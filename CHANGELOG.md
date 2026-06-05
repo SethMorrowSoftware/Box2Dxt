@@ -108,9 +108,24 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 - **Slicker tool palette.** Section headers are brighter and sit over a hairline
   rule; tool buttons are left-aligned, light up on hover, and keep their accent
   when selected — a more polished, professional left sidebar.
+- **Less redundant work in hot paths.** The Kit's material setters
+  (`b2kSetBounce` / `b2kSetFriction` / `b2kSetDensity`) now resolve the control's
+  long id once instead of twice, matching the collision-filter setters; and the
+  demo's lidar scene reads each ray-hit accessor once per ray rather than twice
+  (48 rays a frame), trimming per-frame overhead with no behaviour change.
 
 ### Fixed
 
+- **`b2kReshape` no longer leaves a body shapeless — and keeps it sensor-aware.**
+  Reshaping destroyed the old collision shape *before* building the new one, so a
+  graphic whose outline collapsed to fewer than three points (a degenerate
+  polygon) lost its shape entirely, leaving a body with nothing to collide with.
+  The swap is now atomic: the new shape is built first and the original is kept
+  untouched if the new one is rejected. Like the attach helpers, reshaping also
+  re-enables sensor events, so a reshaped body stays detectable by sensors.
+- **Demo's first FPS reading is no longer bogus.** `clearState` now seeds the
+  frame counter and timestamp, so the HUD's opening frames-per-second value is
+  meaningful instead of a one-off near-zero spike right after a (re)compile.
 - **Bridge & Chain spans ignore Bouncy mode.** Building a span while the
   **Bouncy** build option was on made every plank/link springy, so bridges and
   chains jittered and never settled. Span segments are now always built

@@ -1244,6 +1244,9 @@ on raiseUI
 end raiseUI
 
 on clearState
+   put the milliseconds into gFpsTime   -- seed the FPS window so the first reading is sane
+   put 0 into gFrames
+   put empty into gFps
    put empty into gDrops
    put empty into gBombs
    put empty into gFlash
@@ -1673,10 +1676,9 @@ on renderLidar
       put tEx + cos(tAng) * tRange into tTx
       put tEy + sin(tAng) * tRange into tTy
       get b2kRayHit(tEx, tEy, tTx, tTy)
-      if b2kRayHitX() is not empty then
-         put b2kRayHitX() into tHx
-         put b2kRayHitY() into tHy
-      else
+      put b2kRayHitX() into tHx
+      put b2kRayHitY() into tHy
+      if tHx is empty then       -- a miss: draw the ray out to its far end
          put round(tTx) into tHx
          put round(tTy) into tHy
       end if
