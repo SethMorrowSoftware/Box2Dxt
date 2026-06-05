@@ -514,27 +514,37 @@ end b2kSpawnCapsule
 -- Materials & body properties
 -- =====================================================================
 command b2kSetBounce pControl, pRestitution
-   if sShapeH[the long id of pControl] is not empty then b2SetShapeRestitution sShapeH[the long id of pControl], pRestitution
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is not empty then b2SetShapeRestitution s, pRestitution
 end b2kSetBounce
 
 command b2kSetFriction pControl, pFriction
-   if sShapeH[the long id of pControl] is not empty then b2SetShapeFriction sShapeH[the long id of pControl], pFriction
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is not empty then b2SetShapeFriction s, pFriction
 end b2kSetFriction
 
 command b2kSetDensity pControl, pDensity
-   if sShapeH[the long id of pControl] is not empty then b2SetShapeDensity sShapeH[the long id of pControl], pDensity
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is not empty then b2SetShapeDensity s, pDensity
 end b2kSetDensity
 
 -- Re-fit a body's collision shape to the control's CURRENT size, in place on the
 -- SAME body so any joints stay valid. pShape is "box" | "ball" | "capsule" | "poly".
 -- Resize the control's graphic first, then re-apply materials afterwards.
 command b2kReshape pControl, pShape
-   local tRef, tBody, tHw, tHh, tWm, tHm, tR, tL, tHoriz, tCx, tCy, p, lx, ly, tCount
+   local tRef, tBody, tOld, tHw, tHh, tWm, tHm, tR, tL, tHoriz, tCx, tCy, p, lx, ly, tCount, tNewVerts
    put the long id of pControl into tRef
    if sBody[tRef] is empty then exit b2kReshape
    put sBody[tRef] into tBody
-   if sShapeH[tRef] is not empty then b2DestroyShape sShapeH[tRef]
+   -- Build the new shape first and drop the old one only afterwards, so the body
+   -- is never momentarily shapeless and a rejected shape leaves the original
+   -- intact (any joints on the body stay valid throughout).
+   put sShapeH[tRef] into tOld
    put empty into sShapeH[tRef]
+   b2ShapeDefEnableSensorEvents true   -- keep the reshaped body detectable by sensors
    switch pShape
       case "ball"
          put ((the width of pControl) / 2) / sScale into tR
@@ -560,7 +570,7 @@ command b2kReshape pControl, pShape
          put item 1 of the loc of pControl into tCx
          put item 2 of the loc of pControl into tCy
          b2PolyBegin
-         put empty into sVerts[tRef]
+         put empty into tNewVerts
          put 0 into tCount
          repeat for each line p in the points of pControl
             if p is empty then next repeat
@@ -568,11 +578,15 @@ command b2kReshape pControl, pShape
             put (item 1 of p - tCx) / sScale into lx
             put - ((item 2 of p - tCy) / sScale) into ly
             b2PolyAddPoint lx, ly
-            put lx & "," & ly & cr after sVerts[tRef]
+            put lx & "," & ly & cr after tNewVerts
             add 1 to tCount
          end repeat
-         if tCount < 3 then exit b2kReshape
+         if tCount < 3 then           -- degenerate outline: keep the existing shape
+            put tOld into sShapeH[tRef]
+            exit b2kReshape
+         end if
          put b2AddPolygon(tBody, 1.0, 0.4, 0.2) into sShapeH[tRef]
+         put tNewVerts into sVerts[tRef]
          break
       default
          put ((the width of pControl) / 2) / sScale into tHw
@@ -583,6 +597,7 @@ command b2kReshape pControl, pShape
                   & tHw & "," & tHh & cr & ("-" & tHw) & "," & tHh into sVerts[tRef]
          end if
    end switch
+   if tOld is not empty then b2DestroyShape tOld   -- now safe to release the old shape
 end b2kReshape
 
 command b2kSetBullet pControl, pFlag

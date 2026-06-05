@@ -15,8 +15,15 @@
 -- #####################################################################
 
 -- =====================================================================
--- EMBEDDED KIT  ·  copy of src/box2dxt-kit.livecodescript
+-- EMBEDDED KIT  ·  auto-generated copy of src/box2dxt-kit.livecodescript
+--
+-- This file is self-contained: paste the whole thing into one stack script
+-- and it runs.  The Kit below is a GENERATED copy — do not edit it here.
+-- Edit the canonical Kit at src/box2dxt-kit.livecodescript, then run:
+--     python3 tools/sync-embedded-kit.py
+-- (CI checks it stays in sync via:  tools/sync-embedded-kit.py --check)
 -- =====================================================================
+-- >>> BEGIN EMBEDDED KIT >>>
 -- =====================================================================
 -- box2dxt-kit.livecodescript   ·   "Box2Dxt Kit"  (b2k...)
 --
@@ -53,12 +60,15 @@
 --         b2kSetGravityScale ctrl,s · b2kSetDamping ctrl,lin[,ang] · b2kWake ctrl ·
 --         b2kSetType ctrl,name · b2kSetStatic/Dynamic/Kinematic ctrl ·
 --         b2kEnable/Disable ctrl
--- ACT     b2kPush ctrl,dvx,dvy · b2kForce ctrl,fx,fy · b2kSetVelocity ctrl,vx,vy ·
---         b2kSpin ctrl,degPerSec · b2kSpinBy ctrl,degPerSec · b2kMoveTo ctrl,x,y[,deg]
+-- ACT     b2kPush ctrl,dvx,dvy · b2kImpulse ctrl,ix,iy · b2kForce ctrl,fx,fy ·
+--         b2kSetVelocity ctrl,vx,vy · b2kSpin ctrl,deg/s · b2kSpinBy ctrl,deg/s ·
+--         b2kTorque ctrl,t · b2kAngularImpulse ctrl,imp · b2kMoveTo ctrl,x,y[,deg] ·
 --         b2kExplode x,y[,radius][,power] · b2kRemove ctrl
--- GET     b2kBodyOf(ctrl) · b2kVelocity(ctrl) · b2kSpeed(ctrl) · b2kAngle(ctrl) ·
---         b2kMass(ctrl) · b2kBodyType(ctrl) · b2kIsAwake(ctrl) · b2kControlAt(x,y) ·
---         b2kBodyCount() · b2kAwakeCount() · b2kToWorldX/Y(px) · b2kToScreenX/Y(m) ·
+-- GET     b2kBodyOf(ctrl) · b2kPosition(ctrl) · b2kWorldCenter(ctrl) · b2kVelocity(ctrl) ·
+--         b2kSpeed(ctrl) · b2kAngle(ctrl) · b2kMass(ctrl) · b2kBodyType(ctrl) ·
+--         b2kGravityScale(ctrl) · b2kDamping(ctrl) · b2kIsAwake(ctrl) · b2kControlAt(x,y) ·
+--         b2kControlContains(ctrl,x,y) · b2kBodyCount() · b2kAwakeCount() ·
+--         b2kToWorldX/Y(px) · b2kToScreenX/Y(m) ·
 --         b2kRayHit(x1,y1,x2,y2) + b2kRayHitX/Y() · b2kRayHitNormalX/Y() · b2kRayDist()
 -- JOINTS  b2kHinge ctrlA,ctrlB,x,y · b2kWeld ctrlA,ctrlB · b2kRope ctrlA,ctrlB[,len]
 --         b2kSlider ctrlA,ctrlB,axisDeg · b2kWheel chassis,wheel,x,y[,axisDeg]
@@ -70,6 +80,17 @@
 -- DRAG    b2kGrab(x,y) -> control · b2kRelease
 -- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
 --         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
+--         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
+-- SENSOR  b2kAddSensor ctrl[,shape] · on b2kSensorEnter pSensor,pVisitor ·
+--         on b2kSensorExit pSensor,pVisitor · b2kSensorCount()+EnterSensor/Visitor(i)
+-- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
+--         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
+-- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen points)
+-- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
+-- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
+-- TUNE    b2kSetRestitutionThreshold px/s · b2kSetContactTuning hz,damp,pushPx ·
+--         b2kSetJointTuning hz,damp · b2kSetMaxSpeed px/s · b2kEnableWarmStarting f ·
+--         b2kProfile() · b2kAwakeBodyCount()
 --
 -- Tips: pass controls by reference (the long id of ... is safest). Keep moving
 -- objects a sensible on-screen size (default scale 40 px/m, so ~4-400 px).
@@ -89,6 +110,9 @@ local sRad           -- ctrlRef     -> radius (metres) for "ball"
 local sImgAngle      -- ctrlRef     -> last applied angle (deg) for "image"
 local sStatic        -- ctrlRef     -> true for bodies that never move
 local sSpawned       -- ctrlRef     -> true if the kit created the control
+local sSensor        -- ctrlRef     -> true for sensor (non-solid trigger) bodies
+local sLayers        -- collision-layer name -> bit value
+local sNextBit       -- next free collision-layer bit
 local sDragJoint, sDragAnchor, sDragging
 local sContactObj    -- object that receives b2kContact messages
 local sFrameObj      -- object that receives an on b2kFrame message each frame
@@ -112,6 +136,8 @@ command b2kSetup pGravityX, pGravityY
    put (the height of this card) - 40 into sOriginY
    put 4 into sSub
    b2kResetTables
+   put empty into sLayers
+   put 1 into sNextBit
    put 0 into sDragJoint
    put false into sDragging
    put false into sRunning
@@ -128,6 +154,7 @@ command b2kResetTables
    put empty into sImgAngle
    put empty into sStatic
    put empty into sSpawned
+   put empty into sSensor
 end b2kResetTables
 
 command b2kTeardown
@@ -268,6 +295,12 @@ function b2kWorld
    return sWorld
 end b2kWorld
 
+-- Sanity check from kit-only code: returns the native shim's ABI version (3),
+-- i.e. that the box2dxt extension and its native library are loaded and in sync.
+function b2kVersion
+   return b2Version()
+end b2kVersion
+
 -- =====================================================================
 -- Coordinate conversion (sim Y up; screen Y down)
 -- =====================================================================
@@ -310,6 +343,7 @@ command b2kAddBox pControl, pDynamic
    if tGraphic or (tImage and pDynamic) then put false into tFixed
    else put true into tFixed
    put b2NewBody(sWorld, tType, tWx, tWy, 0, false, tFixed) into tBody
+   b2ShapeDefEnableSensorEvents true   -- so sensors can detect this shape
    put b2AddBox(tBody, tHw, tHh, 1.0, 0.4, 0.2) into sShapeH[tRef]
    b2kRegister tRef, tBody, (not pDynamic)
    if tGraphic and pDynamic then
@@ -335,6 +369,7 @@ command b2kAddBall pControl, pDynamic
    put b2kToWorldX(item 1 of the loc of pControl) into tWx
    put b2kToWorldY(item 2 of the loc of pControl) into tWy
    put b2NewBody(sWorld, tType, tWx, tWy, 0, false, false) into tBody
+   b2ShapeDefEnableSensorEvents true   -- so sensors can detect this shape
    put b2AddCircle(tBody, 0, 0, tRad, 1.0, 0.4, 0.4) into sShapeH[tRef]
    b2kRegister tRef, tBody, (not pDynamic)
    if word 1 of tRef is "graphic" then put "ball" into sRender[tRef]
@@ -370,6 +405,7 @@ command b2kAddCapsule pControl, pDynamic
    if tGraphic or (tImage and pDynamic) then put false into tFixed
    else put true into tFixed
    put b2NewBody(sWorld, tType, tWx, tWy, 0, false, tFixed) into tBody
+   b2ShapeDefEnableSensorEvents true   -- so sensors can detect this shape
    if tHoriz then
       put b2AddCapsule(tBody, - tL, 0, tL, 0, tR, 1.0, 0.4, 0.2) into sShapeH[tRef]
    else
@@ -416,6 +452,7 @@ command b2kAddPolygon pControl, pDynamic
       b2DestroyBody tBody
       return 0
    end if
+   b2ShapeDefEnableSensorEvents true   -- so sensors can detect this shape
    put b2AddPolygon(tBody, 1.0, 0.4, 0.2) into sShapeH[tRef]
    b2kRegister tRef, tBody, (not pDynamic)
    put "poly" into sRender[tRef]
@@ -503,16 +540,91 @@ end b2kSpawnCapsule
 -- Materials & body properties
 -- =====================================================================
 command b2kSetBounce pControl, pRestitution
-   b2SetShapeRestitution sShapeH[the long id of pControl], pRestitution
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is not empty then b2SetShapeRestitution s, pRestitution
 end b2kSetBounce
 
 command b2kSetFriction pControl, pFriction
-   b2SetShapeFriction sShapeH[the long id of pControl], pFriction
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is not empty then b2SetShapeFriction s, pFriction
 end b2kSetFriction
 
 command b2kSetDensity pControl, pDensity
-   b2SetShapeDensity sShapeH[the long id of pControl], pDensity
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is not empty then b2SetShapeDensity s, pDensity
 end b2kSetDensity
+
+-- Re-fit a body's collision shape to the control's CURRENT size, in place on the
+-- SAME body so any joints stay valid. pShape is "box" | "ball" | "capsule" | "poly".
+-- Resize the control's graphic first, then re-apply materials afterwards.
+command b2kReshape pControl, pShape
+   local tRef, tBody, tOld, tHw, tHh, tWm, tHm, tR, tL, tHoriz, tCx, tCy, p, lx, ly, tCount, tNewVerts
+   put the long id of pControl into tRef
+   if sBody[tRef] is empty then exit b2kReshape
+   put sBody[tRef] into tBody
+   -- Build the new shape first and drop the old one only afterwards, so the body
+   -- is never momentarily shapeless and a rejected shape leaves the original
+   -- intact (any joints on the body stay valid throughout).
+   put sShapeH[tRef] into tOld
+   put empty into sShapeH[tRef]
+   b2ShapeDefEnableSensorEvents true   -- keep the reshaped body detectable by sensors
+   switch pShape
+      case "ball"
+         put ((the width of pControl) / 2) / sScale into tR
+         put b2AddCircle(tBody, 0, 0, tR, 1.0, 0.4, 0.4) into sShapeH[tRef]
+         put tR into sRad[tRef]
+         break
+      case "capsule"
+         put (the width of pControl) / sScale into tWm
+         put (the height of pControl) / sScale into tHm
+         put (tWm >= tHm) into tHoriz
+         if tHoriz then
+            put tHm / 2 into tR
+            put max(0, tWm / 2 - tR) into tL
+            put b2AddCapsule(tBody, - tL, 0, tL, 0, tR, 1.0, 0.4, 0.2) into sShapeH[tRef]
+         else
+            put tWm / 2 into tR
+            put max(0, tHm / 2 - tR) into tL
+            put b2AddCapsule(tBody, 0, - tL, 0, tL, tR, 1.0, 0.4, 0.2) into sShapeH[tRef]
+         end if
+         put b2kCapsuleVerts(tL, tR, tHoriz) into sVerts[tRef]
+         break
+      case "poly"
+         put item 1 of the loc of pControl into tCx
+         put item 2 of the loc of pControl into tCy
+         b2PolyBegin
+         put empty into tNewVerts
+         put 0 into tCount
+         repeat for each line p in the points of pControl
+            if p is empty then next repeat
+            if tCount >= 8 then next repeat
+            put (item 1 of p - tCx) / sScale into lx
+            put - ((item 2 of p - tCy) / sScale) into ly
+            b2PolyAddPoint lx, ly
+            put lx & "," & ly & cr after tNewVerts
+            add 1 to tCount
+         end repeat
+         if tCount < 3 then           -- degenerate outline: keep the existing shape
+            put tOld into sShapeH[tRef]
+            exit b2kReshape
+         end if
+         put b2AddPolygon(tBody, 1.0, 0.4, 0.2) into sShapeH[tRef]
+         put tNewVerts into sVerts[tRef]
+         break
+      default
+         put ((the width of pControl) / 2) / sScale into tHw
+         put ((the height of pControl) / 2) / sScale into tHh
+         put b2AddBox(tBody, tHw, tHh, 1.0, 0.4, 0.2) into sShapeH[tRef]
+         if sRender[tRef] is "poly" then
+            put ("-" & tHw) & "," & ("-" & tHh) & cr & tHw & "," & ("-" & tHh) & cr \
+                  & tHw & "," & tHh & cr & ("-" & tHw) & "," & tHh into sVerts[tRef]
+         end if
+   end switch
+   if tOld is not empty then b2DestroyShape tOld   -- now safe to release the old shape
+end b2kReshape
 
 command b2kSetBullet pControl, pFlag
    b2SetBullet sBody[the long id of pControl], (pFlag is true)
@@ -536,6 +648,17 @@ end b2kSetDamping
 command b2kWake pControl
    b2SetAwake sBody[the long id of pControl], true
 end b2kWake
+
+-- Send a body to sleep (it stops simulating until something wakes it).
+command b2kSleep pControl
+   b2SetAwake sBody[the long id of pControl], false
+end b2kSleep
+
+-- Below this speed (pixels/sec) a body may fall asleep. Lower = stays awake
+-- longer; higher = sleeps sooner (saves CPU).
+command b2kSetSleepThreshold pControl, pPxPerSec
+   b2SetSleepThreshold sBody[the long id of pControl], pPxPerSec / sScale
+end b2kSetSleepThreshold
 
 -- =====================================================================
 -- Acting on bodies   (velocities/kicks are in PIXELS/sec, screen-oriented)
@@ -568,6 +691,25 @@ end b2kSpinBy
 command b2kForce pControl, pFxPx, pFyPx
    b2ApplyForce sBody[the long id of pControl], pFxPx / sScale, - pFyPx / sScale, true
 end b2kForce
+
+-- A one-shot impulse (a sharp kick), screen-oriented. Mass-aware: heavier bodies
+-- move less. b2kPush changes velocity directly; this is the impulse equivalent.
+command b2kImpulse pControl, pIxPx, pIyPx
+   b2ApplyImpulse sBody[the long id of pControl], pIxPx / sScale, - pIyPx / sScale, true
+end b2kImpulse
+
+-- A continuous turning force (same units as motor torque). Positive turns one way,
+-- negative the other. Apply each frame for a sustained twist; pairs with b2kForce.
+command b2kTorque pControl, pTorque
+   b2ApplyTorque sBody[the long id of pControl], pTorque, true
+end b2kTorque
+
+-- A one-shot twist (a sharp angular kick), mass-aware: bodies with more
+-- rotational inertia turn less. b2kSpinBy sets the spin directly; this is the
+-- impulse equivalent, and the angular partner of b2kImpulse.
+command b2kAngularImpulse pControl, pImpulse
+   b2ApplyAngularImpulse sBody[the long id of pControl], pImpulse, true
+end b2kAngularImpulse
 
 -- Change a body's type at runtime: "static", "kinematic", or "dynamic".
 command b2kSetType pControl, pType
@@ -631,6 +773,7 @@ command b2kRemove pControl
    delete variable sImgAngle[tRef]
    delete variable sStatic[tRef]
    delete variable sSpawned[tRef]
+   delete variable sSensor[tRef]
    -- If the kit created this control (b2kSpawn...), delete it too, so removing
    -- a body never leaves a dead graphic behind. Attached controls are left alone.
    if tWasSpawned then
@@ -640,8 +783,21 @@ command b2kRemove pControl
    end if
 end b2kRemove
 
--- A radial "blast" that kicks nearby dynamic bodies outward.
+-- A radial "blast" that kicks nearby dynamic bodies outward. Uses Box2D's native
+-- b2World_Explode: it's shape-perimeter aware (so a wide plank catches more blast
+-- than a small ball) and affects EVERY dynamic body in range, not just kit ones.
+-- pPowerPx is the impulse per unit length of facing surface; pRadiusPx the reach.
 command b2kExplode pScreenX, pScreenY, pRadiusPx, pPowerPx
+   if pRadiusPx is empty then put 180 into pRadiusPx
+   if pPowerPx is empty then put 900 into pPowerPx
+   if sWorld is empty then exit b2kExplode
+   b2WorldExplode sWorld, b2kToWorldX(pScreenX), b2kToWorldY(pScreenY), \
+         pRadiusPx / sScale, (pRadiusPx / sScale) * 0.5, pPowerPx / sScale
+end b2kExplode
+
+-- The original velocity-based blast (pre-v3): kicks only kit-tracked dynamic
+-- bodies, ignoring their size. Kept for callers that relied on the old feel.
+command b2kExplodeLegacy pScreenX, pScreenY, pRadiusPx, pPowerPx
    local cx, cy, tRadM, tRef, b, dx, dy, d, f
    if pRadiusPx is empty then put 180 into pRadiusPx
    if pPowerPx is empty then put 900 into pPowerPx
@@ -660,7 +816,7 @@ command b2kExplode pScreenX, pScreenY, pRadiusPx, pPowerPx
          b2SetAwake b, true
       end if
    end repeat
-end b2kExplode
+end b2kExplodeLegacy
 
 -- =====================================================================
 -- Getters
@@ -668,6 +824,23 @@ end b2kExplode
 function b2kBodyOf pControl
    return sBody[the long id of pControl]
 end b2kBodyOf
+
+-- A body's position in SCREEN pixels as "x,y" (the position partner of
+-- b2kVelocity). Controls already follow their body, but this reads the exact,
+-- sub-pixel centre — handy for aiming, distance checks, or mixing with b2…
+function b2kPosition pControl
+   local b
+   put sBody[the long id of pControl] into b
+   return b2kToScreenX(b2BodyX(b)) & "," & b2kToScreenY(b2BodyY(b))
+end b2kPosition
+
+-- A body's centre of mass in SCREEN pixels as "x,y". Differs from b2kPosition
+-- for off-centre or compound shapes; it's the true pivot for spin and torque.
+function b2kWorldCenter pControl
+   local b
+   put sBody[the long id of pControl] into b
+   return b2kToScreenX(b2BodyWorldCenterX(b)) & "," & b2kToScreenY(b2BodyWorldCenterY(b))
+end b2kWorldCenter
 
 function b2kVelocity pControl
    local b
@@ -689,9 +862,34 @@ function b2kIsAwake pControl
    return b2BodyIsAwake(sBody[the long id of pControl])
 end b2kIsAwake
 
+-- Current rotation speed in DEGREES/sec (the getter for b2kSpin / b2kSpinBy).
+function b2kSpinRate pControl
+   return b2BodyAngularVelocity(sBody[the long id of pControl]) * 180 / kPI
+end b2kSpinRate
+
+function b2kIsBullet pControl
+   return b2BodyIsBullet(sBody[the long id of pControl])
+end b2kIsBullet
+
+function b2kIsEnabled pControl
+   return b2BodyIsEnabled(sBody[the long id of pControl])
+end b2kIsEnabled
+
 function b2kMass pControl
    return b2BodyMass(sBody[the long id of pControl])
 end b2kMass
+
+-- The body's per-body gravity multiplier (the getter for b2kSetGravityScale).
+function b2kGravityScale pControl
+   return b2BodyGravityScale(sBody[the long id of pControl])
+end b2kGravityScale
+
+-- The body's drag as "linear,angular" (the getter for b2kSetDamping).
+function b2kDamping pControl
+   local b
+   put sBody[the long id of pControl] into b
+   return b2BodyLinearDamping(b) & "," & b2BodyAngularDamping(b)
+end b2kDamping
 
 -- Body type as a word: "static", "kinematic", or "dynamic" (mirrors b2kSetType).
 function b2kBodyType pControl
@@ -721,6 +919,16 @@ end b2kAwakeCount
 function b2kControlAt pScreenX, pScreenY
    return sCtrl[b2BodyAtPoint(sWorld, b2kToWorldX(pScreenX), b2kToWorldY(pScreenY))]
 end b2kControlAt
+
+-- True if SCREEN point (x,y) is inside this control's actual collision shape —
+-- rotation- and shape-aware, unlike a bounding-box test. b2kControlAt searches
+-- every body; this tests one control you already have (e.g. a precise click hit).
+function b2kControlContains pControl, pScreenX, pScreenY
+   local tRef
+   put the long id of pControl into tRef
+   if sShapeH[tRef] is empty then return false
+   return b2ShapeTestPoint(sShapeH[tRef], b2kToWorldX(pScreenX), b2kToWorldY(pScreenY))
+end b2kControlContains
 
 -- Cast a ray between two screen points; returns the control hit (or empty).
 -- Then b2kRayHitX() / b2kRayHitY() give the hit point in screen pixels.
@@ -765,6 +973,37 @@ end b2kRayHitNormalY
 function b2kRayDist
    return sRayDist
 end b2kRayDist
+
+-- ---- contacts, polling style ----------------------------------------
+-- The kit also SENDS `on b2kContact` / `on b2kEndContact` to your
+-- b2kContactTarget. These functions instead let you POLL the same per-frame
+-- snapshot (e.g. from `on b2kFrame`) without registering a target. The snapshot
+-- refreshes once per simulated step; indices are 1-based. Each accessor returns
+-- the touching control's long id (empty for a wall, the ground, or any body the
+-- kit isn't tracking).
+function b2kContactCount
+   return b2ContactBeginCount()
+end b2kContactCount
+
+function b2kContactA pIndex
+   return sCtrl[b2ContactBeginBodyA(pIndex)]
+end b2kContactA
+
+function b2kContactB pIndex
+   return sCtrl[b2ContactBeginBodyB(pIndex)]
+end b2kContactB
+
+function b2kEndContactCount
+   return b2ContactEndCount()
+end b2kEndContactCount
+
+function b2kEndContactA pIndex
+   return sCtrl[b2ContactEndBodyA(pIndex)]
+end b2kEndContactA
+
+function b2kEndContactB pIndex
+   return sCtrl[b2ContactEndBodyB(pIndex)]
+end b2kEndContactB
 
 -- =====================================================================
 -- Joints (return a joint handle; pass it to b2kMotor / b2kRemoveJoint)
@@ -834,6 +1073,11 @@ end b2kHingeAngle
 function b2kRopeLength pJoint
    return b2DistanceLength(pJoint) * sScale
 end b2kRopeLength
+
+-- Set a rope (distance) joint's exact rest length, in pixels.
+command b2kRopeSetLength pJoint, pLengthPx
+   b2DistanceSetLength pJoint, pLengthPx / sScale
+end b2kRopeSetLength
 
 command b2kRopeRange pJoint, pMinPx, pMaxPx
    b2DistanceSetLengthRange pJoint, pMinPx / sScale, pMaxPx / sScale
@@ -933,6 +1177,28 @@ command b2kWheelSpring pJoint, pHertz, pDamping
    b2WheelEnableSpring pJoint, true, pHertz, pDamping
 end b2kWheelSpring
 
+-- OFF switches: the b2k… joint wrappers above only ever turn a feature ON, so
+-- these let callers disable a motor or limit again (free swing / unbounded slide).
+command b2kMotorOff pJoint
+   if pJoint is not empty and pJoint > 0 then b2RevoluteEnableMotor pJoint, false, 0, 0
+end b2kMotorOff
+
+command b2kHingeLimitOff pJoint
+   if pJoint is not empty and pJoint > 0 then b2RevoluteEnableLimit pJoint, false, 0, 0
+end b2kHingeLimitOff
+
+command b2kSliderMotorOff pJoint
+   if pJoint is not empty and pJoint > 0 then b2PrismaticEnableMotor pJoint, false, 0, 0
+end b2kSliderMotorOff
+
+command b2kSliderLimitOff pJoint
+   if pJoint is not empty and pJoint > 0 then b2PrismaticEnableLimit pJoint, false, 0, 0
+end b2kSliderLimitOff
+
+command b2kWheelMotorOff pJoint
+   if pJoint is not empty and pJoint > 0 then b2WheelEnableMotor pJoint, false, 0, 0
+end b2kWheelMotorOff
+
 command b2kRemoveJoint pJoint
    if pJoint is not empty and pJoint > 0 then b2DestroyJoint pJoint
 end b2kRemoveJoint
@@ -948,6 +1214,219 @@ function b2kLocalAnchor pBody, pWx, pWy
    put sin(- ba) into s
    return (dx * c - dy * s) & "," & (dx * s + dy * c)
 end b2kLocalAnchor
+
+-- =====================================================================
+-- Sensors (non-solid trigger zones)
+-- =====================================================================
+-- Attach a SENSOR fixture to a control: it reports overlaps but never blocks.
+-- Static by default (a fixed trigger zone); pShape is "box" (default), "ball" or
+-- "capsule". While the loop runs, overlaps are delivered to your b2kContactTarget
+-- as `on b2kSensorEnter pSensorCtrl, pVisitorCtrl` / `on b2kSensorExit ...`. The
+-- kit enables sensor events on every body it creates, so sensors detect them.
+command b2kAddSensor pControl, pShape
+   local tRef
+   put the long id of pControl into tRef
+   b2ShapeDefSensor true
+   b2ShapeDefEnableSensorEvents true
+   switch pShape
+      case "ball"
+         b2kAddBall pControl, false
+         break
+      case "capsule"
+         b2kAddCapsule pControl, false
+         break
+      default
+         b2kAddBox pControl, false
+   end switch
+   put true into sSensor[tRef]
+   return sBody[tRef]
+end b2kAddSensor
+
+-- Polling alternative to the on b2kSensorEnter/Exit messages (read in on b2kFrame).
+-- Counts/indices are 1-based; each returns a control (empty for untracked bodies).
+function b2kSensorCount
+   return b2SensorBeginCount()
+end b2kSensorCount
+function b2kSensorEnterSensor pIndex
+   return sCtrl[b2ShapeBody(b2SensorBeginSensorShape(pIndex))]
+end b2kSensorEnterSensor
+function b2kSensorEnterVisitor pIndex
+   return sCtrl[b2ShapeBody(b2SensorBeginVisitorShape(pIndex))]
+end b2kSensorEnterVisitor
+function b2kSensorExitCount
+   return b2SensorEndCount()
+end b2kSensorExitCount
+function b2kSensorExitSensor pIndex
+   return sCtrl[b2ShapeBody(b2SensorEndSensorShape(pIndex))]
+end b2kSensorExitSensor
+function b2kSensorExitVisitor pIndex
+   return sCtrl[b2ShapeBody(b2SensorEndVisitorShape(pIndex))]
+end b2kSensorExitVisitor
+
+-- =====================================================================
+-- Collision filtering (named layers; up to 32)
+-- =====================================================================
+-- Define (or fetch) a named collision layer, returning its bit value. Then
+-- b2kSetCategory / b2kSetMask take a comma- or space-separated list of layer
+-- names (or raw numbers). Two shapes collide only if EACH one's category appears
+-- in the other's mask (and no shared negative group forbids it).
+command b2kDefineLayer pName
+   if sLayers[pName] is not empty then return sLayers[pName]
+   if sNextBit is empty or sNextBit < 1 then put 1 into sNextBit
+   put sNextBit into sLayers[pName]
+   put sNextBit * 2 into sNextBit
+   return sLayers[pName]
+end b2kDefineLayer
+
+function b2kLayerBits pLayers
+   local tBits, tL
+   put 0 into tBits
+   replace comma with space in pLayers
+   repeat for each word tL in pLayers
+      if tL is empty then next repeat
+      if tL is a number then put tBits bitOr (tL) into tBits
+      else put tBits bitOr b2kDefineLayer(tL) into tBits
+   end repeat
+   return tBits
+end b2kLayerBits
+
+command b2kSetCategory pControl, pLayers
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is empty then exit b2kSetCategory
+   b2SetShapeFilter s, b2kLayerBits(pLayers), b2ShapeFilterMask(s), b2ShapeFilterGroup(s)
+end b2kSetCategory
+
+command b2kSetMask pControl, pLayers
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is empty then exit b2kSetMask
+   b2SetShapeFilter s, b2ShapeFilterCategory(s), b2kLayerBits(pLayers), b2ShapeFilterGroup(s)
+end b2kSetMask
+
+-- Group index: bodies sharing a NEGATIVE group never collide; a POSITIVE group
+-- always collide. Overrides category/mask. 0 (default) = use category/mask.
+command b2kSetCollisionGroup pControl, pGroup
+   local s
+   put sShapeH[the long id of pControl] into s
+   if s is empty then exit b2kSetCollisionGroup
+   b2SetShapeFilter s, b2ShapeFilterCategory(s), b2ShapeFilterMask(s), pGroup
+end b2kSetCollisionGroup
+
+-- =====================================================================
+-- Chains (smooth terrain) and world queries
+-- =====================================================================
+-- A smooth static chain (ground/terrain) from a list of SCREEN points ("x,y" per
+-- line). Unlike joined box/segment edges it has no inner corners for fast bodies
+-- to catch on. Needs >= 4 points; pLoop true closes it. Invisible (draw a matching
+-- graphic). Returns a chain handle (b2DestroyChain to remove).
+command b2kChain pPoints, pLoop
+   local tBody, p
+   if sWorld is empty then return 0
+   put b2NewStaticBody(sWorld, 0, 0) into tBody
+   b2ChainBegin
+   repeat for each line p in pPoints
+      if p is empty then next repeat
+      b2ChainAddPoint b2kToWorldX(item 1 of p), b2kToWorldY(item 2 of p)
+   end repeat
+   return b2CreateChain(tBody, (pLoop is true), 0.6, 0.1)
+end b2kChain
+
+command b2kSmoothGround pPoints
+   return b2kChain(pPoints, false)
+end b2kSmoothGround
+
+-- Controls whose body overlaps a screen RECT (newline-separated long ids).
+function b2kOverlap pX1, pY1, pX2, pY2
+   if sWorld is empty then return empty
+   return b2kQueryToControls(b2OverlapAABB(sWorld, b2kToWorldX(pX1), b2kToWorldY(pY1), b2kToWorldX(pX2), b2kToWorldY(pY2)))
+end b2kOverlap
+
+-- Controls whose body overlaps a screen circle.
+function b2kOverlapCircle pX, pY, pRadiusPx
+   if sWorld is empty then return empty
+   return b2kQueryToControls(b2OverlapCircle(sWorld, b2kToWorldX(pX), b2kToWorldY(pY), pRadiusPx / sScale))
+end b2kOverlapCircle
+
+-- Every control a ray crosses, nearest-first (vs b2kRayHit's single closest).
+function b2kRayHitAll pX1, pY1, pX2, pY2
+   if sWorld is empty then return empty
+   return b2kQueryToControls(b2RayCastAll(sWorld, b2kToWorldX(pX1), b2kToWorldY(pY1), b2kToWorldX(pX2), b2kToWorldY(pY2)))
+end b2kRayHitAll
+
+-- Shared: turn the current query result (count) into a newline list of controls.
+function b2kQueryToControls pCount
+   local i, c, tList
+   put empty into tList
+   repeat with i = 1 to pCount
+      put sCtrl[b2QueryBody(i)] into c
+      if c is not empty then put c & cr after tList
+   end repeat
+   return tList
+end b2kQueryToControls
+
+-- =====================================================================
+-- Motor & filter joints
+-- =====================================================================
+-- Drive pMover toward a target pose relative to pRef (a moving anchor; empty =
+-- the world). Offsets are in screen pixels / degrees from pRef's centre. Great for
+-- followers, lifts and character motion. Returns a joint handle (b2kRemoveJoint).
+command b2kMotorTo pMover, pRef, pOffsetXPx, pOffsetYPx, pAngleDeg, pMaxForce, pMaxTorque
+   local bMover, bRef
+   put sBody[the long id of pMover] into bMover
+   if pRef is empty then put sDragAnchor into bRef
+   else put sBody[the long id of pRef] into bRef
+   if pAngleDeg is empty then put 0 into pAngleDeg
+   if pMaxForce is empty then put 1000 into pMaxForce
+   if pMaxTorque is empty then put 1000 into pMaxTorque
+   return b2MotorJoint(sWorld, bRef, bMover, pOffsetXPx / sScale, - pOffsetYPx / sScale, \
+         pAngleDeg * kPI / 180, pMaxForce, pMaxTorque, 0.3, false)
+end b2kMotorTo
+
+-- Stop two specific controls from colliding with each other (without changing how
+-- either collides with anything else). Returns a joint handle (b2kRemoveJoint).
+command b2kNoCollide pCtrlA, pCtrlB
+   return b2FilterJoint(sWorld, sBody[the long id of pCtrlA], sBody[the long id of pCtrlB])
+end b2kNoCollide
+
+-- =====================================================================
+-- World tuning (advanced) + perf readout
+-- =====================================================================
+-- Below this approach speed (px/sec) collisions stop bouncing, even if bouncy.
+command b2kSetRestitutionThreshold pPxPerSec
+   if sWorld is not empty then b2SetRestitutionThreshold sWorld, pPxPerSec / sScale
+end b2kSetRestitutionThreshold
+
+-- Contact softness: stiffness (hertz), damping ratio, max separation-fix speed (px/sec).
+command b2kSetContactTuning pHertz, pDamping, pPushPx
+   if sWorld is not empty then b2SetContactTuning sWorld, pHertz, pDamping, pPushPx / sScale
+end b2kSetContactTuning
+
+command b2kSetJointTuning pHertz, pDamping
+   if sWorld is not empty then b2SetJointTuning sWorld, pHertz, pDamping
+end b2kSetJointTuning
+
+-- Clamp how fast any body can move (px/sec) — stops runaway speeds.
+command b2kSetMaxSpeed pPxPerSec
+   if sWorld is not empty then b2SetMaximumLinearSpeed sWorld, pPxPerSec / sScale
+end b2kSetMaxSpeed
+
+command b2kEnableWarmStarting pFlag
+   if sWorld is not empty then b2EnableWarmStarting sWorld, (pFlag is true)
+end b2kEnableWarmStarting
+
+-- A quick perf readout in milliseconds: "totalStep,collide,solve" for the last step.
+function b2kProfile
+   if sWorld is empty then return empty
+   b2WorldProfileUpdate sWorld
+   return b2WorldProfileStep() & "," & b2WorldProfileCollide() & "," & b2WorldProfileSolve()
+end b2kProfile
+
+-- How many dynamic bodies are awake right now (native count, vs b2kAwakeCount).
+function b2kAwakeBodyCount
+   if sWorld is empty then return 0
+   return b2AwakeBodyCount(sWorld)
+end b2kAwakeBodyCount
 
 -- =====================================================================
 -- Dragging: call b2kGrab from mouseDown and b2kRelease from mouseUp.
@@ -996,11 +1475,27 @@ on b2kStep pGen
       lock screen
       b2kSync
       b2kDispatchContacts
+      b2kDispatchSensors
       if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
       unlock screen           -- one redraw per frame: sync + events + app drawing
    end if
    send ("b2kStep " & sGen) to me in 16 milliseconds
 end b2kStep
+
+-- Advance exactly one fixed step, even while paused (drives a Step button).
+command b2kStepOnce
+   if not sRunning then exit b2kStepOnce
+   b2Step sWorld, (1 / 60), sSub
+   if sDragging then
+      b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
+   end if
+   lock screen
+   b2kSync
+   b2kDispatchContacts
+   b2kDispatchSensors
+   if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+   unlock screen
+end b2kStepOnce
 
 command b2kSync
    local tRef, tBody, tWx, tWy, tDead, d
@@ -1127,6 +1622,25 @@ command b2kDispatchContacts
    end repeat
 end b2kDispatchContacts
 
+-- Snapshot sensor begin/end overlaps each frame and (if a target is set) deliver
+-- them as on b2kSensorEnter / on b2kSensorExit. Sensor and visitor shapes are
+-- mapped back to their controls via the shape's body.
+command b2kDispatchSensors
+   local tN, i, tS, tV
+   put b2SensorsUpdate(sWorld) into tN
+   if sContactObj is empty then exit b2kDispatchSensors
+   repeat with i = 1 to tN
+      put sCtrl[b2ShapeBody(b2SensorBeginSensorShape(i))] into tS
+      put sCtrl[b2ShapeBody(b2SensorBeginVisitorShape(i))] into tV
+      dispatch "b2kSensorEnter" to sContactObj with tS, tV
+   end repeat
+   repeat with i = 1 to b2SensorEndCount()
+      put sCtrl[b2ShapeBody(b2SensorEndSensorShape(i))] into tS
+      put sCtrl[b2ShapeBody(b2SensorEndVisitorShape(i))] into tV
+      dispatch "b2kSensorExit" to sContactObj with tS, tV
+   end repeat
+end b2kDispatchSensors
+-- <<< END EMBEDDED KIT <<<
 
 -- =====================================================================
 -- DEMO APP  ·  built on the Kit above (b2k...)
@@ -1244,6 +1758,9 @@ on raiseUI
 end raiseUI
 
 on clearState
+   put the milliseconds into gFpsTime   -- seed the FPS window so the first reading is sane
+   put 0 into gFrames
+   put empty into gFps
    put empty into gDrops
    put empty into gBombs
    put empty into gFlash
@@ -1673,10 +2190,9 @@ on renderLidar
       put tEx + cos(tAng) * tRange into tTx
       put tEy + sin(tAng) * tRange into tTy
       get b2kRayHit(tEx, tEy, tTx, tTy)
-      if b2kRayHitX() is not empty then
-         put b2kRayHitX() into tHx
-         put b2kRayHitY() into tHy
-      else
+      put b2kRayHitX() into tHx
+      put b2kRayHitY() into tHy
+      if tHx is empty then       -- a miss: draw the ray out to its far end
          put round(tTx) into tHx
          put round(tTy) into tHy
       end if
