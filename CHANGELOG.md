@@ -124,6 +124,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 - **Slicker tool palette.** Section headers are brighter and sit over a hairline
   rule; tool buttons are left-aligned, light up on hover, and keep their accent
   when selected — a more polished, professional left sidebar.
+- **Contraption joints skip redrawing settled markers.** While running, the
+  builder's per-frame `renderJoints` now skips any joint whose tracked bodies are
+  all asleep — the Kit only repositions awake bodies, so an asleep joint's marker
+  is already in place. Build-mode dragging still redraws every marker. The win
+  grows with the joint count on a settled machine.
 - **Less redundant work in hot paths.** The Kit's material setters
   (`b2kSetBounce` / `b2kSetFriction` / `b2kSetDensity`) now resolve the control's
   long id once instead of twice, matching the collision-filter setters; and the
@@ -132,6 +137,12 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Fixed
 
+- **Contraption motors no longer stay dead after a pressure plate + rebuild.**
+  Joints persist across Build↔Run, so a pressure plate that switched motors off
+  during a run left them off when you returned to Build and pressed Run again
+  (and the joint inspector could still read "Motor: on"). Entering Run now
+  re-applies each joint's designed motor state from its marker, so a Run always
+  starts from the layout you built.
 - **`b2kReshape` no longer leaves a body shapeless — and keeps it sensor-aware.**
   Reshaping destroyed the old collision shape *before* building the new one, so a
   graphic whose outline collapsed to fewer than three points (a degenerate

@@ -2707,6 +2707,7 @@ on toggleMode
       put true into gMotorsRunning
       armFuses
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
+      armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
       put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse." into gStatus
    else
@@ -3457,11 +3458,20 @@ end recordJoint
 -- Redraw every joint marker. dot = pivot bead on B; rod = arm from a fixed pivot
 -- to the moving part; line = link between the two parts. Empty kind = removed.
 on renderJoints
-   local tI, tG, tVis
+   local tI, tG, tVis, tRunning
    if gJN < 1 then exit renderJoints
+   -- While running, the Kit's sync only repositions AWAKE bodies, so a marker
+   -- whose tracked body (or bodies) are all asleep is already in the right place
+   -- and its redraw — the real per-frame cost on big contraptions — can be
+   -- skipped. In build mode parts move under the editor, not the sim, so the
+   -- skip is disabled and every marker still follows a dragged part.
+   put (gMode is "run") into tRunning
    repeat with tI = 1 to gJN
       put gJVis[tI] into tVis
       if tVis is empty or tVis is "none" then next repeat
+      if tRunning then
+         if jointAtRest(tI, tVis) then next repeat   -- asleep: marker already correct
+      end if
       put "cb_joint_" & tI into tG
       if there is not a graphic tG then next repeat
       try
@@ -3476,6 +3486,24 @@ on renderJoints
       end try
    end repeat
 end renderJoints
+
+-- True when a joint marker need not be redrawn this frame: the body (or bodies)
+-- it follows are all asleep, so they haven't moved. dot follows B; rod follows
+-- its moving end; line follows both A and B.
+function jointAtRest pIndex, pVis
+   if pVis is "dot" then return not partAwake(gJCb[pIndex])
+   if pVis is "rod" then return not partAwake(gJEnd[pIndex])
+   return (not partAwake(gJCa[pIndex])) and (not partAwake(gJCb[pIndex]))
+end jointAtRest
+
+-- True when a part control has an awake, actively-simulating body. Empty or
+-- body-less endpoints (a world pin, a static anchor) count as at rest — they
+-- never move — so they don't force a redraw on their own.
+function partAwake pCtrl
+   if pCtrl is empty then return false
+   if b2kBodyOf(pCtrl) is empty then return false
+   return b2kIsAwake(pCtrl)
+end partAwake
 
 -- =====================================================================
 -- Per-frame + contact feedback (only while Running)
@@ -4538,6 +4566,19 @@ on toggleAllMotors
       else if gJKind[tI] is "wheel" then b2kWheelMotor gJHandle[tI], tSpeed, kWheelTorque
    end repeat
 end toggleAllMotors
+
+-- Push every joint's designed motor state (from its marker) onto the live joint.
+-- Joints persist across Build<->Run, and a pressure plate can flip motors off
+-- mid-run via toggleAllMotors, so each Run re-applies the design — otherwise a
+-- plate that killed a motor would leave it dead after the next Build/Run.
+on armMotors
+   local tI
+   if gJN < 1 then exit armMotors
+   repeat with tI = 1 to gJN
+      if gJKind[tI] is empty then next repeat   -- removed joint: marker is gone
+      applyJointMotor tI
+   end repeat
+end armMotors
 
 -- A bomb hit hard enough arms a one-frame fuse (so it blows outside the callback).
 on bombImpactCheck pCtrl
