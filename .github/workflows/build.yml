@@ -1,19 +1,27 @@
 name: build
 
 # Builds the native box2dxt shared library and runs the C smoke test on Linux,
-# macOS and Windows. On a version tag (v*) the per-OS binaries are attached to
-# the matching GitHub Release — those are the canonical artifacts referenced by
-# prebuilt/README.md. Pull requests get the same build + test gate (no release).
+# macOS and Windows. When a GitHub Release is published the per-OS binaries are
+# attached to it — those are the canonical artifacts referenced by
+# prebuilt/README.md. Pull requests and pushes to main get the same build + test
+# gate (no release). You can also run it by hand (Actions ▸ build ▸ Run workflow)
+# and give an existing release tag to attach binaries to it after the fact.
 
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*' ]
   pull_request:
+  release:
+    types: [ published ]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Attach the built binaries to this existing release tag (e.g. dev-01). Leave blank to only build & test."
+        required: false
+        default: ""
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.ref }}-${{ github.event.inputs.release_tag }}
   cancel-in-progress: true
 
 jobs:
@@ -81,11 +89,12 @@ jobs:
           path: dist/${{ matrix.asset }}
           if-no-files-found: error
 
-  # Tag builds only: gather the three binaries and attach them to the Release.
+  # Gather the three binaries and attach them to the release — either the one that
+  # was just published, or the tag passed to a manual run.
   release:
-    name: attach binaries to the Release
+    name: attach binaries to the release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -94,10 +103,10 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Upload to the Release
+      - name: Attach binaries to the release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.release_tag }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* \
-              --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes \
-            || gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+          echo "Attaching binaries to release: $TAG"
+          gh release upload "$TAG" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
