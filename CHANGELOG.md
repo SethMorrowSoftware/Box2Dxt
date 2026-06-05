@@ -96,9 +96,10 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
   onto a platform, showing the new pieces in one click.
 - **Continuous integration** (`.github/workflows/build.yml`). Every push and
   pull request builds the native library and runs the C smoke test on Linux,
-  macOS and Windows; version tags (`v*`) additionally attach the per-OS binaries
-  to the matching GitHub Release — the canonical artifacts `prebuilt/README.md`
-  points to.
+  macOS and Windows; publishing a GitHub Release (any tag name) additionally
+  builds and attaches the per-OS binaries to it — the canonical artifacts
+  `prebuilt/README.md` points to. A manual run (Actions ▸ build ▸ Run workflow)
+  can attach binaries to an existing release after the fact.
 - **Single-source Kit + drift check** (`tools/sync-embedded-kit.py`). The
   example stacks stay self-contained but now embed a *generated* copy of
   `src/box2dxt-kit.livecodescript` between sentinel comments, kept in sync by
