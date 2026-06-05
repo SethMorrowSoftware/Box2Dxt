@@ -34,7 +34,23 @@ setup, conventions, and how to extend the binding.
 
 See [the README](README.md#repository-layout). In short: C shim and extension in
 `src/`, the demo in `examples/`, guides in `docs/`, the runtime test in `tests/`,
-drop-in binaries in `prebuilt/`.
+drop-in binaries in `prebuilt/`, and helper scripts in `tools/`.
+
+## Editing the Kit
+
+`src/box2dxt-kit.livecodescript` is the **single source of truth** for the Kit.
+The example stacks in `examples/` are self-contained, so each one embeds a
+generated copy of the Kit between `>>> BEGIN EMBEDDED KIT` / `<<< END EMBEDDED
+KIT` sentinels. After changing the Kit, re-sync those copies:
+
+```sh
+python3 tools/sync-embedded-kit.py
+```
+
+Never hand-edit the region between the sentinels — your change would be
+overwritten on the next sync. CI runs `tools/sync-embedded-kit.py --check` and
+fails if an embedded copy has drifted, so commit the re-synced examples
+alongside the Kit change.
 
 ## Conventions
 
