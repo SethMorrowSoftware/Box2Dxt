@@ -10,6 +10,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Three more example machines (contraption builder).** **Trebuchet** (a
+  counterweight arm that whips round and flings a ball), **Crane** (a motorised
+  jib with a load hung on a rope) and **Wrecking Ball** (a roped weight shoved
+  into a brick wall) — each one click from the Examples menu, showcasing the
+  hinge-motor, weld and rope joints.
 - **Cannon example recipe (contraption builder).** A new one-click machine in the
   Examples menu: a static carriage + barrel and a heavy ball that fires across the
   field on Run (via the launch system) into a crate stack. It doubles as a demo

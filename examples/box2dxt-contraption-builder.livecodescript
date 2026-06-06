@@ -2735,6 +2735,18 @@ on handleAction pId
          hideRecipesMenu
          buildRecipeCannon
          break
+      case "trebuchet"
+         hideRecipesMenu
+         buildRecipeTrebuchet
+         break
+      case "crane"
+         hideRecipesMenu
+         buildRecipeCrane
+         break
+      case "wreckingball"
+         hideRecipesMenu
+         buildRecipeWreckingBall
+         break
       case "cradle"
          hideRecipesMenu
          buildRecipeCradle
@@ -6716,7 +6728,7 @@ on buildRecipesMenu
    put the width of this card into tWide
    put the height of this card into tHigh
    put 280 into tW
-   put 516 into tH
+   put 618 into tH
    put (tWide - tW) div 2 into tL
    put (tHigh - tH) div 2 into tT
    makeBar "ui_recipescrim", 0, 0, tWide, tHigh, "10,11,15"
@@ -6742,6 +6754,12 @@ on buildRecipesMenu
    makeRecipeBtn "catapult", "Catapult", tL + 16, tBy, tW - 32
    add 34 to tBy
    makeRecipeBtn "cannon", "Cannon", tL + 16, tBy, tW - 32
+   add 34 to tBy
+   makeRecipeBtn "trebuchet", "Trebuchet", tL + 16, tBy, tW - 32
+   add 34 to tBy
+   makeRecipeBtn "crane", "Crane", tL + 16, tBy, tW - 32
+   add 34 to tBy
+   makeRecipeBtn "wreckingball", "Wrecking Ball", tL + 16, tBy, tW - 32
    add 34 to tBy
    makeRecipeBtn "cradle", "Newton's Cradle", tL + 16, tBy, tW - 32
    add 34 to tBy
@@ -6912,6 +6930,91 @@ on buildRecipeCannon
    put "Cannon — press Run: the ball fires across the field. Knock the crate stack down!" into gStatus
    updateHud
 end buildRecipeCannon
+
+-- A trebuchet: a long arm hinged off-centre, a heavy counterweight welded to the
+-- short end and a ball resting on the long end. On Run the weight drops, the arm
+-- whips round and flings the ball downfield. (Gravity-driven — no motor.)
+on buildRecipeTrebuchet
+   if gMode is "run" then toggleMode
+   clearAll
+   local tCx, tBaseY, tPivot, tArm, tWeight, tBall
+   put (gArenaL + gArenaR) div 2 - 70 into tCx
+   put gArenaB - 150 into tBaseY
+   put placeAnchor(tCx, tBaseY) into tPivot
+   put placeBox(tCx + 44, tBaseY, 264, 12, "180,150,90") into tArm
+   set the uDensity of tArm to 0.5
+   b2kSetDensity tArm, 0.5
+   get connectJoint("hinge", tArm, tPivot, tCx, tBaseY, 0)
+   put placeBox(tCx - 80, tBaseY + 12, 56, 56, "214,92,92") into tWeight
+   set the uDensity of tWeight to 4
+   b2kSetDensity tWeight, 4
+   get connectJoint("weld", tWeight, tArm)
+   put placeBall(tCx + 162, tBaseY + 6, 26, "232,182,92") into tBall
+   set the uDensity of tBall to 0.8
+   b2kSetDensity tBall, 0.8
+   renderBuild
+   put "Trebuchet — press Run: the counterweight drops and the long arm flings the ball downfield." into gStatus
+   updateHud
+end buildRecipeTrebuchet
+
+-- A crane: a static mast, a motorised jib that swings, and a load hung from the
+-- jib end on a rope so it trails and sways as the jib turns.
+on buildRecipeCrane
+   if gMode is "run" then toggleMode
+   clearAll
+   local tX, tBaseY, tTop, tMast, tPivot, tJib, tLoad
+   put gArenaL + 150 into tX
+   put gArenaB - 30 into tBaseY
+   put tBaseY - 210 into tTop
+   put placeBox(tX, tBaseY - 110, 26, 220, "92,98,112") into tMast
+   set the uBodyType of tMast to "static"
+   b2kSetType tMast, "static"
+   put placeAnchor(tX, tTop) into tPivot
+   put placeBox(tX + 96, tTop, 210, 14, "180,150,90") into tJib
+   set the uDensity of tJib to 0.4
+   b2kSetDensity tJib, 0.4
+   get connectJoint("hinge", tJib, tPivot, tX, tTop, 26)   -- 26 deg/s motor swings the jib
+   put placeBall(tX + 184, tTop + 92, 34, "232,182,92") into tLoad
+   set the uDensity of tLoad to 2
+   b2kSetDensity tLoad, 2
+   get connectJoint("rope", tJib, tLoad)
+   renderBuild
+   put "Crane — press Run: the motorised jib swings and the roped load trails and sways behind it." into gStatus
+   updateHud
+end buildRecipeCrane
+
+-- A wrecking ball: a static gantry, a heavy ball hung on a rope and given a
+-- sideways shove on Run so it swings into a brick wall and knocks it down.
+on buildRecipeWreckingBall
+   if gMode is "run" then toggleMode
+   clearAll
+   local tX, tBaseY, tTop, tLeg, tBeam, tPivot, tBall, tI
+   put gArenaL + 120 into tX
+   put gArenaB - 30 into tBaseY
+   put tBaseY - 210 into tTop
+   put placeBox(tX, tBaseY - 105, 18, 210, "92,98,112") into tLeg
+   set the uBodyType of tLeg to "static"
+   b2kSetType tLeg, "static"
+   put placeBox(tX + 230, tBaseY - 105, 18, 210, "92,98,112") into tLeg
+   set the uBodyType of tLeg to "static"
+   b2kSetType tLeg, "static"
+   put placeBox(tX + 115, tTop, 260, 16, "92,98,112") into tBeam
+   set the uBodyType of tBeam to "static"
+   b2kSetType tBeam, "static"
+   put placeAnchor(tX + 40, tTop) into tPivot
+   put placeBall(tX + 40, tTop + 140, 40, "60,64,74") into tBall
+   set the uDensity of tBall to 4.5
+   b2kSetDensity tBall, 4.5
+   get connectJoint("rope", tPivot, tBall)
+   set the uLaunchSpeed of tBall to 540
+   set the uLaunchDir of tBall to 0                         -- shove right, into the wall
+   repeat with tI = 0 to 5
+      get placeBox(gArenaR - 160, gArenaB - 22 - tI * 30, 60, 28, "200,120,80")
+   end repeat
+   renderBuild
+   put "Wrecking Ball — press Run: the ball swings into the brick wall and smashes it down." into gStatus
+   updateHud
+end buildRecipeWreckingBall
 
 -- Five equal pendulums in a touching row; the raised end ball kicks the chain.
 on buildRecipeCradle
