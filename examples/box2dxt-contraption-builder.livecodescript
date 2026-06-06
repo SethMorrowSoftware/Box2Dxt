@@ -3011,6 +3011,7 @@ function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
             put cr & round(tHx) & "," & round(tHy) after tBase
          end repeat
          put cr & (pCx + tHw) & "," & tYBase after tBase     -- base-right (loop closes to base-left)
+         put reversedLines(tBase) into tBase                 -- wind so the chain's solid side faces OUT (bodies rest on top)
          break
       default
          -- platform: an axis-aligned rectangle
@@ -3133,13 +3134,25 @@ on finishDrawTerrain
       put "Press and drag to draw a ground line." into gStatus
       exit finishDrawTerrain
    end if
-   -- normalise left→right so the chain's solid side faces up (bodies rest on top)
+   -- Normalise the contour left→right, then build a CLOSED, filled ground mass:
+   -- the drawn surface on top, straight down to the arena floor. The top is laid
+   -- right→left so the chain's solid side faces up (Box2D: solid = right of the
+   -- travel direction), matching the smoke test's ground chain — bodies rest on it.
+   local tShape, tFloor, tFirstX, tLastX
    if (item 1 of the last line of tPts) < (item 1 of line 1 of tPts) then put reversedLines(tPts) into tPts
-   set the points of gDrawCtrl to tPts
-   tagPart gDrawCtrl, "draw", "150,120,84", empty
-   set the uPoints of gDrawCtrl to tPts
+   put item 1 of line 1 of tPts into tFirstX
+   put item 1 of the last line of tPts into tLastX
+   put gArenaB into tFloor
+   put tLastX & "," & tFloor & cr & reversedLines(tPts) & cr & tFirstX & "," & tFloor into tShape
+   set the style of gDrawCtrl to "polygon"
+   set the filled of gDrawCtrl to true
+   set the backgroundColor of gDrawCtrl to "120,96,60"
+   set the foregroundColor of gDrawCtrl to "70,56,36"
+   set the lineSize of gDrawCtrl to 2
+   set the points of gDrawCtrl to tShape
+   tagPart gDrawCtrl, "draw", "120,96,60", empty
    set the uFriction of gDrawCtrl to 0.6
-   b2kAddChain gDrawCtrl, tPts, false             -- open, one-sided ground line
+   b2kAddChain gDrawCtrl, tShape, true            -- closed loop = a solid ground mass
    selectPart gDrawCtrl
    put "Ground drawn. Press Run to test it." into gStatus
    put empty into gDrawCtrl
@@ -3154,11 +3167,13 @@ function placeDrawPlaceholder pX, pY
    put "cb_terrain_" & the milliseconds & "_" & random(99999) into tName
    create graphic tName
    put the long id of graphic tName into tRef
-   set the style of tRef to "line"
-   set the lineSize of tRef to kDrawLineSize
-   set the foregroundColor of tRef to "150,120,84"
+   set the style of tRef to "polygon"
+   set the filled of tRef to true
+   set the backgroundColor of tRef to "120,96,60"
+   set the foregroundColor of tRef to "70,56,36"
+   set the lineSize of tRef to 2
    set the loc of tRef to round(pX) & "," & round(pY)
-   tagPart tRef, "draw", "150,120,84", empty
+   tagPart tRef, "draw", "120,96,60", empty
    return tRef
 end placeDrawPlaceholder
 
@@ -4620,13 +4635,12 @@ on applyPartSpecial pCtrl, pSpecial
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
          break
    end switch
-   if tKind is "draw" then                       -- restore a freehand-drawn ground line + its chain
+   if tKind is "draw" then                       -- restore a freehand-drawn ground mass + its chain
       put specialValue(pSpecial, "pts") into tV
       if tV is not empty then
          replace "|" with cr in tV
          set the points of pCtrl to tV
-         set the uPoints of pCtrl to tV
-         b2kAddChain pCtrl, tV, false
+         b2kAddChain pCtrl, tV, true             -- closed loop, same as when it was drawn
       end if
    end if
 end applyPartSpecial

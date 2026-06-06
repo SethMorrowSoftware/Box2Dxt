@@ -183,6 +183,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Fixed
 
+- **Drawn ground now collides and is clearly visible.** A freehand *Draw* piece
+  is now a filled, closed ground mass (the drawn surface down to the floor) with
+  its chain wound so the solid side faces up — bodies rest on it instead of
+  falling through, and it reads as solid ground rather than a thin line. The same
+  chain-winding fix applies to the smooth **Hill**.
 - **Drawn terrain saves where you last dragged it.** A freehand *Draw* terrain
   piece is now serialized from its current points, so repositioning it before a
   save no longer snaps it back to where it was first drawn when you load.
