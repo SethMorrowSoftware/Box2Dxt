@@ -10,6 +10,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Categorised Examples gallery.** The Examples menu is now a tidy two-column
+  gallery grouped into **Launchers / Machines / Chain Reactions / Toys & Tests**
+  with section headers, instead of one long scrolling list — room to keep adding
+  machines and far easier to scan. (UI version bumped so it rebuilds.)
+- **Enable/disable parts.** Every dynamic part has an **In simulation: yes/no**
+  toggle (Physics tab) that pulls it out of / back into the live world
+  (`b2kDisable` / `b2kEnable`); saved and loaded.
 - **Comprehensive part inspector.** More of box2dxt is now editable per object:
   a body can be **kinematic** (a moving platform — set a launch velocity and it
   drifts, unaffected by gravity or collisions) as well as static or dynamic;

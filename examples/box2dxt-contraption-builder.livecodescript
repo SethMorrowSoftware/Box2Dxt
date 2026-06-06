@@ -1763,7 +1763,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "3"
+constant kUIVersion = "4"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -4130,6 +4130,7 @@ function partSpecial pCtrl
       if numOr(the uLayer of pCtrl, 0) > 0 then put addKV(tS, "lyr=" & (the uLayer of pCtrl)) into tS
       if numOr(the uSleep of pCtrl, 0) > 0 then put addKV(tS, "slp=" & (the uSleep of pCtrl)) into tS
       if the uKind of pCtrl is "image" and the uShape of pCtrl is not empty then put addKV(tS, "ishp=" & (the uShape of pCtrl)) into tS
+      if the uActive of pCtrl is false then put addKV(tS, "act=false") into tS
       if the uKind of pCtrl is "draw" then put addKV(tS, "pts=" & ptsPacked(pCtrl)) into tS
    end if
    switch tKind
@@ -4597,6 +4598,10 @@ on applyPartSpecial pCtrl, pSpecial
          set the uSleep of pCtrl to tV
          b2kSetSleepThreshold pCtrl, tV
       end if
+      if specialValue(pSpecial, "act") is "false" then
+         set the uActive of pCtrl to false
+         b2kDisable pCtrl
+      end if
       put specialValue(pSpecial, "ldmp") into tV
       if tV is not empty then
          set the uLinDamp of pCtrl to tV
@@ -5025,15 +5030,15 @@ end showPartInspector
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
       case "image"
-         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
+         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
@@ -5113,6 +5118,9 @@ function propLabel pCtrl, pKey
          return "Sleeps below: " & (the uSleep of pCtrl) & " px/s"
       case "imgshape"
          return "Collision shape: " & numOr(the uShape of pCtrl, "box")
+      case "active"
+         if the uActive of pCtrl is false then return "In simulation: no (disabled)"
+         return "In simulation: yes"
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
@@ -5332,6 +5340,15 @@ on adjustPartProp pCtrl, pKey, pDir
          b2kReshape pCtrl, (the uShape of pCtrl)
          reapplyMaterial pCtrl
          break
+      case "active"
+         if the uActive of pCtrl is false then
+            set the uActive of pCtrl to true
+            b2kEnable pCtrl
+         else
+            set the uActive of pCtrl to false
+            b2kDisable pCtrl
+         end if
+         break
       case "launchspeed"
          put numOr(the uLaunchSpeed of pCtrl, 0) + pDir * 50 into tLs
          set the uLaunchSpeed of pCtrl to clampRange(tLs, 0, 1500)
@@ -5508,7 +5525,7 @@ end swatchIndexOf
 -- Which settings tab a property key belongs to.
 function propGroup pKey
    if pKey is among the items of "width,height,length,thickness,diameter,size,imgshape,angle,facing,color" then return "shape"
-   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep" then return "physics"
+   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active" then return "physics"
    if pKey is among the items of "launchspeed,launchdir,spinrate" then return "motion"
    return "special"
 end propGroup
@@ -6780,52 +6797,51 @@ on buildRecipesMenu
    local tWide, tHigh, tL, tT, tW, tH, tBy
    put the width of this card into tWide
    put the height of this card into tHigh
-   put 280 into tW
-   put 618 into tH
+   put 420 into tW
+   put 476 into tH
    put (tWide - tW) div 2 into tL
    put (tHigh - tH) div 2 into tT
    makeBar "ui_recipescrim", 0, 0, tWide, tHigh, "10,11,15"
-   set the blendLevel of graphic "ui_recipescrim" to 55
+   set the blendLevel of graphic "ui_recipescrim" to 62
    set the uRecipeMenu of graphic "ui_recipescrim" to true
    makeBar "ui_recipebg", tL, tT, tL + tW, tT + tH, "34,38,48"
    set the uRecipeMenu of graphic "ui_recipebg" to true
-   makeLabel "ui_recipe_title", tL + 16, tT + 12, tL + tW - 16, tT + 36, "Examples & Stress Test", 14, "236,238,245", true
+   makeLabel "ui_recipe_title", tL + 18, tT + 14, tL + tW - 18, tT + 38, "Example Machines", 15, "236,238,245", true
    set the uRecipeMenu of field "ui_recipe_title" to true
-   put tT + 48 into tBy
-   makeRecipeBtn "balloonlift", "Balloon Lift", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "platebomb", "Plate → Bomb Chain", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "fantower", "Fan Tower", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "magnetcatch", "Magnet Catch", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "cart", "Motor Cart", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "swing", "Pendulum Swing", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "catapult", "Catapult", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "cannon", "Cannon", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "trebuchet", "Trebuchet", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "crane", "Crane", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "wreckingball", "Wrecking Ball", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "cradle", "Newton's Cradle", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "dominoes", "Domino Run", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "terrainrun", "Terrain Run", tL + 16, tBy, tW - 32
-   add 40 to tBy
-   makeRecipeBtn "stress", "Stress Test (+" & kStressBatch & " bodies)", tL + 16, tBy, tW - 32
-   add 40 to tBy
-   makeAction "recipeclose", "Close", tL + tW - 90, tBy, 74, 26
+   put tT + 46 into tBy
+   put recipeCategory("Launchers", "catapult,cannon,trebuchet,wreckingball", \
+         "Catapult,Cannon,Trebuchet,Wrecking Ball", tL, tW, tBy) into tBy
+   put recipeCategory("Machines", "crane,cart,fantower,magnetcatch,balloonlift", \
+         "Crane,Motor Cart,Fan Tower,Magnet Catch,Balloon Lift", tL, tW, tBy) into tBy
+   put recipeCategory("Chain Reactions", "platebomb,dominoes", \
+         "Plate → Bomb,Domino Run", tL, tW, tBy) into tBy
+   put recipeCategory("Toys & Tests", "swing,cradle,terrainrun,stress", \
+         "Pendulum Swing,Newton's Cradle,Terrain Run,Stress (+" & kStressBatch & ")", tL, tW, tBy) into tBy
+   makeAction "recipeclose", "Close", tL + tW - 92, tBy + 2, 76, 26
    set the uRecipeMenu of button "ui_act_recipeclose" to true
    hideRecipesMenu
 end buildRecipesMenu
+
+-- Lay out one labelled category of recipe buttons in two columns. Returns the
+-- next free Y. pIds / pLabels are comma lists; the headers and buttons all carry
+-- uRecipeMenu so the whole gallery shows/hides as one.
+function recipeCategory pTitle, pIds, pLabels, pL, pW, pY
+   local tHdr, tI, tN, tColW, tBx
+   put "ui_reccat_" & the number of controls of this card into tHdr   -- a unique, name-safe id
+   makeLabel tHdr, pL + 18, pY, pL + pW - 18, pY + 18, pTitle, 11, "150,196,232", true
+   set the uRecipeMenu of field tHdr to true
+   add 22 to pY
+   set the itemDelimiter to comma
+   put the number of items of pIds into tN
+   put (pW - 44) div 2 into tColW
+   repeat with tI = 1 to tN
+      if (tI - 1) mod 2 is 0 then put pL + 18 into tBx
+      else put pL + 18 + tColW + 8 into tBx
+      makeRecipeBtn (item tI of pIds), (item tI of pLabels), tBx, pY, tColW
+      if (tI mod 2 is 0) or (tI is tN) then add 30 to pY
+   end repeat
+   return pY + 8
+end recipeCategory
 
 on makeRecipeBtn pId, pLabel, pX, pY, pW
    makeAction pId, pLabel, pX, pY, pW, 28
