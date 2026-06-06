@@ -1736,7 +1736,7 @@ local gDynParts, gDynDirty
 -- selection / inspector / onboarding / stress-test bookkeeping
 local gSelPart, gHoverId, gOnbStep, gStressCount
 local gSelJoint                        -- selected joint index (1..gJN), empty if none
-local gInspTab                         -- active inspector tab: shape | physics | motion | special
+local gInspTab                         -- active inspector tab: shape | physics | collide | special
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
 local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
 local gPreRun                          -- snapshot of the build, taken when Run starts
@@ -1770,7 +1770,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "4"
+constant kUIVersion = "5"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -2230,7 +2230,7 @@ on makeInspector
    -- settings tabs: group a part's many settings so each pane stays short
    makeAction "tab_shape", "Shape", tL + 12, tTop + 124, 50, 24
    makeAction "tab_physics", "Physics", tL + 64, tTop + 124, 58, 24
-   makeAction "tab_motion", "Motion", tL + 124, tTop + 124, 52, 24
+   makeAction "tab_collide", "Collide", tL + 124, tTop + 124, 52, 24
    makeAction "tab_special", "Special", tL + 178, tTop + 124, 58, 24
    -- a clearly-marked, divided settings block so adjustable values stand out
    makeBar "ui_settings_div", tL + 12, tTop + 156, tWide - 12, tTop + 157, "60,66,80"
@@ -5573,17 +5573,17 @@ end swatchIndexOf
 -- Which settings tab a property key belongs to.
 function propGroup pKey
    if pKey is among the items of "width,height,length,thickness,diameter,size,imgshape,angle,facing,color" then return "shape"
-   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor" then return "physics"
-   if pKey is among the items of "launchspeed,launchdir,spinrate" then return "motion"
-   return "special"
+   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material" then return "physics"
+   if pKey is among the items of "layer,sensor,filter,active,sleep" then return "collide"
+   return "special"   -- launchspeed,launchdir,spinrate and the fan/magnet/bomb keys
 end propGroup
 
 -- The tabs that actually have settings for this kind (so empty tabs stay hidden).
 function partTabs pKind
-   local tKey, tHasShape, tHasPhys, tHasMotion, tHasSpec, tOut
+   local tKey, tHasShape, tHasPhys, tHasCollide, tHasSpec, tOut
    put false into tHasShape
    put false into tHasPhys
-   put false into tHasMotion
+   put false into tHasCollide
    put false into tHasSpec
    set the itemDelimiter to comma
    repeat for each item tKey in partProps(pKind)
@@ -5594,8 +5594,8 @@ function partTabs pKind
          case "physics"
             put true into tHasPhys
             break
-         case "motion"
-            put true into tHasMotion
+         case "collide"
+            put true into tHasCollide
             break
          case "special"
             put true into tHasSpec
@@ -5605,7 +5605,7 @@ function partTabs pKind
    put empty into tOut
    if tHasShape then put "shape" into tOut
    if tHasPhys then put addItem(tOut, "physics") into tOut
-   if tHasMotion then put addItem(tOut, "motion") into tOut
+   if tHasCollide then put addItem(tOut, "collide") into tOut
    if tHasSpec then put addItem(tOut, "special") into tOut
    return tOut
 end partTabs
@@ -5625,7 +5625,7 @@ end selectInspTab
 on refreshInspTabs pAvail
    local tT
    set the itemDelimiter to comma
-   repeat for each item tT in "shape,physics,motion,special"
+   repeat for each item tT in "shape,physics,collide,special"
       if there is not a button ("ui_act_tab_" & tT) then next repeat
       if tT is among the items of pAvail then
          set the visible of button ("ui_act_tab_" & tT) to true
@@ -5643,7 +5643,7 @@ end refreshInspTabs
 on hideInspTabs
    local tT
    set the itemDelimiter to comma
-   repeat for each item tT in "shape,physics,motion,special"
+   repeat for each item tT in "shape,physics,collide,special"
       if there is a button ("ui_act_tab_" & tT) then set the visible of button ("ui_act_tab_" & tT) to false
    end repeat
 end hideInspTabs
