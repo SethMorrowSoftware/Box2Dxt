@@ -1969,9 +1969,9 @@ on makeTopBar
    makeBar "ui_accent", 0, kTopBarH, tWide, kTopBarH + kAccentH, kColAccentGreen
    makeLabel "ui_title", 18, 7, 280, 33, "Box2Dxt", 22, "236,238,245", true
    makeLabel "ui_sub", 20, 32, 560, 50, "Contraption Builder — build a machine, then press Run to bring it to life", 11, "150,154,166", false
-   put "mode,reset,clear,save,load,recipes,info" into tIds
-   put "Run,Reset,Clear,Save,Load,Recipes,?" into tLbls
-   put "84,60,64,64,64,84,30" into tWidths
+   put "mode,reset,clear,save,load,worldadv,recipes,info" into tIds
+   put "Run,Reset,Clear,Save,Load,World,Recipes,?" into tLbls
+   put "84,60,64,64,64,64,84,30" into tWidths
    put 6 into tGap
    put 0 into tW
    repeat for each item tId in tWidths
@@ -2267,8 +2267,6 @@ on makeInspector
    makeAction "gravity", "Gravity: Normal", tL + 12, tRy, kInspectorW - 24, 26
    add 32 to tRy
    makeAction "worldfeel", "Feel: Default", tL + 12, tRy, kInspectorW - 24, 26
-   add 32 to tRy
-   makeAction "worldadv", "World · Advanced…", tL + 12, tRy, kInspectorW - 24, 26
    add 32 to tRy
    makeAction "pause", "Pause", tL + 12, tRy, 108, 26
    makeAction "step", "Step", tL + 128, tRy, 80, 26
@@ -2855,7 +2853,7 @@ on toggleMode
       applyWorldOptions             -- and the advanced solver toggles (CCD, sleeping, substeps…)
       armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
-      put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse; Shift-click to kick one." into gStatus
+      put "Run — gravity & motors live. Drag bodies; Shift-click to kick." into gStatus
    else
       put "build" into gMode
       put empty into gFps
@@ -4172,6 +4170,7 @@ end saveContraption
 function partLine pCtrl
    local tLoc
    put the loc of pCtrl into tLoc
+   if the uKind of pCtrl is "laser" then put (line 1 of the points of pCtrl) into tLoc   -- a laser's anchor is its emitter, not the beam's bbox centre
    return "part" & tab & (the uPartId of pCtrl) & tab & (the uKind of pCtrl) & tab & \
          (item 1 of tLoc) & tab & (item 2 of tLoc) & tab & \
          numOr(the uW of pCtrl, the width of pCtrl) & tab & numOr(the uH of pCtrl, the height of pCtrl) & tab & \
@@ -7212,7 +7211,12 @@ function actionHelp pId
          return "Close this menu."
       case "filterclose"
          return "Close the collision filter."
+      case "worldadv"
+         return "Advanced world solver settings (CCD, sleeping, sub-steps…)."
+      case "worldclose"
+         return "Close the world settings."
    end switch
+   if char 1 to 5 of pId is "wopt_" then return "Toggle this world solver setting."
    if char 1 to 9 of pId is "prop_inc_" then return "Increase this value."
    if char 1 to 9 of pId is "prop_dec_" then return "Decrease this value."
    if char 1 to 9 of pId is "filt_cat_" then return "Toggle whether this part is on channel " & (char 10 to -1 of pId) & "."
