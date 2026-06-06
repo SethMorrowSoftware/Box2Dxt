@@ -178,6 +178,12 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Fixed
 
+- **Drawn terrain saves where you last dragged it.** A freehand *Draw* terrain
+  piece is now serialized from its current points, so repositioning it before a
+  save no longer snaps it back to where it was first drawn when you load.
+- **Tidied the smooth-hill outline locals.** Its working variables used bare
+  names (including `env`); they're now `t`-prefixed like the rest of the file,
+  removing any chance of clashing with an xTalk reserved word.
 - **Kit collision-layer handlers no longer trip an OpenXTalk reserved word.**
   The `pLayers` parameter of `b2kLayerBits` / `b2kSetCategory` / `b2kSetMask` is
   (case-insensitively) the reserved word `players`, which stopped the script

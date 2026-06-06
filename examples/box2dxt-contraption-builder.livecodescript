@@ -2974,7 +2974,7 @@ end terrainColor
 -- about the centre. Convex and <= 8 verts, so b2kAddPolygon accepts it.
 function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
    local tHw, tHh, tBase, tPt, tx, ty, tC, tS, tA, tRot
-   local tBumps, tNh, ih, th, env, bump, hx, hy, yBase
+   local tBumps, tNh, tIh, tT, tEnv, tBump, tHx, tHy, tYBase
    set the itemDelimiter to comma                -- we parse "x,y" points below
    put pW / 2 into tHw
    put pH / 2 into tHh
@@ -2992,20 +2992,20 @@ function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
          -- body rides over the bumps without catching on any seam.
          put max(1, round(pW / 200)) into tBumps
          put 6 * (tBumps + 1) into tNh                       -- top samples
-         put pCy + tHh into yBase
+         put pCy + tHh into tYBase
          -- order base-left, top LEFT→RIGHT, base-right: as a closed chain loop
          -- this puts the solid side below the surface (Box2D: solid = right of
          -- the travel direction), so bodies rest ON the hill rather than fall through.
-         put (pCx - tHw) & "," & yBase into tBase            -- base-left
-         repeat with ih = 1 to tNh - 1                       -- interior top points, left → right
-            put ih / tNh into th
-            put sin(th * kPI) into env                        -- 0 at the ends → meets the base
-            put 0.62 + 0.38 * (0.5 - 0.5 * cos(th * tBumps * 2 * kPI)) into bump
-            put pCx - tHw + th * pW into hx
-            put yBase - pH * env * bump into hy
-            put cr & round(hx) & "," & round(hy) after tBase
+         put (pCx - tHw) & "," & tYBase into tBase           -- base-left
+         repeat with tIh = 1 to tNh - 1                      -- interior top points, left → right
+            put tIh / tNh into tT
+            put sin(tT * kPI) into tEnv                       -- 0 at the ends → meets the base
+            put 0.62 + 0.38 * (0.5 - 0.5 * cos(tT * tBumps * 2 * kPI)) into tBump
+            put pCx - tHw + tT * pW into tHx
+            put tYBase - pH * tEnv * tBump into tHy
+            put cr & round(tHx) & "," & round(tHy) after tBase
          end repeat
-         put cr & (pCx + tHw) & "," & yBase after tBase      -- base-right (loop closes to base-left)
+         put cr & (pCx + tHw) & "," & tYBase after tBase     -- base-right (loop closes to base-left)
          break
       default
          -- platform: an axis-aligned rectangle
@@ -3172,8 +3172,9 @@ end reversedLines
 -- and TAB are taken by the save format).
 function ptsPacked pCtrl
    local tP
-   put the uPoints of pCtrl into tP
-   replace cr with "|" in tP
+   put the points of pCtrl into tP     -- current points, so a dragged terrain saves where it sits
+   filter tP without empty             -- drop any trailing blank line
+   replace cr with "|" in tP           -- ";" and TAB are taken by the save format
    return tP
 end ptsPacked
 
