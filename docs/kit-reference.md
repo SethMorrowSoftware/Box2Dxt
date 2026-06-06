@@ -10,6 +10,10 @@ demo's performance practices built in.
 stack and `start using` it). It requires the `box2dxt` extension loaded
 (`put b2Version()` should return `3`).
 
+> **New here?** Read the [**Complete Guide**](kit-guide.md) first — it teaches
+> the Kit start-to-finish with runnable examples. This page is the quick-lookup
+> reference.
+
 - [60-second start](#60-second-start)
 - [World & loop](#world--loop)
 - [Configuration](#configuration)
@@ -106,6 +110,7 @@ dynamic/static where a handler takes an optional `dyn` flag.
 | `b2kSpawnBox x, y, w, h [,color]` → control | Create a control *and* its box body. |
 | `b2kSpawnBall x, y, diam [,color]` → control | Create a control *and* its ball body. |
 | `b2kSpawnCapsule x, y, len, thick [,color]` → control | Create a pill-shaped control *and* its capsule body. |
+| `b2kReshape ctrl, "box"\|"ball"\|"capsule"\|"poly"` | Rebuild a body's collision shape from the control's current size/points, on the same body (joints survive). Resets material + filter — re-apply them after. |
 
 ## Materials
 
@@ -239,9 +244,11 @@ events on every body it creates, so sensors detect them automatically.
 | Handler | Purpose |
 |---------|---------|
 | `b2kAddSensor ctrl [,shape]` → body | Attach a static sensor (`shape` = `box`/`ball`/`capsule`). |
+| `b2kSetSensor ctrl, flag` | Flip an existing body between solid and sensor (rebuilds the shape, keeping the new sensor state). |
 | `on b2kSensorEnter pSensorCtrl, pVisitorCtrl` | Sent to your `b2kContactTarget` when a body enters a sensor. |
 | `on b2kSensorExit pSensorCtrl, pVisitorCtrl` | Sent when it leaves. |
-| `b2kSensorCount()` / `b2kSensorEnterSensor(i)` / `b2kSensorEnterVisitor(i)` | Poll this frame's enters (1-based); `…Exit…` for leaves. |
+| `b2kSensorCount()` / `b2kSensorEnterSensor(i)` / `b2kSensorEnterVisitor(i)` | Poll this frame's enters (1-based). |
+| `b2kSensorExitCount()` / `b2kSensorExitSensor(i)` / `b2kSensorExitVisitor(i)` | Poll this frame's leaves (1-based). |
 
 ## Collision filtering (named layers)
 
@@ -262,6 +269,11 @@ other's mask (and no shared negative group forbids it).
 |---------|---------|
 | `b2kChain pointList [,loop]` → chain | Smooth static terrain from a list of `x,y` screen points (≥ 4). No inner corners for fast bodies to catch on. Invisible — draw a matching graphic. |
 | `b2kSmoothGround pointList` → chain | An open chain (alias for `b2kChain …, false`). |
+| `b2kAddChain ctrl, pointList [,loop]` | A smooth chain that **tracks a control** (move/draw the terrain as one graphic). Points are the control's own outline. |
+
+> **Winding:** a chain's solid side is to the *right* of the point-travel
+> direction. For ground you stand on, list the top surface **right-to-left** so
+> the solid side faces up. (Bodies falling through? Reverse the point order.)
 
 ## Region & ray queries
 

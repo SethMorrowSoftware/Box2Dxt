@@ -173,7 +173,8 @@ of the [Kit](kit-reference.md).
 
 ## Where to go next
 
-- [Kit Reference](kit-reference.md) — the full friendly `b2k…` API.
+- [**Kit Guide**](kit-guide.md) — the complete, teach-you-everything walkthrough of the `b2k…` toolkit, with runnable examples.
+- [Kit Reference](kit-reference.md) — the same `b2k…` API as quick-lookup tables.
 - [API Reference](api-reference.md) — the low-level `b2…` API and units/gotchas.
 - [Architecture](architecture.md) — how it all works under the hood.
 - [Building](building.md) — compile the native library yourself.
