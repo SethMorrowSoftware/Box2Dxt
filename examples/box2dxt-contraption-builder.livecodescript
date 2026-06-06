@@ -1346,6 +1346,34 @@ command b2kSmoothGround pPoints
    return b2kChain(pPoints, false)
 end b2kSmoothGround
 
+-- Attach a smooth static chain to a CONTROL, from a list of SCREEN points
+-- ("x,y" per line) — the control's own outline. Unlike b2kChain (which makes an
+-- untracked world body), this registers the body against the control like
+-- b2kAddBox/Ball/Polygon, so it selects (b2kControlAt), drags (b2kMoveTo) and
+-- removes (b2kRemove) as a normal static part. The points are taken relative to
+-- the control's centre, so moving the control moves the terrain with it. pLoop
+-- true closes the outline into a solid blob; false leaves a one-sided ground
+-- line. Great for smooth, rolling, concave terrain a fast body won't catch on.
+command b2kAddChain pControl, pPoints, pLoop
+   local tRef, tCx, tCy, tBody, p, lx, ly
+   if sWorld is empty then return 0
+   put the long id of pControl into tRef
+   put item 1 of the loc of pControl into tCx
+   put item 2 of the loc of pControl into tCy
+   put b2NewStaticBody(sWorld, b2kToWorldX(tCx), b2kToWorldY(tCy)) into tBody
+   b2ChainBegin
+   repeat for each line p in pPoints
+      if p is empty then next repeat
+      put (item 1 of p - tCx) / sScale into lx          -- local to the control's centre
+      put - ((item 2 of p - tCy) / sScale) into ly
+      b2ChainAddPoint lx, ly
+   end repeat
+   get b2CreateChain(tBody, (pLoop is true), 0.6, 0.1)
+   b2kRegister tRef, tBody, true                        -- static, kit-tracked
+   put "loc" into sRender[tRef]                          -- static: registered but never synced
+   return tBody
+end b2kAddChain
+
 -- Controls whose body overlaps a screen RECT (newline-separated long ids).
 function b2kOverlap pX1, pY1, pX2, pY2
    if sWorld is empty then return empty
@@ -2913,6 +2941,7 @@ end terrainColor
 -- about the centre. Convex and <= 8 verts, so b2kAddPolygon accepts it.
 function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
    local tHw, tHh, tBase, tPt, tx, ty, tC, tS, tA, tRot
+   local tBumps, tNh, ih, th, env, bump, hx, hy, yBase
    set the itemDelimiter to comma                -- we parse "x,y" points below
    put pW / 2 into tHw
    put pH / 2 into tHh
@@ -2924,11 +2953,26 @@ function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
                & cr & (pCx + tHw) & "," & (pCy - tHh) into tBase
          break
       case "hill"
-         -- a convex dome: flat base with an arched top
-         put (pCx - tHw) & "," & (pCy + tHh) & cr & (pCx + tHw) & "," & (pCy + tHh) & cr \
-               & round(pCx + tHw * 0.62) & "," & round(pCy - tHh * 0.45) & cr \
-               & pCx & "," & (pCy - tHh) & cr \
-               & round(pCx - tHw * 0.62) & "," & round(pCy - tHh * 0.45) into tBase
+         -- Rolling ground: a flat base with an undulating top. The bump count
+         -- grows with width, so a narrow hill is a single dome and a wide one
+         -- rolls. placeTerrain turns this outline into a smooth chain, so a fast
+         -- body rides over the bumps without catching on any seam.
+         put max(1, round(pW / 200)) into tBumps
+         put 6 * (tBumps + 1) into tNh                       -- top samples
+         put pCy + tHh into yBase
+         -- order base-left, top LEFT→RIGHT, base-right: as a closed chain loop
+         -- this puts the solid side below the surface (Box2D: solid = right of
+         -- the travel direction), so bodies rest ON the hill rather than fall through.
+         put (pCx - tHw) & "," & yBase into tBase            -- base-left
+         repeat with ih = 1 to tNh - 1                       -- interior top points, left → right
+            put ih / tNh into th
+            put sin(th * kPI) into env                        -- 0 at the ends → meets the base
+            put 0.62 + 0.38 * (0.5 - 0.5 * cos(th * tBumps * 2 * kPI)) into bump
+            put pCx - tHw + th * pW into hx
+            put yBase - pH * env * bump into hy
+            put cr & round(hx) & "," & round(hy) after tBase
+         end repeat
+         put cr & (pCx + tHw) & "," & yBase after tBase      -- base-right (loop closes to base-left)
          break
       default
          -- platform: an axis-aligned rectangle
@@ -2968,7 +3012,8 @@ function placeTerrain pKind, pX, pY, pW, pH
    set the lineSize of tRef to 2                 -- a bolder edge reads as solid ground
    set the points of tRef to terrainPoints(pKind, round(pX), round(pY), pW, pH, 0, false)
    set the loc of tRef to round(pX) & "," & round(pY)
-   b2kAddPolygon tRef, false                  -- static: never falls, never syncs
+   if pKind is "hill" then b2kAddChain tRef, the points of tRef, true   -- smooth rolling ground
+   else b2kAddPolygon tRef, false                                       -- convex: never falls, never syncs
    tagPart tRef, pKind, tColor, empty
    set the uW of tRef to pW
    set the uH of tRef to pH
@@ -2990,9 +3035,21 @@ on regenTerrain pCtrl
          numOr(the uW of pCtrl, 120), numOr(the uH of pCtrl, 26), numOr(the uAngle of pCtrl, 0), \
          (the uFlip of pCtrl is true))
    set the loc of pCtrl to tCx & "," & tCy     -- keep centred on the body origin
-   b2kReshape pCtrl, "poly"
-   reapplyMaterial pCtrl
+   if the uKind of pCtrl is "hill" then
+      rebuildHillChain pCtrl                    -- smooth hills use a chain, not a polygon shape
+   else
+      b2kReshape pCtrl, "poly"
+      reapplyMaterial pCtrl
+   end if
 end regenTerrain
+
+-- Rebuild a hill's smooth static chain from its current outline (the polygon
+-- shape path can't represent the rolling, concave profile). Drops the old chain
+-- body and re-attaches one to the same graphic, so the part keeps its identity.
+on rebuildHillChain pCtrl
+   if b2kBodyOf(pCtrl) is not empty then b2kRemove pCtrl   -- destroy old chain body; graphic stays (not kit-spawned)
+   b2kAddChain pCtrl, the points of pCtrl, true
+end rebuildHillChain
 
 -- =====================================================================
 -- Vehicle: a ready-made car you drop in like any object — a chassis on two
@@ -5061,7 +5118,9 @@ on resizePart pCtrl, pFactor
    end if
    set the uW of pCtrl to the width of pCtrl
    set the uH of pCtrl to the height of pCtrl
-   if kindHasBody(tKind) then
+   if tKind is "hill" then
+      rebuildHillChain pCtrl
+   else if kindHasBody(tKind) then
       b2kReshape pCtrl, shapeOfKind(tKind)
       reapplyMaterial pCtrl
    end if
@@ -5263,7 +5322,9 @@ on setPartDimension pCtrl, pAxis, pValue
    set the loc of pCtrl to tCx & "," & tCy
    set the uW of pCtrl to tW
    set the uH of pCtrl to tH
-   if kindHasBody(tKind) then
+   if tKind is "hill" then
+      rebuildHillChain pCtrl              -- outline carries its own rotation; body stays at 0
+   else if kindHasBody(tKind) then
       b2kReshape pCtrl, shapeOfKind(tKind)
       reapplyMaterial pCtrl
       if tAng is not 0 then b2kMoveTo pCtrl, tCx, tCy, tAng

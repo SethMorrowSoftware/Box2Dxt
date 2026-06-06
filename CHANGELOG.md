@@ -10,6 +10,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Smooth, rolling hills (contraption builder + Kit).** The Hill terrain tool now
+  builds a smooth chain that follows its outline instead of a single convex
+  polygon, so a fast ball or wheel rides over it without catching on seams — and
+  the bump count scales with width (a narrow hill is a dome, a wide one rolls).
+  Backed by a new Kit helper, **`b2kAddChain pControl, pPoints [, pLoop]`**, which
+  attaches a *control-tracked* smooth chain — unlike the world-only `b2kChain` it
+  selects, drags, resizes, deletes and saves like any static part.
 - **Full Box2D v3.1.0 live-object API.** The binding now exposes essentially the
   whole engine surface a script needs — ~240 new shim functions, each with a
   `b2…` extension wrapper and, where it helps, a friendly `b2k…` Kit helper:
