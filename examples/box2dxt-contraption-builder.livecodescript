@@ -5268,7 +5268,26 @@ on showPartInspector pCtrl
    end repeat
    if tRow > 0 then setSettingsHint empty           -- rows are showing; hide the prompt
    else setSettingsHint "Nothing to adjust on this tab."
+   if tKind is "bomb" then setSettingsHint blastPreviewText(pCtrl)   -- live "what it would hit"
 end showPartInspector
+
+-- A live preview of a bomb's reach: how many parts currently sit inside its blast
+-- radius, found with the Kit's region query b2kOverlapCircle. Refreshes whenever
+-- the bomb is selected or its radius is nudged.
+function blastPreviewText pBomb
+   local tCx, tCy, tR, tP, tN, tPlural
+   set the itemDelimiter to comma
+   put item 1 of the loc of pBomb into tCx
+   put item 2 of the loc of pBomb into tCy
+   put numOr(the uBlastRadius of pBomb, kBombRadius) into tR
+   put 0 into tN
+   repeat for each line tP in b2kOverlapCircle(tCx, tCy, tR)
+      if tP is not empty and tP is not pBomb then add 1 to tN
+   end repeat
+   if tN is 1 then put "part" into tPlural
+   else put "parts" into tPlural
+   return "Blast radius " & tR & " px — reaches " & tN && tPlural & " right now."
+end blastPreviewText
 
 -- The ordered list of adjustable settings shown for each kind of part.
 function partProps pKind
