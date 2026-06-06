@@ -1724,7 +1724,7 @@ local gArenaL, gArenaR, gArenaT, gArenaB
 local gStatus
 local gNextPid
 local gFlash
-local gFrames, gFpsTime, gFps
+local gFrames, gFpsTime, gFps, gHudTime   -- gHudTime throttles the live HUD/telemetry refresh
 -- new-object + field-force state (balloons rise on their own; fans/magnets are
 -- body-less zones that push parts each frame; plates count what rests on them).
 -- gKindList[kind] holds a CR-delimited control list per special kind.
@@ -4393,17 +4393,61 @@ on updateHud
    put tInfo & "    Parts: " & b2kBodyCount() & "    Joints: " & liveJointCount() into tInfo
    if gBouncy then put tInfo & "    Bouncy" into tInfo
    if gMode is "run" and gFps is not empty then put tInfo & "    " & gFps & " fps" into tInfo
+   if gMode is "run" then put tInfo & hudPerf() & hudSelection() into tInfo
    if gStatus is not empty then put tInfo & "     |  " & gStatus into tInfo
    if there is a field "ui_status" then put tInfo into field "ui_status"
 end updateHud
 
+-- Live engine telemetry for the status bar (Run only): solver step time + how many
+-- bodies are still awake. b2kProfile returns "totalStep,collide,solve" in ms.
+function hudPerf
+   local tProf
+   put b2kProfile() into tProf
+   if tProf is empty then return empty
+   set the itemDelimiter to comma
+   return "    step " & fmtMs(item 1 of tProf) & "ms · awake " & b2kAwakeBodyCount()
+end hudPerf
+
+-- Live readout for the selected part or joint, so the inspector numbers can be
+-- watched changing during a run (speed/mass/angle, or a joint's own measure).
+function hudSelection
+   local tK, tH
+   if gSelJoint is not empty then
+      put gJKind[gSelJoint] into tK
+      put gJHandle[gSelJoint] into tH
+      if tK is "hinge" then return "    hinge " & round(b2kHingeAngle(tH)) & "°"
+      if tK is "rope" then return "    rope " & round(b2kRopeLength(tH)) & " px"
+      if tK is "slider" then return "    slider " & round(b2kSliderPos(tH)) & " px"
+      return empty
+   end if
+   if gSelPart is empty or not kindHasBody(the uKind of gSelPart) then return empty
+   return "    sel: " & round(b2kSpeed(gSelPart)) & " px/s · " & fmtMass(b2kMass(gSelPart)) & " · " & round(b2kAngle(gSelPart)) & "°"
+end hudSelection
+
+-- Small number formatters for the readouts.
+function fmtMs pN
+   if pN is empty or pN is not a number then return "0.0"
+   return format("%.1f", pN)
+end fmtMs
+
+function fmtMass pN
+   if pN is empty or pN is not a number then return "0 kg"
+   if pN < 10 then return format("%.1f", pN) & " kg"
+   return round(pN) & " kg"
+end fmtMass
+
 on tickHud
    add 1 to gFrames
    if gFpsTime is empty then put the milliseconds into gFpsTime
-   if the milliseconds - gFpsTime >= 500 then
+   if the milliseconds - gFpsTime >= kFpsWindowMs then
       put round(gFrames * 1000 / (the milliseconds - gFpsTime)) into gFps
       put 0 into gFrames
       put the milliseconds into gFpsTime
+   end if
+   -- Refresh the HUD ~10x/sec while running so the live telemetry reads smoothly,
+   -- without rebuilding the whole status string every single frame.
+   if gHudTime is empty or (the milliseconds - gHudTime) >= 100 then
+      put the milliseconds into gHudTime
       updateHud
    end if
 end tickHud
