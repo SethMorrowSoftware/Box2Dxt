@@ -1747,8 +1747,8 @@ constant kEditTools    = "drag,delete,duplicate,multiply"
 constant kEditLabels   = "Drag,Delete,Duplicate,Multiply"
 constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
-constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor"
-constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor"
+constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor,laser"
+constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor,Laser"
 constant kTerrainTools = "platform,ramp,hill,draw"
 constant kTerrainLabels = "Platform,Ramp,Hill,Draw"
 constant kDrawStep = 14       -- min pixels between sampled points while drawing freehand terrain
@@ -1771,7 +1771,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "5"
+constant kUIVersion = "6"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1798,6 +1798,7 @@ constant kPlateW = 120, kPlateH = 16
 constant kSensorW = 96, kSensorH = 72
 constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
+constant kLaserReach = 1600, kLaserStep = 45   -- laser ray length (px) and the angle step its direction cycles by
 constant kStressBatch = 50
 constant kSizeMin = 16, kSizeMax = 240
 -- Terrain (static scenery) can be larger than parts — wide ledges, long ramps.
@@ -1896,6 +1897,7 @@ on renderBuild
    lock screen
    b2kSync
    renderJoints
+   updateLasers
    unlock screen
 end renderBuild
 
@@ -2551,6 +2553,12 @@ on mouseMove pX, pY
       local tCx, tCy, tOld, tDx, tDy, tGroup, tP
       put max(gArenaL, min(gArenaR, pX)) into tCx
       put max(gArenaT, min(gArenaB, pY)) into tCy
+      if the uKind of gDragCtrl is "laser" then       -- drag a laser by its emitter, not the beam midpoint
+         set the points of gDragCtrl to round(tCx) & "," & round(tCy) & cr & (line 2 of the points of gDragCtrl)
+         drawLaserBeam gDragCtrl
+         put true into gDragMoved
+         exit mouseMove
+      end if
       put the loc of gDragCtrl into tOld
       put round(tCx) - item 1 of tOld into tDx       -- how far the grabbed part moved
       put round(tCy) - item 2 of tOld into tDy
@@ -2914,6 +2922,9 @@ function placePart pX, pY
          break
       case "magnet"
          put placeMagnet(pX, pY) into tCtrl
+         break
+      case "laser"
+         put placeLaser(pX, pY) into tCtrl
          break
       default
          return empty
@@ -3328,7 +3339,7 @@ end kindIsDynamic
 
 -- Fans and magnets are GUI-only influence zones with no physics body.
 function kindHasBody pKind
-   return pKind is not "fan" and pKind is not "magnet"
+   return pKind is not "fan" and pKind is not "magnet" and pKind is not "laser"
 end kindHasBody
 
 -- Friendly singular name for status messages.
@@ -3345,7 +3356,7 @@ end friendlyKind
 
 -- Add a freshly tagged part to its per-kind list (for fast per-frame iteration).
 on registerKind pCtrl, pKind
-   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor" then
+   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor,laser" then
       put pCtrl & cr after gKindList[pKind]
    end if
    if pKind is "plate" then
@@ -3358,7 +3369,7 @@ end registerKind
 -- Drop a deleted part from any per-kind list it belonged to.
 on unregisterKind pCtrl
    local tKind, tP, tNew
-   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor"
+   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor,laser"
       if pCtrl is not in gKindList[tKind] then next repeat
       put empty into tNew
       repeat for each line tP in gKindList[tKind]
@@ -3792,6 +3803,7 @@ on b2kFrame
    applyFieldForces
    updateBombs
    updateRings
+   updateLasers
    tickHud
 end b2kFrame
 
@@ -4192,6 +4204,9 @@ function partSpecial pCtrl
          put addKV(tS, "bpower=" & (the uBlastPower of pCtrl)) into tS
          put addKV(tS, "fuse=" & (the uFuseOnRun of pCtrl is true)) into tS
          break
+      case "laser"
+         put addKV(tS, "ldr=" & numOr(the uLaserDir of pCtrl, 0)) into tS
+         break
    end switch
    return tS
 end partSpecial
@@ -4438,6 +4453,10 @@ function hudSelection
       if tK is "slider" then return "    slider " & round(b2kSliderPos(tH)) & " px"
       return empty
    end if
+   if gSelPart is not empty and the uKind of gSelPart is "laser" then
+      if the uLaserDist of gSelPart is empty then return "    beam: no hit"
+      return "    beam: " & (the uLaserDist of gSelPart) & " px"
+   end if
    if gSelPart is empty or not kindHasBody(the uKind of gSelPart) then return empty
    return "    sel: " & round(b2kSpeed(gSelPart)) & " px/s · " & fmtMass(b2kMass(gSelPart)) & " · " & round(b2kAngle(gSelPart)) & "°"
 end hudSelection
@@ -4640,6 +4659,57 @@ function fanArrowPoints pCx, pCy, pHw, pHh, pDir
    return tP
 end fanArrowPoints
 
+-- A laser: a no-body emitter that casts a ray each frame and draws the beam to
+-- whatever it hits first (a wall counts), marking the distance. Shows off the
+-- Kit's ray API (b2kRayHit + b2kRayHitX/Y + b2kRayDist). The graphic is the beam
+-- itself — a thick line from the emitter (point 1) to the hit point (point 2).
+function placeLaser pX, pY
+   local tName, tRef
+   put "cb_laser_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "line"
+   set the lineSize of tRef to 5
+   set the foregroundColor of tRef to "236,80,80"
+   set the uLaserDir of tRef to 0            -- 0=right 90=down 180=left 270=up (45° steps)
+   set the points of tRef to round(pX) & "," & round(pY) & cr & round(pX + 40) & "," & round(pY)
+   tagPart tRef, "laser", "236,80,80", empty
+   drawLaserBeam tRef
+   return tRef
+end placeLaser
+
+-- Recast a laser's ray from its emitter (point 1) along uLaserDir and stretch the
+-- beam to the first hit; store the distance for the live readout.
+on drawLaserBeam pLaser
+   local tHead, tEx, tEy, tRad, tFx, tFy, tHx, tHy
+   set the itemDelimiter to comma
+   put line 1 of the points of pLaser into tHead
+   if tHead is empty then exit drawLaserBeam
+   put item 1 of tHead into tEx
+   put item 2 of tHead into tEy
+   put numOr(the uLaserDir of pLaser, 0) * kPI / 180 into tRad
+   put tEx + kLaserReach * cos(tRad) into tFx
+   put tEy + kLaserReach * sin(tRad) into tFy
+   if b2kRayHit(tEx, tEy, tFx, tFy) then
+      put b2kRayHitX() into tHx
+      put b2kRayHitY() into tHy
+      set the uLaserDist of pLaser to round(b2kRayDist())
+   else
+      put tFx into tHx
+      put tFy into tHy
+      set the uLaserDist of pLaser to empty
+   end if
+   set the points of pLaser to round(tEx) & "," & round(tEy) & cr & round(tHx) & "," & round(tHy)
+end drawLaserBeam
+
+-- Recast every laser (called each frame while running and on every build redraw).
+on updateLasers
+   local tL
+   repeat for each line tL in gKindList["laser"]
+      if tL is not empty then drawLaserBeam tL
+   end repeat
+end updateLasers
+
 -- Restore every saved per-part setting (common body props + per-kind extras).
 on applyPartSpecial pCtrl, pSpecial
    if pCtrl is empty then exit applyPartSpecial
@@ -4750,6 +4820,11 @@ on applyPartSpecial pCtrl, pSpecial
          put specialValue(pSpecial, "bpower") into tV
          if tV is not empty then set the uBlastPower of pCtrl to tV
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
+         break
+      case "laser"
+         put specialValue(pSpecial, "ldr") into tV
+         if tV is not empty then set the uLaserDir of pCtrl to tV
+         drawLaserBeam pCtrl
          break
    end switch
    if tKind is "draw" then                       -- restore a freehand-drawn ground mass + its chain
@@ -5168,6 +5243,8 @@ function partProps pKind
          return "fandir,fanforce,fansize,color"
       case "magnet"
          return "magpol,magforce,magrange,color"
+      case "laser"
+         return "laserdir"
    end switch
    return empty
 end partProps
@@ -5258,6 +5335,8 @@ function propLabel pCtrl, pKey
          return "Strength: " & (the uMagForce of pCtrl)
       case "magrange"
          return "Reach: " & (the uMagRange of pCtrl)
+      case "laserdir"
+         return "Beam angle: " & numOr(the uLaserDir of pCtrl, 0) & "°"
    end switch
    return pKey
 end propLabel
@@ -5536,6 +5615,10 @@ on adjustPartProp pCtrl, pKey, pDir
          if tMr > 520 then put 520 into tMr
          set the uMagRange of pCtrl to tMr
          break
+      case "laserdir"
+         set the uLaserDir of pCtrl to ((numOr(the uLaserDir of pCtrl, 0) + pDir * kLaserStep + 360) mod 360)
+         drawLaserBeam pCtrl
+         break
       case "bombfuse"
          set the uFuseOnRun of pCtrl to not (the uFuseOnRun of pCtrl is true)
          break
@@ -5764,7 +5847,7 @@ function propGroup pKey
    if pKey is among the items of "width,height,length,thickness,diameter,size,imgshape,angle,facing,color" then return "shape"
    if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material" then return "physics"
    if pKey is among the items of "layer,sensor,filter,active,sleep" then return "collide"
-   return "special"   -- launchspeed,launchdir,spinrate and the fan/magnet/bomb keys
+   return "special"   -- launchspeed,launchdir,spinrate, laserdir, and the fan/magnet/bomb keys
 end propGroup
 
 -- The tabs that actually have settings for this kind (so empty tabs stay hidden).
@@ -6846,7 +6929,7 @@ function niceName pId
          & "poly=Polygon" & cr & "image=Picture" & cr & "anchor=Anchor" & cr & "delete=Delete" & cr \
          & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
-         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr \
+         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr & "laser=Laser" & cr \
          & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "draw=Draw Terrain" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
          & "weld=Weld Joint" & cr & "servo=Servo Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
@@ -6868,7 +6951,7 @@ function toolGlyph pId
    local tGlyphs
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
          & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
-         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr \
+         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr \
          & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
          & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
@@ -6918,6 +7001,8 @@ function toolHelp pId
          return "A wind zone that blows parts along." & cr & "A fan pushes any part inside its zone in the arrow's direction. Set the direction and strength in the inspector. No body — parts pass through it."
       case "magnet"
          return "A magnet that pulls parts toward it." & cr & "A magnet attracts nearby parts (or repels them). Set attract/repel, strength and reach in the inspector. No body — parts pass through it."
+      case "laser"
+         return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray from its emitter and draws the beam to the first thing it strikes (a wall counts). Set the beam angle in the inspector; while running, select it to read the live hit distance. Shows off the Kit's ray-casting."
       case "platform"
          return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery — a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf. Set its size, angle and grip in the inspector."
       case "ramp"
