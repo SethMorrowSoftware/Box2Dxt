@@ -4128,6 +4128,8 @@ function partSpecial pCtrl
       put addKV(tS, "spin=" & (the uSpinRate of pCtrl)) into tS
       if the uGroup of pCtrl is not empty then put addKV(tS, "grp=" & (the uGroup of pCtrl)) into tS
       if numOr(the uLayer of pCtrl, 0) > 0 then put addKV(tS, "lyr=" & (the uLayer of pCtrl)) into tS
+      if numOr(the uSleep of pCtrl, 0) > 0 then put addKV(tS, "slp=" & (the uSleep of pCtrl)) into tS
+      if the uKind of pCtrl is "image" and the uShape of pCtrl is not empty then put addKV(tS, "ishp=" & (the uShape of pCtrl)) into tS
       if the uKind of pCtrl is "draw" then put addKV(tS, "pts=" & ptsPacked(pCtrl)) into tS
    end if
    switch tKind
@@ -4585,9 +4587,15 @@ on applyPartSpecial pCtrl, pSpecial
          set the uFixedRot of pCtrl to true
          b2kSetFixedRotation pCtrl, true
       end if
-      if specialValue(pSpecial, "btype") is "static" then
-         set the uBodyType of pCtrl to "static"
-         b2kSetType pCtrl, "static"
+      put specialValue(pSpecial, "btype") into tV
+      if tV is "static" or tV is "kinematic" then
+         set the uBodyType of pCtrl to tV
+         b2kSetType pCtrl, tV
+      end if
+      put specialValue(pSpecial, "slp") into tV
+      if tV is not empty then
+         set the uSleep of pCtrl to tV
+         b2kSetSleepThreshold pCtrl, tV
       end if
       put specialValue(pSpecial, "ldmp") into tV
       if tV is not empty then
@@ -4653,6 +4661,14 @@ on applyPartSpecial pCtrl, pSpecial
          replace "|" with cr in tV
          set the points of pCtrl to tV
          b2kAddChain pCtrl, tV, true             -- closed loop, same as when it was drawn
+      end if
+   end if
+   if tKind is "image" then                      -- restore a chosen image collision shape
+      put specialValue(pSpecial, "ishp") into tV
+      if tV is not empty then
+         set the uShape of pCtrl to tV
+         b2kReshape pCtrl, tV
+         reapplyMaterial pCtrl
       end if
    end if
 end applyPartSpecial
@@ -5009,15 +5025,15 @@ end showPartInspector
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
       case "image"
-         return "width,height,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
+         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,launchspeed,launchdir,spinrate"
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
@@ -5026,8 +5042,10 @@ function partProps pKind
          return "width,height,color,angle,friction"
       case "sensor"
          return "width,height,color"
+      case "draw"
+         return "color"
       case "anchor"
-         return "width,height,color"
+         return "width,height,color,bounce,friction"
       case "ramp"
          return "width,height,angle,facing,friction,color"
       case "platform"
@@ -5077,6 +5095,7 @@ function propLabel pCtrl, pKey
          return "Spin: free to rotate"
       case "bodytype"
          if the uBodyType of pCtrl is "static" then return "Movement: fixed in place"
+         if the uBodyType of pCtrl is "kinematic" then return "Movement: moving platform (kinematic)"
          return "Movement: free-moving"
       case "lindamp"
          return "Air drag (move): " & numOr(the uLinDamp of pCtrl, 0)
@@ -5089,6 +5108,11 @@ function propLabel pCtrl, pKey
       case "layer"
          if numOr(the uLayer of pCtrl, 0) is 0 then return "Collision layer: 0 (hits everything)"
          return "Collision layer: " & (the uLayer of pCtrl) & " (same-layer parts pass through)"
+      case "sleep"
+         if numOr(the uSleep of pCtrl, 0) is 0 then return "Sleep: never (stays active)"
+         return "Sleeps below: " & (the uSleep of pCtrl) & " px/s"
+      case "imgshape"
+         return "Collision shape: " & numOr(the uShape of pCtrl, "box")
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
@@ -5253,8 +5277,16 @@ on adjustPartProp pCtrl, pKey, pDir
          b2kSetFixedRotation pCtrl, (the uFixedRot of pCtrl is true)
          break
       case "bodytype"
-         if the uBodyType of pCtrl is "static" then set the uBodyType of pCtrl to "dynamic"
-         else set the uBodyType of pCtrl to "static"
+         switch the uBodyType of pCtrl       -- cycle dynamic -> static -> kinematic
+            case "static"
+               set the uBodyType of pCtrl to "kinematic"
+               break
+            case "kinematic"
+               set the uBodyType of pCtrl to "dynamic"
+               break
+            default
+               set the uBodyType of pCtrl to "static"
+         end switch
          b2kSetType pCtrl, (the uBodyType of pCtrl)
          break
       case "lindamp"
@@ -5285,6 +5317,20 @@ on adjustPartProp pCtrl, pKey, pDir
       case "layer"
          set the uLayer of pCtrl to clampRange(numOr(the uLayer of pCtrl, 0) + pDir, 0, 8)
          applyCollisionLayer pCtrl
+         break
+      case "sleep"
+         set the uSleep of pCtrl to clampRange(numOr(the uSleep of pCtrl, 0) + pDir * 10, 0, 200)
+         b2kSetSleepThreshold pCtrl, numOr(the uSleep of pCtrl, 0)
+         break
+      case "imgshape"
+         set the itemDelimiter to comma
+         put "box,ball,capsule" into tPal
+         put itemOffset(numOr(the uShape of pCtrl, "box"), tPal) + pDir into tIdx
+         if tIdx < 1 then put the number of items of tPal into tIdx
+         if tIdx > the number of items of tPal then put 1 into tIdx
+         set the uShape of pCtrl to item tIdx of tPal
+         b2kReshape pCtrl, (the uShape of pCtrl)
+         reapplyMaterial pCtrl
          break
       case "launchspeed"
          put numOr(the uLaunchSpeed of pCtrl, 0) + pDir * 50 into tLs
@@ -5378,7 +5424,7 @@ on resizePart pCtrl, pFactor
    if tKind is "hill" then
       rebuildHillChain pCtrl
    else if kindHasBody(tKind) then
-      b2kReshape pCtrl, shapeOfKind(tKind)
+      b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
    end if
 end resizePart
@@ -5413,6 +5459,13 @@ function shapeOfKind pKind
    end switch
    return "box"
 end shapeOfKind
+
+-- The collision shape b2kReshape should rebuild for a part: an image uses its
+-- chosen uShape (box/ball/capsule); every other kind is fixed by its kind.
+function partShape pCtrl
+   if the uKind of pCtrl is "image" then return numOr(the uShape of pCtrl, "box")
+   return shapeOfKind(the uKind of pCtrl)
+end partShape
 
 -- After a reshape the new shape has default material; restore the part's values.
 on reapplyMaterial pCtrl
@@ -5454,8 +5507,8 @@ end swatchIndexOf
 
 -- Which settings tab a property key belongs to.
 function propGroup pKey
-   if pKey is among the items of "width,height,length,thickness,diameter,size,angle,facing,color" then return "shape"
-   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer" then return "physics"
+   if pKey is among the items of "width,height,length,thickness,diameter,size,imgshape,angle,facing,color" then return "shape"
+   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep" then return "physics"
    if pKey is among the items of "launchspeed,launchdir,spinrate" then return "motion"
    return "special"
 end propGroup
@@ -5592,7 +5645,7 @@ on setPartDimension pCtrl, pAxis, pValue
    if tKind is "hill" then
       rebuildHillChain pCtrl              -- outline carries its own rotation; body stays at 0
    else if kindHasBody(tKind) then
-      b2kReshape pCtrl, shapeOfKind(tKind)
+      b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
       if tAng is not 0 then b2kMoveTo pCtrl, tCx, tCy, tAng
    end if

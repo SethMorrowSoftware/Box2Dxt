@@ -10,6 +10,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Comprehensive part inspector.** More of box2dxt is now editable per object:
+  a body can be **kinematic** (a moving platform — set a launch velocity and it
+  drifts, unaffected by gravity or collisions) as well as static or dynamic;
+  every dynamic part exposes a **sleep threshold**; **imported images** can pick
+  their collision shape (box / ball / capsule, which survives resize and
+  save/load); and previously bare inspectors gained options — *Draw* ground gets
+  a colour and *Anchors* get bounce and grip.
 - **Three more example machines (contraption builder).** **Trebuchet** (a
   counterweight arm that whips round and flings a ball), **Crane** (a motorised
   jib with a load hung on a rope) and **Wrecking Ball** (a roped weight shoved
