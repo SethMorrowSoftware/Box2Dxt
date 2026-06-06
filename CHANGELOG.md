@@ -10,6 +10,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Servo joint (contraption builder).** A new joint (the Kit's motor joint,
+  `b2kMotorTo`) that drives part A to hold its position and angle relative to
+  part B, yielding under load and springing back rather than locking rigidly like
+  a weld — for self-righting parts, soft platforms and return-to-home arms. Saves
+  and loads like any joint.
 - **Sensor trigger zones (contraption builder).** A new SPECIAL part: a
   non-solid zone that parts pass straight through, but the instant a dynamic body
   *enters* it, it fires the same signal as a pressure plate — set off bombs and

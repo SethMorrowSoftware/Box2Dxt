@@ -1743,11 +1743,12 @@ constant kTerrainTools = "platform,ramp,hill"
 constant kTerrainLabels = "Platform,Ramp,Hill"
 constant kVehicleTools = "car"
 constant kVehicleLabels = "Car"
-constant kJointTools   = "hinge,weld,rope,slider,wheel,bridge,chain"
-constant kJointLabels  = "Hinge,Weld,Rope,Slider,Wheel,Bridge,Chain"
+constant kJointTools   = "hinge,weld,servo,rope,slider,wheel,bridge,chain"
+constant kJointLabels  = "Hinge,Weld,Servo,Rope,Slider,Wheel,Bridge,Chain"
 constant kHingeTorque = 1500, kWheelTorque = 320
 constant kBridgeFlex = 30   -- a bridge plank pin flexes +/- this many degrees, so a
                             -- loaded deck sags under weight but can never fold back on itself
+constant kServoForce = 3000, kServoTorque = 2500   -- how hard a Servo joint holds its pose
 
 -- Layout, in screen pixels. Derived edges (canvas L/R/T/B) are computed from the
 -- card size in prepArena/buildUI, because LiveCode constants cannot be expressions.
@@ -3383,7 +3384,7 @@ end buildSpan
 -- The shared joint builder. Picks a sensible pivot per kind, records the joint
 -- and its marker, and motorises it when pMotorSpeed > 0. Returns true on success.
 function connectJoint pKind, pA, pB, pX, pY, pMotorSpeed
-   local tJ, tAxis, tPivX, tPivY, tVis, tEnd
+   local tJ, tAxis, tPivX, tPivY, tVis, tEnd, tdx, tdy, tda
    put pX into tPivX
    put pY into tPivY
    put "dot" into tVis
@@ -3421,6 +3422,16 @@ function connectJoint pKind, pA, pB, pX, pY, pMotorSpeed
       case "weld"
          b2kWeld pA, pB
          put the result into tJ
+         put "line" into tVis
+         break
+      case "servo"
+         -- a powered position hold: drives pA to keep its CURRENT pose relative
+         -- to pB. It yields under load and springs back, unlike a rigid weld.
+         if pB is empty then return false       -- a servo holds between two parts
+         put (item 1 of the loc of pA) - (item 1 of the loc of pB) into tdx
+         put (item 2 of the loc of pA) - (item 2 of the loc of pB) into tdy
+         put round(b2kAngle(pA) - b2kAngle(pB)) into tda
+         put b2kMotorTo(pA, pB, tdx, tdy, tda, kServoForce, kServoTorque) into tJ
          put "line" into tVis
          break
       case "rope"
@@ -6301,7 +6312,7 @@ function niceName pId
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
          & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr \
          & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
-         & "weld=Weld Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
+         & "weld=Weld Joint" & cr & "servo=Servo Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
    local tLine
    set the itemDelimiter to "="
@@ -6323,7 +6334,7 @@ function toolGlyph pId
          & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
          & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr \
          & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
-         & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
+         & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
    set the itemDelimiter to "="
    repeat for each line tLine in tGlyphs
@@ -6383,6 +6394,8 @@ function toolHelp pId
          return "Pin two parts so they rotate." & cr & "A hinge is a pin two parts spin around — like an axle or a pendulum. Pin to an Anchor or empty space, switch Motor on, and it drives itself."
       case "weld"
          return "Glue two parts rigidly together." & cr & "A weld locks two parts as one solid piece — they keep their relative position and angle."
+      case "servo"
+         return "A powered hold between two parts." & cr & "A servo drives one part to keep its position and angle relative to another. Unlike a rigid weld it gives under load and springs back — good for self-righting parts, soft platforms and return-to-home arms. Click part A, then part B."
       case "rope"
          return "Link two parts with a rope." & cr & "A rope keeps two parts from drifting further apart than its length. They can still swing and fall closer together."
       case "slider"
