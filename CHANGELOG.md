@@ -10,6 +10,78 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Per-part collision filter (contraption builder).** Beyond the quick
+  *Collision layer*, every solid part now has a **Collision filter** that opens a
+  popup of eight channels in two rows — which channels the part *is on*
+  (category) and which it *collides with* (mask). Two parts touch only when each
+  is on a channel the other collides with, so you can make whole sets of parts
+  ignore each other while still landing on the ground. Built on the Kit's
+  `b2kSetCategory` / `b2kSetMask`, re-applied after any reshape, and saved/loaded.
+- **Per-part sensor toggle (contraption builder).** Any solid part (box, image,
+  ball, capsule, polygon) can be flipped into a **trigger zone** from its Collide
+  tab — it turns translucent, stops blocking, and fires the same enter/exit
+  signal as the dedicated Sensor. The Kit gained `b2kSetSensor` so the flag can
+  be toggled on an existing part (the shape is rebuilt, keeping the sensor state).
+  Saved and loaded.
+- **Categorised Examples gallery.** The Examples menu is now a tidy two-column
+  gallery grouped into **Launchers / Machines / Chain Reactions / Toys & Tests**
+  with section headers, instead of one long scrolling list — room to keep adding
+  machines and far easier to scan. (UI version bumped so it rebuilds.)
+- **Enable/disable parts.** Every dynamic part has an **In simulation: yes/no**
+  toggle (Collide tab) that pulls it out of / back into the live world
+  (`b2kDisable` / `b2kEnable`); saved and loaded.
+- **Comprehensive part inspector.** More of box2dxt is now editable per object:
+  a body can be **kinematic** (a moving platform — set a launch velocity and it
+  drifts, unaffected by gravity or collisions) as well as static or dynamic;
+  every dynamic part exposes a **sleep threshold**; **imported images** can pick
+  their collision shape (box / ball / capsule, which survives resize and
+  save/load); and previously bare inspectors gained options — *Draw* ground gets
+  a colour and *Anchors* get bounce and grip.
+- **Three more example machines (contraption builder).** **Trebuchet** (a
+  counterweight arm that whips round and flings a ball), **Crane** (a motorised
+  jib with a load hung on a rope) and **Wrecking Ball** (a roped weight shoved
+  into a brick wall) — each one click from the Examples menu, showcasing the
+  hinge-motor, weld and rope joints.
+- **Cannon example recipe (contraption builder).** A new one-click machine in the
+  Examples menu: a static carriage + barrel and a heavy ball that fires across the
+  field on Run (via the launch system) into a crate stack. It doubles as a demo
+  of **collision layers** — the ball and barrel share a layer so the ball slips
+  clear of the barrel as it launches.
+- **Draw-your-own terrain (contraption builder).** A new TERRAIN tool (**Draw**,
+  the ✎ glyph): press and drag across the play field to sketch a ground contour —
+  bumps, valleys, ramps, anything — and on release it becomes a smooth one-sided
+  chain (`b2kAddChain`, open) that parts roll along without catching on seams. It
+  saves and loads as its own point list and can be dragged to reposition.
+- **World feel presets (contraption builder).** A new BUILD OPTIONS cycle button
+  beside Gravity tunes how the whole world responds — **Default**, **Bouncy**,
+  **Floaty** (soft, speed-limited) and **Snappy** (stiff, responsive) — via the
+  Kit's restitution-threshold, contact-tuning and max-speed setters. Re-applied
+  each Run and saved/loaded with the layout.
+- **Servo joint (contraption builder).** A new joint (the Kit's motor joint,
+  `b2kMotorTo`) that drives part A to hold its position and angle relative to
+  part B, yielding under load and springing back rather than locking rigidly like
+  a weld — for self-righting parts, soft platforms and return-to-home arms. Saves
+  and loads like any joint.
+- **Sensor trigger zones (contraption builder).** A new SPECIAL part: a
+  non-solid zone that parts pass straight through, but the instant a dynamic body
+  *enters* it, it fires the same signal as a pressure plate — set off bombs and
+  flip every motor. Perfect for tripwires and gates; it fires once per arrival
+  (occupancy-tracked) so passing traffic doesn't machine-gun the motors. Built on
+  the Kit's sensor events, and resizable — the Kit's `b2kReshape` now keeps a
+  reshaped shape a sensor.
+- **Collision layers (contraption builder).** Every solid part now has a
+  *Collision layer* setting on its Collide tab: 0 hits everything (the default),
+  while parts sharing a layer 1–8 pass through each other but still collide with
+  the ground and parts on other layers — handy for overlapping mechanisms or
+  letting a sub-assembly move without snagging on itself. Saves and loads with
+  the part.
+- **Smooth, rolling hills (contraption builder + Kit).** The Hill terrain tool now
+  builds a smooth chain that follows its outline instead of a single convex
+  polygon, so a fast ball or wheel rides over it without catching on seams — and
+  the bump count scales with width (a narrow hill is a dome, a wide one rolls).
+  Backed by a new Kit helper, **`b2kAddChain pControl, pPoints [, pLoop]`**, which
+  attaches a *control-tracked* smooth chain — unlike the world-only `b2kChain` it
+  selects, drags, resizes, deletes and saves like any static part.
 - **Full Box2D v3.1.0 live-object API.** The binding now exposes essentially the
   whole engine surface a script needs — ~240 new shim functions, each with a
   `b2…` extension wrapper and, where it helps, a friendly `b2k…` Kit helper:
@@ -108,6 +180,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Changed
 
+- **Sturdier bridges and more natural chains (contraption builder).** Bridge
+  planks now hinge through a flex limit (a new internal `deckpin` joint) so a
+  loaded deck sags under weight but can never fold back on itself, and chain
+  spans use finer, lighter links for a smoother, more rope-like drape. Both still
+  save, load and delete like any other span.
 - **Examples now embed the current Kit.** The demo and contraption builder
   previously carried hand-copied, drifted snapshots of the Kit; they now embed
   the canonical `src/box2dxt-kit.livecodescript` verbatim (regenerated by
@@ -138,6 +215,27 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Fixed
 
+- **Every inspector setting is reachable again.** As the part inspector grew, the
+  Physics tab had more settings than the panel can show at once, so the last few
+  (Collision layer, Sleep, In-simulation, Sensor) were silently cut off. The
+  settings are re-balanced across the tabs — Physics keeps the material/dynamics
+  settings, a renamed **Collide** tab gathers the collision and simulation-state
+  settings, and the launch settings move to **Special** — so nothing is hidden.
+- **Collision settings survive a reshape.** Changing an image's collision shape,
+  toggling the sensor flag, or resizing a part rebuilds its shape with a fresh
+  (default) filter; the part's collision layer and channel filter are now
+  re-applied afterwards instead of being quietly dropped.
+- **Drawn ground now collides and is clearly visible.** A freehand *Draw* piece
+  is now a filled, closed ground mass (the drawn surface down to the floor) with
+  its chain wound so the solid side faces up — bodies rest on it instead of
+  falling through, and it reads as solid ground rather than a thin line. The same
+  chain-winding fix applies to the smooth **Hill**.
+- **Drawn terrain saves where you last dragged it.** A freehand *Draw* terrain
+  piece is now serialized from its current points, so repositioning it before a
+  save no longer snaps it back to where it was first drawn when you load.
+- **Tidied the smooth-hill outline locals.** Its working variables used bare
+  names (including `env`); they're now `t`-prefixed like the rest of the file,
+  removing any chance of clashing with an xTalk reserved word.
 - **Kit collision-layer handlers no longer trip an OpenXTalk reserved word.**
   The `pLayers` parameter of `b2kLayerBits` / `b2kSetCategory` / `b2kSetMask` is
   (case-insensitively) the reserved word `players`, which stopped the script

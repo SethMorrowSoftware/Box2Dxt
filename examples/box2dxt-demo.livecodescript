@@ -571,6 +571,7 @@ command b2kReshape pControl, pShape
    put sShapeH[tRef] into tOld
    put empty into sShapeH[tRef]
    b2ShapeDefEnableSensorEvents true   -- keep the reshaped body detectable by sensors
+   if sSensor[tRef] is true then b2ShapeDefSensor true   -- a sensor stays a sensor after reshaping
    switch pShape
       case "ball"
          put ((the width of pControl) / 2) / sScale into tR
@@ -1242,6 +1243,13 @@ command b2kAddSensor pControl, pShape
    return sBody[tRef]
 end b2kAddSensor
 
+-- Flip a control's collision between solid and SENSOR (a non-solid trigger that
+-- reports overlaps but never blocks). The flag lives on the shape, so rebuild the
+-- shape afterwards with b2kReshape — it re-applies the sensor state from here.
+command b2kSetSensor pControl, pFlag
+   put (pFlag is true) into sSensor[the long id of pControl]
+end b2kSetSensor
+
 -- Polling alternative to the on b2kSensorEnter/Exit messages (read in on b2kFrame).
 -- Counts/indices are 1-based; each returns a control (empty for untracked bodies).
 function b2kSensorCount
@@ -1335,6 +1343,34 @@ end b2kChain
 command b2kSmoothGround pPoints
    return b2kChain(pPoints, false)
 end b2kSmoothGround
+
+-- Attach a smooth static chain to a CONTROL, from a list of SCREEN points
+-- ("x,y" per line) — the control's own outline. Unlike b2kChain (which makes an
+-- untracked world body), this registers the body against the control like
+-- b2kAddBox/Ball/Polygon, so it selects (b2kControlAt), drags (b2kMoveTo) and
+-- removes (b2kRemove) as a normal static part. The points are taken relative to
+-- the control's centre, so moving the control moves the terrain with it. pLoop
+-- true closes the outline into a solid blob; false leaves a one-sided ground
+-- line. Great for smooth, rolling, concave terrain a fast body won't catch on.
+command b2kAddChain pControl, pPoints, pLoop
+   local tRef, tCx, tCy, tBody, p, lx, ly
+   if sWorld is empty then return 0
+   put the long id of pControl into tRef
+   put item 1 of the loc of pControl into tCx
+   put item 2 of the loc of pControl into tCy
+   put b2NewStaticBody(sWorld, b2kToWorldX(tCx), b2kToWorldY(tCy)) into tBody
+   b2ChainBegin
+   repeat for each line p in pPoints
+      if p is empty then next repeat
+      put (item 1 of p - tCx) / sScale into lx          -- local to the control's centre
+      put - ((item 2 of p - tCy) / sScale) into ly
+      b2ChainAddPoint lx, ly
+   end repeat
+   get b2CreateChain(tBody, (pLoop is true), 0.6, 0.1)
+   b2kRegister tRef, tBody, true                        -- static, kit-tracked
+   put "loc" into sRender[tRef]                          -- static: registered but never synced
+   return tBody
+end b2kAddChain
 
 -- Controls whose body overlaps a screen RECT (newline-separated long ids).
 function b2kOverlap pX1, pY1, pX2, pY2

@@ -581,6 +581,7 @@ command b2kReshape pControl, pShape
    put sShapeH[tRef] into tOld
    put empty into sShapeH[tRef]
    b2ShapeDefEnableSensorEvents true   -- keep the reshaped body detectable by sensors
+   if sSensor[tRef] is true then b2ShapeDefSensor true   -- a sensor stays a sensor after reshaping
    switch pShape
       case "ball"
          put ((the width of pControl) / 2) / sScale into tR
@@ -1252,6 +1253,13 @@ command b2kAddSensor pControl, pShape
    return sBody[tRef]
 end b2kAddSensor
 
+-- Flip a control's collision between solid and SENSOR (a non-solid trigger that
+-- reports overlaps but never blocks). The flag lives on the shape, so rebuild the
+-- shape afterwards with b2kReshape — it re-applies the sensor state from here.
+command b2kSetSensor pControl, pFlag
+   put (pFlag is true) into sSensor[the long id of pControl]
+end b2kSetSensor
+
 -- Polling alternative to the on b2kSensorEnter/Exit messages (read in on b2kFrame).
 -- Counts/indices are 1-based; each returns a control (empty for untracked bodies).
 function b2kSensorCount
@@ -1345,6 +1353,34 @@ end b2kChain
 command b2kSmoothGround pPoints
    return b2kChain(pPoints, false)
 end b2kSmoothGround
+
+-- Attach a smooth static chain to a CONTROL, from a list of SCREEN points
+-- ("x,y" per line) — the control's own outline. Unlike b2kChain (which makes an
+-- untracked world body), this registers the body against the control like
+-- b2kAddBox/Ball/Polygon, so it selects (b2kControlAt), drags (b2kMoveTo) and
+-- removes (b2kRemove) as a normal static part. The points are taken relative to
+-- the control's centre, so moving the control moves the terrain with it. pLoop
+-- true closes the outline into a solid blob; false leaves a one-sided ground
+-- line. Great for smooth, rolling, concave terrain a fast body won't catch on.
+command b2kAddChain pControl, pPoints, pLoop
+   local tRef, tCx, tCy, tBody, p, lx, ly
+   if sWorld is empty then return 0
+   put the long id of pControl into tRef
+   put item 1 of the loc of pControl into tCx
+   put item 2 of the loc of pControl into tCy
+   put b2NewStaticBody(sWorld, b2kToWorldX(tCx), b2kToWorldY(tCy)) into tBody
+   b2ChainBegin
+   repeat for each line p in pPoints
+      if p is empty then next repeat
+      put (item 1 of p - tCx) / sScale into lx          -- local to the control's centre
+      put - ((item 2 of p - tCy) / sScale) into ly
+      b2ChainAddPoint lx, ly
+   end repeat
+   get b2CreateChain(tBody, (pLoop is true), 0.6, 0.1)
+   b2kRegister tRef, tBody, true                        -- static, kit-tracked
+   put "loc" into sRender[tRef]                          -- static: registered but never synced
+   return tBody
+end b2kAddChain
 
 -- Controls whose body overlaps a screen RECT (newline-separated long ids).
 function b2kOverlap pX1, pY1, pX2, pY2
@@ -1679,6 +1715,7 @@ local gMode, gTool, gJointTool
 local gPendCtrl, gPendX, gPendY
 local gMotorOn, gMotorSpeed, gBouncy, gMotorsRunning
 local gDragCtrl, gDragMode, gDragMoved
+local gDrawPts, gDrawCtrl               -- freehand-terrain points + its preview graphic
 local gParts
 local gJN
 local gJKind, gJHandle, gJCa, gJCb
@@ -1693,13 +1730,16 @@ local gFrames, gFpsTime, gFps
 -- gKindList[kind] holds a CR-delimited control list per special kind.
 local gKindList
 local gPlateLoad, gPlateState
+local gSensorCount      -- per-sensor count of bodies currently inside (fires on 0→1)
 local gRingN, gRingX, gRingY, gRingF
 local gDynParts, gDynDirty
 -- selection / inspector / onboarding / stress-test bookkeeping
 local gSelPart, gHoverId, gOnbStep, gStressCount
 local gSelJoint                        -- selected joint index (1..gJN), empty if none
-local gInspTab                         -- active inspector tab: shape | physics | motion | special
+local gFilterPart                      -- part whose collision filter the popup panel is editing
+local gInspTab                         -- active inspector tab: shape | physics | collide | special
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
+local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
 local gPreRun                          -- snapshot of the build, taken when Run starts
 local gPalOpen                         -- CR-list of palette section titles currently expanded
 
@@ -1707,15 +1747,20 @@ constant kEditTools    = "drag,delete,duplicate,multiply"
 constant kEditLabels   = "Drag,Delete,Duplicate,Multiply"
 constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
-constant kSpecialTools = "balloon,bomb,plate,fan,magnet"
-constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet"
-constant kTerrainTools = "platform,ramp,hill"
-constant kTerrainLabels = "Platform,Ramp,Hill"
+constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor"
+constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor"
+constant kTerrainTools = "platform,ramp,hill,draw"
+constant kTerrainLabels = "Platform,Ramp,Hill,Draw"
+constant kDrawStep = 14       -- min pixels between sampled points while drawing freehand terrain
+constant kDrawLineSize = 7    -- drawn ground is thick: reads as solid + easy to click/select
 constant kVehicleTools = "car"
 constant kVehicleLabels = "Car"
-constant kJointTools   = "hinge,weld,rope,slider,wheel,bridge,chain"
-constant kJointLabels  = "Hinge,Weld,Rope,Slider,Wheel,Bridge,Chain"
+constant kJointTools   = "hinge,weld,servo,rope,slider,wheel,bridge,chain"
+constant kJointLabels  = "Hinge,Weld,Servo,Rope,Slider,Wheel,Bridge,Chain"
 constant kHingeTorque = 1500, kWheelTorque = 320
+constant kBridgeFlex = 30   -- a bridge plank pin flexes +/- this many degrees, so a
+                            -- loaded deck sags under weight but can never fold back on itself
+constant kServoForce = 3000, kServoTorque = 2500   -- how hard a Servo joint holds its pose
 
 -- Layout, in screen pixels. Derived edges (canvas L/R/T/B) are computed from the
 -- card size in prepArena/buildUI, because LiveCode constants cannot be expressions.
@@ -1726,7 +1771,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "3"
+constant kUIVersion = "5"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1750,6 +1795,7 @@ constant kBalloonGravScale = -0.6, kBalloonDamp = 1.2, kBalloonDiam = 46
 constant kBombDiam = 40, kBombRadius = 210, kBombPower = 720
 constant kBombFuseFrames = 60, kBombImpactSpeed = 700
 constant kPlateW = 120, kPlateH = 16
+constant kSensorW = 96, kSensorH = 72
 constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
 constant kStressBatch = 50
@@ -1758,6 +1804,8 @@ constant kSizeMin = 16, kSizeMax = 240
 constant kTerrainMin = 20, kTerrainMax = 600
 -- inspector: rows shown per tab, dimension nudge (px), joint click radius (px)
 constant kPropRows = 10, kDimStep = 8, kJointHitR = 16
+-- the eight collision channels the filter popup exposes (1..8 -> bits 1,2,4..128)
+constant kFilterChannels = 8, kAllChannels = "1,2,3,4,5,6,7,8"
 -- numeric settings a user may type an exact value for (toggles/colour stay stepper-only)
 constant kEntryKeys = "width,height,length,thickness,diameter,size,angle,bounce,density,friction,gravity,lindamp,angdamp,launchspeed,launchdir,spinrate,blastradius,blastpower,fanforce,fansize,magforce,magrange"
 
@@ -1802,6 +1850,7 @@ on startCB
    put empty into gSelJoint
    put "shape" into gInspTab
    put "normal" into gGravityMode
+   put "default" into gWorldFeel
    put empty into gHoverId
    put 0 into gStressCount
    put "SHAPES" into gPalOpen        -- single-open accordion: SHAPES is the category open first
@@ -1903,6 +1952,7 @@ on buildUI
    makeInspector
    makeStatusBar
    buildRecipesMenu
+   buildFilterPanel
    applyTooltips
 end buildUI
 
@@ -2183,9 +2233,9 @@ on makeInspector
    makeField "ui_insp_body", tL + 12, tTop + 40, tWide - 12, tTop + 118, 11, "190,194,206"
    -- settings tabs: group a part's many settings so each pane stays short
    makeAction "tab_shape", "Shape", tL + 12, tTop + 124, 50, 24
-   makeAction "tab_physics", "Physics", tL + 64, tTop + 124, 58, 24
-   makeAction "tab_motion", "Motion", tL + 124, tTop + 124, 52, 24
-   makeAction "tab_special", "Special", tL + 178, tTop + 124, 58, 24
+   makeAction "tab_physics", "Physics", tL + 64, tTop + 124, 56, 24
+   makeAction "tab_collide", "Collide", tL + 122, tTop + 124, 56, 24
+   makeAction "tab_special", "Special", tL + 180, tTop + 124, 56, 24
    -- a clearly-marked, divided settings block so adjustable values stand out
    makeBar "ui_settings_div", tL + 12, tTop + 156, tWide - 12, tTop + 157, "60,66,80"
    makeLabel "ui_settings_hdr", tL + 12, tTop + 162, tWide - 12, tTop + 182, "PART SETTINGS", 11, "120,220,150", true
@@ -2211,11 +2261,14 @@ on makeInspector
    add 34 to tRy
    makeAction "gravity", "Gravity: Normal", tL + 12, tRy, kInspectorW - 24, 26
    add 32 to tRy
+   makeAction "worldfeel", "Feel: Default", tL + 12, tRy, kInspectorW - 24, 26
+   add 32 to tRy
    makeAction "pause", "Pause", tL + 12, tRy, 108, 26
    makeAction "step", "Step", tL + 128, tRy, 80, 26
    clearPropRows
    refreshSpeedLabel
    refreshGravityLabel
+   refreshWorldFeelLabel
 end makeInspector
 
 -- A prominent accent-green +/- button for adjusting a part's settings.
@@ -2436,6 +2489,11 @@ on mouseDown
       jointClick tx, ty
       exit mouseDown
    end if
+   -- Draw tool: press-drag to sketch a ground line (built on release).
+   if gTool is "draw" then
+      if inArena(tx, ty) then beginDrawTerrain tx, ty
+      exit mouseDown
+   end if
    -- Drag tool: a click on a joint marker selects that joint for editing.
    if gTool is "drag" then
       local tJHit
@@ -2481,6 +2539,10 @@ on mouseDown
 end mouseDown
 
 on mouseMove pX, pY
+   if gDragMode is "draw" then
+      extendDrawTerrain pX, pY
+      exit mouseMove
+   end if
    if gDragMode is "build" and gDragCtrl is not empty then
       local tCx, tCy, tOld, tDx, tDy, tGroup, tP
       put max(gArenaL, min(gArenaR, pX)) into tCx
@@ -2507,6 +2569,11 @@ end mouseMove
 on mouseUp
    if "ui_" is in the short name of the target then
       handleUiClick
+      exit mouseUp
+   end if
+   if gDragMode is "draw" then
+      finishDrawTerrain
+      put empty into gDragMode
       exit mouseUp
    end if
    if gDragMode is "build" and gDragCtrl is not empty and gDragMoved then
@@ -2544,6 +2611,10 @@ on handleUiClick
    put the short name of the target into tName
    if tName is "ui_recipescrim" then
       hideRecipesMenu
+      exit handleUiClick
+   end if
+   if tName is "ui_filterscrim" then
+      hideFilterPanel
       exit handleUiClick
    end if
    -- Click a settings value to type an exact number (steppers stay on the +/- keys).
@@ -2590,6 +2661,10 @@ on handleAction pId
       selectInspTab (char 5 to -1 of pId)
       exit handleAction
    end if
+   if char 1 to 5 of pId is "filt_" then
+      handleFilterToggle pId
+      exit handleAction
+   end if
    switch pId
       case "mode"
          toggleMode
@@ -2629,6 +2704,9 @@ on handleAction pId
       case "gravity"
          cycleGravity
          break
+      case "worldfeel"
+         cycleWorldFeel
+         break
       case "pause"
          togglePause
          break
@@ -2643,6 +2721,9 @@ on handleAction pId
          break
       case "recipeclose"
          hideRecipesMenu
+         break
+      case "filterclose"
+         hideFilterPanel
          break
       case "cart"
          hideRecipesMenu
@@ -2671,6 +2752,22 @@ on handleAction pId
       case "catapult"
          hideRecipesMenu
          buildRecipeCatapult
+         break
+      case "cannon"
+         hideRecipesMenu
+         buildRecipeCannon
+         break
+      case "trebuchet"
+         hideRecipesMenu
+         buildRecipeTrebuchet
+         break
+      case "crane"
+         hideRecipesMenu
+         buildRecipeCrane
+         break
+      case "wreckingball"
+         hideRecipesMenu
+         buildRecipeWreckingBall
          break
       case "cradle"
          hideRecipesMenu
@@ -2705,8 +2802,10 @@ on toggleMode
       resetPend
       deselectJoint
       put true into gMotorsRunning
+      put empty into gSensorCount   -- every sensor zone starts empty each Run
       armFuses
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
+      applyWorldFeel                -- re-apply the world-tuning preset to the live world
       armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
       put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse." into gStatus
@@ -2788,6 +2887,9 @@ function placePart pX, pY
          break
       case "plate"
          put placePlate(pX, pY) into tCtrl
+         break
+      case "sensor"
+         put placeSensor(pX, pY) into tCtrl
          break
       case "fan"
          put placeFan(pX, pY) into tCtrl
@@ -2911,6 +3013,7 @@ end terrainColor
 -- about the centre. Convex and <= 8 verts, so b2kAddPolygon accepts it.
 function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
    local tHw, tHh, tBase, tPt, tx, ty, tC, tS, tA, tRot
+   local tBumps, tNh, tIh, tT, tEnv, tBump, tHx, tHy, tYBase
    set the itemDelimiter to comma                -- we parse "x,y" points below
    put pW / 2 into tHw
    put pH / 2 into tHh
@@ -2922,11 +3025,27 @@ function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
                & cr & (pCx + tHw) & "," & (pCy - tHh) into tBase
          break
       case "hill"
-         -- a convex dome: flat base with an arched top
-         put (pCx - tHw) & "," & (pCy + tHh) & cr & (pCx + tHw) & "," & (pCy + tHh) & cr \
-               & round(pCx + tHw * 0.62) & "," & round(pCy - tHh * 0.45) & cr \
-               & pCx & "," & (pCy - tHh) & cr \
-               & round(pCx - tHw * 0.62) & "," & round(pCy - tHh * 0.45) into tBase
+         -- Rolling ground: a flat base with an undulating top. The bump count
+         -- grows with width, so a narrow hill is a single dome and a wide one
+         -- rolls. placeTerrain turns this outline into a smooth chain, so a fast
+         -- body rides over the bumps without catching on any seam.
+         put max(1, round(pW / 200)) into tBumps
+         put 6 * (tBumps + 1) into tNh                       -- top samples
+         put pCy + tHh into tYBase
+         -- order base-left, top LEFT→RIGHT, base-right: as a closed chain loop
+         -- this puts the solid side below the surface (Box2D: solid = right of
+         -- the travel direction), so bodies rest ON the hill rather than fall through.
+         put (pCx - tHw) & "," & tYBase into tBase           -- base-left
+         repeat with tIh = 1 to tNh - 1                      -- interior top points, left → right
+            put tIh / tNh into tT
+            put sin(tT * kPI) into tEnv                       -- 0 at the ends → meets the base
+            put 0.62 + 0.38 * (0.5 - 0.5 * cos(tT * tBumps * 2 * kPI)) into tBump
+            put pCx - tHw + tT * pW into tHx
+            put tYBase - pH * tEnv * tBump into tHy
+            put cr & round(tHx) & "," & round(tHy) after tBase
+         end repeat
+         put cr & (pCx + tHw) & "," & tYBase after tBase     -- base-right (loop closes to base-left)
+         put reversedLines(tBase) into tBase                 -- wind so the chain's solid side faces OUT (bodies rest on top)
          break
       default
          -- platform: an axis-aligned rectangle
@@ -2966,7 +3085,8 @@ function placeTerrain pKind, pX, pY, pW, pH
    set the lineSize of tRef to 2                 -- a bolder edge reads as solid ground
    set the points of tRef to terrainPoints(pKind, round(pX), round(pY), pW, pH, 0, false)
    set the loc of tRef to round(pX) & "," & round(pY)
-   b2kAddPolygon tRef, false                  -- static: never falls, never syncs
+   if pKind is "hill" then b2kAddChain tRef, the points of tRef, true   -- smooth rolling ground
+   else b2kAddPolygon tRef, false                                       -- convex: never falls, never syncs
    tagPart tRef, pKind, tColor, empty
    set the uW of tRef to pW
    set the uH of tRef to pH
@@ -2988,9 +3108,129 @@ on regenTerrain pCtrl
          numOr(the uW of pCtrl, 120), numOr(the uH of pCtrl, 26), numOr(the uAngle of pCtrl, 0), \
          (the uFlip of pCtrl is true))
    set the loc of pCtrl to tCx & "," & tCy     -- keep centred on the body origin
-   b2kReshape pCtrl, "poly"
-   reapplyMaterial pCtrl
+   if the uKind of pCtrl is "hill" then
+      rebuildHillChain pCtrl                    -- smooth hills use a chain, not a polygon shape
+   else
+      b2kReshape pCtrl, "poly"
+      reapplyMaterial pCtrl
+   end if
 end regenTerrain
+
+-- Rebuild a hill's smooth static chain from its current outline (the polygon
+-- shape path can't represent the rolling, concave profile). Drops the old chain
+-- body and re-attaches one to the same graphic, so the part keeps its identity.
+on rebuildHillChain pCtrl
+   if b2kBodyOf(pCtrl) is not empty then b2kRemove pCtrl   -- destroy old chain body; graphic stays (not kit-spawned)
+   b2kAddChain pCtrl, the points of pCtrl, true
+end rebuildHillChain
+
+-- =====================================================================
+-- Freehand "Draw" terrain: press-drag to sketch a ground line; on release it
+-- becomes a smooth ONE-SIDED chain (b2kAddChain, open) bodies rest on top of.
+-- =====================================================================
+on beginDrawTerrain pX, pY
+   set the itemDelimiter to comma
+   put "draw" into gDragMode
+   put round(pX) & "," & round(pY) into gDrawPts
+   put "cb_terrain_" & the milliseconds & "_" & random(99999) into gDrawCtrl
+   create graphic gDrawCtrl
+   put the long id of graphic gDrawCtrl into gDrawCtrl
+   set the style of gDrawCtrl to "line"
+   set the lineSize of gDrawCtrl to kDrawLineSize
+   set the foregroundColor of gDrawCtrl to "150,120,84"
+   set the points of gDrawCtrl to gDrawPts
+   put "Draw the ground — release to set it." into gStatus
+end beginDrawTerrain
+
+on extendDrawTerrain pX, pY
+   if gDrawCtrl is empty then exit extendDrawTerrain
+   set the itemDelimiter to comma
+   local tx, ty, tLast
+   put max(gArenaL, min(gArenaR, pX)) into tx
+   put max(gArenaT, min(gArenaB, pY)) into ty
+   put the last line of gDrawPts into tLast
+   if tLast is not empty and (abs(tx - item 1 of tLast) + abs(ty - item 2 of tLast)) < kDrawStep then exit extendDrawTerrain
+   put cr & round(tx) & "," & round(ty) after gDrawPts
+   set the points of gDrawCtrl to gDrawPts
+end extendDrawTerrain
+
+on finishDrawTerrain
+   if gDrawCtrl is empty then exit finishDrawTerrain
+   set the itemDelimiter to comma
+   local tPts
+   put gDrawPts into tPts
+   if the number of lines of tPts < 2 then        -- a click, not a drag: nothing to build
+      try
+         delete gDrawCtrl
+      end try
+      put empty into gDrawCtrl
+      put empty into gDrawPts
+      put "Press and drag to draw a ground line." into gStatus
+      exit finishDrawTerrain
+   end if
+   -- Normalise the contour left→right, then build a CLOSED, filled ground mass:
+   -- the drawn surface on top, straight down to the arena floor. The top is laid
+   -- right→left so the chain's solid side faces up (Box2D: solid = right of the
+   -- travel direction), matching the smoke test's ground chain — bodies rest on it.
+   local tShape, tFloor, tFirstX, tLastX
+   if (item 1 of the last line of tPts) < (item 1 of line 1 of tPts) then put reversedLines(tPts) into tPts
+   put item 1 of line 1 of tPts into tFirstX
+   put item 1 of the last line of tPts into tLastX
+   put gArenaB into tFloor
+   put tLastX & "," & tFloor & cr & reversedLines(tPts) & cr & tFirstX & "," & tFloor into tShape
+   set the style of gDrawCtrl to "polygon"
+   set the filled of gDrawCtrl to true
+   set the backgroundColor of gDrawCtrl to "120,96,60"
+   set the foregroundColor of gDrawCtrl to "70,56,36"
+   set the lineSize of gDrawCtrl to 2
+   set the points of gDrawCtrl to tShape
+   tagPart gDrawCtrl, "draw", "120,96,60", empty
+   set the uFriction of gDrawCtrl to 0.6
+   b2kAddChain gDrawCtrl, tShape, true            -- closed loop = a solid ground mass
+   selectPart gDrawCtrl
+   put "Ground drawn. Press Run to test it." into gStatus
+   put empty into gDrawCtrl
+   put empty into gDrawPts
+   updateHud
+end finishDrawTerrain
+
+-- A placeholder line graphic for a saved drawn-terrain part; applyPartSpecial
+-- fills in its points and chain from the saved point list.
+function placeDrawPlaceholder pX, pY
+   local tName, tRef
+   put "cb_terrain_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "polygon"
+   set the filled of tRef to true
+   set the backgroundColor of tRef to "120,96,60"
+   set the foregroundColor of tRef to "70,56,36"
+   set the lineSize of tRef to 2
+   set the loc of tRef to round(pX) & "," & round(pY)
+   tagPart tRef, "draw", "120,96,60", empty
+   return tRef
+end placeDrawPlaceholder
+
+-- Reverse the order of a CR-list of points.
+function reversedLines pList
+   local tL, tOut
+   put empty into tOut
+   repeat for each line tL in pList
+      if tL is not empty then put tL & cr before tOut
+   end repeat
+   if tOut is not empty then delete the last char of tOut
+   return tOut
+end reversedLines
+
+-- A drawn terrain's points packed into one save column (CR -> "|", since ";"
+-- and TAB are taken by the save format).
+function ptsPacked pCtrl
+   local tP
+   put the points of pCtrl into tP     -- current points, so a dragged terrain saves where it sits
+   filter tP without empty             -- drop any trailing blank line
+   replace cr with "|" in tP           -- ";" and TAB are taken by the save format
+   return tP
+end ptsPacked
 
 -- =====================================================================
 -- Vehicle: a ready-made car you drop in like any object — a chassis on two
@@ -3087,19 +3327,20 @@ end friendlyKind
 
 -- Add a freshly tagged part to its per-kind list (for fast per-frame iteration).
 on registerKind pCtrl, pKind
-   if pKind is among the items of "balloon,bomb,plate,fan,magnet" then
+   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor" then
       put pCtrl & cr after gKindList[pKind]
    end if
    if pKind is "plate" then
       put 0 into gPlateLoad[pCtrl]
       put "up" into gPlateState[pCtrl]
    end if
+   if pKind is "sensor" then put 0 into gSensorCount[pCtrl]
 end registerKind
 
 -- Drop a deleted part from any per-kind list it belonged to.
 on unregisterKind pCtrl
    local tKind, tP, tNew
-   repeat for each item tKind in "balloon,bomb,plate,fan,magnet"
+   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor"
       if pCtrl is not in gKindList[tKind] then next repeat
       put empty into tNew
       repeat for each line tP in gKindList[tKind]
@@ -3109,6 +3350,7 @@ on unregisterKind pCtrl
    end repeat
    if pCtrl is among the keys of gPlateLoad then delete variable gPlateLoad[pCtrl]
    if pCtrl is among the keys of gPlateState then delete variable gPlateState[pCtrl]
+   if pCtrl is among the keys of gSensorCount then delete variable gSensorCount[pCtrl]
 end unregisterKind
 
 -- The dynamic (gravity-affected) parts, cached and rebuilt only when parts change.
@@ -3261,7 +3503,7 @@ end makeJoint
 -- rope of small links. Each segment is a normal part and each link an exact-pivot
 -- "pin" joint, so the whole span renders, saves/loads and deletes like anything else.
 on buildSpan pKind, pA, pB, pEx, pEy
-   local tSx, tSy, tD, tN, tHt, tColor, tDens, tSag
+   local tSx, tSy, tD, tN, tHt, tColor, tDens, tSag, tPinKind
    local tI, tT, tJx0, tJy0, tJx1, tJy1, tCx, tCy, tLen, tAng, tSeg, tPrev
    put gPendX into tSx
    put gPendY into tSy
@@ -3271,17 +3513,19 @@ on buildSpan pKind, pA, pB, pEx, pEy
       exit buildSpan
    end if
    if pKind is "bridge" then
+      put "deckpin" into tPinKind             -- planks flex a little but never fold back
       put max(2, min(20, round(tD / 60))) into tN
       put 12 into tHt
       put "168,146,98" into tColor
       put 1 into tDens
       put 0 into tSag                        -- straight; sags under load
    else
-      put max(4, min(28, round(tD / 24))) into tN
-      put 8 into tHt
+      put "pin" into tPinKind                 -- links pivot freely so the chain drapes
+      put max(6, min(40, round(tD / 18))) into tN   -- more, finer links → a smoother curve
+      put 7 into tHt
       put "150,154,170" into tColor
-      put 0.4 into tDens
-      put tD * 0.16 into tSag                 -- a gentle initial drape
+      put 0.3 into tDens                      -- lighter, so it settles into a natural catenary
+      put tD * 0.18 into tSag                 -- a deeper initial drape
    end if
    put tSx into tJx0
    put tSy into tJy0
@@ -3300,20 +3544,20 @@ on buildSpan pKind, pA, pB, pEx, pEy
       set the uBounce of tSeg to 0           -- spans stay taut even when Bouncy mode is on
       b2kSetBounce tSeg, 0
       b2kMoveTo tSeg, round(tCx), round(tCy), tAng
-      if tI is 1 then get connectJoint("pin", pA, tSeg, round(tJx0), round(tJy0), 0)
-      else get connectJoint("pin", tPrev, tSeg, round(tJx0), round(tJy0), 0)
+      if tI is 1 then get connectJoint(tPinKind, pA, tSeg, round(tJx0), round(tJy0), 0)
+      else get connectJoint(tPinKind, tPrev, tSeg, round(tJx0), round(tJy0), 0)
       put tSeg into tPrev
       put tJx1 into tJx0
       put tJy1 into tJy0
    end repeat
-   get connectJoint("pin", tPrev, pB, round(pEx), round(pEy), 0)
+   get connectJoint(tPinKind, tPrev, pB, round(pEx), round(pEy), 0)
    put (niceName(pKind) & " built from " & tN & " segments. Press Run to test it.") into gStatus
 end buildSpan
 
 -- The shared joint builder. Picks a sensible pivot per kind, records the joint
 -- and its marker, and motorises it when pMotorSpeed > 0. Returns true on success.
 function connectJoint pKind, pA, pB, pX, pY, pMotorSpeed
-   local tJ, tAxis, tPivX, tPivY, tVis, tEnd
+   local tJ, tAxis, tPivX, tPivY, tVis, tEnd, tdx, tdy, tda
    put pX into tPivX
    put pY into tPivY
    put "dot" into tVis
@@ -3353,6 +3597,16 @@ function connectJoint pKind, pA, pB, pX, pY, pMotorSpeed
          put the result into tJ
          put "line" into tVis
          break
+      case "servo"
+         -- a powered position hold: drives pA to keep its CURRENT pose relative
+         -- to pB. It yields under load and springs back, unlike a rigid weld.
+         if pB is empty then return false       -- a servo holds between two parts
+         put (item 1 of the loc of pA) - (item 1 of the loc of pB) into tdx
+         put (item 2 of the loc of pA) - (item 2 of the loc of pB) into tdy
+         put round(b2kAngle(pA) - b2kAngle(pB)) into tda
+         put b2kMotorTo(pA, pB, tdx, tdy, tda, kServoForce, kServoTorque) into tJ
+         put "line" into tVis
+         break
       case "rope"
          b2kRope pA, pB
          put the result into tJ
@@ -3375,6 +3629,12 @@ function connectJoint pKind, pA, pB, pX, pY, pMotorSpeed
       case "pin"
          b2kHinge pA, pB, pX, pY            -- exact-pivot hinge for spans (no marker)
          put the result into tJ
+         put "none" into tVis
+         break
+      case "deckpin"
+         b2kHinge pA, pB, pX, pY            -- bridge-deck pin: hinged but flex-limited (no marker)
+         put the result into tJ
+         if tJ > 0 then b2kHingeLimit tJ, - kBridgeFlex, kBridgeFlex
          put "none" into tVis
          break
       default
@@ -3531,6 +3791,36 @@ on b2kEndContact pA, pB
    plateTouch pA, pB, -1
    plateTouch pB, pA, -1
 end b2kEndContact
+
+-- A dynamic body entered a sensor zone. Fire the plate signal on the first
+-- arrival (0→1 occupants) so passing traffic doesn't machine-gun the motors.
+on b2kSensorEnter pSensor, pVisitor
+   if pSensor is empty or pVisitor is empty then exit b2kSensorEnter
+   if (the uKind of pSensor is not "sensor") and (the uSensor of pSensor is not true) then exit b2kSensorEnter
+   if b2kBodyType(pVisitor) is not "dynamic" then exit b2kSensorEnter
+   add 1 to gSensorCount[pSensor]
+   if gSensorCount[pSensor] is 1 then
+      try
+         set the backgroundColor of pSensor to "120,230,140"   -- lit while occupied
+      end try
+      put "A sensor zone triggered — bombs go off and motors switch!" into gStatus
+      triggerSignal
+      updateHud
+   end if
+end b2kSensorEnter
+
+-- A body left a sensor zone; when the last one leaves, the zone goes idle again.
+on b2kSensorExit pSensor, pVisitor
+   if pSensor is empty then exit b2kSensorExit
+   if (the uKind of pSensor is not "sensor") and (the uSensor of pSensor is not true) then exit b2kSensorExit
+   subtract 1 from gSensorCount[pSensor]
+   if gSensorCount[pSensor] <= 0 then
+      put 0 into gSensorCount[pSensor]
+      try
+         set the backgroundColor of pSensor to numOr(the uColor of pSensor, "232,196,92")
+      end try
+   end if
+end b2kSensorExit
 
 on flashCtrl pCtrl
    if pCtrl is empty then exit flashCtrl
@@ -3790,7 +4080,7 @@ end buildSampleSwing
 function serializeText
    local tOut, tP, tI
    put "CB2" & cr into tOut
-   put "world" & tab & gGravityMode & cr after tOut
+   put "world" & tab & gGravityMode & tab & gWorldFeel & cr after tOut
    repeat for each line tP in gParts
       if tP is empty then next repeat
       try
@@ -3859,6 +4149,14 @@ function partSpecial pCtrl
       put addKV(tS, "ldir=" & (the uLaunchDir of pCtrl)) into tS
       put addKV(tS, "spin=" & (the uSpinRate of pCtrl)) into tS
       if the uGroup of pCtrl is not empty then put addKV(tS, "grp=" & (the uGroup of pCtrl)) into tS
+      if numOr(the uLayer of pCtrl, 0) > 0 then put addKV(tS, "lyr=" & (the uLayer of pCtrl)) into tS
+      if numOr(the uSleep of pCtrl, 0) > 0 then put addKV(tS, "slp=" & (the uSleep of pCtrl)) into tS
+      if the uKind of pCtrl is "image" and the uShape of pCtrl is not empty then put addKV(tS, "ishp=" & (the uShape of pCtrl)) into tS
+      if the uActive of pCtrl is false then put addKV(tS, "act=false") into tS
+      if the uSensor of pCtrl is true then put addKV(tS, "sen=true") into tS
+      if the uCat of pCtrl is not empty then put addKV(tS, "cat=" & (the uCat of pCtrl)) into tS
+      if the uMask of pCtrl is not empty then put addKV(tS, "msk=" & (the uMask of pCtrl)) into tS
+      if the uKind of pCtrl is "draw" then put addKV(tS, "pts=" & ptsPacked(pCtrl)) into tS
    end if
    switch tKind
       case "fan"
@@ -3951,6 +4249,7 @@ on rebuildFromText pData
    local tIdA, tIdB, tPx, tPy, tMotor, tA, tB, tJSpecial
    clearAll
    put "normal" into gGravityMode
+   put "default" into gWorldFeel
    put empty into tMap
    lock screen
    repeat for each line tLine in pData
@@ -3989,11 +4288,13 @@ on rebuildFromText pData
          put tMap[tIdA] into tA
          if tIdB is 0 then put empty into tB
          else put tMap[tIdB] into tB
-         if tA is not empty and (tB is not empty or tKind is "hinge" or tKind is "pin") then
+         if tA is not empty and (tB is not empty or tKind is "hinge" or tKind is "pin" or tKind is "deckpin") then
             if connectJoint(tKind, tA, tB, tPx, tPy, tMotor) then applyJointSpecial gJN, tJSpecial
          end if
       else if tRec is "world" then
          put item 2 of tLine into gGravityMode
+         put item 3 of tLine into gWorldFeel
+         if gWorldFeel is empty then put "default" into gWorldFeel
          set the itemDelimiter to comma
       else
          set the itemDelimiter to comma
@@ -4001,7 +4302,9 @@ on rebuildFromText pData
    end repeat
    set the itemDelimiter to comma
    applyGravityMode
+   applyWorldFeel
    refreshGravityLabel
+   refreshWorldFeelLabel
    renderBuild
    unlock screen
 end rebuildFromText
@@ -4039,6 +4342,8 @@ function rebuildPart pKind, pX, pY, pW, pH, pColor, pFile
       case "ramp"
       case "hill"
          return placeTerrain(pKind, pX, pY, pW, pH)
+      case "draw"
+         return placeDrawPlaceholder(pX, pY)   -- points + chain restored by applyPartSpecial
       case "image"
          return rebuildImage(pX, pY, pW, pH, pFile)
       case "balloon"
@@ -4047,6 +4352,8 @@ function rebuildPart pKind, pX, pY, pW, pH, pColor, pFile
          return placeBomb(pX, pY)
       case "plate"
          return placePlate(pX, pY)
+      case "sensor"
+         return placeSensor(pX, pY)
       case "fan"
          return placeFan(pX, pY)
       case "magnet"
@@ -4167,6 +4474,28 @@ function placePlate pX, pY
    return tRef
 end placePlate
 
+-- A non-solid trigger zone. Nothing collides with it, but when a dynamic body
+-- ENTERS it (on b2kSensorEnter) it fires the same signal as a pressure plate —
+-- bombs go off and motors flip. Drawn translucent so it reads as a zone.
+function placeSensor pX, pY
+   local tName, tRef
+   put "cb_sensor_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "rectangle"
+   set the filled of tRef to true
+   set the backgroundColor of tRef to "232,196,92"     -- amber, idle
+   set the foregroundColor of tRef to "120,96,32"
+   set the lineSize of tRef to 2
+   set the blendLevel of tRef to 55                      -- translucent: clearly a zone, not solid
+   set the width of tRef to kSensorW
+   set the height of tRef to kSensorH
+   set the loc of tRef to round(pX) & "," & round(pY)
+   b2kAddSensor tRef                                      -- static, non-solid trigger fixture
+   tagPart tRef, "sensor", "232,196,92", empty
+   return tRef
+end placeSensor
+
 -- A fan/wind zone: a translucent arrow that pushes parts inside it. No body.
 function placeFan pX, pY
    local tName, tRef
@@ -4284,9 +4613,19 @@ on applyPartSpecial pCtrl, pSpecial
          set the uFixedRot of pCtrl to true
          b2kSetFixedRotation pCtrl, true
       end if
-      if specialValue(pSpecial, "btype") is "static" then
-         set the uBodyType of pCtrl to "static"
-         b2kSetType pCtrl, "static"
+      put specialValue(pSpecial, "btype") into tV
+      if tV is "static" or tV is "kinematic" then
+         set the uBodyType of pCtrl to tV
+         b2kSetType pCtrl, tV
+      end if
+      put specialValue(pSpecial, "slp") into tV
+      if tV is not empty then
+         set the uSleep of pCtrl to tV
+         b2kSetSleepThreshold pCtrl, tV
+      end if
+      if specialValue(pSpecial, "act") is "false" then
+         set the uActive of pCtrl to false
+         b2kDisable pCtrl
       end if
       put specialValue(pSpecial, "ldmp") into tV
       if tV is not empty then
@@ -4310,6 +4649,16 @@ on applyPartSpecial pCtrl, pSpecial
       if tV is not empty then set the uSpinRate of pCtrl to tV
       put specialValue(pSpecial, "grp") into tV
       if tV is not empty then set the uGroup of pCtrl to tV
+      put specialValue(pSpecial, "lyr") into tV
+      if tV is not empty then
+         set the uLayer of pCtrl to tV
+         applyCollisionLayer pCtrl
+      end if
+      put specialValue(pSpecial, "cat") into tV
+      if tV is not empty then set the uCat of pCtrl to tV
+      put specialValue(pSpecial, "msk") into tV
+      if tV is not empty then set the uMask of pCtrl to tV
+      applyPartFilter pCtrl                  -- no-op unless cat/msk were set above
       put specialValue(pSpecial, "ang") into tV
       if tV is not empty and tV is not 0 then
          b2kMoveTo pCtrl, item 1 of the loc of pCtrl, item 2 of the loc of pCtrl, tV
@@ -4341,6 +4690,38 @@ on applyPartSpecial pCtrl, pSpecial
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
          break
    end switch
+   if tKind is "draw" then                       -- restore a freehand-drawn ground mass + its chain
+      put specialValue(pSpecial, "pts") into tV
+      if tV is not empty then
+         replace "|" with cr in tV
+         set the points of pCtrl to tV
+         b2kAddChain pCtrl, tV, true             -- closed loop, same as when it was drawn
+      end if
+   end if
+   -- Restore a chosen image collision shape and/or the sensor (trigger-zone) flag.
+   -- Both end in a reshape, so set the flags first and reshape ONCE: the rebuilt
+   -- shape picks up the new outline (image) and the sensor state, then the
+   -- material and collision layer (which a reshape resets) are re-applied.
+   local tReshape
+   put false into tReshape
+   if tKind is "image" then
+      put specialValue(pSpecial, "ishp") into tV
+      if tV is not empty then
+         set the uShape of pCtrl to tV
+         put true into tReshape
+      end if
+   end if
+   if specialValue(pSpecial, "sen") is "true" then
+      set the uSensor of pCtrl to true
+      b2kSetSensor pCtrl, true
+      put true into tReshape
+   end if
+   if tReshape then
+      b2kReshape pCtrl, partShape(pCtrl)
+      reapplyMaterial pCtrl
+      reapplyCollision pCtrl
+      applySensorLook pCtrl
+   end if
 end applyPartSpecial
 
 -- =====================================================================
@@ -4595,6 +4976,7 @@ on resetSceneState
    put empty into gKindList
    put empty into gPlateLoad
    put empty into gPlateState
+   put empty into gSensorCount
    put empty into gDynParts
    put true into gDynDirty
    put 0 into gRingN
@@ -4694,23 +5076,27 @@ end showPartInspector
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "image"
-         return "width,height,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
          return "diameter,color,bounce,density,blastradius,blastpower,bombfuse"
       case "plate"
          return "width,height,color,angle,friction"
-      case "anchor"
+      case "sensor"
          return "width,height,color"
+      case "draw"
+         return "color"
+      case "anchor"
+         return "width,height,color,bounce,friction"
       case "ramp"
          return "width,height,angle,facing,friction,color"
       case "platform"
@@ -4760,6 +5146,7 @@ function propLabel pCtrl, pKey
          return "Spin: free to rotate"
       case "bodytype"
          if the uBodyType of pCtrl is "static" then return "Movement: fixed in place"
+         if the uBodyType of pCtrl is "kinematic" then return "Movement: moving platform (kinematic)"
          return "Movement: free-moving"
       case "lindamp"
          return "Air drag (move): " & numOr(the uLinDamp of pCtrl, 0)
@@ -4769,6 +5156,22 @@ function propLabel pCtrl, pKey
          return "Fast-collision: " & yesNo(the uBullet of pCtrl is true)
       case "material"
          return "Material: " & materialNameOf(pCtrl)
+      case "layer"
+         if numOr(the uLayer of pCtrl, 0) is 0 then return "Collision layer: 0 (hits everything)"
+         return "Collision layer: " & (the uLayer of pCtrl) & " (same-layer parts pass through)"
+      case "sleep"
+         if numOr(the uSleep of pCtrl, 0) is 0 then return "Sleep: never (stays active)"
+         return "Sleeps below: " & (the uSleep of pCtrl) & " px/s"
+      case "imgshape"
+         return "Collision shape: " & numOr(the uShape of pCtrl, "box")
+      case "active"
+         if the uActive of pCtrl is false then return "In simulation: no (disabled)"
+         return "In simulation: yes"
+      case "sensor"
+         if the uSensor of pCtrl is true then return "Trigger zone (non-solid): yes"
+         return "Trigger zone (non-solid): no"
+      case "filter"
+         return "Collision filter: " & filterSummary(pCtrl)
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
@@ -4933,8 +5336,16 @@ on adjustPartProp pCtrl, pKey, pDir
          b2kSetFixedRotation pCtrl, (the uFixedRot of pCtrl is true)
          break
       case "bodytype"
-         if the uBodyType of pCtrl is "static" then set the uBodyType of pCtrl to "dynamic"
-         else set the uBodyType of pCtrl to "static"
+         switch the uBodyType of pCtrl       -- cycle dynamic -> static -> kinematic
+            case "static"
+               set the uBodyType of pCtrl to "kinematic"
+               break
+            case "kinematic"
+               set the uBodyType of pCtrl to "dynamic"
+               break
+            default
+               set the uBodyType of pCtrl to "static"
+         end switch
          b2kSetType pCtrl, (the uBodyType of pCtrl)
          break
       case "lindamp"
@@ -4961,6 +5372,45 @@ on adjustPartProp pCtrl, pKey, pDir
          break
       case "material"
          cycleMaterial pCtrl, pDir
+         break
+      case "layer"
+         set the uLayer of pCtrl to clampRange(numOr(the uLayer of pCtrl, 0) + pDir, 0, 8)
+         applyCollisionLayer pCtrl
+         break
+      case "sleep"
+         set the uSleep of pCtrl to clampRange(numOr(the uSleep of pCtrl, 0) + pDir * 10, 0, 200)
+         b2kSetSleepThreshold pCtrl, numOr(the uSleep of pCtrl, 0)
+         break
+      case "imgshape"
+         set the itemDelimiter to comma
+         put "box,ball,capsule" into tPal
+         put itemOffset(numOr(the uShape of pCtrl, "box"), tPal) + pDir into tIdx
+         if tIdx < 1 then put the number of items of tPal into tIdx
+         if tIdx > the number of items of tPal then put 1 into tIdx
+         set the uShape of pCtrl to item tIdx of tPal
+         b2kReshape pCtrl, (the uShape of pCtrl)
+         reapplyMaterial pCtrl
+         reapplyCollision pCtrl             -- reshape resets the filter; restore layer + channels
+         break
+      case "active"
+         if the uActive of pCtrl is false then
+            set the uActive of pCtrl to true
+            b2kEnable pCtrl
+         else
+            set the uActive of pCtrl to false
+            b2kDisable pCtrl
+         end if
+         break
+      case "sensor"
+         set the uSensor of pCtrl to (the uSensor of pCtrl is not true)
+         b2kSetSensor pCtrl, (the uSensor of pCtrl is true)
+         b2kReshape pCtrl, partShape(pCtrl)
+         reapplyMaterial pCtrl
+         reapplyCollision pCtrl             -- reshape resets the filter; restore layer + channels
+         applySensorLook pCtrl
+         break
+      case "filter"
+         openFilterPanel pCtrl              -- a set of channels needs the popup, not a stepper
          break
       case "launchspeed"
          put numOr(the uLaunchSpeed of pCtrl, 0) + pDir * 50 into tLs
@@ -5051,9 +5501,12 @@ on resizePart pCtrl, pFactor
    end if
    set the uW of pCtrl to the width of pCtrl
    set the uH of pCtrl to the height of pCtrl
-   if kindHasBody(tKind) then
-      b2kReshape pCtrl, shapeOfKind(tKind)
+   if tKind is "hill" then
+      rebuildHillChain pCtrl
+   else if kindHasBody(tKind) then
+      b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
+      reapplyCollision pCtrl             -- reshape resets the filter; keep layer + channels
    end if
 end resizePart
 
@@ -5088,12 +5541,140 @@ function shapeOfKind pKind
    return "box"
 end shapeOfKind
 
+-- The collision shape b2kReshape should rebuild for a part: an image uses its
+-- chosen uShape (box/ball/capsule); every other kind is fixed by its kind.
+function partShape pCtrl
+   if the uKind of pCtrl is "image" then return numOr(the uShape of pCtrl, "box")
+   return shapeOfKind(the uKind of pCtrl)
+end partShape
+
 -- After a reshape the new shape has default material; restore the part's values.
 on reapplyMaterial pCtrl
    if the uBounce of pCtrl is not empty then b2kSetBounce pCtrl, (the uBounce of pCtrl)
    if the uDensity of pCtrl is not empty then b2kSetDensity pCtrl, (the uDensity of pCtrl)
    if the uFriction of pCtrl is not empty then b2kSetFriction pCtrl, (the uFriction of pCtrl)
 end reapplyMaterial
+
+-- Collision layer 0 (the default) hits everything. Layers 1-8 give a part a
+-- shared negative collision group, so parts on the SAME layer pass through each
+-- other while still colliding with the ground and parts on other layers.
+on applyCollisionLayer pCtrl
+   local tL
+   put numOr(the uLayer of pCtrl, 0) into tL
+   if tL is 0 then b2kSetCollisionGroup pCtrl, 0
+   else b2kSetCollisionGroup pCtrl, - tL
+end applyCollisionLayer
+
+-- A part flagged as a sensor (trigger zone) is non-solid: bodies pass through it
+-- and it fires b2kSensorEnter/Exit instead of colliding. Show that with a
+-- translucent fill so it reads as a "ghost" zone, not a solid block.
+on applySensorLook pCtrl
+   if pCtrl is empty then exit applySensorLook
+   try
+      if the uSensor of pCtrl is true then set the blendLevel of pCtrl to 45
+      else set the blendLevel of pCtrl to 0
+   end try
+end applySensorLook
+
+-- ---------------------------------------------------------------------
+-- Collision category / mask filter (the "Collision filter" popup panel)
+-- ---------------------------------------------------------------------
+-- A part is ON a set of channels (category) and COLLIDES WITH a set of channels
+-- (mask). Two parts touch only when each is on a channel the other collides with.
+-- This is independent of the simpler "Collision layer" (a group override). The
+-- panel works in channel numbers 1..8; the Kit's filter wants the matching bits.
+
+-- Turn a channel-number list ("1,3") into the bit values b2kLayerBits expects
+-- (channel N -> 2^(N-1), so "1,3" -> "1,4").
+function channelBits pList
+   local tN, tOut
+   put empty into tOut
+   set the itemDelimiter to comma
+   repeat for each item tN in pList
+      if tN is empty or tN is not a number then next repeat
+      put addItem(tOut, round(2 ^ (tN - 1))) into tOut   -- channel N -> bit 2^(N-1), kept integer
+   end repeat
+   if tOut is empty then return 0
+   return tOut
+end channelBits
+
+-- A part's stored channel sets, defaulting to the Box2D default (on channel 1,
+-- collides with every channel) when the part has never been customised.
+function partCategories pCtrl
+   return numOr(the uCat of pCtrl, "1")
+end partCategories
+
+function partMaskChannels pCtrl
+   return numOr(the uMask of pCtrl, kAllChannels)
+end partMaskChannels
+
+function partFilterCustom pCtrl
+   return (the uCat of pCtrl is not empty) or (the uMask of pCtrl is not empty)
+end partFilterCustom
+
+-- Push the part's category/mask into the live shape. A reshape resets the filter,
+-- so this is re-run after every reshape (next to applyCollisionLayer).
+on applyPartFilter pCtrl
+   if pCtrl is empty then exit applyPartFilter
+   if not partFilterCustom(pCtrl) then exit applyPartFilter   -- leave Box2D defaults alone
+   b2kSetCategory pCtrl, channelBits(partCategories(pCtrl))
+   b2kSetMask pCtrl, channelBits(partMaskChannels(pCtrl))
+end applyPartFilter
+
+-- Re-apply BOTH collision settings (layer group + category/mask) after a reshape,
+-- which always rebuilds the shape with a default filter.
+on reapplyCollision pCtrl
+   applyCollisionLayer pCtrl
+   applyPartFilter pCtrl
+end reapplyCollision
+
+-- A compact one-line description for the inspector row.
+function filterSummary pCtrl
+   if not partFilterCustom(pCtrl) then return "default (hits everything)"
+   return "on " & channelText(partCategories(pCtrl)) & " · hits " & channelText(partMaskChannels(pCtrl))
+end filterSummary
+
+-- "1,2,3,4,5,6,7,8" -> "all"; a short list stays as-is; empty -> "none".
+function channelText pList
+   local tSorted
+   if pList is empty then return "none"
+   put sortedChannels(pList) into tSorted
+   if tSorted is kAllChannels then return "all"
+   return tSorted
+end channelText
+
+-- Add or remove a channel number from a comma list, kept sorted; never returns
+-- empty (a part must stay on at least one channel, and collide with at least one).
+function toggleChannel pList, pIdx
+   local tN, tOut, tFound
+   put empty into tOut
+   put false into tFound
+   set the itemDelimiter to comma
+   repeat for each item tN in pList
+      if tN is pIdx then
+         put true into tFound
+      else if tN is not empty then
+         put addItem(tOut, tN) into tOut
+      end if
+   end repeat
+   if not tFound then put addItem(tOut, pIdx) into tOut
+   if tOut is empty then return pIdx          -- refuse to clear the last channel
+   return sortedChannels(tOut)
+end toggleChannel
+
+-- Sort a channel-number list ascending and drop blanks/dupes.
+function sortedChannels pList
+   local tN, tSeen, tOut, tI
+   set the itemDelimiter to comma
+   repeat for each item tN in pList
+      if tN is not empty and tN is a number then put true into tSeen[tN]
+   end repeat
+   put empty into tOut
+   repeat with tI = 1 to kFilterChannels
+      if tSeen[tI] is true then put addItem(tOut, tI) into tOut
+   end repeat
+   return tOut
+end sortedChannels
 
 -- A generous palette the Colour setting cycles through.
 function partSwatches
@@ -5118,18 +5699,18 @@ end swatchIndexOf
 
 -- Which settings tab a property key belongs to.
 function propGroup pKey
-   if pKey is among the items of "width,height,length,thickness,diameter,size,angle,facing,color" then return "shape"
+   if pKey is among the items of "width,height,length,thickness,diameter,size,imgshape,angle,facing,color" then return "shape"
    if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material" then return "physics"
-   if pKey is among the items of "launchspeed,launchdir,spinrate" then return "motion"
-   return "special"
+   if pKey is among the items of "layer,sensor,filter,active,sleep" then return "collide"
+   return "special"   -- launchspeed,launchdir,spinrate and the fan/magnet/bomb keys
 end propGroup
 
 -- The tabs that actually have settings for this kind (so empty tabs stay hidden).
 function partTabs pKind
-   local tKey, tHasShape, tHasPhys, tHasMotion, tHasSpec, tOut
+   local tKey, tHasShape, tHasPhys, tHasCollide, tHasSpec, tOut
    put false into tHasShape
    put false into tHasPhys
-   put false into tHasMotion
+   put false into tHasCollide
    put false into tHasSpec
    set the itemDelimiter to comma
    repeat for each item tKey in partProps(pKind)
@@ -5140,8 +5721,8 @@ function partTabs pKind
          case "physics"
             put true into tHasPhys
             break
-         case "motion"
-            put true into tHasMotion
+         case "collide"
+            put true into tHasCollide
             break
          case "special"
             put true into tHasSpec
@@ -5151,7 +5732,7 @@ function partTabs pKind
    put empty into tOut
    if tHasShape then put "shape" into tOut
    if tHasPhys then put addItem(tOut, "physics") into tOut
-   if tHasMotion then put addItem(tOut, "motion") into tOut
+   if tHasCollide then put addItem(tOut, "collide") into tOut
    if tHasSpec then put addItem(tOut, "special") into tOut
    return tOut
 end partTabs
@@ -5171,7 +5752,7 @@ end selectInspTab
 on refreshInspTabs pAvail
    local tT
    set the itemDelimiter to comma
-   repeat for each item tT in "shape,physics,motion,special"
+   repeat for each item tT in "shape,physics,collide,special"
       if there is not a button ("ui_act_tab_" & tT) then next repeat
       if tT is among the items of pAvail then
          set the visible of button ("ui_act_tab_" & tT) to true
@@ -5189,7 +5770,7 @@ end refreshInspTabs
 on hideInspTabs
    local tT
    set the itemDelimiter to comma
-   repeat for each item tT in "shape,physics,motion,special"
+   repeat for each item tT in "shape,physics,collide,special"
       if there is a button ("ui_act_tab_" & tT) then set the visible of button ("ui_act_tab_" & tT) to false
    end repeat
 end hideInspTabs
@@ -5253,9 +5834,12 @@ on setPartDimension pCtrl, pAxis, pValue
    set the loc of pCtrl to tCx & "," & tCy
    set the uW of pCtrl to tW
    set the uH of pCtrl to tH
-   if kindHasBody(tKind) then
-      b2kReshape pCtrl, shapeOfKind(tKind)
+   if tKind is "hill" then
+      rebuildHillChain pCtrl              -- outline carries its own rotation; body stays at 0
+   else if kindHasBody(tKind) then
+      b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
+      reapplyCollision pCtrl              -- reshape resets the filter; keep layer + channels
       if tAng is not 0 then b2kMoveTo pCtrl, tCx, tCy, tAng
    end if
 end setPartDimension
@@ -5268,6 +5852,10 @@ on editPropValue pKey
       exit editPropValue
    end if
    if gSelPart is empty then exit editPropValue
+   if pKey is "filter" then
+      openFilterPanel gSelPart
+      exit editPropValue
+   end if
    set the itemDelimiter to comma
    if pKey is not among the items of kEntryKeys then exit editPropValue
    ask ("Set " & propEditName(gSelPart, pKey) & ":") with currentPropValue(gSelPart, pKey)
@@ -6010,6 +6598,63 @@ on refreshGravityLabel
    if there is a button "ui_act_gravity" then set the label of button "ui_act_gravity" to "Gravity: " & gravityModeName(gGravityMode)
 end refreshGravityLabel
 
+-- World feel: a few one-click presets that tune how the whole world responds —
+-- how readily things bounce (restitution threshold), how soft/stiff contacts are
+-- (contact tuning) and a top speed cap. Cosmetic-but-fun; safe before the world
+-- exists (the Kit's world setters no-op until b2kSetup has run).
+function worldFeelName pMode
+   switch pMode
+      case "bouncy"
+         return "Bouncy"
+      case "floaty"
+         return "Floaty"
+      case "snappy"
+         return "Snappy"
+   end switch
+   return "Default"
+end worldFeelName
+
+on applyWorldFeel
+   switch gWorldFeel
+      case "bouncy"
+         b2kSetRestitutionThreshold 20      -- low threshold: collisions bounce readily
+         b2kSetContactTuning 30, 10, 120
+         b2kSetMaxSpeed 6000
+         break
+      case "floaty"
+         b2kSetRestitutionThreshold 40
+         b2kSetContactTuning 12, 12, 80     -- soft, squishy contacts
+         b2kSetMaxSpeed 1500                -- gentle, speed-limited
+         break
+      case "snappy"
+         b2kSetRestitutionThreshold 80      -- only fast hits bounce
+         b2kSetContactTuning 60, 8, 160     -- stiff, responsive contacts
+         b2kSetMaxSpeed 6000
+         break
+      default                               -- "default": Box2D's standard feel
+         b2kSetRestitutionThreshold 40
+         b2kSetContactTuning 30, 10, 120
+         b2kSetMaxSpeed 6000
+   end switch
+end applyWorldFeel
+
+on cycleWorldFeel
+   local tOrder, tI
+   put "default,bouncy,floaty,snappy" into tOrder
+   set the itemDelimiter to comma
+   put itemOffset(gWorldFeel, tOrder) + 1 into tI
+   if tI < 1 or tI > the number of items of tOrder then put 1 into tI
+   put item tI of tOrder into gWorldFeel
+   applyWorldFeel
+   refreshWorldFeelLabel
+   put "World feel: " & worldFeelName(gWorldFeel) & "." into gStatus
+   updateHud
+end cycleWorldFeel
+
+on refreshWorldFeelLabel
+   if there is a button "ui_act_worldfeel" then set the label of button "ui_act_worldfeel" to "Feel: " & worldFeelName(gWorldFeel)
+end refreshWorldFeelLabel
+
 function gravityModeName pMode
    switch pMode
       case "low"
@@ -6139,9 +6784,9 @@ function niceName pId
          & "poly=Polygon" & cr & "image=Picture" & cr & "anchor=Anchor" & cr & "delete=Delete" & cr \
          & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
-         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr \
-         & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
-         & "weld=Weld Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
+         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr \
+         & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "draw=Draw Terrain" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
+         & "weld=Weld Joint" & cr & "servo=Servo Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
    local tLine
    set the itemDelimiter to "="
@@ -6161,9 +6806,9 @@ function toolGlyph pId
    local tGlyphs
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
          & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
-         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr \
-         & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
-         & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
+         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr \
+         & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
+         & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
    set the itemDelimiter to "="
    repeat for each line tLine in tGlyphs
@@ -6205,6 +6850,8 @@ function toolHelp pId
          return "A bomb that explodes and flings parts." & cr & "Detonates on a hard hit, a pressure-plate signal, or a Run-fuse (toggle it below). The blast flings nearby parts outward."
       case "plate"
          return "A switch that triggers when weighed down." & cr & "A pressure plate. When a part rests on it, it fires a signal: any bombs go off and all motors switch on or off. Build chain reactions with it!"
+      case "sensor"
+         return "A trigger zone that fires when entered." & cr & "A sensor is a non-solid zone — parts pass right through it, but the moment one enters, it fires the same signal as a pressure plate: bombs go off and all motors switch. Great for tripwires and gates."
       case "fan"
          return "A wind zone that blows parts along." & cr & "A fan pushes any part inside its zone in the arrow's direction. Set the direction and strength in the inspector. No body — parts pass through it."
       case "magnet"
@@ -6214,13 +6861,17 @@ function toolHelp pId
       case "ramp"
          return "Place a fixed slope for rolling and sliding." & cr & "A ramp is a fixed wedge. Balls roll down it and parts slide along it. Rotate it for any incline and raise its grip to slow the slide — great for launches and runs."
       case "hill"
-         return "Place a fixed rounded mound." & cr & "A hill is a fixed, rounded mound that parts roll over and settle against. Size and rotate it to shape your landscape."
+         return "Place a smooth rolling mound." & cr & "A hill is fixed scenery built as a smooth chain, so parts roll over it without catching. Make it narrow for a single dome or wide for rolling hills; size and rotate it to shape your landscape."
+      case "draw"
+         return "Draw your own ground line." & cr & "Press and drag across the play field to sketch a smooth ground contour — bumps, valleys, ramps, anything. On release it becomes solid terrain parts roll along. Drag it to reposition; delete and redraw to change its shape."
       case "car"
          return "Drop a ready-made motor car." & cr & "A complete car: a chassis on two sprung, motorised wheels. Drop it in, press Run and it drives off. Drag the body and the whole car moves with it; tune or reverse each wheel's motor in the joint inspector."
       case "hinge"
          return "Pin two parts so they rotate." & cr & "A hinge is a pin two parts spin around — like an axle or a pendulum. Pin to an Anchor or empty space, switch Motor on, and it drives itself."
       case "weld"
          return "Glue two parts rigidly together." & cr & "A weld locks two parts as one solid piece — they keep their relative position and angle."
+      case "servo"
+         return "A powered hold between two parts." & cr & "A servo drives one part to keep its position and angle relative to another. Unlike a rigid weld it gives under load and springs back — good for self-righting parts, soft platforms and return-to-home arms. Click part A, then part B."
       case "rope"
          return "Link two parts with a rope." & cr & "A rope keeps two parts from drifting further apart than its length. They can still swing and fall closer together."
       case "slider"
@@ -6261,9 +6912,13 @@ function actionHelp pId
          return "Faster motor speed for new motorised joints."
       case "recipeclose"
          return "Close this menu."
+      case "filterclose"
+         return "Close the collision filter."
    end switch
    if char 1 to 9 of pId is "prop_inc_" then return "Increase this value."
    if char 1 to 9 of pId is "prop_dec_" then return "Decrease this value."
+   if char 1 to 9 of pId is "filt_cat_" then return "Toggle whether this part is on channel " & (char 10 to -1 of pId) & "."
+   if char 1 to 10 of pId is "filt_mask_" then return "Toggle whether this part collides with channel " & (char 11 to -1 of pId) & "."
    return niceName(pId)
 end actionHelp
 
@@ -6326,44 +6981,51 @@ on buildRecipesMenu
    local tWide, tHigh, tL, tT, tW, tH, tBy
    put the width of this card into tWide
    put the height of this card into tHigh
-   put 280 into tW
-   put 482 into tH
+   put 420 into tW
+   put 476 into tH
    put (tWide - tW) div 2 into tL
    put (tHigh - tH) div 2 into tT
    makeBar "ui_recipescrim", 0, 0, tWide, tHigh, "10,11,15"
-   set the blendLevel of graphic "ui_recipescrim" to 55
+   set the blendLevel of graphic "ui_recipescrim" to 62
    set the uRecipeMenu of graphic "ui_recipescrim" to true
    makeBar "ui_recipebg", tL, tT, tL + tW, tT + tH, "34,38,48"
    set the uRecipeMenu of graphic "ui_recipebg" to true
-   makeLabel "ui_recipe_title", tL + 16, tT + 12, tL + tW - 16, tT + 36, "Examples & Stress Test", 14, "236,238,245", true
+   makeLabel "ui_recipe_title", tL + 18, tT + 14, tL + tW - 18, tT + 38, "Example Machines", 15, "236,238,245", true
    set the uRecipeMenu of field "ui_recipe_title" to true
-   put tT + 48 into tBy
-   makeRecipeBtn "balloonlift", "Balloon Lift", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "platebomb", "Plate → Bomb Chain", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "fantower", "Fan Tower", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "magnetcatch", "Magnet Catch", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "cart", "Motor Cart", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "swing", "Pendulum Swing", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "catapult", "Catapult", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "cradle", "Newton's Cradle", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "dominoes", "Domino Run", tL + 16, tBy, tW - 32
-   add 34 to tBy
-   makeRecipeBtn "terrainrun", "Terrain Run", tL + 16, tBy, tW - 32
-   add 40 to tBy
-   makeRecipeBtn "stress", "Stress Test (+" & kStressBatch & " bodies)", tL + 16, tBy, tW - 32
-   add 40 to tBy
-   makeAction "recipeclose", "Close", tL + tW - 90, tBy, 74, 26
+   put tT + 46 into tBy
+   put recipeCategory("Launchers", "catapult,cannon,trebuchet,wreckingball", \
+         "Catapult,Cannon,Trebuchet,Wrecking Ball", tL, tW, tBy) into tBy
+   put recipeCategory("Machines", "crane,cart,fantower,magnetcatch,balloonlift", \
+         "Crane,Motor Cart,Fan Tower,Magnet Catch,Balloon Lift", tL, tW, tBy) into tBy
+   put recipeCategory("Chain Reactions", "platebomb,dominoes", \
+         "Plate → Bomb,Domino Run", tL, tW, tBy) into tBy
+   put recipeCategory("Toys & Tests", "swing,cradle,terrainrun,stress", \
+         "Pendulum Swing,Newton's Cradle,Terrain Run,Stress (+" & kStressBatch & ")", tL, tW, tBy) into tBy
+   makeAction "recipeclose", "Close", tL + tW - 92, tBy + 2, 76, 26
    set the uRecipeMenu of button "ui_act_recipeclose" to true
    hideRecipesMenu
 end buildRecipesMenu
+
+-- Lay out one labelled category of recipe buttons in two columns. Returns the
+-- next free Y. pIds / pLabels are comma lists; the headers and buttons all carry
+-- uRecipeMenu so the whole gallery shows/hides as one.
+function recipeCategory pTitle, pIds, pLabels, pL, pW, pY
+   local tHdr, tI, tN, tColW, tBx
+   put "ui_reccat_" & the number of controls of this card into tHdr   -- a unique, name-safe id
+   makeLabel tHdr, pL + 18, pY, pL + pW - 18, pY + 18, pTitle, 11, "150,196,232", true
+   set the uRecipeMenu of field tHdr to true
+   add 22 to pY
+   set the itemDelimiter to comma
+   put the number of items of pIds into tN
+   put (pW - 44) div 2 into tColW
+   repeat with tI = 1 to tN
+      if (tI - 1) mod 2 is 0 then put pL + 18 into tBx
+      else put pL + 18 + tColW + 8 into tBx
+      makeRecipeBtn (item tI of pIds), (item tI of pLabels), tBx, pY, tColW
+      if (tI mod 2 is 0) or (tI is tN) then add 30 to pY
+   end repeat
+   return pY + 8
+end recipeCategory
 
 on makeRecipeBtn pId, pLabel, pX, pY, pW
    makeAction pId, pLabel, pX, pY, pW, 28
@@ -6397,6 +7059,125 @@ on setRecipeVisible pFlag
       if pFlag then set the layer of tCtrl to top
    end repeat
 end setRecipeVisible
+
+-- =====================================================================
+-- Collision-filter popup: two rows of eight channel toggles (category /
+-- mask). Built once with the chrome (hidden), mirroring the recipes menu.
+-- =====================================================================
+on buildFilterPanel
+   local tWide, tHigh, tW, tH, tL, tT, tI, tBx, tColW, tRowY
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 360 into tW
+   put 286 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_filterscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_filterscrim" to 62
+   set the uFilterMenu of graphic "ui_filterscrim" to true
+   makeBar "ui_filterbg", tL, tT, tL + tW, tT + tH, "34,38,48"
+   set the uFilterMenu of graphic "ui_filterbg" to true
+   makeLabel "ui_filter_title", tL + 18, tT + 14, tL + tW - 18, tT + 36, "Collision Filter", 15, "236,238,245", true
+   set the uFilterMenu of field "ui_filter_title" to true
+   makeLabel "ui_filter_sub", tL + 18, tT + 38, tL + tW - 18, tT + 58, "", 11, "150,196,232", false
+   set the uFilterMenu of field "ui_filter_sub" to true
+   -- "On channels" row
+   makeLabel "ui_filter_cathdr", tL + 18, tT + 66, tL + tW - 18, tT + 84, "On channels (what this part is):", 11, "210,214,224", true
+   set the uFilterMenu of field "ui_filter_cathdr" to true
+   put (tW - 36 - 7 * 6) div kFilterChannels into tColW
+   put tT + 88 into tRowY
+   repeat with tI = 1 to kFilterChannels
+      put tL + 18 + (tI - 1) * (tColW + 6) into tBx
+      makeAction ("filt_cat_" & tI), tI, tBx, tRowY, tColW, 26
+      set the uFilterMenu of button ("ui_act_filt_cat_" & tI) to true
+   end repeat
+   -- "Collides with" row
+   makeLabel "ui_filter_maskhdr", tL + 18, tT + 124, tL + tW - 18, tT + 142, "Collides with channels:", 11, "210,214,224", true
+   set the uFilterMenu of field "ui_filter_maskhdr" to true
+   put tT + 146 into tRowY
+   repeat with tI = 1 to kFilterChannels
+      put tL + 18 + (tI - 1) * (tColW + 6) into tBx
+      makeAction ("filt_mask_" & tI), tI, tBx, tRowY, tColW, 26
+      set the uFilterMenu of button ("ui_act_filt_mask_" & tI) to true
+   end repeat
+   makeLabel "ui_filter_help", tL + 18, tT + 182, tL + tW - 18, tT + 244, \
+         "Two parts collide only when each is on a channel the other collides with. Tip: keep channel 1 under “Collides with” so parts still land on the ground.", \
+         11, "150,154,166", false
+   set the uFilterMenu of field "ui_filter_help" to true
+   makeAction "filterclose", "Close", tL + tW - 92, tT + tH - 34, 76, 26
+   set the uFilterMenu of button "ui_act_filterclose" to true
+   setFilterVisible false
+end buildFilterPanel
+
+-- Open the panel for a part: remember it, paint the toggles, show the panel.
+on openFilterPanel pCtrl
+   if pCtrl is empty then exit openFilterPanel
+   put pCtrl into gFilterPart
+   refreshFilterPanel
+   setFilterVisible true
+end openFilterPanel
+
+on hideFilterPanel
+   put empty into gFilterPart
+   setFilterVisible false
+end hideFilterPanel
+
+-- Light each toggle to match the part's current category / mask channels.
+on refreshFilterPanel
+   local tI, tCats, tMask
+   if gFilterPart is empty then exit refreshFilterPanel
+   if there is not gFilterPart then
+      hideFilterPanel
+      exit refreshFilterPanel
+   end if
+   if there is a field "ui_filter_sub" then
+      put ("Editing: " & niceName(the uKind of gFilterPart)) into field "ui_filter_sub"
+   end if
+   put "," & sortedChannels(partCategories(gFilterPart)) & "," into tCats
+   put "," & sortedChannels(partMaskChannels(gFilterPart)) & "," into tMask
+   repeat with tI = 1 to kFilterChannels
+      setToggle ("ui_act_filt_cat_" & tI), ("," & tI & "," is in tCats)
+      setToggle ("ui_act_filt_mask_" & tI), ("," & tI & "," is in tMask)
+   end repeat
+end refreshFilterPanel
+
+-- A click on a category/mask channel toggle: flip it, apply, repaint. The action
+-- id is "filt_cat_<n>" or "filt_mask_<n>"; split off the row and the channel.
+on handleFilterToggle pId
+   local tRest, tWhich, tIdx
+   if gFilterPart is empty then exit handleFilterToggle
+   if there is not gFilterPart then
+      hideFilterPanel
+      exit handleFilterToggle
+   end if
+   put char 6 to -1 of pId into tRest           -- "cat_3" or "mask_3"
+   set the itemDelimiter to "_"
+   put item 1 of tRest into tWhich              -- "cat" | "mask"
+   put item 2 of tRest into tIdx                -- the channel number
+   set the itemDelimiter to comma
+   if tIdx is not a number then exit handleFilterToggle
+   if tWhich is "cat" then
+      set the uCat of gFilterPart to toggleChannel(partCategories(gFilterPart), tIdx)
+   else
+      set the uMask of gFilterPart to toggleChannel(partMaskChannels(gFilterPart), tIdx)
+   end if
+   applyPartFilter gFilterPart
+   refreshFilterPanel
+   if gSelPart is gFilterPart then showPartInspector gFilterPart
+end handleFilterToggle
+
+on setFilterVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uFilterMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setFilterVisible
 
 -- A balloon hauls a box up by a rope.
 on buildRecipeBalloonLift
@@ -6487,6 +7268,125 @@ on buildRecipeCatapult
    put "Catapult — press Run: the heavy block drops on the right arm and flings the ball off the left." into gStatus
    updateHud
 end buildRecipeCatapult
+
+-- A horizontal cannon: a static carriage + barrel (axis-aligned, so the static
+-- render is exact — no rotated-static-body gotcha), a heavy ball that fires up
+-- the field on Run via the launch system, and a crate stack to knock down. The
+-- ball + barrel share a collision layer, so the ball slips clear of the barrel
+-- instead of snagging on it as it launches.
+on buildRecipeCannon
+   if gMode is "run" then toggleMode
+   clearAll
+   local tX, tBaseY, tBarrel, tBase, tBall, tI
+   put gArenaL + 80 into tX
+   put gArenaB - 96 into tBaseY
+   put placeBox(tX + 18, tBaseY + 34, 66, 30, "92,70,52") into tBase     -- carriage
+   set the uBodyType of tBase to "static"
+   b2kSetType tBase, "static"
+   put placeBox(tX + 30, tBaseY, 96, 34, "70,74,86") into tBarrel        -- barrel
+   set the uBodyType of tBarrel to "static"
+   b2kSetType tBarrel, "static"
+   set the uLayer of tBarrel to 1
+   applyCollisionLayer tBarrel
+   put placeBall(tX + 88, tBaseY, 26, "40,42,50") into tBall             -- cannonball at the muzzle
+   set the uDensity of tBall to 2.6
+   b2kSetDensity tBall, 2.6
+   set the uLaunchSpeed of tBall to 1150
+   set the uLaunchDir of tBall to 18                                      -- across and slightly up
+   set the uLayer of tBall to 1
+   applyCollisionLayer tBall
+   repeat with tI = 0 to 4                                                -- crate stack downrange
+      get placeBox(gArenaR - 150, gArenaB - 22 - tI * 30, 46, 28, "200,120,80")
+   end repeat
+   renderBuild
+   put "Cannon — press Run: the ball fires across the field. Knock the crate stack down!" into gStatus
+   updateHud
+end buildRecipeCannon
+
+-- A trebuchet: a long arm hinged off-centre, a heavy counterweight welded to the
+-- short end and a ball resting on the long end. On Run the weight drops, the arm
+-- whips round and flings the ball downfield. (Gravity-driven — no motor.)
+on buildRecipeTrebuchet
+   if gMode is "run" then toggleMode
+   clearAll
+   local tCx, tBaseY, tPivot, tArm, tWeight, tBall
+   put (gArenaL + gArenaR) div 2 - 70 into tCx
+   put gArenaB - 150 into tBaseY
+   put placeAnchor(tCx, tBaseY) into tPivot
+   put placeBox(tCx + 44, tBaseY, 264, 12, "180,150,90") into tArm
+   set the uDensity of tArm to 0.5
+   b2kSetDensity tArm, 0.5
+   get connectJoint("hinge", tArm, tPivot, tCx, tBaseY, 0)
+   put placeBox(tCx - 80, tBaseY + 12, 56, 56, "214,92,92") into tWeight
+   set the uDensity of tWeight to 4
+   b2kSetDensity tWeight, 4
+   get connectJoint("weld", tWeight, tArm)
+   put placeBall(tCx + 162, tBaseY + 6, 26, "232,182,92") into tBall
+   set the uDensity of tBall to 0.8
+   b2kSetDensity tBall, 0.8
+   renderBuild
+   put "Trebuchet — press Run: the counterweight drops and the long arm flings the ball downfield." into gStatus
+   updateHud
+end buildRecipeTrebuchet
+
+-- A crane: a static mast, a motorised jib that swings, and a load hung from the
+-- jib end on a rope so it trails and sways as the jib turns.
+on buildRecipeCrane
+   if gMode is "run" then toggleMode
+   clearAll
+   local tX, tBaseY, tTop, tMast, tPivot, tJib, tLoad
+   put gArenaL + 150 into tX
+   put gArenaB - 30 into tBaseY
+   put tBaseY - 210 into tTop
+   put placeBox(tX, tBaseY - 110, 26, 220, "92,98,112") into tMast
+   set the uBodyType of tMast to "static"
+   b2kSetType tMast, "static"
+   put placeAnchor(tX, tTop) into tPivot
+   put placeBox(tX + 96, tTop, 210, 14, "180,150,90") into tJib
+   set the uDensity of tJib to 0.4
+   b2kSetDensity tJib, 0.4
+   get connectJoint("hinge", tJib, tPivot, tX, tTop, 26)   -- 26 deg/s motor swings the jib
+   put placeBall(tX + 184, tTop + 92, 34, "232,182,92") into tLoad
+   set the uDensity of tLoad to 2
+   b2kSetDensity tLoad, 2
+   get connectJoint("rope", tJib, tLoad)
+   renderBuild
+   put "Crane — press Run: the motorised jib swings and the roped load trails and sways behind it." into gStatus
+   updateHud
+end buildRecipeCrane
+
+-- A wrecking ball: a static gantry, a heavy ball hung on a rope and given a
+-- sideways shove on Run so it swings into a brick wall and knocks it down.
+on buildRecipeWreckingBall
+   if gMode is "run" then toggleMode
+   clearAll
+   local tX, tBaseY, tTop, tLeg, tBeam, tPivot, tBall, tI
+   put gArenaL + 120 into tX
+   put gArenaB - 30 into tBaseY
+   put tBaseY - 210 into tTop
+   put placeBox(tX, tBaseY - 105, 18, 210, "92,98,112") into tLeg
+   set the uBodyType of tLeg to "static"
+   b2kSetType tLeg, "static"
+   put placeBox(tX + 230, tBaseY - 105, 18, 210, "92,98,112") into tLeg
+   set the uBodyType of tLeg to "static"
+   b2kSetType tLeg, "static"
+   put placeBox(tX + 115, tTop, 260, 16, "92,98,112") into tBeam
+   set the uBodyType of tBeam to "static"
+   b2kSetType tBeam, "static"
+   put placeAnchor(tX + 40, tTop) into tPivot
+   put placeBall(tX + 40, tTop + 140, 40, "60,64,74") into tBall
+   set the uDensity of tBall to 4.5
+   b2kSetDensity tBall, 4.5
+   get connectJoint("rope", tPivot, tBall)
+   set the uLaunchSpeed of tBall to 540
+   set the uLaunchDir of tBall to 0                         -- shove right, into the wall
+   repeat with tI = 0 to 5
+      get placeBox(gArenaR - 160, gArenaB - 22 - tI * 30, 60, 28, "200,120,80")
+   end repeat
+   renderBuild
+   put "Wrecking Ball — press Run: the ball swings into the brick wall and smashes it down." into gStatus
+   updateHud
+end buildRecipeWreckingBall
 
 -- Five equal pendulums in a touching row; the raised end ball kicks the chain.
 on buildRecipeCradle
