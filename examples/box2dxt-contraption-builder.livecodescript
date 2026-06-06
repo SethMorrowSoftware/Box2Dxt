@@ -1740,6 +1740,7 @@ local gFilterPart                      -- part whose collision filter the popup 
 local gInspTab                         -- active inspector tab: shape | physics | collide | special
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
 local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
+local gCCD, gSleepOn, gWarmStart, gSubsteps   -- advanced world solver toggles (the "World · Advanced" panel)
 local gPreRun                          -- snapshot of the build, taken when Run starts
 local gPalOpen                         -- CR-list of palette section titles currently expanded
 
@@ -1771,7 +1772,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "6"
+constant kUIVersion = "7"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1852,6 +1853,7 @@ on startCB
    put "shape" into gInspTab
    put "normal" into gGravityMode
    put "default" into gWorldFeel
+   setWorldOptionDefaults
    put empty into gHoverId
    put 0 into gStressCount
    put "SHAPES" into gPalOpen        -- single-open accordion: SHAPES is the category open first
@@ -1955,6 +1957,7 @@ on buildUI
    makeStatusBar
    buildRecipesMenu
    buildFilterPanel
+   buildWorldPanel
    applyTooltips
 end buildUI
 
@@ -2264,6 +2267,8 @@ on makeInspector
    makeAction "gravity", "Gravity: Normal", tL + 12, tRy, kInspectorW - 24, 26
    add 32 to tRy
    makeAction "worldfeel", "Feel: Default", tL + 12, tRy, kInspectorW - 24, 26
+   add 32 to tRy
+   makeAction "worldadv", "World · Advanced…", tL + 12, tRy, kInspectorW - 24, 26
    add 32 to tRy
    makeAction "pause", "Pause", tL + 12, tRy, 108, 26
    makeAction "step", "Step", tL + 128, tRy, 80, 26
@@ -2643,6 +2648,10 @@ on handleUiClick
       hideFilterPanel
       exit handleUiClick
    end if
+   if tName is "ui_worldscrim" then
+      hideWorldPanel
+      exit handleUiClick
+   end if
    -- Click a settings value to type an exact number (steppers stay on the +/- keys).
    if "ui_prop_lbl_" is in tName then
       editPropValue (the uPropKey of the target)
@@ -2689,6 +2698,10 @@ on handleAction pId
    end if
    if char 1 to 5 of pId is "filt_" then
       handleFilterToggle pId
+      exit handleAction
+   end if
+   if char 1 to 5 of pId is "wopt_" then
+      handleWorldToggle pId
       exit handleAction
    end if
    switch pId
@@ -2750,6 +2763,12 @@ on handleAction pId
          break
       case "filterclose"
          hideFilterPanel
+         break
+      case "worldadv"
+         openWorldPanel
+         break
+      case "worldclose"
+         hideWorldPanel
          break
       case "cart"
          hideRecipesMenu
@@ -2833,6 +2852,7 @@ on toggleMode
       armThrusters
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
       applyWorldFeel                -- re-apply the world-tuning preset to the live world
+      applyWorldOptions             -- and the advanced solver toggles (CCD, sleeping, substeps…)
       armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
       put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse; Shift-click to kick one." into gStatus
@@ -4115,7 +4135,8 @@ end buildSampleSwing
 function serializeText
    local tOut, tP, tI
    put "CB2" & cr into tOut
-   put "world" & tab & gGravityMode & tab & gWorldFeel & cr after tOut
+   put "world" & tab & gGravityMode & tab & gWorldFeel & tab & (gCCD is true) & tab & \
+         (gSleepOn is true) & tab & (gWarmStart is true) & tab & numOr(gSubsteps, 4) & cr after tOut
    repeat for each line tP in gParts
       if tP is empty then next repeat
       try
@@ -4293,6 +4314,7 @@ on rebuildFromText pData
    clearAll
    put "normal" into gGravityMode
    put "default" into gWorldFeel
+   setWorldOptionDefaults
    put empty into tMap
    lock screen
    repeat for each line tLine in pData
@@ -4338,6 +4360,10 @@ on rebuildFromText pData
          put item 2 of tLine into gGravityMode
          put item 3 of tLine into gWorldFeel
          if gWorldFeel is empty then put "default" into gWorldFeel
+         if item 4 of tLine is not empty then put (item 4 of tLine is "true") into gCCD
+         if item 5 of tLine is not empty then put (item 5 of tLine is "true") into gSleepOn
+         if item 6 of tLine is not empty then put (item 6 of tLine is "true") into gWarmStart
+         if item 7 of tLine is not empty then put item 7 of tLine into gSubsteps
          set the itemDelimiter to comma
       else
          set the itemDelimiter to comma
@@ -6880,6 +6906,23 @@ on applyWorldFeel
    end switch
 end applyWorldFeel
 
+-- The advanced solver toggles default to Box2D's recommended setup.
+on setWorldOptionDefaults
+   put false into gCCD          -- continuous collision off (fast bodies can tunnel, but cheaper)
+   put true into gSleepOn       -- resting bodies sleep (saves CPU)
+   put true into gWarmStart     -- reuse last frame's solution (stabler + faster)
+   put 4 into gSubsteps         -- solver sub-steps per step
+end setWorldOptionDefaults
+
+-- Push the advanced toggles into the live world (re-applied on every Run).
+on applyWorldOptions
+   b2kEnableContinuous (gCCD is true)
+   b2kEnableSleeping (gSleepOn is true)
+   b2kEnableWarmStarting (gWarmStart is true)
+   b2kSetSubsteps numOr(gSubsteps, 4)
+   b2kSetJointTuning 60, 2       -- a sane default joint stiffness (hz, damping)
+end applyWorldOptions
+
 on cycleWorldFeel
    local tOrder, tI
    put "default,bouncy,floaty,snappy" into tOrder
@@ -7424,6 +7467,103 @@ on setFilterVisible pFlag
       if pFlag then set the layer of tCtrl to top
    end repeat
 end setFilterVisible
+
+-- =====================================================================
+-- World · Advanced popup: the solver toggles the Feel presets don't cover
+-- (continuous collision, sleeping, warm-starting, sub-steps). Built once
+-- with the chrome, hidden, like the recipes and filter popups.
+-- =====================================================================
+on buildWorldPanel
+   local tWide, tHigh, tW, tH, tL, tT, tRy
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 340 into tW
+   put 250 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_worldscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_worldscrim" to 62
+   set the uWorldMenu of graphic "ui_worldscrim" to true
+   makeBar "ui_worldbg", tL, tT, tL + tW, tT + tH, "34,38,48"
+   set the uWorldMenu of graphic "ui_worldbg" to true
+   makeLabel "ui_world_title", tL + 18, tT + 14, tL + tW - 18, tT + 36, "World · Advanced", 15, "236,238,245", true
+   set the uWorldMenu of field "ui_world_title" to true
+   put tT + 48 into tRy
+   makeAction "wopt_ccd", "Continuous collision: off", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_ccd" to true
+   add 36 to tRy
+   makeAction "wopt_sleep", "Sleeping: on", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_sleep" to true
+   add 36 to tRy
+   makeAction "wopt_warm", "Warm starting: on", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_warm" to true
+   add 36 to tRy
+   makeAction "wopt_sub", "Solver sub-steps: 4", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_sub" to true
+   makeAction "worldclose", "Close", tL + tW - 92, tT + tH - 34, 76, 26
+   set the uWorldMenu of button "ui_act_worldclose" to true
+   setWorldVisible false
+end buildWorldPanel
+
+on openWorldPanel
+   refreshWorldPanel
+   setWorldVisible true
+end openWorldPanel
+
+on hideWorldPanel
+   setWorldVisible false
+end hideWorldPanel
+
+-- Paint each toggle to its current state (and light the ON ones blue).
+on refreshWorldPanel
+   if there is a button "ui_act_wopt_ccd" then set the label of button "ui_act_wopt_ccd" to "Continuous collision: " & onOff(gCCD)
+   if there is a button "ui_act_wopt_sleep" then set the label of button "ui_act_wopt_sleep" to "Sleeping: " & onOff(gSleepOn)
+   if there is a button "ui_act_wopt_warm" then set the label of button "ui_act_wopt_warm" to "Warm starting: " & onOff(gWarmStart)
+   if there is a button "ui_act_wopt_sub" then set the label of button "ui_act_wopt_sub" to "Solver sub-steps: " & numOr(gSubsteps, 4)
+   setToggle "ui_act_wopt_ccd", (gCCD is true)
+   setToggle "ui_act_wopt_sleep", (gSleepOn is true)
+   setToggle "ui_act_wopt_warm", (gWarmStart is true)
+end refreshWorldPanel
+
+-- "on"/"off" for a boolean-ish global.
+function onOff pFlag
+   if pFlag is true then return "on"
+   return "off"
+end onOff
+
+-- A click on a world-option toggle: flip it, push it live, repaint.
+on handleWorldToggle pId
+   switch pId
+      case "wopt_ccd"
+         put not (gCCD is true) into gCCD
+         break
+      case "wopt_sleep"
+         put not (gSleepOn is true) into gSleepOn
+         break
+      case "wopt_warm"
+         put not (gWarmStart is true) into gWarmStart
+         break
+      case "wopt_sub"
+         put numOr(gSubsteps, 4) + 1 into gSubsteps
+         if gSubsteps > 8 then put 1 into gSubsteps
+         break
+   end switch
+   if gMode is "run" then applyWorldOptions      -- take effect immediately while running
+   refreshWorldPanel
+end handleWorldToggle
+
+on setWorldVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uWorldMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setWorldVisible
 
 -- A balloon hauls a box up by a rope.
 on buildRecipeBalloonLift
