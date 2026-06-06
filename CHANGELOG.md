@@ -10,6 +10,32 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Showcase pass — every Kit capability is now reachable from the builder.**
+  Several engine features the demo never surfaced are now exposed (raising the
+  count of directly-used `b2k…` handlers from 79 to 98; the rest are alternate
+  spellings of features already shown, e.g. `b2kSpawnBall` vs `b2kAddBall`):
+  - **Laser (SPECIAL).** A body-less emitter that casts a ray each frame and
+    draws its beam to the first thing it strikes — walls count — via `b2kRayHit`
+    / `b2kRayHitX/Y` / `b2kRayDist`. The beam is live in Build and Run, follows
+    its emitter when dragged, and its angle cycles in 45° steps; select it during
+    Run to read the live hit distance.
+  - **Thruster (SPECIAL).** A self-propelled rocket: an ignition pop (`b2kPush`)
+    on Run, then steady force along its own facing (`b2kForce`) with optional
+    spin (`b2kTorque`). Lock its rotation for a straight climb or let it tumble.
+  - **Shift-click to kick.** Shift-clicking a body during Run gives it a sharp,
+    mass-aware impulse and a tumble (`b2kImpulse` / `b2kAngularImpulse`).
+  - **Live telemetry.** While running, the status bar shows solver step time and
+    awake-body count (`b2kProfile`, `b2kAwakeBodyCount`) plus a live readout of
+    the selected part (speed/mass/angle) or joint (`b2kHingeAngle` /
+    `b2kRopeLength` / `b2kSliderPos`).
+  - **Bomb blast preview.** Selecting a bomb reports how many parts sit inside
+    its radius right now (`b2kOverlapCircle`), and a bomb can switch between the
+    shape-aware native blast and the old velocity-based feel (`b2kExplodeLegacy`).
+  - **World · Advanced panel.** Solver toggles the Feel presets don't cover —
+    continuous collision (`b2kEnableContinuous`), sleeping (`b2kEnableSleeping`),
+    warm-starting (`b2kEnableWarmStarting`) and a sub-step quality cycle
+    (`b2kSetSubsteps`) — applied on Run and saved with the layout.
+
 - **Per-part collision filter (contraption builder).** Beyond the quick
   *Collision layer*, every solid part now has a **Collision filter** that opens a
   popup of eight channels in two rows — which channels the part *is on*
