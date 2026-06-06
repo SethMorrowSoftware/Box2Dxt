@@ -1736,6 +1736,7 @@ local gDynParts, gDynDirty
 -- selection / inspector / onboarding / stress-test bookkeeping
 local gSelPart, gHoverId, gOnbStep, gStressCount
 local gSelJoint                        -- selected joint index (1..gJN), empty if none
+local gFilterPart                      -- part whose collision filter the popup panel is editing
 local gInspTab                         -- active inspector tab: shape | physics | collide | special
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
 local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
@@ -1803,6 +1804,8 @@ constant kSizeMin = 16, kSizeMax = 240
 constant kTerrainMin = 20, kTerrainMax = 600
 -- inspector: rows shown per tab, dimension nudge (px), joint click radius (px)
 constant kPropRows = 10, kDimStep = 8, kJointHitR = 16
+-- the eight collision channels the filter popup exposes (1..8 -> bits 1,2,4..128)
+constant kFilterChannels = 8, kAllChannels = "1,2,3,4,5,6,7,8"
 -- numeric settings a user may type an exact value for (toggles/colour stay stepper-only)
 constant kEntryKeys = "width,height,length,thickness,diameter,size,angle,bounce,density,friction,gravity,lindamp,angdamp,launchspeed,launchdir,spinrate,blastradius,blastpower,fanforce,fansize,magforce,magrange"
 
@@ -1949,6 +1952,7 @@ on buildUI
    makeInspector
    makeStatusBar
    buildRecipesMenu
+   buildFilterPanel
    applyTooltips
 end buildUI
 
@@ -2609,6 +2613,10 @@ on handleUiClick
       hideRecipesMenu
       exit handleUiClick
    end if
+   if tName is "ui_filterscrim" then
+      hideFilterPanel
+      exit handleUiClick
+   end if
    -- Click a settings value to type an exact number (steppers stay on the +/- keys).
    if "ui_prop_lbl_" is in tName then
       editPropValue (the uPropKey of the target)
@@ -2651,6 +2659,10 @@ on handleAction pId
    end if
    if char 1 to 4 of pId is "tab_" then
       selectInspTab (char 5 to -1 of pId)
+      exit handleAction
+   end if
+   if char 1 to 5 of pId is "filt_" then
+      handleFilterToggle pId
       exit handleAction
    end if
    switch pId
@@ -2709,6 +2721,9 @@ on handleAction pId
          break
       case "recipeclose"
          hideRecipesMenu
+         break
+      case "filterclose"
+         hideFilterPanel
          break
       case "cart"
          hideRecipesMenu
@@ -4139,6 +4154,8 @@ function partSpecial pCtrl
       if the uKind of pCtrl is "image" and the uShape of pCtrl is not empty then put addKV(tS, "ishp=" & (the uShape of pCtrl)) into tS
       if the uActive of pCtrl is false then put addKV(tS, "act=false") into tS
       if the uSensor of pCtrl is true then put addKV(tS, "sen=true") into tS
+      if the uCat of pCtrl is not empty then put addKV(tS, "cat=" & (the uCat of pCtrl)) into tS
+      if the uMask of pCtrl is not empty then put addKV(tS, "msk=" & (the uMask of pCtrl)) into tS
       if the uKind of pCtrl is "draw" then put addKV(tS, "pts=" & ptsPacked(pCtrl)) into tS
    end if
    switch tKind
@@ -4637,6 +4654,11 @@ on applyPartSpecial pCtrl, pSpecial
          set the uLayer of pCtrl to tV
          applyCollisionLayer pCtrl
       end if
+      put specialValue(pSpecial, "cat") into tV
+      if tV is not empty then set the uCat of pCtrl to tV
+      put specialValue(pSpecial, "msk") into tV
+      if tV is not empty then set the uMask of pCtrl to tV
+      applyPartFilter pCtrl                  -- no-op unless cat/msk were set above
       put specialValue(pSpecial, "ang") into tV
       if tV is not empty and tV is not 0 then
          b2kMoveTo pCtrl, item 1 of the loc of pCtrl, item 2 of the loc of pCtrl, tV
@@ -4697,7 +4719,7 @@ on applyPartSpecial pCtrl, pSpecial
    if tReshape then
       b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
-      applyCollisionLayer pCtrl
+      reapplyCollision pCtrl
       applySensorLook pCtrl
    end if
 end applyPartSpecial
@@ -5054,15 +5076,15 @@ end showPartInspector
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
       case "image"
-         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
+         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
@@ -5148,6 +5170,8 @@ function propLabel pCtrl, pKey
       case "sensor"
          if the uSensor of pCtrl is true then return "Trigger zone (non-solid): yes"
          return "Trigger zone (non-solid): no"
+      case "filter"
+         return "Collision filter: " & filterSummary(pCtrl)
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
@@ -5366,7 +5390,7 @@ on adjustPartProp pCtrl, pKey, pDir
          set the uShape of pCtrl to item tIdx of tPal
          b2kReshape pCtrl, (the uShape of pCtrl)
          reapplyMaterial pCtrl
-         applyCollisionLayer pCtrl          -- reshape resets the filter; restore the layer
+         reapplyCollision pCtrl             -- reshape resets the filter; restore layer + channels
          break
       case "active"
          if the uActive of pCtrl is false then
@@ -5382,8 +5406,11 @@ on adjustPartProp pCtrl, pKey, pDir
          b2kSetSensor pCtrl, (the uSensor of pCtrl is true)
          b2kReshape pCtrl, partShape(pCtrl)
          reapplyMaterial pCtrl
-         applyCollisionLayer pCtrl          -- reshape resets the filter; restore the layer
+         reapplyCollision pCtrl             -- reshape resets the filter; restore layer + channels
          applySensorLook pCtrl
+         break
+      case "filter"
+         openFilterPanel pCtrl              -- a set of channels needs the popup, not a stepper
          break
       case "launchspeed"
          put numOr(the uLaunchSpeed of pCtrl, 0) + pDir * 50 into tLs
@@ -5479,7 +5506,7 @@ on resizePart pCtrl, pFactor
    else if kindHasBody(tKind) then
       b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
-      applyCollisionLayer pCtrl          -- reshape resets the filter; keep the part's layer
+      reapplyCollision pCtrl             -- reshape resets the filter; keep layer + channels
    end if
 end resizePart
 
@@ -5548,6 +5575,104 @@ on applySensorLook pCtrl
       else set the blendLevel of pCtrl to 0
    end try
 end applySensorLook
+
+-- ---------------------------------------------------------------------
+-- Collision category / mask filter (the "Collision filter" popup panel)
+-- ---------------------------------------------------------------------
+-- A part is ON a set of channels (category) and COLLIDES WITH a set of channels
+-- (mask). Two parts touch only when each is on a channel the other collides with.
+-- This is independent of the simpler "Collision layer" (a group override). The
+-- panel works in channel numbers 1..8; the Kit's filter wants the matching bits.
+
+-- Turn a channel-number list ("1,3") into the bit values b2kLayerBits expects
+-- (channel N -> 2^(N-1), so "1,3" -> "1,4").
+function channelBits pList
+   local tN, tOut
+   put empty into tOut
+   set the itemDelimiter to comma
+   repeat for each item tN in pList
+      if tN is empty or tN is not a number then next repeat
+      put addItem(tOut, round(2 ^ (tN - 1))) into tOut   -- channel N -> bit 2^(N-1), kept integer
+   end repeat
+   if tOut is empty then return 0
+   return tOut
+end channelBits
+
+-- A part's stored channel sets, defaulting to the Box2D default (on channel 1,
+-- collides with every channel) when the part has never been customised.
+function partCategories pCtrl
+   return numOr(the uCat of pCtrl, "1")
+end partCategories
+
+function partMaskChannels pCtrl
+   return numOr(the uMask of pCtrl, kAllChannels)
+end partMaskChannels
+
+function partFilterCustom pCtrl
+   return (the uCat of pCtrl is not empty) or (the uMask of pCtrl is not empty)
+end partFilterCustom
+
+-- Push the part's category/mask into the live shape. A reshape resets the filter,
+-- so this is re-run after every reshape (next to applyCollisionLayer).
+on applyPartFilter pCtrl
+   if pCtrl is empty then exit applyPartFilter
+   if not partFilterCustom(pCtrl) then exit applyPartFilter   -- leave Box2D defaults alone
+   b2kSetCategory pCtrl, channelBits(partCategories(pCtrl))
+   b2kSetMask pCtrl, channelBits(partMaskChannels(pCtrl))
+end applyPartFilter
+
+-- Re-apply BOTH collision settings (layer group + category/mask) after a reshape,
+-- which always rebuilds the shape with a default filter.
+on reapplyCollision pCtrl
+   applyCollisionLayer pCtrl
+   applyPartFilter pCtrl
+end reapplyCollision
+
+-- A compact one-line description for the inspector row.
+function filterSummary pCtrl
+   if not partFilterCustom(pCtrl) then return "default (hits everything)"
+   return "on " & channelText(partCategories(pCtrl)) & " · hits " & channelText(partMaskChannels(pCtrl))
+end filterSummary
+
+-- "1,2,3,4,5,6,7,8" -> "all"; a short list stays as-is; empty -> "none".
+function channelText pList
+   if pList is empty then return "none"
+   if sortedChannels(pList) is sortedChannels(kAllChannels) then return "all"
+   return sortedChannels(pList)
+end channelText
+
+-- Add or remove a channel number from a comma list, kept sorted; never returns
+-- empty (a part must stay on at least one channel, and collide with at least one).
+function toggleChannel pList, pIdx
+   local tN, tOut, tFound
+   put empty into tOut
+   put false into tFound
+   set the itemDelimiter to comma
+   repeat for each item tN in pList
+      if tN is pIdx then
+         put true into tFound
+      else if tN is not empty then
+         put addItem(tOut, tN) into tOut
+      end if
+   end repeat
+   if not tFound then put addItem(tOut, pIdx) into tOut
+   if tOut is empty then return pIdx          -- refuse to clear the last channel
+   return sortedChannels(tOut)
+end toggleChannel
+
+-- Sort a channel-number list ascending and drop blanks/dupes.
+function sortedChannels pList
+   local tN, tSeen, tOut, tI
+   set the itemDelimiter to comma
+   repeat for each item tN in pList
+      if tN is not empty and tN is a number then put true into tSeen[tN]
+   end repeat
+   put empty into tOut
+   repeat with tI = 1 to kFilterChannels
+      if tSeen[tI] is true then put addItem(tOut, tI) into tOut
+   end repeat
+   return tOut
+end sortedChannels
 
 -- A generous palette the Colour setting cycles through.
 function partSwatches
@@ -5712,7 +5837,7 @@ on setPartDimension pCtrl, pAxis, pValue
    else if kindHasBody(tKind) then
       b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
-      applyCollisionLayer pCtrl           -- reshape resets the filter; keep the part's layer
+      reapplyCollision pCtrl              -- reshape resets the filter; keep layer + channels
       if tAng is not 0 then b2kMoveTo pCtrl, tCx, tCy, tAng
    end if
 end setPartDimension
@@ -5725,6 +5850,10 @@ on editPropValue pKey
       exit editPropValue
    end if
    if gSelPart is empty then exit editPropValue
+   if pKey is "filter" then
+      openFilterPanel gSelPart
+      exit editPropValue
+   end if
    set the itemDelimiter to comma
    if pKey is not among the items of kEntryKeys then exit editPropValue
    ask ("Set " & propEditName(gSelPart, pKey) & ":") with currentPropValue(gSelPart, pKey)
@@ -6781,9 +6910,13 @@ function actionHelp pId
          return "Faster motor speed for new motorised joints."
       case "recipeclose"
          return "Close this menu."
+      case "filterclose"
+         return "Close the collision filter."
    end switch
    if char 1 to 9 of pId is "prop_inc_" then return "Increase this value."
    if char 1 to 9 of pId is "prop_dec_" then return "Decrease this value."
+   if char 1 to 9 of pId is "filt_cat_" then return "Toggle whether this part is on channel " & (char 10 to -1 of pId) & "."
+   if char 1 to 10 of pId is "filt_mask_" then return "Toggle whether this part collides with channel " & (char 11 to -1 of pId) & "."
    return niceName(pId)
 end actionHelp
 
@@ -6924,6 +7057,125 @@ on setRecipeVisible pFlag
       if pFlag then set the layer of tCtrl to top
    end repeat
 end setRecipeVisible
+
+-- =====================================================================
+-- Collision-filter popup: two rows of eight channel toggles (category /
+-- mask). Built once with the chrome (hidden), mirroring the recipes menu.
+-- =====================================================================
+on buildFilterPanel
+   local tWide, tHigh, tW, tH, tL, tT, tI, tBx, tColW, tRowY
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 360 into tW
+   put 286 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_filterscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_filterscrim" to 62
+   set the uFilterMenu of graphic "ui_filterscrim" to true
+   makeBar "ui_filterbg", tL, tT, tL + tW, tT + tH, "34,38,48"
+   set the uFilterMenu of graphic "ui_filterbg" to true
+   makeLabel "ui_filter_title", tL + 18, tT + 14, tL + tW - 18, tT + 36, "Collision Filter", 15, "236,238,245", true
+   set the uFilterMenu of field "ui_filter_title" to true
+   makeLabel "ui_filter_sub", tL + 18, tT + 38, tL + tW - 18, tT + 58, "", 11, "150,196,232", false
+   set the uFilterMenu of field "ui_filter_sub" to true
+   -- "On channels" row
+   makeLabel "ui_filter_cathdr", tL + 18, tT + 66, tL + tW - 18, tT + 84, "On channels (what this part is):", 11, "210,214,224", true
+   set the uFilterMenu of field "ui_filter_cathdr" to true
+   put (tW - 36 - 7 * 6) div kFilterChannels into tColW
+   put tT + 88 into tRowY
+   repeat with tI = 1 to kFilterChannels
+      put tL + 18 + (tI - 1) * (tColW + 6) into tBx
+      makeAction ("filt_cat_" & tI), tI, tBx, tRowY, tColW, 26
+      set the uFilterMenu of button ("ui_act_filt_cat_" & tI) to true
+   end repeat
+   -- "Collides with" row
+   makeLabel "ui_filter_maskhdr", tL + 18, tT + 124, tL + tW - 18, tT + 142, "Collides with channels:", 11, "210,214,224", true
+   set the uFilterMenu of field "ui_filter_maskhdr" to true
+   put tT + 146 into tRowY
+   repeat with tI = 1 to kFilterChannels
+      put tL + 18 + (tI - 1) * (tColW + 6) into tBx
+      makeAction ("filt_mask_" & tI), tI, tBx, tRowY, tColW, 26
+      set the uFilterMenu of button ("ui_act_filt_mask_" & tI) to true
+   end repeat
+   makeLabel "ui_filter_help", tL + 18, tT + 182, tL + tW - 18, tT + 244, \
+         "Two parts collide only when each is on a channel the other collides with. Tip: keep channel 1 under “Collides with” so parts still land on the ground.", \
+         11, "150,154,166", false
+   set the uFilterMenu of field "ui_filter_help" to true
+   makeAction "filterclose", "Close", tL + tW - 92, tT + tH - 34, 76, 26
+   set the uFilterMenu of button "ui_act_filterclose" to true
+   setFilterVisible false
+end buildFilterPanel
+
+-- Open the panel for a part: remember it, paint the toggles, show the panel.
+on openFilterPanel pCtrl
+   if pCtrl is empty then exit openFilterPanel
+   put pCtrl into gFilterPart
+   refreshFilterPanel
+   setFilterVisible true
+end openFilterPanel
+
+on hideFilterPanel
+   put empty into gFilterPart
+   setFilterVisible false
+end hideFilterPanel
+
+-- Light each toggle to match the part's current category / mask channels.
+on refreshFilterPanel
+   local tI, tCats, tMask
+   if gFilterPart is empty then exit refreshFilterPanel
+   if there is not gFilterPart then
+      hideFilterPanel
+      exit refreshFilterPanel
+   end if
+   if there is a field "ui_filter_sub" then
+      put ("Editing: " & niceName(the uKind of gFilterPart)) into field "ui_filter_sub"
+   end if
+   put "," & sortedChannels(partCategories(gFilterPart)) & "," into tCats
+   put "," & sortedChannels(partMaskChannels(gFilterPart)) & "," into tMask
+   repeat with tI = 1 to kFilterChannels
+      setToggle ("ui_act_filt_cat_" & tI), ("," & tI & "," is in tCats)
+      setToggle ("ui_act_filt_mask_" & tI), ("," & tI & "," is in tMask)
+   end repeat
+end refreshFilterPanel
+
+-- A click on a category/mask channel toggle: flip it, apply, repaint. The action
+-- id is "filt_cat_<n>" or "filt_mask_<n>"; split off the row and the channel.
+on handleFilterToggle pId
+   local tRest, tWhich, tIdx
+   if gFilterPart is empty then exit handleFilterToggle
+   if there is not gFilterPart then
+      hideFilterPanel
+      exit handleFilterToggle
+   end if
+   put char 6 to -1 of pId into tRest           -- "cat_3" or "mask_3"
+   set the itemDelimiter to "_"
+   put item 1 of tRest into tWhich              -- "cat" | "mask"
+   put item 2 of tRest into tIdx                -- the channel number
+   set the itemDelimiter to comma
+   if tIdx is not a number then exit handleFilterToggle
+   if tWhich is "cat" then
+      set the uCat of gFilterPart to toggleChannel(partCategories(gFilterPart), tIdx)
+   else
+      set the uMask of gFilterPart to toggleChannel(partMaskChannels(gFilterPart), tIdx)
+   end if
+   applyPartFilter gFilterPart
+   refreshFilterPanel
+   if gSelPart is gFilterPart then showPartInspector gFilterPart
+end handleFilterToggle
+
+on setFilterVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uFilterMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setFilterVisible
 
 -- A balloon hauls a box up by a rope.
 on buildRecipeBalloonLift

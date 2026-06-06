@@ -10,12 +10,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Per-part collision filter (contraption builder).** Beyond the quick
+  *Collision layer*, every solid part now has a **Collision filter** that opens a
+  popup of eight channels in two rows — which channels the part *is on*
+  (category) and which it *collides with* (mask). Two parts touch only when each
+  is on a channel the other collides with, so you can make whole sets of parts
+  ignore each other while still landing on the ground. Built on the Kit's
+  `b2kSetCategory` / `b2kSetMask`, re-applied after any reshape, and saved/loaded.
+- **Per-part sensor toggle (contraption builder).** Any solid part (box, image,
+  ball, capsule, polygon) can be flipped into a **trigger zone** from its Collide
+  tab — it turns translucent, stops blocking, and fires the same enter/exit
+  signal as the dedicated Sensor. The Kit gained `b2kSetSensor` so the flag can
+  be toggled on an existing part (the shape is rebuilt, keeping the sensor state).
+  Saved and loaded.
 - **Categorised Examples gallery.** The Examples menu is now a tidy two-column
   gallery grouped into **Launchers / Machines / Chain Reactions / Toys & Tests**
   with section headers, instead of one long scrolling list — room to keep adding
   machines and far easier to scan. (UI version bumped so it rebuilds.)
 - **Enable/disable parts.** Every dynamic part has an **In simulation: yes/no**
-  toggle (Physics tab) that pulls it out of / back into the live world
+  toggle (Collide tab) that pulls it out of / back into the live world
   (`b2kDisable` / `b2kEnable`); saved and loaded.
 - **Comprehensive part inspector.** More of box2dxt is now editable per object:
   a body can be **kinematic** (a moving platform — set a launch velocity and it
@@ -57,7 +70,7 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
   the Kit's sensor events, and resizable — the Kit's `b2kReshape` now keeps a
   reshaped shape a sensor.
 - **Collision layers (contraption builder).** Every solid part now has a
-  *Collision layer* setting on its Physics tab: 0 hits everything (the default),
+  *Collision layer* setting on its Collide tab: 0 hits everything (the default),
   while parts sharing a layer 1–8 pass through each other but still collide with
   the ground and parts on other layers — handy for overlapping mechanisms or
   letting a sub-assembly move without snagging on itself. Saves and loads with
@@ -202,6 +215,16 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Fixed
 
+- **Every inspector setting is reachable again.** As the part inspector grew, the
+  Physics tab had more settings than the panel can show at once, so the last few
+  (Collision layer, Sleep, In-simulation, Sensor) were silently cut off. The
+  settings are re-balanced across the tabs — Physics keeps the material/dynamics
+  settings, a renamed **Collide** tab gathers the collision and simulation-state
+  settings, and the launch settings move to **Special** — so nothing is hidden.
+- **Collision settings survive a reshape.** Changing an image's collision shape,
+  toggling the sensor flag, or resizing a part rebuilds its shape with a fresh
+  (default) filter; the part's collision layer and channel filter are now
+  re-applied afterwards instead of being quietly dropped.
 - **Drawn ground now collides and is clearly visible.** A freehand *Draw* piece
   is now a filled, closed ground mass (the drawn surface down to the floor) with
   its chain wound so the solid side faces up — bodies rest on it instead of
