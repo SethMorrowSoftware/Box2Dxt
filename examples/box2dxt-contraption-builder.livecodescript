@@ -4229,6 +4229,7 @@ function partSpecial pCtrl
          put addKV(tS, "bradius=" & (the uBlastRadius of pCtrl)) into tS
          put addKV(tS, "bpower=" & (the uBlastPower of pCtrl)) into tS
          put addKV(tS, "fuse=" & (the uFuseOnRun of pCtrl is true)) into tS
+         if the uSoftBlast of pCtrl is true then put addKV(tS, "soft=true") into tS
          break
       case "laser"
          put addKV(tS, "ldr=" & numOr(the uLaserDir of pCtrl, 0)) into tS
@@ -4898,6 +4899,7 @@ on applyPartSpecial pCtrl, pSpecial
          put specialValue(pSpecial, "bpower") into tV
          if tV is not empty then set the uBlastPower of pCtrl to tV
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
+         if specialValue(pSpecial, "soft") is "true" then set the uSoftBlast of pCtrl to true
          break
       case "laser"
          put specialValue(pSpecial, "ldr") into tV
@@ -5057,7 +5059,8 @@ on detonateBomb pBomb
    if tRad is empty then put kBombRadius into tRad
    put the uBlastPower of pBomb into tPow
    if tPow is empty then put kBombPower into tPow
-   b2kExplode tLx, tLy, tRad, tPow
+   if the uSoftBlast of pBomb is true then b2kExplodeLegacy tLx, tLy, tRad, tPow   -- old velocity-based feel
+   else b2kExplode tLx, tLy, tRad, tPow                                             -- shape-aware native blast
    spawnRing tLx, tLy
    popBalloonsNear tLx, tLy, tRad
    deletePart pBomb
@@ -5331,7 +5334,7 @@ function partProps pKind
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
-         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse"
+         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse,bombsoft"
       case "plate"
          return "width,height,color,angle,friction"
       case "sensor"
@@ -5431,6 +5434,9 @@ function propLabel pCtrl, pKey
          return "Blast power: " & (the uBlastPower of pCtrl)
       case "bombfuse"
          return "Light fuse on Run: " & yesNo(the uFuseOnRun of pCtrl)
+      case "bombsoft"
+         if the uSoftBlast of pCtrl is true then return "Blast style: soft (legacy, size-blind)"
+         return "Blast style: shape-aware (native)"
       case "fandir"
          return "Direction: " & dirName(the uFanDir of pCtrl)
       case "fanforce"
@@ -5744,6 +5750,9 @@ on adjustPartProp pCtrl, pKey, pDir
          break
       case "bombfuse"
          set the uFuseOnRun of pCtrl to not (the uFuseOnRun of pCtrl is true)
+         break
+      case "bombsoft"
+         set the uSoftBlast of pCtrl to not (the uSoftBlast of pCtrl is true)
          break
    end switch
 end adjustPartProp
