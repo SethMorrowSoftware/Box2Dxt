@@ -3926,6 +3926,7 @@ function partSpecial pCtrl
       put addKV(tS, "ldir=" & (the uLaunchDir of pCtrl)) into tS
       put addKV(tS, "spin=" & (the uSpinRate of pCtrl)) into tS
       if the uGroup of pCtrl is not empty then put addKV(tS, "grp=" & (the uGroup of pCtrl)) into tS
+      if numOr(the uLayer of pCtrl, 0) > 0 then put addKV(tS, "lyr=" & (the uLayer of pCtrl)) into tS
    end if
    switch tKind
       case "fan"
@@ -4377,6 +4378,11 @@ on applyPartSpecial pCtrl, pSpecial
       if tV is not empty then set the uSpinRate of pCtrl to tV
       put specialValue(pSpecial, "grp") into tV
       if tV is not empty then set the uGroup of pCtrl to tV
+      put specialValue(pSpecial, "lyr") into tV
+      if tV is not empty then
+         set the uLayer of pCtrl to tV
+         applyCollisionLayer pCtrl
+      end if
       put specialValue(pSpecial, "ang") into tV
       if tV is not empty and tV is not 0 then
          b2kMoveTo pCtrl, item 1 of the loc of pCtrl, item 2 of the loc of pCtrl, tV
@@ -4761,15 +4767,15 @@ end showPartInspector
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
       case "image"
-         return "width,height,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "width,height,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,launchspeed,launchdir,spinrate"
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
@@ -4836,6 +4842,9 @@ function propLabel pCtrl, pKey
          return "Fast-collision: " & yesNo(the uBullet of pCtrl is true)
       case "material"
          return "Material: " & materialNameOf(pCtrl)
+      case "layer"
+         if numOr(the uLayer of pCtrl, 0) is 0 then return "Collision layer: 0 (hits everything)"
+         return "Collision layer: " & (the uLayer of pCtrl) & " (same-layer parts pass through)"
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
@@ -5029,6 +5038,10 @@ on adjustPartProp pCtrl, pKey, pDir
       case "material"
          cycleMaterial pCtrl, pDir
          break
+      case "layer"
+         set the uLayer of pCtrl to clampRange(numOr(the uLayer of pCtrl, 0) + pDir, 0, 8)
+         applyCollisionLayer pCtrl
+         break
       case "launchspeed"
          put numOr(the uLaunchSpeed of pCtrl, 0) + pDir * 50 into tLs
          set the uLaunchSpeed of pCtrl to clampRange(tLs, 0, 1500)
@@ -5164,6 +5177,16 @@ on reapplyMaterial pCtrl
    if the uFriction of pCtrl is not empty then b2kSetFriction pCtrl, (the uFriction of pCtrl)
 end reapplyMaterial
 
+-- Collision layer 0 (the default) hits everything. Layers 1-8 give a part a
+-- shared negative collision group, so parts on the SAME layer pass through each
+-- other while still colliding with the ground and parts on other layers.
+on applyCollisionLayer pCtrl
+   local tL
+   put numOr(the uLayer of pCtrl, 0) into tL
+   if tL is 0 then b2kSetCollisionGroup pCtrl, 0
+   else b2kSetCollisionGroup pCtrl, - tL
+end applyCollisionLayer
+
 -- A generous palette the Colour setting cycles through.
 function partSwatches
    return "92,150,222" & cr & "84,206,142" & cr & "232,182,92" & cr & "214,92,92" & cr \
@@ -5188,7 +5211,7 @@ end swatchIndexOf
 -- Which settings tab a property key belongs to.
 function propGroup pKey
    if pKey is among the items of "width,height,length,thickness,diameter,size,angle,facing,color" then return "shape"
-   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material" then return "physics"
+   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer" then return "physics"
    if pKey is among the items of "launchspeed,launchdir,spinrate" then return "motion"
    return "special"
 end propGroup

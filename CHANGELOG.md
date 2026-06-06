@@ -10,6 +10,12 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Collision layers (contraption builder).** Every solid part now has a
+  *Collision layer* setting on its Physics tab: 0 hits everything (the default),
+  while parts sharing a layer 1–8 pass through each other but still collide with
+  the ground and parts on other layers — handy for overlapping mechanisms or
+  letting a sub-assembly move without snagging on itself. Saves and loads with
+  the part.
 - **Smooth, rolling hills (contraption builder + Kit).** The Hill terrain tool now
   builds a smooth chain that follows its outline instead of a single convex
   polygon, so a fast ball or wheel rides over it without catching on seams — and
