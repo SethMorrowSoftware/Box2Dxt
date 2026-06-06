@@ -10,6 +10,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Cannon example recipe (contraption builder).** A new one-click machine in the
+  Examples menu: a static carriage + barrel and a heavy ball that fires across the
+  field on Run (via the launch system) into a crate stack. It doubles as a demo
+  of **collision layers** — the ball and barrel share a layer so the ball slips
+  clear of the barrel as it launches.
 - **Draw-your-own terrain (contraption builder).** A new TERRAIN tool (**Draw**,
   the ✎ glyph): press and drag across the play field to sketch a ground contour —
   bumps, valleys, ramps, anything — and on release it becomes a smooth one-sided

@@ -1743,7 +1743,8 @@ constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor"
 constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor"
 constant kTerrainTools = "platform,ramp,hill,draw"
 constant kTerrainLabels = "Platform,Ramp,Hill,Draw"
-constant kDrawStep = 14   -- min pixels between sampled points while drawing freehand terrain
+constant kDrawStep = 14       -- min pixels between sampled points while drawing freehand terrain
+constant kDrawLineSize = 7    -- drawn ground is thick: reads as solid + easy to click/select
 constant kVehicleTools = "car"
 constant kVehicleLabels = "Car"
 constant kJointTools   = "hinge,weld,servo,rope,slider,wheel,bridge,chain"
@@ -2730,6 +2731,10 @@ on handleAction pId
          hideRecipesMenu
          buildRecipeCatapult
          break
+      case "cannon"
+         hideRecipesMenu
+         buildRecipeCannon
+         break
       case "cradle"
          hideRecipesMenu
          buildRecipeCradle
@@ -3096,7 +3101,7 @@ on beginDrawTerrain pX, pY
    create graphic gDrawCtrl
    put the long id of graphic gDrawCtrl into gDrawCtrl
    set the style of gDrawCtrl to "line"
-   set the lineSize of gDrawCtrl to 4
+   set the lineSize of gDrawCtrl to kDrawLineSize
    set the foregroundColor of gDrawCtrl to "150,120,84"
    set the points of gDrawCtrl to gDrawPts
    put "Draw the ground — release to set it." into gStatus
@@ -3150,7 +3155,7 @@ function placeDrawPlaceholder pX, pY
    create graphic tName
    put the long id of graphic tName into tRef
    set the style of tRef to "line"
-   set the lineSize of tRef to 4
+   set the lineSize of tRef to kDrawLineSize
    set the foregroundColor of tRef to "150,120,84"
    set the loc of tRef to round(pX) & "," & round(pY)
    tagPart tRef, "draw", "150,120,84", empty
@@ -6697,7 +6702,7 @@ on buildRecipesMenu
    put the width of this card into tWide
    put the height of this card into tHigh
    put 280 into tW
-   put 482 into tH
+   put 516 into tH
    put (tWide - tW) div 2 into tL
    put (tHigh - tH) div 2 into tT
    makeBar "ui_recipescrim", 0, 0, tWide, tHigh, "10,11,15"
@@ -6721,6 +6726,8 @@ on buildRecipesMenu
    makeRecipeBtn "swing", "Pendulum Swing", tL + 16, tBy, tW - 32
    add 34 to tBy
    makeRecipeBtn "catapult", "Catapult", tL + 16, tBy, tW - 32
+   add 34 to tBy
+   makeRecipeBtn "cannon", "Cannon", tL + 16, tBy, tW - 32
    add 34 to tBy
    makeRecipeBtn "cradle", "Newton's Cradle", tL + 16, tBy, tW - 32
    add 34 to tBy
@@ -6857,6 +6864,40 @@ on buildRecipeCatapult
    put "Catapult — press Run: the heavy block drops on the right arm and flings the ball off the left." into gStatus
    updateHud
 end buildRecipeCatapult
+
+-- A horizontal cannon: a static carriage + barrel (axis-aligned, so the static
+-- render is exact — no rotated-static-body gotcha), a heavy ball that fires up
+-- the field on Run via the launch system, and a crate stack to knock down. The
+-- ball + barrel share a collision layer, so the ball slips clear of the barrel
+-- instead of snagging on it as it launches.
+on buildRecipeCannon
+   if gMode is "run" then toggleMode
+   clearAll
+   local tX, tBaseY, tBarrel, tBase, tBall, tI
+   put gArenaL + 80 into tX
+   put gArenaB - 96 into tBaseY
+   put placeBox(tX + 18, tBaseY + 34, 66, 30, "92,70,52") into tBase     -- carriage
+   set the uBodyType of tBase to "static"
+   b2kSetType tBase, "static"
+   put placeBox(tX + 30, tBaseY, 96, 34, "70,74,86") into tBarrel        -- barrel
+   set the uBodyType of tBarrel to "static"
+   b2kSetType tBarrel, "static"
+   set the uLayer of tBarrel to 1
+   applyCollisionLayer tBarrel
+   put placeBall(tX + 88, tBaseY, 26, "40,42,50") into tBall             -- cannonball at the muzzle
+   set the uDensity of tBall to 2.6
+   b2kSetDensity tBall, 2.6
+   set the uLaunchSpeed of tBall to 1150
+   set the uLaunchDir of tBall to 18                                      -- across and slightly up
+   set the uLayer of tBall to 1
+   applyCollisionLayer tBall
+   repeat with tI = 0 to 4                                                -- crate stack downrange
+      get placeBox(gArenaR - 150, gArenaB - 22 - tI * 30, 46, 28, "200,120,80")
+   end repeat
+   renderBuild
+   put "Cannon — press Run: the ball fires across the field. Knock the crate stack down!" into gStatus
+   updateHud
+end buildRecipeCannon
 
 -- Five equal pendulums in a touching row; the raised end ball kicks the chain.
 on buildRecipeCradle
