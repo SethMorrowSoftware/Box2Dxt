@@ -1217,6 +1217,13 @@ command b2kAddSensor pControl, pShape
    return sBody[tRef]
 end b2kAddSensor
 
+-- Flip a control's collision between solid and SENSOR (a non-solid trigger that
+-- reports overlaps but never blocks). The flag lives on the shape, so rebuild the
+-- shape afterwards with b2kReshape — it re-applies the sensor state from here.
+command b2kSetSensor pControl, pFlag
+   put (pFlag is true) into sSensor[the long id of pControl]
+end b2kSetSensor
+
 -- Polling alternative to the on b2kSensorEnter/Exit messages (read in on b2kFrame).
 -- Counts/indices are 1-based; each returns a control (empty for untracked bodies).
 function b2kSensorCount

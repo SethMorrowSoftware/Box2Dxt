@@ -1253,6 +1253,13 @@ command b2kAddSensor pControl, pShape
    return sBody[tRef]
 end b2kAddSensor
 
+-- Flip a control's collision between solid and SENSOR (a non-solid trigger that
+-- reports overlaps but never blocks). The flag lives on the shape, so rebuild the
+-- shape afterwards with b2kReshape — it re-applies the sensor state from here.
+command b2kSetSensor pControl, pFlag
+   put (pFlag is true) into sSensor[the long id of pControl]
+end b2kSetSensor
+
 -- Polling alternative to the on b2kSensorEnter/Exit messages (read in on b2kFrame).
 -- Counts/indices are 1-based; each returns a control (empty for untracked bodies).
 function b2kSensorCount
@@ -3774,7 +3781,7 @@ end b2kEndContact
 -- arrival (0→1 occupants) so passing traffic doesn't machine-gun the motors.
 on b2kSensorEnter pSensor, pVisitor
    if pSensor is empty or pVisitor is empty then exit b2kSensorEnter
-   if the uKind of pSensor is not "sensor" then exit b2kSensorEnter
+   if (the uKind of pSensor is not "sensor") and (the uSensor of pSensor is not true) then exit b2kSensorEnter
    if b2kBodyType(pVisitor) is not "dynamic" then exit b2kSensorEnter
    add 1 to gSensorCount[pSensor]
    if gSensorCount[pSensor] is 1 then
@@ -3790,7 +3797,7 @@ end b2kSensorEnter
 -- A body left a sensor zone; when the last one leaves, the zone goes idle again.
 on b2kSensorExit pSensor, pVisitor
    if pSensor is empty then exit b2kSensorExit
-   if the uKind of pSensor is not "sensor" then exit b2kSensorExit
+   if (the uKind of pSensor is not "sensor") and (the uSensor of pSensor is not true) then exit b2kSensorExit
    subtract 1 from gSensorCount[pSensor]
    if gSensorCount[pSensor] <= 0 then
       put 0 into gSensorCount[pSensor]
@@ -4131,6 +4138,7 @@ function partSpecial pCtrl
       if numOr(the uSleep of pCtrl, 0) > 0 then put addKV(tS, "slp=" & (the uSleep of pCtrl)) into tS
       if the uKind of pCtrl is "image" and the uShape of pCtrl is not empty then put addKV(tS, "ishp=" & (the uShape of pCtrl)) into tS
       if the uActive of pCtrl is false then put addKV(tS, "act=false") into tS
+      if the uSensor of pCtrl is true then put addKV(tS, "sen=true") into tS
       if the uKind of pCtrl is "draw" then put addKV(tS, "pts=" & ptsPacked(pCtrl)) into tS
    end if
    switch tKind
@@ -4668,13 +4676,29 @@ on applyPartSpecial pCtrl, pSpecial
          b2kAddChain pCtrl, tV, true             -- closed loop, same as when it was drawn
       end if
    end if
-   if tKind is "image" then                      -- restore a chosen image collision shape
+   -- Restore a chosen image collision shape and/or the sensor (trigger-zone) flag.
+   -- Both end in a reshape, so set the flags first and reshape ONCE: the rebuilt
+   -- shape picks up the new outline (image) and the sensor state, then the
+   -- material and collision layer (which a reshape resets) are re-applied.
+   local tReshape
+   put false into tReshape
+   if tKind is "image" then
       put specialValue(pSpecial, "ishp") into tV
       if tV is not empty then
          set the uShape of pCtrl to tV
-         b2kReshape pCtrl, tV
-         reapplyMaterial pCtrl
+         put true into tReshape
       end if
+   end if
+   if specialValue(pSpecial, "sen") is "true" then
+      set the uSensor of pCtrl to true
+      b2kSetSensor pCtrl, true
+      put true into tReshape
+   end if
+   if tReshape then
+      b2kReshape pCtrl, partShape(pCtrl)
+      reapplyMaterial pCtrl
+      applyCollisionLayer pCtrl
+      applySensorLook pCtrl
    end if
 end applyPartSpecial
 
@@ -5030,15 +5054,15 @@ end showPartInspector
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
       case "image"
-         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
+         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,launchspeed,launchdir,spinrate"
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
@@ -5121,6 +5145,9 @@ function propLabel pCtrl, pKey
       case "active"
          if the uActive of pCtrl is false then return "In simulation: no (disabled)"
          return "In simulation: yes"
+      case "sensor"
+         if the uSensor of pCtrl is true then return "Trigger zone (non-solid): yes"
+         return "Trigger zone (non-solid): no"
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
@@ -5339,6 +5366,7 @@ on adjustPartProp pCtrl, pKey, pDir
          set the uShape of pCtrl to item tIdx of tPal
          b2kReshape pCtrl, (the uShape of pCtrl)
          reapplyMaterial pCtrl
+         applyCollisionLayer pCtrl          -- reshape resets the filter; restore the layer
          break
       case "active"
          if the uActive of pCtrl is false then
@@ -5348,6 +5376,14 @@ on adjustPartProp pCtrl, pKey, pDir
             set the uActive of pCtrl to false
             b2kDisable pCtrl
          end if
+         break
+      case "sensor"
+         set the uSensor of pCtrl to (the uSensor of pCtrl is not true)
+         b2kSetSensor pCtrl, (the uSensor of pCtrl is true)
+         b2kReshape pCtrl, partShape(pCtrl)
+         reapplyMaterial pCtrl
+         applyCollisionLayer pCtrl          -- reshape resets the filter; restore the layer
+         applySensorLook pCtrl
          break
       case "launchspeed"
          put numOr(the uLaunchSpeed of pCtrl, 0) + pDir * 50 into tLs
@@ -5443,6 +5479,7 @@ on resizePart pCtrl, pFactor
    else if kindHasBody(tKind) then
       b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
+      applyCollisionLayer pCtrl          -- reshape resets the filter; keep the part's layer
    end if
 end resizePart
 
@@ -5501,6 +5538,17 @@ on applyCollisionLayer pCtrl
    else b2kSetCollisionGroup pCtrl, - tL
 end applyCollisionLayer
 
+-- A part flagged as a sensor (trigger zone) is non-solid: bodies pass through it
+-- and it fires b2kSensorEnter/Exit instead of colliding. Show that with a
+-- translucent fill so it reads as a "ghost" zone, not a solid block.
+on applySensorLook pCtrl
+   if pCtrl is empty then exit applySensorLook
+   try
+      if the uSensor of pCtrl is true then set the blendLevel of pCtrl to 45
+      else set the blendLevel of pCtrl to 0
+   end try
+end applySensorLook
+
 -- A generous palette the Colour setting cycles through.
 function partSwatches
    return "92,150,222" & cr & "84,206,142" & cr & "232,182,92" & cr & "214,92,92" & cr \
@@ -5525,7 +5573,7 @@ end swatchIndexOf
 -- Which settings tab a property key belongs to.
 function propGroup pKey
    if pKey is among the items of "width,height,length,thickness,diameter,size,imgshape,angle,facing,color" then return "shape"
-   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active" then return "physics"
+   if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor" then return "physics"
    if pKey is among the items of "launchspeed,launchdir,spinrate" then return "motion"
    return "special"
 end propGroup
@@ -5664,6 +5712,7 @@ on setPartDimension pCtrl, pAxis, pValue
    else if kindHasBody(tKind) then
       b2kReshape pCtrl, partShape(pCtrl)
       reapplyMaterial pCtrl
+      applyCollisionLayer pCtrl           -- reshape resets the filter; keep the part's layer
       if tAng is not 0 then b2kMoveTo pCtrl, tCx, tCy, tAng
    end if
 end setPartDimension
