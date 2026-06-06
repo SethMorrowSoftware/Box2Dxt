@@ -2480,6 +2480,10 @@ on mouseDown
    put the mouseH into tx
    put the mouseV into ty
    if gMode is "run" then
+      if the shiftKey is down then       -- Shift-click kicks the body under the pointer
+         kickPartAt tx, ty
+         exit mouseDown
+      end if
       get b2kGrab(tx, ty)
       if it is not empty then put "run" into gDragMode
       exit mouseDown
@@ -2605,6 +2609,20 @@ on mouseRelease
    put empty into gDragCtrl
    put empty into gDragMode
 end mouseRelease
+
+-- Shift-click during Run kicks the dynamic body under the pointer: a sharp,
+-- mass-aware upward impulse with a little sideways scatter, plus a tumble. Shows
+-- off the one-shot b2kImpulse / b2kAngularImpulse force handlers.
+on kickPartAt pX, pY
+   local tHit
+   put b2kControlAt(pX, pY) into tHit
+   if tHit is empty then exit kickPartAt
+   if b2kBodyType(tHit) is not "dynamic" then exit kickPartAt
+   b2kImpulse tHit, (random(401) - 200), -380       -- up, with random horizontal scatter
+   b2kAngularImpulse tHit, (random(481) - 240)       -- a tumble either way
+   put "Kicked it! Shift-click any moving part during Run to bat it around." into gStatus
+   updateHud
+end kickPartAt
 
 on handleUiClick
    local tName, tId
@@ -2808,7 +2826,7 @@ on toggleMode
       applyWorldFeel                -- re-apply the world-tuning preset to the live world
       armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
-      put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse." into gStatus
+      put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse; Shift-click to kick one." into gStatus
    else
       put "build" into gMode
       put empty into gFps
