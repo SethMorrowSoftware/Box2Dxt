@@ -2233,9 +2233,9 @@ on makeInspector
    makeField "ui_insp_body", tL + 12, tTop + 40, tWide - 12, tTop + 118, 11, "190,194,206"
    -- settings tabs: group a part's many settings so each pane stays short
    makeAction "tab_shape", "Shape", tL + 12, tTop + 124, 50, 24
-   makeAction "tab_physics", "Physics", tL + 64, tTop + 124, 58, 24
-   makeAction "tab_collide", "Collide", tL + 124, tTop + 124, 52, 24
-   makeAction "tab_special", "Special", tL + 178, tTop + 124, 58, 24
+   makeAction "tab_physics", "Physics", tL + 64, tTop + 124, 56, 24
+   makeAction "tab_collide", "Collide", tL + 122, tTop + 124, 56, 24
+   makeAction "tab_special", "Special", tL + 180, tTop + 124, 56, 24
    -- a clearly-marked, divided settings block so adjustable values stand out
    makeBar "ui_settings_div", tL + 12, tTop + 156, tWide - 12, tTop + 157, "60,66,80"
    makeLabel "ui_settings_hdr", tL + 12, tTop + 162, tWide - 12, tTop + 182, "PART SETTINGS", 11, "120,220,150", true
@@ -5076,15 +5076,15 @@ end showPartInspector
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "image"
-         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
+         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sleep,active,sensor,filter,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
