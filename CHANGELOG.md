@@ -138,6 +138,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Fixed
 
+- **Kit collision-layer handlers no longer trip an OpenXTalk reserved word.**
+  The `pLayers` parameter of `b2kLayerBits` / `b2kSetCategory` / `b2kSetMask` is
+  (case-insensitively) the reserved word `players`, which stopped the script
+  from compiling in OpenXTalk once the examples embedded the full Kit. Renamed to
+  `pLayerList`; callers are unaffected (the parameter name is internal).
 - **Contraption motors no longer stay dead after a pressure plate + rebuild.**
   Joints persist across Build↔Run, so a pressure plate that switched motors off
   during a run left them off when you returned to Build and pressed Run again

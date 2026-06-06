@@ -1252,11 +1252,11 @@ command b2kDefineLayer pName
    return sLayers[pName]
 end b2kDefineLayer
 
-function b2kLayerBits pLayers
+function b2kLayerBits pLayerList
    local tBits, tL
    put 0 into tBits
-   replace comma with space in pLayers
-   repeat for each word tL in pLayers
+   replace comma with space in pLayerList
+   repeat for each word tL in pLayerList
       if tL is empty then next repeat
       if tL is a number then put tBits bitOr (tL) into tBits
       else put tBits bitOr b2kDefineLayer(tL) into tBits
@@ -1264,18 +1264,18 @@ function b2kLayerBits pLayers
    return tBits
 end b2kLayerBits
 
-command b2kSetCategory pControl, pLayers
+command b2kSetCategory pControl, pLayerList
    local s
    put sShapeH[the long id of pControl] into s
    if s is empty then exit b2kSetCategory
-   b2SetShapeFilter s, b2kLayerBits(pLayers), b2ShapeFilterMask(s), b2ShapeFilterGroup(s)
+   b2SetShapeFilter s, b2kLayerBits(pLayerList), b2ShapeFilterMask(s), b2ShapeFilterGroup(s)
 end b2kSetCategory
 
-command b2kSetMask pControl, pLayers
+command b2kSetMask pControl, pLayerList
    local s
    put sShapeH[the long id of pControl] into s
    if s is empty then exit b2kSetMask
-   b2SetShapeFilter s, b2ShapeFilterCategory(s), b2kLayerBits(pLayers), b2ShapeFilterGroup(s)
+   b2SetShapeFilter s, b2ShapeFilterCategory(s), b2kLayerBits(pLayerList), b2ShapeFilterGroup(s)
 end b2kSetMask
 
 -- Group index: bodies sharing a NEGATIVE group never collide; a POSITIVE group
