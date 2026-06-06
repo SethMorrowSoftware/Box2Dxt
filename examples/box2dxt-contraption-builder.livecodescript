@@ -4154,8 +4154,8 @@ function partSpecial pCtrl
       if the uKind of pCtrl is "image" and the uShape of pCtrl is not empty then put addKV(tS, "ishp=" & (the uShape of pCtrl)) into tS
       if the uActive of pCtrl is false then put addKV(tS, "act=false") into tS
       if the uSensor of pCtrl is true then put addKV(tS, "sen=true") into tS
-      if the uCat of pCtrl is not empty then put addKV(tS, "cat=" & (the uCat of pCtrl)) into tS
-      if the uMask of pCtrl is not empty then put addKV(tS, "msk=" & (the uMask of pCtrl)) into tS
+      if the uOnChans of pCtrl is not empty then put addKV(tS, "cat=" & (the uOnChans of pCtrl)) into tS
+      if the uHitChans of pCtrl is not empty then put addKV(tS, "msk=" & (the uHitChans of pCtrl)) into tS
       if the uKind of pCtrl is "draw" then put addKV(tS, "pts=" & ptsPacked(pCtrl)) into tS
    end if
    switch tKind
@@ -4655,9 +4655,9 @@ on applyPartSpecial pCtrl, pSpecial
          applyCollisionLayer pCtrl
       end if
       put specialValue(pSpecial, "cat") into tV
-      if tV is not empty then set the uCat of pCtrl to tV
+      if tV is not empty then set the uOnChans of pCtrl to tV
       put specialValue(pSpecial, "msk") into tV
-      if tV is not empty then set the uMask of pCtrl to tV
+      if tV is not empty then set the uHitChans of pCtrl to tV
       applyPartFilter pCtrl                  -- no-op unless cat/msk were set above
       put specialValue(pSpecial, "ang") into tV
       if tV is not empty and tV is not 0 then
@@ -5601,15 +5601,15 @@ end channelBits
 -- A part's stored channel sets, defaulting to the Box2D default (on channel 1,
 -- collides with every channel) when the part has never been customised.
 function partCategories pCtrl
-   return numOr(the uCat of pCtrl, "1")
+   return numOr(the uOnChans of pCtrl, "1")
 end partCategories
 
 function partMaskChannels pCtrl
-   return numOr(the uMask of pCtrl, kAllChannels)
+   return numOr(the uHitChans of pCtrl, kAllChannels)
 end partMaskChannels
 
 function partFilterCustom pCtrl
-   return (the uCat of pCtrl is not empty) or (the uMask of pCtrl is not empty)
+   return (the uOnChans of pCtrl is not empty) or (the uHitChans of pCtrl is not empty)
 end partFilterCustom
 
 -- Push the part's category/mask into the live shape. A reshape resets the filter,
@@ -7101,7 +7101,7 @@ on buildFilterPanel
       set the uFilterMenu of button ("ui_act_filt_mask_" & tI) to true
    end repeat
    makeLabel "ui_filter_help", tL + 18, tT + 182, tL + tW - 18, tT + 244, \
-         "Two parts collide only when each is on a channel the other collides with. Tip: keep channel 1 under “Collides with” so parts still land on the ground.", \
+         "Two parts collide only when each is on a channel the other collides with. Tip: keep channel 1 on in the lower row so parts still land on the ground.", \
          11, "150,154,166", false
    set the uFilterMenu of field "ui_filter_help" to true
    makeAction "filterclose", "Close", tL + tW - 92, tT + tH - 34, 76, 26
@@ -7157,9 +7157,9 @@ on handleFilterToggle pId
    set the itemDelimiter to comma
    if tIdx is not a number then exit handleFilterToggle
    if tWhich is "cat" then
-      set the uCat of gFilterPart to toggleChannel(partCategories(gFilterPart), tIdx)
+      set the uOnChans of gFilterPart to toggleChannel(partCategories(gFilterPart), tIdx)
    else
-      set the uMask of gFilterPart to toggleChannel(partMaskChannels(gFilterPart), tIdx)
+      set the uHitChans of gFilterPart to toggleChannel(partMaskChannels(gFilterPart), tIdx)
    end if
    applyPartFilter gFilterPart
    refreshFilterPanel
