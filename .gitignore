@@ -1,0 +1,6 @@
+# CMake out-of-source build directory (see docs/building.md, CONTRIBUTING.md)
+/build/
+
+# Python bytecode (from tools/)
+__pycache__/
+*.pyc

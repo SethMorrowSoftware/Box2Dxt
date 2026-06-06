@@ -70,36 +70,21 @@ CMake fetches Box2D v3.1.0 automatically (pinned `GIT_TAG v3.1.0`). See `docs/bu
 
 **Static verification for the script layer.** OXT/LiveCode is a GUI runtime — there is **no
 headless way to compile or run the `.livecodescript` here**. The user compiles and tests in OXT.
-Your job is to catch what's statically catchable *before* they do. The de-facto gates:
+Your job is to catch what's statically catchable *before* they do. One command bundles the gates
+(and CI runs the same script):
 
 ```sh
-# 1. Smart/curly quotes anywhere == OXT compile failure. Must print 0.
-python3 - examples/box2dxt-contraption-builder.livecodescript <<'PY'
-import sys; smart={0x201C,0x201D,0x2018,0x2019}
-print(sum(1 for l in open(sys.argv[1],encoding="utf-8") if any(ord(c) in smart for c in l)))
-PY
-
-# 2. Handler balance: every on/command/function/getprop/setprop has a matching end. Must print 0.
-python3 - <<'PY'
-import re
-lines=open("examples/box2dxt-contraption-builder.livecodescript",encoding="utf-8").read().split("\n")
-stack=[];op=("on ","command ","function ","getprop ","setprop ","before ","after ");errs=[]
-for i,l in enumerate(lines,1):
-    s=l.strip().lower()
-    if any(s.startswith(o) for o in op) and not s.startswith("end "): stack.append(s.split()[1])
-    elif s.startswith("end "):
-        t=s.split()[1] if len(s.split())>1 else ""
-        if t in ("if","repeat","switch","try"): continue
-        if not stack or stack.pop()!=t: errs.append(f"L{i}: {s}")
-print("balance errors:", len(errs)+len(stack))
-PY
-
-# 3. Embedded copies in sync.
-python3 tools/sync-embedded-kit.py --check
+python3 tools/check-livecodescript.py
 ```
 
-Always run these after editing a `.livecodescript`. **Do not claim runtime behavior you cannot
-observe** — say "verified statically; needs an OXT pass" and let the user confirm.
+It checks the Kit and every example for: **smart/curly quotes** (any one fails OXT compilation),
+**handler balance** (every `on`/`command`/`function`/`getprop`/`setprop` has its `end <name>`),
+**control-structure balance** (`if`/`repeat`/`switch`/`try` blocks closed inside their handler),
+and **embedded-Kit drift** (delegates to `sync-embedded-kit.py --check`). Exit non-zero on any
+failure. Run it after **every** `.livecodescript` edit.
+
+**Do not claim runtime behavior you cannot observe** — say "verified statically; needs an OXT
+pass" and let the user confirm.
 
 ## LiveCodeScript / OXT gotchas (learned the hard way)
 
