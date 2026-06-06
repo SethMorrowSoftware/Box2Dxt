@@ -571,6 +571,7 @@ command b2kReshape pControl, pShape
    put sShapeH[tRef] into tOld
    put empty into sShapeH[tRef]
    b2ShapeDefEnableSensorEvents true   -- keep the reshaped body detectable by sensors
+   if sSensor[tRef] is true then b2ShapeDefSensor true   -- a sensor stays a sensor after reshaping
    switch pShape
       case "ball"
          put ((the width of pControl) / 2) / sScale into tR

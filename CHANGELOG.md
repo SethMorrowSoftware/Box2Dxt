@@ -10,6 +10,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Sensor trigger zones (contraption builder).** A new SPECIAL part: a
+  non-solid zone that parts pass straight through, but the instant a dynamic body
+  *enters* it, it fires the same signal as a pressure plate — set off bombs and
+  flip every motor. Perfect for tripwires and gates; it fires once per arrival
+  (occupancy-tracked) so passing traffic doesn't machine-gun the motors. Built on
+  the Kit's sensor events, and resizable — the Kit's `b2kReshape` now keeps a
+  reshaped shape a sensor.
 - **Collision layers (contraption builder).** Every solid part now has a
   *Collision layer* setting on its Physics tab: 0 hits everything (the default),
   while parts sharing a layer 1–8 pass through each other but still collide with

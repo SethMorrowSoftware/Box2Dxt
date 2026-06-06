@@ -581,6 +581,7 @@ command b2kReshape pControl, pShape
    put sShapeH[tRef] into tOld
    put empty into sShapeH[tRef]
    b2ShapeDefEnableSensorEvents true   -- keep the reshaped body detectable by sensors
+   if sSensor[tRef] is true then b2ShapeDefSensor true   -- a sensor stays a sensor after reshaping
    switch pShape
       case "ball"
          put ((the width of pControl) / 2) / sScale into tR
@@ -1721,6 +1722,7 @@ local gFrames, gFpsTime, gFps
 -- gKindList[kind] holds a CR-delimited control list per special kind.
 local gKindList
 local gPlateLoad, gPlateState
+local gSensorCount      -- per-sensor count of bodies currently inside (fires on 0→1)
 local gRingN, gRingX, gRingY, gRingF
 local gDynParts, gDynDirty
 -- selection / inspector / onboarding / stress-test bookkeeping
@@ -1735,8 +1737,8 @@ constant kEditTools    = "drag,delete,duplicate,multiply"
 constant kEditLabels   = "Drag,Delete,Duplicate,Multiply"
 constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
-constant kSpecialTools = "balloon,bomb,plate,fan,magnet"
-constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet"
+constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor"
+constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor"
 constant kTerrainTools = "platform,ramp,hill"
 constant kTerrainLabels = "Platform,Ramp,Hill"
 constant kVehicleTools = "car"
@@ -1780,6 +1782,7 @@ constant kBalloonGravScale = -0.6, kBalloonDamp = 1.2, kBalloonDiam = 46
 constant kBombDiam = 40, kBombRadius = 210, kBombPower = 720
 constant kBombFuseFrames = 60, kBombImpactSpeed = 700
 constant kPlateW = 120, kPlateH = 16
+constant kSensorW = 96, kSensorH = 72
 constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
 constant kStressBatch = 50
@@ -2735,6 +2738,7 @@ on toggleMode
       resetPend
       deselectJoint
       put true into gMotorsRunning
+      put empty into gSensorCount   -- every sensor zone starts empty each Run
       armFuses
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
       armMotors                     -- re-establish each joint's designed motor state
@@ -2818,6 +2822,9 @@ function placePart pX, pY
          break
       case "plate"
          put placePlate(pX, pY) into tCtrl
+         break
+      case "sensor"
+         put placeSensor(pX, pY) into tCtrl
          break
       case "fan"
          put placeFan(pX, pY) into tCtrl
@@ -3146,19 +3153,20 @@ end friendlyKind
 
 -- Add a freshly tagged part to its per-kind list (for fast per-frame iteration).
 on registerKind pCtrl, pKind
-   if pKind is among the items of "balloon,bomb,plate,fan,magnet" then
+   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor" then
       put pCtrl & cr after gKindList[pKind]
    end if
    if pKind is "plate" then
       put 0 into gPlateLoad[pCtrl]
       put "up" into gPlateState[pCtrl]
    end if
+   if pKind is "sensor" then put 0 into gSensorCount[pCtrl]
 end registerKind
 
 -- Drop a deleted part from any per-kind list it belonged to.
 on unregisterKind pCtrl
    local tKind, tP, tNew
-   repeat for each item tKind in "balloon,bomb,plate,fan,magnet"
+   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor"
       if pCtrl is not in gKindList[tKind] then next repeat
       put empty into tNew
       repeat for each line tP in gKindList[tKind]
@@ -3168,6 +3176,7 @@ on unregisterKind pCtrl
    end repeat
    if pCtrl is among the keys of gPlateLoad then delete variable gPlateLoad[pCtrl]
    if pCtrl is among the keys of gPlateState then delete variable gPlateState[pCtrl]
+   if pCtrl is among the keys of gSensorCount then delete variable gSensorCount[pCtrl]
 end unregisterKind
 
 -- The dynamic (gravity-affected) parts, cached and rebuilt only when parts change.
@@ -3598,6 +3607,36 @@ on b2kEndContact pA, pB
    plateTouch pA, pB, -1
    plateTouch pB, pA, -1
 end b2kEndContact
+
+-- A dynamic body entered a sensor zone. Fire the plate signal on the first
+-- arrival (0→1 occupants) so passing traffic doesn't machine-gun the motors.
+on b2kSensorEnter pSensor, pVisitor
+   if pSensor is empty or pVisitor is empty then exit b2kSensorEnter
+   if the uKind of pSensor is not "sensor" then exit b2kSensorEnter
+   if b2kBodyType(pVisitor) is not "dynamic" then exit b2kSensorEnter
+   add 1 to gSensorCount[pSensor]
+   if gSensorCount[pSensor] is 1 then
+      try
+         set the backgroundColor of pSensor to "120,230,140"   -- lit while occupied
+      end try
+      put "A sensor zone triggered — bombs go off and motors switch!" into gStatus
+      triggerSignal
+      updateHud
+   end if
+end b2kSensorEnter
+
+-- A body left a sensor zone; when the last one leaves, the zone goes idle again.
+on b2kSensorExit pSensor, pVisitor
+   if pSensor is empty then exit b2kSensorExit
+   if the uKind of pSensor is not "sensor" then exit b2kSensorExit
+   subtract 1 from gSensorCount[pSensor]
+   if gSensorCount[pSensor] <= 0 then
+      put 0 into gSensorCount[pSensor]
+      try
+         set the backgroundColor of pSensor to numOr(the uColor of pSensor, "232,196,92")
+      end try
+   end if
+end b2kSensorExit
 
 on flashCtrl pCtrl
    if pCtrl is empty then exit flashCtrl
@@ -4115,6 +4154,8 @@ function rebuildPart pKind, pX, pY, pW, pH, pColor, pFile
          return placeBomb(pX, pY)
       case "plate"
          return placePlate(pX, pY)
+      case "sensor"
+         return placeSensor(pX, pY)
       case "fan"
          return placeFan(pX, pY)
       case "magnet"
@@ -4234,6 +4275,28 @@ function placePlate pX, pY
    tagPart tRef, "plate", "150,160,180", empty
    return tRef
 end placePlate
+
+-- A non-solid trigger zone. Nothing collides with it, but when a dynamic body
+-- ENTERS it (on b2kSensorEnter) it fires the same signal as a pressure plate —
+-- bombs go off and motors flip. Drawn translucent so it reads as a zone.
+function placeSensor pX, pY
+   local tName, tRef
+   put "cb_sensor_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "rectangle"
+   set the filled of tRef to true
+   set the backgroundColor of tRef to "232,196,92"     -- amber, idle
+   set the foregroundColor of tRef to "120,96,32"
+   set the lineSize of tRef to 2
+   set the blendLevel of tRef to 55                      -- translucent: clearly a zone, not solid
+   set the width of tRef to kSensorW
+   set the height of tRef to kSensorH
+   set the loc of tRef to round(pX) & "," & round(pY)
+   b2kAddSensor tRef                                      -- static, non-solid trigger fixture
+   tagPart tRef, "sensor", "232,196,92", empty
+   return tRef
+end placeSensor
 
 -- A fan/wind zone: a translucent arrow that pushes parts inside it. No body.
 function placeFan pX, pY
@@ -4668,6 +4731,7 @@ on resetSceneState
    put empty into gKindList
    put empty into gPlateLoad
    put empty into gPlateState
+   put empty into gSensorCount
    put empty into gDynParts
    put true into gDynDirty
    put 0 into gRingN
@@ -4782,6 +4846,8 @@ function partProps pKind
          return "diameter,color,bounce,density,blastradius,blastpower,bombfuse"
       case "plate"
          return "width,height,color,angle,friction"
+      case "sensor"
+         return "width,height,color"
       case "anchor"
          return "width,height,color"
       case "ramp"
@@ -6233,7 +6299,7 @@ function niceName pId
          & "poly=Polygon" & cr & "image=Picture" & cr & "anchor=Anchor" & cr & "delete=Delete" & cr \
          & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
-         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr \
+         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr \
          & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
          & "weld=Weld Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
@@ -6255,7 +6321,7 @@ function toolGlyph pId
    local tGlyphs
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
          & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
-         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr \
+         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr \
          & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
          & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
@@ -6299,6 +6365,8 @@ function toolHelp pId
          return "A bomb that explodes and flings parts." & cr & "Detonates on a hard hit, a pressure-plate signal, or a Run-fuse (toggle it below). The blast flings nearby parts outward."
       case "plate"
          return "A switch that triggers when weighed down." & cr & "A pressure plate. When a part rests on it, it fires a signal: any bombs go off and all motors switch on or off. Build chain reactions with it!"
+      case "sensor"
+         return "A trigger zone that fires when entered." & cr & "A sensor is a non-solid zone — parts pass right through it, but the moment one enters, it fires the same signal as a pressure plate: bombs go off and all motors switch. Great for tripwires and gates."
       case "fan"
          return "A wind zone that blows parts along." & cr & "A fan pushes any part inside its zone in the arrow's direction. Set the direction and strength in the inspector. No body — parts pass through it."
       case "magnet"
