@@ -5636,9 +5636,11 @@ end filterSummary
 
 -- "1,2,3,4,5,6,7,8" -> "all"; a short list stays as-is; empty -> "none".
 function channelText pList
+   local tSorted
    if pList is empty then return "none"
-   if sortedChannels(pList) is sortedChannels(kAllChannels) then return "all"
-   return sortedChannels(pList)
+   put sortedChannels(pList) into tSorted
+   if tSorted is kAllChannels then return "all"
+   return tSorted
 end channelText
 
 -- Add or remove a channel number from a comma list, kept sorted; never returns
