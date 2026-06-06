@@ -1716,6 +1716,8 @@ constant kVehicleLabels = "Car"
 constant kJointTools   = "hinge,weld,rope,slider,wheel,bridge,chain"
 constant kJointLabels  = "Hinge,Weld,Rope,Slider,Wheel,Bridge,Chain"
 constant kHingeTorque = 1500, kWheelTorque = 320
+constant kBridgeFlex = 30   -- a bridge plank pin flexes +/- this many degrees, so a
+                            -- loaded deck sags under weight but can never fold back on itself
 
 -- Layout, in screen pixels. Derived edges (canvas L/R/T/B) are computed from the
 -- card size in prepArena/buildUI, because LiveCode constants cannot be expressions.
@@ -3261,7 +3263,7 @@ end makeJoint
 -- rope of small links. Each segment is a normal part and each link an exact-pivot
 -- "pin" joint, so the whole span renders, saves/loads and deletes like anything else.
 on buildSpan pKind, pA, pB, pEx, pEy
-   local tSx, tSy, tD, tN, tHt, tColor, tDens, tSag
+   local tSx, tSy, tD, tN, tHt, tColor, tDens, tSag, tPinKind
    local tI, tT, tJx0, tJy0, tJx1, tJy1, tCx, tCy, tLen, tAng, tSeg, tPrev
    put gPendX into tSx
    put gPendY into tSy
@@ -3271,17 +3273,19 @@ on buildSpan pKind, pA, pB, pEx, pEy
       exit buildSpan
    end if
    if pKind is "bridge" then
+      put "deckpin" into tPinKind             -- planks flex a little but never fold back
       put max(2, min(20, round(tD / 60))) into tN
       put 12 into tHt
       put "168,146,98" into tColor
       put 1 into tDens
       put 0 into tSag                        -- straight; sags under load
    else
-      put max(4, min(28, round(tD / 24))) into tN
-      put 8 into tHt
+      put "pin" into tPinKind                 -- links pivot freely so the chain drapes
+      put max(6, min(40, round(tD / 18))) into tN   -- more, finer links → a smoother curve
+      put 7 into tHt
       put "150,154,170" into tColor
-      put 0.4 into tDens
-      put tD * 0.16 into tSag                 -- a gentle initial drape
+      put 0.3 into tDens                      -- lighter, so it settles into a natural catenary
+      put tD * 0.18 into tSag                 -- a deeper initial drape
    end if
    put tSx into tJx0
    put tSy into tJy0
@@ -3300,13 +3304,13 @@ on buildSpan pKind, pA, pB, pEx, pEy
       set the uBounce of tSeg to 0           -- spans stay taut even when Bouncy mode is on
       b2kSetBounce tSeg, 0
       b2kMoveTo tSeg, round(tCx), round(tCy), tAng
-      if tI is 1 then get connectJoint("pin", pA, tSeg, round(tJx0), round(tJy0), 0)
-      else get connectJoint("pin", tPrev, tSeg, round(tJx0), round(tJy0), 0)
+      if tI is 1 then get connectJoint(tPinKind, pA, tSeg, round(tJx0), round(tJy0), 0)
+      else get connectJoint(tPinKind, tPrev, tSeg, round(tJx0), round(tJy0), 0)
       put tSeg into tPrev
       put tJx1 into tJx0
       put tJy1 into tJy0
    end repeat
-   get connectJoint("pin", tPrev, pB, round(pEx), round(pEy), 0)
+   get connectJoint(tPinKind, tPrev, pB, round(pEx), round(pEy), 0)
    put (niceName(pKind) & " built from " & tN & " segments. Press Run to test it.") into gStatus
 end buildSpan
 
@@ -3375,6 +3379,12 @@ function connectJoint pKind, pA, pB, pX, pY, pMotorSpeed
       case "pin"
          b2kHinge pA, pB, pX, pY            -- exact-pivot hinge for spans (no marker)
          put the result into tJ
+         put "none" into tVis
+         break
+      case "deckpin"
+         b2kHinge pA, pB, pX, pY            -- bridge-deck pin: hinged but flex-limited (no marker)
+         put the result into tJ
+         if tJ > 0 then b2kHingeLimit tJ, - kBridgeFlex, kBridgeFlex
          put "none" into tVis
          break
       default
@@ -3989,7 +3999,7 @@ on rebuildFromText pData
          put tMap[tIdA] into tA
          if tIdB is 0 then put empty into tB
          else put tMap[tIdB] into tB
-         if tA is not empty and (tB is not empty or tKind is "hinge" or tKind is "pin") then
+         if tA is not empty and (tB is not empty or tKind is "hinge" or tKind is "pin" or tKind is "deckpin") then
             if connectJoint(tKind, tA, tB, tPx, tPy, tMotor) then applyJointSpecial gJN, tJSpecial
          end if
       else if tRec is "world" then
