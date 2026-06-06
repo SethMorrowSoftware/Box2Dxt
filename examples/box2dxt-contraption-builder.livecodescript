@@ -1730,6 +1730,7 @@ local gSelPart, gHoverId, gOnbStep, gStressCount
 local gSelJoint                        -- selected joint index (1..gJN), empty if none
 local gInspTab                         -- active inspector tab: shape | physics | motion | special
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
+local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
 local gPreRun                          -- snapshot of the build, taken when Run starts
 local gPalOpen                         -- CR-list of palette section titles currently expanded
 
@@ -1836,6 +1837,7 @@ on startCB
    put empty into gSelJoint
    put "shape" into gInspTab
    put "normal" into gGravityMode
+   put "default" into gWorldFeel
    put empty into gHoverId
    put 0 into gStressCount
    put "SHAPES" into gPalOpen        -- single-open accordion: SHAPES is the category open first
@@ -2245,11 +2247,14 @@ on makeInspector
    add 34 to tRy
    makeAction "gravity", "Gravity: Normal", tL + 12, tRy, kInspectorW - 24, 26
    add 32 to tRy
+   makeAction "worldfeel", "Feel: Default", tL + 12, tRy, kInspectorW - 24, 26
+   add 32 to tRy
    makeAction "pause", "Pause", tL + 12, tRy, 108, 26
    makeAction "step", "Step", tL + 128, tRy, 80, 26
    clearPropRows
    refreshSpeedLabel
    refreshGravityLabel
+   refreshWorldFeelLabel
 end makeInspector
 
 -- A prominent accent-green +/- button for adjusting a part's settings.
@@ -2663,6 +2668,9 @@ on handleAction pId
       case "gravity"
          cycleGravity
          break
+      case "worldfeel"
+         cycleWorldFeel
+         break
       case "pause"
          togglePause
          break
@@ -2742,6 +2750,7 @@ on toggleMode
       put empty into gSensorCount   -- every sensor zone starts empty each Run
       armFuses
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
+      applyWorldFeel                -- re-apply the world-tuning preset to the live world
       armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
       put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse." into gStatus
@@ -3907,7 +3916,7 @@ end buildSampleSwing
 function serializeText
    local tOut, tP, tI
    put "CB2" & cr into tOut
-   put "world" & tab & gGravityMode & cr after tOut
+   put "world" & tab & gGravityMode & tab & gWorldFeel & cr after tOut
    repeat for each line tP in gParts
       if tP is empty then next repeat
       try
@@ -4069,6 +4078,7 @@ on rebuildFromText pData
    local tIdA, tIdB, tPx, tPy, tMotor, tA, tB, tJSpecial
    clearAll
    put "normal" into gGravityMode
+   put "default" into gWorldFeel
    put empty into tMap
    lock screen
    repeat for each line tLine in pData
@@ -4112,6 +4122,8 @@ on rebuildFromText pData
          end if
       else if tRec is "world" then
          put item 2 of tLine into gGravityMode
+         put item 3 of tLine into gWorldFeel
+         if gWorldFeel is empty then put "default" into gWorldFeel
          set the itemDelimiter to comma
       else
          set the itemDelimiter to comma
@@ -4119,7 +4131,9 @@ on rebuildFromText pData
    end repeat
    set the itemDelimiter to comma
    applyGravityMode
+   applyWorldFeel
    refreshGravityLabel
+   refreshWorldFeelLabel
    renderBuild
    unlock screen
 end rebuildFromText
@@ -6180,6 +6194,63 @@ end cycleGravity
 on refreshGravityLabel
    if there is a button "ui_act_gravity" then set the label of button "ui_act_gravity" to "Gravity: " & gravityModeName(gGravityMode)
 end refreshGravityLabel
+
+-- World feel: a few one-click presets that tune how the whole world responds —
+-- how readily things bounce (restitution threshold), how soft/stiff contacts are
+-- (contact tuning) and a top speed cap. Cosmetic-but-fun; safe before the world
+-- exists (the Kit's world setters no-op until b2kSetup has run).
+function worldFeelName pMode
+   switch pMode
+      case "bouncy"
+         return "Bouncy"
+      case "floaty"
+         return "Floaty"
+      case "snappy"
+         return "Snappy"
+   end switch
+   return "Default"
+end worldFeelName
+
+on applyWorldFeel
+   switch gWorldFeel
+      case "bouncy"
+         b2kSetRestitutionThreshold 20      -- low threshold: collisions bounce readily
+         b2kSetContactTuning 30, 10, 120
+         b2kSetMaxSpeed 6000
+         break
+      case "floaty"
+         b2kSetRestitutionThreshold 40
+         b2kSetContactTuning 12, 12, 80     -- soft, squishy contacts
+         b2kSetMaxSpeed 1500                -- gentle, speed-limited
+         break
+      case "snappy"
+         b2kSetRestitutionThreshold 80      -- only fast hits bounce
+         b2kSetContactTuning 60, 8, 160     -- stiff, responsive contacts
+         b2kSetMaxSpeed 6000
+         break
+      default                               -- "default": Box2D's standard feel
+         b2kSetRestitutionThreshold 40
+         b2kSetContactTuning 30, 10, 120
+         b2kSetMaxSpeed 6000
+   end switch
+end applyWorldFeel
+
+on cycleWorldFeel
+   local tOrder, tI
+   put "default,bouncy,floaty,snappy" into tOrder
+   set the itemDelimiter to comma
+   put itemOffset(gWorldFeel, tOrder) + 1 into tI
+   if tI < 1 or tI > the number of items of tOrder then put 1 into tI
+   put item tI of tOrder into gWorldFeel
+   applyWorldFeel
+   refreshWorldFeelLabel
+   put "World feel: " & worldFeelName(gWorldFeel) & "." into gStatus
+   updateHud
+end cycleWorldFeel
+
+on refreshWorldFeelLabel
+   if there is a button "ui_act_worldfeel" then set the label of button "ui_act_worldfeel" to "Feel: " & worldFeelName(gWorldFeel)
+end refreshWorldFeelLabel
 
 function gravityModeName pMode
    switch pMode

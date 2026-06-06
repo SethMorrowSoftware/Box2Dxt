@@ -10,6 +10,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **World feel presets (contraption builder).** A new BUILD OPTIONS cycle button
+  beside Gravity tunes how the whole world responds — **Default**, **Bouncy**,
+  **Floaty** (soft, speed-limited) and **Snappy** (stiff, responsive) — via the
+  Kit's restitution-threshold, contact-tuning and max-speed setters. Re-applied
+  each Run and saved/loaded with the layout.
 - **Servo joint (contraption builder).** A new joint (the Kit's motor joint,
   `b2kMotorTo`) that drives part A to hold its position and angle relative to
   part B, yielding under load and springing back rather than locking rigidly like
