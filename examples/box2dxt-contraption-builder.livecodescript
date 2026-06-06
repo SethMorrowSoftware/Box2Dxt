@@ -1747,8 +1747,8 @@ constant kEditTools    = "drag,delete,duplicate,multiply"
 constant kEditLabels   = "Drag,Delete,Duplicate,Multiply"
 constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
-constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor,laser"
-constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor,Laser"
+constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor,laser,thruster"
+constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor,Laser,Thruster"
 constant kTerrainTools = "platform,ramp,hill,draw"
 constant kTerrainLabels = "Platform,Ramp,Hill,Draw"
 constant kDrawStep = 14       -- min pixels between sampled points while drawing freehand terrain
@@ -2830,6 +2830,7 @@ on toggleMode
       put true into gMotorsRunning
       put empty into gSensorCount   -- every sensor zone starts empty each Run
       armFuses
+      armThrusters
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
       applyWorldFeel                -- re-apply the world-tuning preset to the live world
       armMotors                     -- re-establish each joint's designed motor state
@@ -2925,6 +2926,9 @@ function placePart pX, pY
          break
       case "laser"
          put placeLaser(pX, pY) into tCtrl
+         break
+      case "thruster"
+         put placeThruster(pX, pY) into tCtrl
          break
       default
          return empty
@@ -3334,7 +3338,7 @@ end tagPart
 
 -- Whether a kind moves under gravity (so it gets bounce, waking, field forces).
 function kindIsDynamic pKind
-   return pKind is among the items of "box,ball,capsule,poly,image,balloon,bomb"
+   return pKind is among the items of "box,ball,capsule,poly,image,balloon,bomb,thruster"
 end kindIsDynamic
 
 -- Fans and magnets are GUI-only influence zones with no physics body.
@@ -3356,7 +3360,7 @@ end friendlyKind
 
 -- Add a freshly tagged part to its per-kind list (for fast per-frame iteration).
 on registerKind pCtrl, pKind
-   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor,laser" then
+   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor,laser,thruster" then
       put pCtrl & cr after gKindList[pKind]
    end if
    if pKind is "plate" then
@@ -3369,7 +3373,7 @@ end registerKind
 -- Drop a deleted part from any per-kind list it belonged to.
 on unregisterKind pCtrl
    local tKind, tP, tNew
-   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor,laser"
+   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor,laser,thruster"
       if pCtrl is not in gKindList[tKind] then next repeat
       put empty into tNew
       repeat for each line tP in gKindList[tKind]
@@ -3804,6 +3808,7 @@ on b2kFrame
    updateBombs
    updateRings
    updateLasers
+   updateThrusters
    tickHud
 end b2kFrame
 
@@ -4206,6 +4211,11 @@ function partSpecial pCtrl
          break
       case "laser"
          put addKV(tS, "ldr=" & numOr(the uLaserDir of pCtrl, 0)) into tS
+         break
+      case "thruster"
+         put addKV(tS, "tdr=" & numOr(the uThrustDir of pCtrl, 270)) into tS
+         put addKV(tS, "tpw=" & numOr(the uThrustPower of pCtrl, 0)) into tS
+         put addKV(tS, "tsp=" & numOr(the uThrustSpin of pCtrl, 0)) into tS
          break
    end switch
    return tS
@@ -4710,6 +4720,48 @@ on updateLasers
    end repeat
 end updateLasers
 
+-- A thruster: a dynamic rocket body that drives itself. Each frame it applies a
+-- continuous force along its own facing (b2kForce) and, when its ignition fires
+-- on the first Run frame, a one-shot velocity pop (b2kPush); an optional spin
+-- adds continuous torque (b2kTorque). Lock its rotation for a straight climb, or
+-- leave it free to tumble.
+function placeThruster pX, pY
+   local tRef
+   b2kSpawnBox pX, pY, 38, 56, "74,84,104"      -- a tall rocket body
+   put the result into tRef
+   set the uThrustDir of tRef to 270             -- thrust upward by default (lifts off)
+   set the uThrustPower of tRef to 700
+   set the uThrustSpin of tRef to 0
+   set the uThrustLit of tRef to false
+   tagPart tRef, "thruster", "74,84,104", empty
+   return tRef
+end placeThruster
+
+-- Reset every thruster's ignition so a fresh Run pops it off the pad once.
+on armThrusters
+   local tT
+   repeat for each line tT in gKindList["thruster"]
+      if tT is not empty then set the uThrustLit of tT to false
+   end repeat
+end armThrusters
+
+-- Drive every thruster each frame: ignition pop, then sustained thrust + spin.
+on updateThrusters
+   local tT, tRad, tPow
+   repeat for each line tT in gKindList["thruster"]
+      if tT is empty then next repeat
+      put numOr(the uThrustPower of tT, 0) into tPow
+      if tPow <= 0 then next repeat
+      put (numOr(the uThrustDir of tT, 270) + b2kAngle(tT)) * kPI / 180 into tRad
+      if the uThrustLit of tT is not true then    -- one-shot ignition kick
+         b2kPush tT, 140 * cos(tRad), 140 * sin(tRad)
+         set the uThrustLit of tT to true
+      end if
+      b2kForce tT, tPow * cos(tRad), tPow * sin(tRad)
+      if numOr(the uThrustSpin of tT, 0) is not 0 then b2kTorque tT, (the uThrustSpin of tT)
+   end repeat
+end updateThrusters
+
 -- Restore every saved per-part setting (common body props + per-kind extras).
 on applyPartSpecial pCtrl, pSpecial
    if pCtrl is empty then exit applyPartSpecial
@@ -4825,6 +4877,15 @@ on applyPartSpecial pCtrl, pSpecial
          put specialValue(pSpecial, "ldr") into tV
          if tV is not empty then set the uLaserDir of pCtrl to tV
          drawLaserBeam pCtrl
+         break
+      case "thruster"
+         put specialValue(pSpecial, "tdr") into tV
+         if tV is not empty then set the uThrustDir of pCtrl to tV
+         put specialValue(pSpecial, "tpw") into tV
+         if tV is not empty then set the uThrustPower of pCtrl to tV
+         put specialValue(pSpecial, "tsp") into tV
+         if tV is not empty then set the uThrustSpin of pCtrl to tV
+         set the uThrustLit of pCtrl to false
          break
    end switch
    if tKind is "draw" then                       -- restore a freehand-drawn ground mass + its chain
@@ -5245,6 +5306,8 @@ function partProps pKind
          return "magpol,magforce,magrange,color"
       case "laser"
          return "laserdir"
+      case "thruster"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,thrustdir,thrustpower,thrustspin"
    end switch
    return empty
 end partProps
@@ -5337,6 +5400,12 @@ function propLabel pCtrl, pKey
          return "Reach: " & (the uMagRange of pCtrl)
       case "laserdir"
          return "Beam angle: " & numOr(the uLaserDir of pCtrl, 0) & "°"
+      case "thrustdir"
+         return "Thrust angle: " & numOr(the uThrustDir of pCtrl, 270) & "°"
+      case "thrustpower"
+         return "Thrust power: " & numOr(the uThrustPower of pCtrl, 0)
+      case "thrustspin"
+         return "Thrust spin: " & numOr(the uThrustSpin of pCtrl, 0)
    end switch
    return pKey
 end propLabel
@@ -5618,6 +5687,15 @@ on adjustPartProp pCtrl, pKey, pDir
       case "laserdir"
          set the uLaserDir of pCtrl to ((numOr(the uLaserDir of pCtrl, 0) + pDir * kLaserStep + 360) mod 360)
          drawLaserBeam pCtrl
+         break
+      case "thrustdir"
+         set the uThrustDir of pCtrl to ((numOr(the uThrustDir of pCtrl, 270) + pDir * kLaserStep + 360) mod 360)
+         break
+      case "thrustpower"
+         set the uThrustPower of pCtrl to clampRange(numOr(the uThrustPower of pCtrl, 0) + pDir * 100, 0, 3000)
+         break
+      case "thrustspin"
+         set the uThrustSpin of pCtrl to clampRange(numOr(the uThrustSpin of pCtrl, 0) + pDir * 200, -3000, 3000)
          break
       case "bombfuse"
          set the uFuseOnRun of pCtrl to not (the uFuseOnRun of pCtrl is true)
@@ -6929,7 +7007,7 @@ function niceName pId
          & "poly=Polygon" & cr & "image=Picture" & cr & "anchor=Anchor" & cr & "delete=Delete" & cr \
          & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
-         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr & "laser=Laser" & cr \
+         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr & "laser=Laser" & cr & "thruster=Thruster" & cr \
          & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "draw=Draw Terrain" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
          & "weld=Weld Joint" & cr & "servo=Servo Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
@@ -6951,7 +7029,7 @@ function toolGlyph pId
    local tGlyphs
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
          & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
-         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr \
+         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr & "thruster=▲" & cr \
          & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
          & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
@@ -7003,6 +7081,8 @@ function toolHelp pId
          return "A magnet that pulls parts toward it." & cr & "A magnet attracts nearby parts (or repels them). Set attract/repel, strength and reach in the inspector. No body — parts pass through it."
       case "laser"
          return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray from its emitter and draws the beam to the first thing it strikes (a wall counts). Set the beam angle in the inspector; while running, select it to read the live hit distance. Shows off the Kit's ray-casting."
+      case "thruster"
+         return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: on Run it pops off with an ignition kick, then applies a steady force along its own facing — plus optional spin. Set thrust angle, power and spin in the inspector; lock its rotation for a straight climb or let it tumble. Shows off b2kForce / b2kTorque / b2kPush."
       case "platform"
          return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery — a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf. Set its size, angle and grip in the inspector."
       case "ramp"
