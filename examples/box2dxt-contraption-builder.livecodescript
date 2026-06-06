@@ -1708,6 +1708,7 @@ local gMode, gTool, gJointTool
 local gPendCtrl, gPendX, gPendY
 local gMotorOn, gMotorSpeed, gBouncy, gMotorsRunning
 local gDragCtrl, gDragMode, gDragMoved
+local gDrawPts, gDrawCtrl               -- freehand-terrain points + its preview graphic
 local gParts
 local gJN
 local gJKind, gJHandle, gJCa, gJCb
@@ -1740,8 +1741,9 @@ constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
 constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor"
 constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor"
-constant kTerrainTools = "platform,ramp,hill"
-constant kTerrainLabels = "Platform,Ramp,Hill"
+constant kTerrainTools = "platform,ramp,hill,draw"
+constant kTerrainLabels = "Platform,Ramp,Hill,Draw"
+constant kDrawStep = 14   -- min pixels between sampled points while drawing freehand terrain
 constant kVehicleTools = "car"
 constant kVehicleLabels = "Car"
 constant kJointTools   = "hinge,weld,servo,rope,slider,wheel,bridge,chain"
@@ -2475,6 +2477,11 @@ on mouseDown
       jointClick tx, ty
       exit mouseDown
    end if
+   -- Draw tool: press-drag to sketch a ground line (built on release).
+   if gTool is "draw" then
+      if inArena(tx, ty) then beginDrawTerrain tx, ty
+      exit mouseDown
+   end if
    -- Drag tool: a click on a joint marker selects that joint for editing.
    if gTool is "drag" then
       local tJHit
@@ -2520,6 +2527,10 @@ on mouseDown
 end mouseDown
 
 on mouseMove pX, pY
+   if gDragMode is "draw" then
+      extendDrawTerrain pX, pY
+      exit mouseMove
+   end if
    if gDragMode is "build" and gDragCtrl is not empty then
       local tCx, tCy, tOld, tDx, tDy, tGroup, tP
       put max(gArenaL, min(gArenaR, pX)) into tCx
@@ -2546,6 +2557,11 @@ end mouseMove
 on mouseUp
    if "ui_" is in the short name of the target then
       handleUiClick
+      exit mouseUp
+   end if
+   if gDragMode is "draw" then
+      finishDrawTerrain
+      put empty into gDragMode
       exit mouseUp
    end if
    if gDragMode is "build" and gDragCtrl is not empty and gDragMoved then
@@ -3067,6 +3083,99 @@ on rebuildHillChain pCtrl
    if b2kBodyOf(pCtrl) is not empty then b2kRemove pCtrl   -- destroy old chain body; graphic stays (not kit-spawned)
    b2kAddChain pCtrl, the points of pCtrl, true
 end rebuildHillChain
+
+-- =====================================================================
+-- Freehand "Draw" terrain: press-drag to sketch a ground line; on release it
+-- becomes a smooth ONE-SIDED chain (b2kAddChain, open) bodies rest on top of.
+-- =====================================================================
+on beginDrawTerrain pX, pY
+   set the itemDelimiter to comma
+   put "draw" into gDragMode
+   put round(pX) & "," & round(pY) into gDrawPts
+   put "cb_terrain_" & the milliseconds & "_" & random(99999) into gDrawCtrl
+   create graphic gDrawCtrl
+   put the long id of graphic gDrawCtrl into gDrawCtrl
+   set the style of gDrawCtrl to "line"
+   set the lineSize of gDrawCtrl to 4
+   set the foregroundColor of gDrawCtrl to "150,120,84"
+   set the points of gDrawCtrl to gDrawPts
+   put "Draw the ground — release to set it." into gStatus
+end beginDrawTerrain
+
+on extendDrawTerrain pX, pY
+   if gDrawCtrl is empty then exit extendDrawTerrain
+   set the itemDelimiter to comma
+   local tx, ty, tLast
+   put max(gArenaL, min(gArenaR, pX)) into tx
+   put max(gArenaT, min(gArenaB, pY)) into ty
+   put the last line of gDrawPts into tLast
+   if tLast is not empty and (abs(tx - item 1 of tLast) + abs(ty - item 2 of tLast)) < kDrawStep then exit extendDrawTerrain
+   put cr & round(tx) & "," & round(ty) after gDrawPts
+   set the points of gDrawCtrl to gDrawPts
+end extendDrawTerrain
+
+on finishDrawTerrain
+   if gDrawCtrl is empty then exit finishDrawTerrain
+   set the itemDelimiter to comma
+   local tPts
+   put gDrawPts into tPts
+   if the number of lines of tPts < 2 then        -- a click, not a drag: nothing to build
+      try
+         delete gDrawCtrl
+      end try
+      put empty into gDrawCtrl
+      put empty into gDrawPts
+      put "Press and drag to draw a ground line." into gStatus
+      exit finishDrawTerrain
+   end if
+   -- normalise left→right so the chain's solid side faces up (bodies rest on top)
+   if (item 1 of the last line of tPts) < (item 1 of line 1 of tPts) then put reversedLines(tPts) into tPts
+   set the points of gDrawCtrl to tPts
+   tagPart gDrawCtrl, "draw", "150,120,84", empty
+   set the uPoints of gDrawCtrl to tPts
+   set the uFriction of gDrawCtrl to 0.6
+   b2kAddChain gDrawCtrl, tPts, false             -- open, one-sided ground line
+   selectPart gDrawCtrl
+   put "Ground drawn. Press Run to test it." into gStatus
+   put empty into gDrawCtrl
+   put empty into gDrawPts
+   updateHud
+end finishDrawTerrain
+
+-- A placeholder line graphic for a saved drawn-terrain part; applyPartSpecial
+-- fills in its points and chain from the saved point list.
+function placeDrawPlaceholder pX, pY
+   local tName, tRef
+   put "cb_terrain_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "line"
+   set the lineSize of tRef to 4
+   set the foregroundColor of tRef to "150,120,84"
+   set the loc of tRef to round(pX) & "," & round(pY)
+   tagPart tRef, "draw", "150,120,84", empty
+   return tRef
+end placeDrawPlaceholder
+
+-- Reverse the order of a CR-list of points.
+function reversedLines pList
+   local tL, tOut
+   put empty into tOut
+   repeat for each line tL in pList
+      if tL is not empty then put tL & cr before tOut
+   end repeat
+   if tOut is not empty then delete the last char of tOut
+   return tOut
+end reversedLines
+
+-- A drawn terrain's points packed into one save column (CR -> "|", since ";"
+-- and TAB are taken by the save format).
+function ptsPacked pCtrl
+   local tP
+   put the uPoints of pCtrl into tP
+   replace cr with "|" in tP
+   return tP
+end ptsPacked
 
 -- =====================================================================
 -- Vehicle: a ready-made car you drop in like any object — a chassis on two
@@ -3986,6 +4095,7 @@ function partSpecial pCtrl
       put addKV(tS, "spin=" & (the uSpinRate of pCtrl)) into tS
       if the uGroup of pCtrl is not empty then put addKV(tS, "grp=" & (the uGroup of pCtrl)) into tS
       if numOr(the uLayer of pCtrl, 0) > 0 then put addKV(tS, "lyr=" & (the uLayer of pCtrl)) into tS
+      if the uKind of pCtrl is "draw" then put addKV(tS, "pts=" & ptsPacked(pCtrl)) into tS
    end if
    switch tKind
       case "fan"
@@ -4171,6 +4281,8 @@ function rebuildPart pKind, pX, pY, pW, pH, pColor, pFile
       case "ramp"
       case "hill"
          return placeTerrain(pKind, pX, pY, pW, pH)
+      case "draw"
+         return placeDrawPlaceholder(pX, pY)   -- points + chain restored by applyPartSpecial
       case "image"
          return rebuildImage(pX, pY, pW, pH, pFile)
       case "balloon"
@@ -4502,6 +4614,15 @@ on applyPartSpecial pCtrl, pSpecial
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
          break
    end switch
+   if tKind is "draw" then                       -- restore a freehand-drawn ground line + its chain
+      put specialValue(pSpecial, "pts") into tV
+      if tV is not empty then
+         replace "|" with cr in tV
+         set the points of pCtrl to tV
+         set the uPoints of pCtrl to tV
+         b2kAddChain pCtrl, tV, false
+      end if
+   end if
 end applyPartSpecial
 
 -- =====================================================================
@@ -6382,7 +6503,7 @@ function niceName pId
          & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
          & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr \
-         & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
+         & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "draw=Draw Terrain" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
          & "weld=Weld Joint" & cr & "servo=Servo Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
    local tLine
@@ -6404,7 +6525,7 @@ function toolGlyph pId
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
          & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
          & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr \
-         & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
+         & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
          & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
    set the itemDelimiter to "="
@@ -6458,7 +6579,9 @@ function toolHelp pId
       case "ramp"
          return "Place a fixed slope for rolling and sliding." & cr & "A ramp is a fixed wedge. Balls roll down it and parts slide along it. Rotate it for any incline and raise its grip to slow the slide — great for launches and runs."
       case "hill"
-         return "Place a fixed rounded mound." & cr & "A hill is a fixed, rounded mound that parts roll over and settle against. Size and rotate it to shape your landscape."
+         return "Place a smooth rolling mound." & cr & "A hill is fixed scenery built as a smooth chain, so parts roll over it without catching. Make it narrow for a single dome or wide for rolling hills; size and rotate it to shape your landscape."
+      case "draw"
+         return "Draw your own ground line." & cr & "Press and drag across the play field to sketch a smooth ground contour — bumps, valleys, ramps, anything. On release it becomes solid terrain parts roll along. Drag it to reposition; delete and redraw to change its shape."
       case "car"
          return "Drop a ready-made motor car." & cr & "A complete car: a chassis on two sprung, motorised wheels. Drop it in, press Run and it drives off. Drag the body and the whole car moves with it; tune or reverse each wheel's motor in the joint inspector."
       case "hinge"

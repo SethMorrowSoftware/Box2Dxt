@@ -10,6 +10,11 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `3`).
 
 ### Added
 
+- **Draw-your-own terrain (contraption builder).** A new TERRAIN tool (**Draw**,
+  the ✎ glyph): press and drag across the play field to sketch a ground contour —
+  bumps, valleys, ramps, anything — and on release it becomes a smooth one-sided
+  chain (`b2kAddChain`, open) that parts roll along without catching on seams. It
+  saves and loads as its own point list and can be dragged to reposition.
 - **World feel presets (contraption builder).** A new BUILD OPTIONS cycle button
   beside Gravity tunes how the whole world responds — **Default**, **Bouncy**,
   **Floaty** (soft, speed-limited) and **Snappy** (stiff, responsive) — via the
