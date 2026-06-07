@@ -1800,6 +1800,7 @@ constant kSensorW = 96, kSensorH = 72
 constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
 constant kLaserReach = 1600, kLaserStep = 45   -- laser ray length (px) and the angle step its direction cycles by
+constant kContainMargin = 90   -- how far past the arena a body may stray before the containment net pulls it back
 constant kStressBatch = 50
 constant kSizeMin = 16, kSizeMax = 240
 -- Terrain (static scenery) can be larger than parts — wide ledges, long ramps.
@@ -1907,6 +1908,7 @@ end renderBuild
 -- Arena (walls + a framed play field, mirrors the showcase demo)
 -- =====================================================================
 on prepArena
+   set the acceleratedRendering of this stack to true   -- GPU compositing so dynamic-layer bodies move without trails/clipping
    local tWide, tHigh, tCanvasL, tCanvasR, tCanvasT, tCanvasB
    put the width of this card into tWide
    put the height of this card into tHigh
@@ -3354,6 +3356,7 @@ on tagPart pCtrl, pKind, pColor, pFile
       set the uDensity of pCtrl to 1
       set the uGravity of pCtrl to 1
       set the uFixedRot of pCtrl to false
+      set the layerMode of pCtrl to "dynamic"   -- moving bodies composite on their own GPU layer (no smear/clip artifacts)
       b2kWake pCtrl                       -- so the first sync draws it
    end if
 end tagPart
@@ -3831,6 +3834,7 @@ on b2kFrame
    updateRings
    updateLasers
    updateThrusters
+   containParts
    tickHud
 end b2kFrame
 
@@ -4232,6 +4236,7 @@ function partSpecial pCtrl
          put addKV(tS, "bradius=" & (the uBlastRadius of pCtrl)) into tS
          put addKV(tS, "bpower=" & (the uBlastPower of pCtrl)) into tS
          put addKV(tS, "fuse=" & (the uFuseOnRun of pCtrl is true)) into tS
+         put addKV(tS, "flen=" & numOr(the uFuseLen of pCtrl, kBombFuseFrames)) into tS
          if the uSoftBlast of pCtrl is true then put addKV(tS, "soft=true") into tS
          break
       case "laser"
@@ -4571,6 +4576,7 @@ function placeBomb pX, pY
    tagPart tCtrl, "bomb", "150,40,40", empty
    set the uFuseOnRun of tCtrl to true     -- bombs arm on Run by default (fuse length set in the inspector)
    set the uFuse of tCtrl to 0
+   set the uFuseLen of tCtrl to kBombFuseFrames    -- countdown frames once armed (60 = ~1s)
    set the uBlastRadius of tCtrl to kBombRadius
    set the uBlastPower of tCtrl to kBombPower
    return tCtrl
@@ -4793,6 +4799,30 @@ on updateThrusters
    end repeat
 end updateThrusters
 
+-- Safety net: a body flung, blasted or thrust clean out of the arena (past a
+-- generous margin) is pulled back to the edge with its speed killed, so nothing
+-- is ever lost off-screen. CCD stops most tunnelling; this catches the rest.
+on containParts
+   local tP, tLoc, tX, tY, tNX, tNY
+   set the itemDelimiter to comma
+   repeat for each line tP in dynamicParts()
+      if tP is empty then next repeat
+      put the loc of tP into tLoc
+      put item 1 of tLoc into tX
+      put item 2 of tLoc into tY
+      put tX into tNX
+      put tY into tNY
+      if tX < gArenaL - kContainMargin then put gArenaL + 12 into tNX
+      else if tX > gArenaR + kContainMargin then put gArenaR - 12 into tNX
+      if tY < gArenaT - kContainMargin then put gArenaT + 12 into tNY
+      else if tY > gArenaB + kContainMargin then put gArenaB - 12 into tNY
+      if tNX is not tX or tNY is not tY then
+         b2kMoveTo tP, tNX, tNY, round(b2kAngle(tP))
+         b2kSetVelocity tP, 0, 0
+      end if
+   end repeat
+end containParts
+
 -- Restore every saved per-part setting (common body props + per-kind extras).
 on applyPartSpecial pCtrl, pSpecial
    if pCtrl is empty then exit applyPartSpecial
@@ -4903,6 +4933,8 @@ on applyPartSpecial pCtrl, pSpecial
          put specialValue(pSpecial, "bpower") into tV
          if tV is not empty then set the uBlastPower of pCtrl to tV
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
+         put specialValue(pSpecial, "flen") into tV
+         if tV is not empty then set the uFuseLen of pCtrl to tV
          if specialValue(pSpecial, "soft") is "true" then set the uSoftBlast of pCtrl to true
          break
       case "laser"
@@ -5027,7 +5059,7 @@ end applyMagnet
 on armFuses
    local tB
    repeat for each line tB in gKindList["bomb"]
-      if tB is not empty and the uFuseOnRun of tB is true then set the uFuse of tB to kBombFuseFrames
+      if tB is not empty and the uFuseOnRun of tB is true then set the uFuse of tB to numOr(the uFuseLen of tB, kBombFuseFrames)
    end repeat
 end armFuses
 
@@ -5338,7 +5370,7 @@ function partProps pKind
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
-         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse,bombsoft"
+         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse,bombfuselen,bombsoft"
       case "plate"
          return "width,height,color,angle,friction"
       case "sensor"
@@ -5438,6 +5470,8 @@ function propLabel pCtrl, pKey
          return "Blast power: " & (the uBlastPower of pCtrl)
       case "bombfuse"
          return "Light fuse on Run: " & yesNo(the uFuseOnRun of pCtrl)
+      case "bombfuselen"
+         return "Fuse length: " & format("%.1f", numOr(the uFuseLen of pCtrl, kBombFuseFrames) / 60) & " s"
       case "bombsoft"
          if the uSoftBlast of pCtrl is true then return "Blast style: soft (legacy, size-blind)"
          return "Blast style: shape-aware (native)"
@@ -5691,23 +5725,23 @@ on adjustPartProp pCtrl, pKey, pDir
       case "blastradius"
          put the uBlastRadius of pCtrl into tBr
          if tBr is empty then put kBombRadius into tBr
-         put tBr + pDir * 40 into tBr
+         put tBr + pDir * 60 into tBr
          if tBr < 60 then put 60 into tBr
-         if tBr > 500 then put 500 into tBr
+         if tBr > 1200 then put 1200 into tBr
          set the uBlastRadius of pCtrl to tBr
          break
       case "blastpower"
          put the uBlastPower of pCtrl into tPow
          if tPow is empty then put kBombPower into tPow
-         put tPow + pDir * 120 into tPow
+         put tPow + pDir * 600 into tPow
          if tPow < 200 then put 200 into tPow
-         if tPow > 2000 then put 2000 into tPow
+         if tPow > 30000 then put 30000 into tPow
          set the uBlastPower of pCtrl to tPow
          break
       case "fanforce"
-         put (the uFanForce of pCtrl) + pDir * 150 into tF
+         put (the uFanForce of pCtrl) + pDir * 600 into tF
          if tF < 0 then put 0 into tF
-         if tF > 3000 then put 3000 into tF
+         if tF > 40000 then put 40000 into tF
          set the uFanForce of pCtrl to tF
          break
       case "fandir"
@@ -5728,15 +5762,15 @@ on adjustPartProp pCtrl, pKey, pDir
          set the uMagPolarity of pCtrl to (the uMagPolarity of pCtrl) * -1
          break
       case "magforce"
-         put (the uMagForce of pCtrl) + pDir * 200 into tMf
+         put (the uMagForce of pCtrl) + pDir * 800 into tMf
          if tMf < 100 then put 100 into tMf
-         if tMf > 4000 then put 4000 into tMf
+         if tMf > 50000 then put 50000 into tMf
          set the uMagForce of pCtrl to tMf
          break
       case "magrange"
-         put (the uMagRange of pCtrl) + pDir * 40 into tMr
+         put (the uMagRange of pCtrl) + pDir * 80 into tMr
          if tMr < 60 then put 60 into tMr
-         if tMr > 520 then put 520 into tMr
+         if tMr > 1400 then put 1400 into tMr
          set the uMagRange of pCtrl to tMr
          break
       case "laserdir"
@@ -5747,13 +5781,16 @@ on adjustPartProp pCtrl, pKey, pDir
          set the uThrustDir of pCtrl to ((numOr(the uThrustDir of pCtrl, 270) + pDir * kLaserStep + 360) mod 360)
          break
       case "thrustpower"
-         set the uThrustPower of pCtrl to clampRange(numOr(the uThrustPower of pCtrl, 0) + pDir * 100, 0, 3000)
+         set the uThrustPower of pCtrl to clampRange(numOr(the uThrustPower of pCtrl, 0) + pDir * 600, 0, 40000)
          break
       case "thrustspin"
-         set the uThrustSpin of pCtrl to clampRange(numOr(the uThrustSpin of pCtrl, 0) + pDir * 200, -3000, 3000)
+         set the uThrustSpin of pCtrl to clampRange(numOr(the uThrustSpin of pCtrl, 0) + pDir * 800, -40000, 40000)
          break
       case "bombfuse"
          set the uFuseOnRun of pCtrl to not (the uFuseOnRun of pCtrl is true)
+         break
+      case "bombfuselen"
+         set the uFuseLen of pCtrl to clampRange(numOr(the uFuseLen of pCtrl, kBombFuseFrames) + pDir * 30, 15, 900)
          break
       case "bombsoft"
          set the uSoftBlast of pCtrl to not (the uSoftBlast of pCtrl is true)
@@ -6921,7 +6958,7 @@ end applyWorldFeel
 
 -- The advanced solver toggles default to Box2D's recommended setup.
 on setWorldOptionDefaults
-   put false into gCCD          -- continuous collision off (fast bodies can tunnel, but cheaper)
+   put true into gCCD           -- continuous collision ON: fast bodies don't tunnel through walls
    put true into gSleepOn       -- resting bodies sleep (saves CPU)
    put true into gWarmStart     -- reuse last frame's solution (stabler + faster)
    put 4 into gSubsteps         -- solver sub-steps per step
