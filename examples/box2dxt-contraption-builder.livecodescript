@@ -1875,6 +1875,26 @@ on startCB
       buildUI
       set the uUIVersion of this stack to kUIVersion
    end if
+   -- The physics world needs the native box2dxt library. Without it b2kSetup would
+   -- throw a raw "unable to load foreign library" LCB error; check first and explain
+   -- the fix in plain language instead. (b2Version is the shim ABI version; expect 3.)
+   local tVer
+   try
+      put b2Version() into tVer
+   catch tErr
+      put empty into tVer
+   end try
+   if tVer is not 3 then
+      if there is a field "ui_status" then put "Box2Dxt native library not loaded — physics is disabled. See the dialog." into field "ui_status"
+      answer "Box2Dxt — native library not loaded" & return & return & \
+            "The box2dxt extension is loaded, but its native library could not be found, so the physics engine cannot start." & return & return & \
+            "Put the library where OXT's loader looks, named WITHOUT a 'lib' prefix:" & return & \
+            "    Linux:    box2dxt.so   (copy to /usr/lib, then run: sudo ldconfig)" & return & \
+            "    macOS:    box2dxt.dylib" & return & \
+            "    Windows:  box2dxt.dll" & return & return & \
+            "Then reopen this stack. Full steps: docs/getting-started.md" with "OK"
+      exit startCB
+   end if
    b2kSetup 0, kDefaultGravity      -- creates the world; the loop stays stopped
    prepArena
    b2kFrameTarget the long id of this stack
@@ -4370,7 +4390,7 @@ end buildSampleSwing
 -- =====================================================================
 -- Serialise the whole scene to CB2 text (used by Save and by Reset's snapshot).
 function serializeText
-   local tOut, tP, tI
+   local tOut, tP, tI, tWsrc, tWtgt
    set the itemDelimiter to comma   -- partLine parses "x,y" locs by item; never assume the caller left it at comma
    put "CB2" & cr into tOut
    put "world" & tab & gGravityMode & tab & gWorldFeel & tab & (gCCD is true) & tab & \
@@ -4389,8 +4409,10 @@ function serializeText
    set the itemDelimiter to tab
    repeat for each line tP in gWires
       if tP is empty then next repeat
-      if (item 1 of tP) is among the lines of gParts and (item 2 of tP) is among the lines of gParts then
-         put "wire" & tab & (the uPartId of (item 1 of tP)) & tab & (the uPartId of (item 2 of tP)) & cr after tOut
+      put item 1 of tP into tWsrc          -- a long id in a variable resolves as an object;
+      put item 2 of tP into tWtgt          -- "the uPartId of (item 1 of tP)" trips OXT's object parser
+      if tWsrc is among the lines of gParts and tWtgt is among the lines of gParts then
+         put "wire" & tab & (the uPartId of tWsrc) & tab & (the uPartId of tWtgt) & cr after tOut
       end if
    end repeat
    return tOut
@@ -5423,6 +5445,7 @@ on applyMagnet pMag, pPart, pPx, pPy
    put item 1 of the loc of pMag into tMx
    put item 2 of the loc of pMag into tMy
    put the uMagRange of pMag into tRange
+   if tRange <= 0 then exit applyMagnet      -- a 0/blank reach (e.g. a hand-edited save) would divide by zero below
    put tMx - pPx into tdx
    put tMy - pPy into tdy
    put sqrt(tdx * tdx + tdy * tdy) into tDist

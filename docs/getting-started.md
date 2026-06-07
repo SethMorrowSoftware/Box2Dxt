@@ -24,12 +24,28 @@ file for your platform from [`prebuilt/`](../prebuilt/) (or from the
 | Platform | Download | Rename it to |
 |----------|----------|--------------|
 | Windows x64 | `prebuilt/box2dxt-windows-x64.dll` | `box2dxt.dll` |
-| macOS (Intel/Apple Silicon) | `prebuilt/libbox2dxt-macos-universal.dylib` | `libbox2dxt.dylib` |
-| Linux x86-64 | `prebuilt/linux-x86_64/libbox2dxt.so` | `libbox2dxt.so` |
+| macOS (Intel/Apple Silicon) | `prebuilt/libbox2dxt-macos-universal.dylib` | `box2dxt.dylib` |
+| Linux x86-64 | `prebuilt/linux-x86_64/libbox2dxt.so` | `box2dxt.so` |
 
-**Put the renamed file where the engine can find it at run time** — the simplest
-choice is next to the stack you're editing. The foreign-binding loader resolves
-the name `box2dxt` to the bare platform filename above.
+OXT's loader resolves the name `box2dxt` to the **bare platform filename with no
+`lib` prefix** (the table above). This bites on Linux especially: the committed
+file is `libbox2dxt.so`, but OXT asks `dlopen` for `box2dxt.so` — leaving the
+`lib` prefix on is the single most common cause of "unable to load foreign
+library".
+
+**Put the renamed file where the loader looks at run time:**
+
+- **Windows / macOS:** next to the stack you're editing works.
+- **Linux:** the dynamic loader does **not** search the stack's folder. Copy the
+  file to a search path and refresh the cache:
+  ```
+  sudo cp box2dxt.so /usr/lib/ && sudo ldconfig
+  ```
+  (or place it next to the OXT engine binary, or add its folder to
+  `LD_LIBRARY_PATH` before launching OXT).
+
+> If a particular engine asks for the `lib`-prefixed name instead, provide that
+> too — a copy or symlink alongside is harmless.
 
 > Prefer building it yourself? See [building.md](building.md). It's two `cmake`
 > commands.
@@ -165,7 +181,7 @@ of the [Kit](kit-reference.md).
 | Symptom | Likely cause & fix |
 |---------|--------------------|
 | `b2Version()` throws / "handler not found" | The extension isn't loaded. Re-add and **Load** `box2dxt.lcb` in the Extension Manager. |
-| First `b2…` call errors about a foreign binding | The native library can't be found or isn't named correctly. Confirm the file is renamed to the bare name (`box2dxt.dll` / `libbox2dxt.dylib` / `libbox2dxt.so`) and sits next to your stack. |
+| First `b2…` call (or `b2Version()`) errors **"unable to load foreign library"** | The native library isn't found or is misnamed. Use the **no-`lib`** bare name: `box2dxt.dll` / `box2dxt.dylib` / `box2dxt.so`. On **Linux** the stack folder isn't searched — put it in `/usr/lib` then run `sudo ldconfig`, or place it next to the OXT engine. (Tip: launching OXT from a terminal prints `dlopen failed <name>` showing the exact filename it wants.) |
 | `b2Version()` returns a different number | Your `box2dxt.lcb` and native library are from different versions. Rebuild/redownload both from the same tag. |
 | Library won't load on an older PC (Linux/Windows) | Use the committed SIMD-disabled `prebuilt/` binary, or build with `-DBOX2D_DISABLE_SIMD=ON` (see [building.md](building.md)). |
 | Bodies jitter or behave non-deterministically | You're stepping with a variable timestep. Let the Kit drive the loop, or step in fixed 1/60 s chunks (see [API Reference → Notes](api-reference.md#notes-and-gotchas)). |
