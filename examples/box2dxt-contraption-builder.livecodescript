@@ -1747,8 +1747,8 @@ local gCCD, gSleepOn, gWarmStart, gSubsteps   -- advanced world solver toggles (
 local gPreRun                          -- snapshot of the build, taken when Run starts
 local gPalOpen                         -- CR-list of palette section titles currently expanded
 
-constant kEditTools    = "drag,delete,duplicate,multiply"
-constant kEditLabels   = "Drag,Delete,Duplicate,Multiply"
+constant kEditTools    = "drag,delete,duplicate,multiply,link"
+constant kEditLabels   = "Drag,Delete,Duplicate,Multiply,Link"
 constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
 constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor,laser,thruster"
@@ -1775,7 +1775,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "8"
+constant kUIVersion = "9"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1904,6 +1904,7 @@ on renderBuild
    b2kSync
    renderJoints
    updateLasers
+   drawWires
    unlock screen
 end renderBuild
 
@@ -2535,6 +2536,10 @@ on mouseDown
       if tHit is not empty then multiplyPart tHit
       exit mouseDown
    end if
+   if gTool is "link" then
+      handleLinkClick tHit
+      exit mouseDown
+   end if
    if tHit is not empty then
       put tHit into gDragCtrl
       put "build" into gDragMode
@@ -2855,6 +2860,7 @@ on toggleMode
       deselectJoint
       put true into gMotorsRunning
       put empty into gSensorCount   -- every sensor zone starts empty each Run
+      deleteByPrefix "cb_wire_"     -- wires are a build-time authoring aid; hide them during Run
       armFuses
       armThrusters
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
@@ -3340,7 +3346,7 @@ on tagPart pCtrl, pKind, pColor, pFile
    if pCtrl is empty then exit tagPart
    set the uPartId of pCtrl to gNextPid
    add 1 to gNameCount[pKind]
-   set the uName of pCtrl to niceName(pKind) && gNameCount[pKind]   -- auto-name; user-renamable in the inspector
+   set the uPartName of pCtrl to niceName(pKind) && gNameCount[pKind]   -- auto-name; user-renamable in the inspector
    set the uKind of pCtrl to pKind
    set the uColor of pCtrl to pColor
    set the uFile of pCtrl to pFile
@@ -3891,8 +3897,8 @@ on b2kSensorEnter pSensor, pVisitor
       try
          set the backgroundColor of pSensor to "120,230,140"   -- lit while occupied
       end try
-      put "A sensor zone triggered — bombs go off and motors switch!" into gStatus
-      triggerSignal
+      put "A sensor zone triggered its signal!" into gStatus
+      fireEmitter pSensor
       updateHud
    end if
 end b2kSensorEnter
@@ -3946,6 +3952,8 @@ on deletePart pCtrl
    if pCtrl is empty then exit deletePart
    if gPendCtrl is pCtrl then resetPend
    if gSelPart is pCtrl then deselectPart
+   if gWireSrc is pCtrl then put empty into gWireSrc
+   removeWiresFor pCtrl
    local tI, tP, tNew
    if gJN >= 1 then
       repeat with tI = 1 to gJN
@@ -4181,6 +4189,13 @@ function serializeText
          if gJKind[tI] is not empty then put jointLine(tI) & cr after tOut
       end repeat
    end if
+   set the itemDelimiter to tab
+   repeat for each line tP in gWires
+      if tP is empty then next repeat
+      if (item 1 of tP) is among the lines of gParts and (item 2 of tP) is among the lines of gParts then
+         put "wire" & tab & (the uPartId of (item 1 of tP)) & tab & (the uPartId of (item 2 of tP)) & cr after tOut
+      end if
+   end repeat
    return tOut
 end serializeText
 
@@ -4210,7 +4225,7 @@ function partLine pCtrl
          (item 1 of tLoc) & tab & (item 2 of tLoc) & tab & \
          numOr(the uW of pCtrl, the width of pCtrl) & tab & numOr(the uH of pCtrl, the height of pCtrl) & tab & \
          (the uBounce of pCtrl) & tab & (the uColor of pCtrl) & tab & (the uFile of pCtrl) & tab & \
-         partSpecial(pCtrl) & tab & (the uName of pCtrl)
+         partSpecial(pCtrl) & tab & (the uPartName of pCtrl)
 end partLine
 
 -- Pack a part's per-kind extras as "key=value;key=value" (empty for plain shapes).
@@ -4377,7 +4392,7 @@ on rebuildFromText pData
                if tBounce > 0 then b2kSetBounce tNew, tBounce
             end if
             applyPartSpecial tNew, tSpecial
-            if tNm is not empty then set the uName of tNew to tNm   -- restore a renamed part's name
+            if tNm is not empty then set the uPartName of tNew to tNm   -- restore a renamed part's name
          end if
       else if tRec is "joint" then
          put item 2 of tLine into tKind
@@ -4394,6 +4409,10 @@ on rebuildFromText pData
          if tA is not empty and (tB is not empty or tKind is "hinge" or tKind is "pin" or tKind is "deckpin") then
             if connectJoint(tKind, tA, tB, tPx, tPy, tMotor) then applyJointSpecial gJN, tJSpecial
          end if
+      else if tRec is "wire" then
+         put item 2 of tLine into tIdA
+         put item 3 of tLine into tIdB
+         if (tIdA is among the keys of tMap) and (tIdB is among the keys of tMap) then addWire tMap[tIdA], tMap[tIdB]
       else if tRec is "world" then
          put item 2 of tLine into gGravityMode
          put item 3 of tLine into gWorldFeel
@@ -5204,8 +5223,8 @@ on platePressed pPlate
    try
       set the backgroundColor of pPlate to "120,230,140"
    end try
-   put "A pressure plate fired — bombs go off and motors switch!" into gStatus
-   triggerSignal
+   put "A pressure plate fired its signal!" into gStatus
+   fireEmitter pPlate
    updateHud
 end platePressed
 
@@ -5225,6 +5244,139 @@ on triggerSignal
    end repeat
    toggleAllMotors
 end triggerSignal
+
+-- =====================================================================
+-- Signal wiring: the Link tool connects a trigger (pressure plate / sensor)
+-- to a target (a bomb). A trigger fires ONLY its wired targets; an unwired
+-- trigger keeps the old "fire everything" behaviour so it still does something.
+-- =====================================================================
+function isEmitter pCtrl
+   if pCtrl is empty then return false
+   return (the uKind of pCtrl is "plate") or (the uKind of pCtrl is "sensor")
+end isEmitter
+
+function isReceiver pCtrl
+   if pCtrl is empty then return false
+   return the uKind of pCtrl is "bomb"
+end isReceiver
+
+function nameOf pCtrl
+   if pCtrl is empty then return "?"
+   if the uPartName of pCtrl is not empty then return the uPartName of pCtrl
+   return niceName(the uKind of pCtrl)
+end nameOf
+
+-- A click with the Link tool: first pick a trigger, then pick its target.
+on handleLinkClick pHit
+   if pHit is empty then
+      put empty into gWireSrc
+      put "Link: click a trigger (a pressure plate or a sensor) to start a wire." into gStatus
+      renderBuild
+      updateHud
+      exit handleLinkClick
+   end if
+   if gWireSrc is empty then
+      if not isEmitter(pHit) then
+         put "Wires start at a pressure plate or a sensor. Click one." into gStatus
+         updateHud
+         exit handleLinkClick
+      end if
+      put pHit into gWireSrc
+      put "Wiring from " & nameOf(pHit) & " — now click a bomb to set off." into gStatus
+   else
+      if pHit is gWireSrc then
+         put empty into gWireSrc
+         put "Wire cancelled." into gStatus
+      else if not isReceiver(pHit) then
+         put "Wire to a bomb (the thing the trigger should set off)." into gStatus
+      else
+         addWire gWireSrc, pHit
+         put "Wired " & nameOf(gWireSrc) & " to " & nameOf(pHit) & "." into gStatus
+         put empty into gWireSrc
+      end if
+   end if
+   renderBuild
+   updateHud
+end handleLinkClick
+
+-- Record a wire (deduped). Edges are "srcCtrl<tab>tgtCtrl" long ids.
+on addWire pSrc, pTgt
+   if pSrc is empty or pTgt is empty then exit addWire
+   local tEdge
+   put pSrc & tab & pTgt into tEdge
+   if tEdge is among the lines of gWires then exit addWire
+   put tEdge & cr after gWires
+   if the last char of gWires is return then delete the last char of gWires
+end addWire
+
+-- Drop every wire touching a part (called when the part is deleted).
+on removeWiresFor pCtrl
+   if gWires is empty then exit removeWiresFor
+   local tEdge, tKept
+   set the itemDelimiter to tab
+   put empty into tKept
+   repeat for each line tEdge in gWires
+      if item 1 of tEdge is pCtrl or item 2 of tEdge is pCtrl then next repeat
+      put tEdge & cr after tKept
+   end repeat
+   if the last char of tKept is return then delete the last char of tKept
+   put tKept into gWires
+end removeWiresFor
+
+-- A trigger fired: set off its wired targets, or — if it has none — fall back to
+-- the legacy global signal so an unwired plate/sensor still does something.
+on fireEmitter pEmitter
+   local tEdge, tTgt, tFired
+   put false into tFired
+   set the itemDelimiter to tab
+   repeat for each line tEdge in gWires
+      if item 1 of tEdge is pEmitter then
+         put item 2 of tEdge into tTgt
+         if tTgt is not empty and tTgt is among the lines of gParts then
+            fireTarget tTgt
+            put true into tFired
+         end if
+      end if
+   end repeat
+   if not tFired then triggerSignal
+end fireEmitter
+
+-- Set off one wired target by kind.
+on fireTarget pTgt
+   switch the uKind of pTgt
+      case "bomb"
+         set the uFuse of pTgt to 1          -- detonate next frame, safely outside the contact callback
+         break
+   end switch
+end fireTarget
+
+-- Redraw the signal wires as amber connector lines between parts (build mode).
+on drawWires
+   deleteByPrefix "cb_wire_"
+   if gWires is empty then exit drawWires
+   local tEdge, tSrc, tTgt, tN, tName, tRef, tx0, ty0, tx1, ty1
+   put 0 into tN
+   repeat for each line tEdge in gWires
+      set the itemDelimiter to tab
+      put item 1 of tEdge into tSrc
+      put item 2 of tEdge into tTgt
+      if tSrc is empty or tTgt is empty then next repeat
+      if tSrc is not among the lines of gParts or tTgt is not among the lines of gParts then next repeat
+      set the itemDelimiter to comma
+      put item 1 of the loc of tSrc into tx0
+      put item 2 of the loc of tSrc into ty0
+      put item 1 of the loc of tTgt into tx1
+      put item 2 of the loc of tTgt into ty1
+      add 1 to tN
+      put "cb_wire_" & tN into tName
+      create graphic tName
+      put the long id of graphic tName into tRef
+      set the style of tRef to "line"
+      set the lineSize of tRef to 2
+      set the foregroundColor of tRef to "232,200,72"
+      set the points of tRef to round(tx0) & "," & round(ty0) & cr & round(tx1) & "," & round(ty1)
+   end repeat
+end drawWires
 
 on toggleAllMotors
    local tI, tSpeed
@@ -5349,13 +5501,13 @@ on renamePart pCtrl
       updateHud
       exit renamePart
    end if
-   ask "Name this part:" with (the uName of pCtrl)
+   ask "Name this part:" with (the uPartName of pCtrl)
    if it is empty or the result is "Cancel" then exit renamePart
    local tNm
    put it into tNm
    replace tab with space in tNm          -- names are tab-delimited in saves
    replace return with space in tNm
-   set the uName of pCtrl to tNm
+   set the uPartName of pCtrl to tNm
    showPartInspector pCtrl                 -- refresh the title
    put "Renamed to " & quote & tNm & quote & "." into gStatus
    updateHud
@@ -5367,7 +5519,7 @@ on showPartInspector pCtrl
    local tKind, tKey, tRow, tAvail
    put the uKind of pCtrl into tKind
    local tNm
-   put the uName of pCtrl into tNm
+   put the uPartName of pCtrl into tNm
    if tNm is empty then put niceName(tKind) into tNm
    setInspector ("Selected: " & tNm), (line 2 of toolHelp(tKind))
    clearPropRows
@@ -7195,7 +7347,7 @@ end niceName
 function toolGlyph pId
    local tGlyphs
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
-         & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
+         & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "link=↦" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
          & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr & "thruster=▲" & cr \
          & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
          & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
@@ -7234,6 +7386,8 @@ function toolHelp pId
          return "Copy a part you click on." & cr & "Duplicate tool. Click any part to drop an identical copy — same size, colour and settings — then drag it where you want."
       case "multiply"
          return "Make many copies of a part at once." & cr & "Multiply tool. Click any part and choose how many copies to make; they drop into a tidy grid, each identical to the original. Great for crates, dominoes and bricks."
+      case "link"
+         return "Wire a trigger to a bomb." & cr & "Link tool. Click a pressure plate or sensor, then click a bomb — an amber wire connects them and that trigger now sets off only that bomb. An unwired trigger still sets off everything. Wires show while building."
       case "balloon"
          return "A helium balloon that floats upward." & cr & "A balloon rises on its own. Tie it to a part with a Rope joint to lift that part. A nearby bomb blast pops it."
       case "bomb"
