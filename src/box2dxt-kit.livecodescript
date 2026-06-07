@@ -228,21 +228,37 @@ end b2kClear
 -- =====================================================================
 -- Configuration
 -- =====================================================================
+function b2kNumberOr pValue, pDefault
+   if pValue is empty then return pDefault
+   if pValue is not a number then return pDefault
+   return pValue
+end b2kNumberOr
+
+function b2kClamp pValue, pLo, pHi
+   local tValue
+   put b2kNumberOr(pValue, pLo) into tValue
+   if tValue < pLo then put pLo into tValue
+   if tValue > pHi then put pHi into tValue
+   return tValue
+end b2kClamp
+
 command b2kSetScale pPixelsPerMetre
-   put pPixelsPerMetre into sScale
+   put b2kClamp(pPixelsPerMetre, 1, 10000) into sScale
 end b2kSetScale
 
 command b2kSetOrigin pScreenX, pScreenY
-   put pScreenX into sOriginX
-   put pScreenY into sOriginY
+   put b2kNumberOr(pScreenX, sOriginX) into sOriginX
+   put b2kNumberOr(pScreenY, sOriginY) into sOriginY
 end b2kSetOrigin
 
 command b2kSetGravity pGx, pGy
+   put b2kNumberOr(pGx, 0) into pGx
+   put b2kNumberOr(pGy, -10) into pGy
    if sWorld is not empty then b2SetGravity sWorld, pGx, pGy
 end b2kSetGravity
 
 command b2kSetSubsteps pN
-   put pN into sSub
+   put round(b2kClamp(pN, 1, 64)) into sSub
 end b2kSetSubsteps
 
 -- World toggles: island sleeping (saves CPU) and continuous collision (CCD,
@@ -307,6 +323,7 @@ command b2kAddBox pControl, pDynamic
    else put 0 into tType
    put ((the width of pControl) / 2) / sScale into tHw
    put ((the height of pControl) / 2) / sScale into tHh
+   if tHw <= 0 or tHh <= 0 then return 0
    put b2kToWorldX(item 1 of the loc of pControl) into tWx
    put b2kToWorldY(item 2 of the loc of pControl) into tWy
    put (word 1 of tRef is "graphic") into tGraphic
@@ -340,6 +357,7 @@ command b2kAddBall pControl, pDynamic
    if pDynamic then put 2 into tType
    else put 0 into tType
    put ((the width of pControl) / 2) / sScale into tRad
+   if tRad <= 0 then return 0
    put b2kToWorldX(item 1 of the loc of pControl) into tWx
    put b2kToWorldY(item 2 of the loc of pControl) into tWy
    put b2NewBody(sWorld, tType, tWx, tWy, 0, false, false) into tBody
@@ -364,6 +382,7 @@ command b2kAddCapsule pControl, pDynamic
    else put 0 into tType
    put (the width of pControl) / sScale into tWm
    put (the height of pControl) / sScale into tHm
+   if tWm <= 0 or tHm <= 0 then return 0
    put (tWm >= tHm) into tHoriz
    if tHoriz then
       put tHm / 2 into tR
@@ -450,7 +469,11 @@ end b2kRegister
 command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
    local tName, tRef
    if pW is empty then put 40 into pW
+   put b2kClamp(pW, 1, 10000) into pW
    if pH is empty then put pW into pH
+   put b2kClamp(pH, 1, 10000) into pH
+   put b2kNumberOr(pScreenX, sOriginX) into pScreenX
+   put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
    create graphic (tName)
    put the long id of graphic (tName) into tRef
@@ -469,6 +492,9 @@ end b2kSpawnBox
 command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
    local tName, tRef
    if pDiameter is empty then put 40 into pDiameter
+   put b2kClamp(pDiameter, 1, 10000) into pDiameter
+   put b2kNumberOr(pScreenX, sOriginX) into pScreenX
+   put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
    create graphic (tName)
    put the long id of graphic (tName) into tRef
@@ -490,6 +516,10 @@ command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
    local tName, tRef
    if pLength is empty then put 80 into pLength
    if pThickness is empty then put 40 into pThickness
+   put b2kClamp(pLength, 1, 10000) into pLength
+   put b2kClamp(pThickness, 1, 10000) into pThickness
+   put b2kNumberOr(pScreenX, sOriginX) into pScreenX
+   put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
    create graphic (tName)
    put the long id of graphic (tName) into tRef
@@ -516,18 +546,21 @@ end b2kSpawnCapsule
 command b2kSetBounce pControl, pRestitution
    local s
    put sShapeH[the long id of pControl] into s
+   put b2kClamp(pRestitution, 0, 2) into pRestitution
    if s is not empty then b2SetShapeRestitution s, pRestitution
 end b2kSetBounce
 
 command b2kSetFriction pControl, pFriction
    local s
    put sShapeH[the long id of pControl] into s
+   put b2kClamp(pFriction, 0, 10) into pFriction
    if s is not empty then b2SetShapeFriction s, pFriction
 end b2kSetFriction
 
 command b2kSetDensity pControl, pDensity
    local s
    put sShapeH[the long id of pControl] into s
+   put b2kClamp(pDensity, 0, 10000) into pDensity
    if s is not empty then b2SetShapeDensity s, pDensity
 end b2kSetDensity
 
@@ -549,12 +582,20 @@ command b2kReshape pControl, pShape
    switch pShape
       case "ball"
          put ((the width of pControl) / 2) / sScale into tR
+         if tR <= 0 then
+            put tOld into sShapeH[tRef]
+            exit b2kReshape
+         end if
          put b2AddCircle(tBody, 0, 0, tR, 1.0, 0.4, 0.4) into sShapeH[tRef]
          put tR into sRad[tRef]
          break
       case "capsule"
          put (the width of pControl) / sScale into tWm
          put (the height of pControl) / sScale into tHm
+         if tWm <= 0 or tHm <= 0 then
+            put tOld into sShapeH[tRef]
+            exit b2kReshape
+         end if
          put (tWm >= tHm) into tHoriz
          if tHoriz then
             put tHm / 2 into tR
@@ -592,6 +633,10 @@ command b2kReshape pControl, pShape
       default
          put ((the width of pControl) / 2) / sScale into tHw
          put ((the height of pControl) / 2) / sScale into tHh
+         if tHw <= 0 or tHh <= 0 then
+            put tOld into sShapeH[tRef]
+            exit b2kReshape
+         end if
          put b2AddBox(tBody, tHw, tHh, 1.0, 0.4, 0.2) into sShapeH[tRef]
          if sRender[tRef] is "poly" then
             put ("-" & tHw) & "," & ("-" & tHh) & cr & tHw & "," & ("-" & tHh) & cr \
@@ -1462,7 +1507,7 @@ command b2kRelease
 end b2kRelease
 
 -- =====================================================================
--- The loop  (fixed timestep, generation-guarded, screen-locked sync)
+-- The loop  (fixed timestep, generation-guarded; sync locks only rendering)
 -- =====================================================================
 on b2kStep pGen
    if not sRunning then exit b2kStep
@@ -1482,12 +1527,10 @@ on b2kStep pGen
       if sDragging then
          b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
       end if
-      lock screen
-      b2kSync
-      b2kDispatchContacts
+      b2kSync                  -- locks screen internally for render updates only
+      b2kDispatchContacts      -- user handlers run after the screen is unlocked
       b2kDispatchSensors
       if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
-      unlock screen           -- one redraw per frame: sync + events + app drawing
    end if
    send ("b2kStep " & sGen) to me in 16 milliseconds
 end b2kStep
@@ -1499,12 +1542,10 @@ command b2kStepOnce
    if sDragging then
       b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
    end if
-   lock screen
    b2kSync
    b2kDispatchContacts
    b2kDispatchSensors
    if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
-   unlock screen
 end b2kStepOnce
 
 command b2kSync

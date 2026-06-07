@@ -55,40 +55,61 @@
 /* ------------------------------------------------------------------ */
 #define DEFINE_TABLE(NAME, TYPE)                                              \
     static TYPE *NAME##_arr = NULL;                                           \
+    static unsigned char *NAME##_used = NULL;                                 \
     static int   NAME##_cap = 0;                                              \
     static int   NAME##_cnt = 0;                                              \
     static int  *NAME##_free = NULL;                                          \
     static int   NAME##_freeCap = 0;                                          \
     static int   NAME##_freeCnt = 0;                                          \
+    static int NAME##_grow_slots(int nc) {                                    \
+        TYPE *na = (TYPE *)realloc(NAME##_arr, (size_t)nc * sizeof(TYPE));    \
+        if (!na) return 0;                                                    \
+        unsigned char *nu = (unsigned char *)realloc(NAME##_used,             \
+                                                     (size_t)nc);             \
+        if (!nu) { NAME##_arr = na; return 0; }                               \
+        memset(nu + NAME##_cap, 0, (size_t)(nc - NAME##_cap));                \
+        NAME##_arr = na; NAME##_used = nu; NAME##_cap = nc;                   \
+        return 1;                                                             \
+    }                                                                         \
     static int NAME##_add(TYPE v) {                                           \
         int idx;                                                              \
         if (NAME##_freeCnt > 0) {                                             \
-            idx = NAME##_free[--NAME##_freeCnt];                              \
-        } else {                                                             \
+            do {                                                              \
+                idx = NAME##_free[--NAME##_freeCnt];                          \
+            } while (NAME##_freeCnt > 0 && NAME##_used[idx]);                 \
+            if (NAME##_used[idx]) idx = -1;                                   \
+        } else {                                                              \
+            idx = -1;                                                         \
+        }                                                                     \
+        if (idx < 0) {                                                        \
             if (NAME##_cnt >= NAME##_cap) {                                   \
                 int nc = NAME##_cap ? NAME##_cap * 2 : 64;                    \
-                NAME##_arr = (TYPE *)realloc(NAME##_arr,                      \
-                                             (size_t)nc * sizeof(TYPE));      \
-                NAME##_cap = nc;                                              \
+                if (!NAME##_grow_slots(nc)) return 0;                         \
             }                                                                 \
             idx = NAME##_cnt++;                                               \
         }                                                                     \
         NAME##_arr[idx] = v;                                                  \
+        NAME##_used[idx] = 1;                                                 \
         return idx + 1;                                                       \
     }                                                                         \
-    static TYPE NAME##_get(int h) {                                          \
-        if (h <= 0 || h > NAME##_cnt) { TYPE z; memset(&z, 0, sizeof z); return z; } \
+    static TYPE NAME##_get(int h) {                                           \
+        if (h <= 0 || h > NAME##_cnt || !NAME##_used[h - 1]) {                \
+            TYPE z; memset(&z, 0, sizeof z); return z;                        \
+        }                                                                     \
         return NAME##_arr[h - 1];                                             \
     }                                                                         \
-    static void NAME##_free_handle(int h) {                                  \
-        if (h <= 0 || h > NAME##_cnt) return;                                 \
+    static int NAME##_free_handle(int h) {                                    \
+        if (h <= 0 || h > NAME##_cnt || !NAME##_used[h - 1]) return 0;        \
         if (NAME##_freeCnt >= NAME##_freeCap) {                               \
             int nc = NAME##_freeCap ? NAME##_freeCap * 2 : 64;                \
-            NAME##_free = (int *)realloc(NAME##_free,                         \
-                                         (size_t)nc * sizeof(int));           \
-            NAME##_freeCap = nc;                                              \
+            int *nf = (int *)realloc(NAME##_free, (size_t)nc * sizeof(int));  \
+            if (!nf) return 0;                                                \
+            NAME##_free = nf; NAME##_freeCap = nc;                            \
         }                                                                     \
+        { TYPE z; memset(&z, 0, sizeof z); NAME##_arr[h - 1] = z; }           \
+        NAME##_used[h - 1] = 0;                                               \
         NAME##_free[NAME##_freeCnt++] = h - 1;                                \
+        return 1;                                                             \
     }
 
 DEFINE_TABLE(worlds, b2WorldId)
@@ -97,21 +118,62 @@ DEFINE_TABLE(shapes, b2ShapeId)
 DEFINE_TABLE(joints, b2JointId)
 DEFINE_TABLE(chains, b2ChainId)
 
+/* Retire any child handles whose Box2D ids became invalid because a parent
+ * object (usually a world or body) destroyed them implicitly. This keeps stale
+ * ids harmless while also letting future create calls reuse their table slots. */
+static void retire_invalid_child_handles(void) {
+    for (int i = 0; i < bodies_cnt; i++)
+        if (bodies_used[i] && !b2Body_IsValid(bodies_arr[i])) bodies_free_handle(i + 1);
+    for (int i = 0; i < shapes_cnt; i++)
+        if (shapes_used[i] && !b2Shape_IsValid(shapes_arr[i])) shapes_free_handle(i + 1);
+    for (int i = 0; i < joints_cnt; i++)
+        if (joints_used[i] && !b2Joint_IsValid(joints_arr[i])) joints_free_handle(i + 1);
+    for (int i = 0; i < chains_cnt; i++)
+        if (chains_used[i] && !b2Chain_IsValid(chains_arr[i])) chains_free_handle(i + 1);
+}
+
 /* small helpers */
 static inline b2Vec2 v2(double x, double y) { b2Vec2 v; v.x = (float)x; v.y = (float)y; return v; }
 static inline b2Rot  rotOf(double a)        { b2Rot r; r.c = (float)cos(a); r.s = (float)sin(a); return r; }
+static int grow_buffer(void **buf, int *cap, int newCap, size_t elemSize) {
+    if (newCap <= *cap) return 1;
+    void *p = realloc(*buf, (size_t)newCap * elemSize);
+    if (!p) return 0;
+    *buf = p;
+    *cap = newCap;
+    return 1;
+}
+static int finite1(double a) { return isfinite(a); }
+static int finite2(double a, double b) { return isfinite(a) && isfinite(b); }
+static int finite3(double a, double b, double c) { return isfinite(a) && isfinite(b) && isfinite(c); }
+static double nonneg_or(double v, double fallback) { return (isfinite(v) && v >= 0.0) ? v : fallback; }
+static int valid_body_type(int t) { return t >= 0 && t <= 2; }
+static int positive(double v) { return isfinite(v) && v > 0.0; }
 
 /* integer handle <-> Box2D userData (void*) round-trip */
 static inline void *h2ud(int h)   { return (void *)(intptr_t)h; }
 static inline int   ud2h(void *p) { return (int)(intptr_t)p; }
 
-/* Recover the integer body handle that owns a shape (0 if the shape or its
- * body has gone away). Used by queries / ray casts / contact events. */
+/* Recover integer handles from Box2D userData (0 if the object has gone away). */
 static int body_handle_of_shape(b2ShapeId s) {
     if (!b2Shape_IsValid(s)) return 0;
     b2BodyId b = b2Shape_GetBody(s);
     if (!b2Body_IsValid(b)) return 0;
     return ud2h(b2Body_GetUserData(b));
+}
+static int shape_handle_of_id(b2ShapeId s) {
+    return b2Shape_IsValid(s) ? ud2h(b2Shape_GetUserData(s)) : 0;
+}
+static int joint_handle_of_id(b2JointId j) {
+    return b2Joint_IsValid(j) ? ud2h(b2Joint_GetUserData(j)) : 0;
+}
+static void retire_shape_id(b2ShapeId s) {
+    int h = shape_handle_of_id(s);
+    if (h) shapes_free_handle(h);
+}
+static void retire_joint_id(b2JointId j) {
+    int h = joint_handle_of_id(j);
+    if (h) joints_free_handle(h);
 }
 
 /* ------------------------------------------------------------------ */
@@ -120,22 +182,29 @@ static int body_handle_of_shape(b2ShapeId s) {
 LC_API int b2lc_abi_version(void) { return LC_ABI_VERSION; }
 
 LC_API int b2lc_world_create(double gx, double gy, int enableSleep, int enableContinuous) {
+    if (!finite2(gx, gy)) return 0;
     b2WorldDef wd = b2DefaultWorldDef();
     wd.gravity = v2(gx, gy);
     wd.enableSleep = enableSleep ? true : false;
     wd.enableContinuous = enableContinuous ? true : false;
-    return worlds_add(b2CreateWorld(&wd));
+    b2WorldId id = b2CreateWorld(&wd);
+    int h = worlds_add(id);
+    if (!h && b2World_IsValid(id)) b2DestroyWorld(id);
+    return h;
 }
 
 LC_API void b2lc_world_destroy(int w) {
     b2WorldId id = worlds_get(w);
-    if (b2World_IsValid(id)) b2DestroyWorld(id);
+    if (b2World_IsValid(id)) {
+        b2DestroyWorld(id);
+        retire_invalid_child_handles();
+    }
     worlds_free_handle(w);
 }
 
 LC_API void b2lc_world_set_gravity(int w, double gx, double gy) {
     b2WorldId id = worlds_get(w);
-    if (b2World_IsValid(id)) b2World_SetGravity(id, v2(gx, gy));
+    if (b2World_IsValid(id) && finite2(gx, gy)) b2World_SetGravity(id, v2(gx, gy));
 }
 
 LC_API void b2lc_world_enable_sleeping(int w, int flag) {
@@ -151,7 +220,10 @@ LC_API void b2lc_world_enable_continuous(int w, int flag) {
 /* dt in seconds, subStepCount is the Soft Step sub-step count (e.g. 4). */
 LC_API void b2lc_world_step(int w, double dt, int subStepCount) {
     b2WorldId id = worlds_get(w);
-    if (b2World_IsValid(id)) b2World_Step(id, (float)dt, subStepCount);
+    if (!b2World_IsValid(id) || !positive(dt)) return;
+    if (subStepCount < 1) subStepCount = 1;
+    if (subStepCount > 64) subStepCount = 64;
+    b2World_Step(id, (float)dt, subStepCount);
 }
 
 /* ------------------------------------------------------------------ */
@@ -160,7 +232,7 @@ LC_API void b2lc_world_step(int w, double dt, int subStepCount) {
 LC_API int b2lc_body_create(int w, int type, double x, double y, double angle,
                             int isBullet, int fixedRotation) {
     b2WorldId wid = worlds_get(w);
-    if (!b2World_IsValid(wid)) return 0;
+    if (!b2World_IsValid(wid) || !valid_body_type(type) || !finite3(x, y, angle)) return 0;
     b2BodyDef bd = b2DefaultBodyDef();
     bd.type = (b2BodyType)type;
     bd.position = v2(x, y);
@@ -169,13 +241,39 @@ LC_API int b2lc_body_create(int w, int type, double x, double y, double angle,
     bd.fixedRotation = fixedRotation ? true : false;
     b2BodyId id = b2CreateBody(wid, &bd);
     int h = bodies_add(id);
+    if (!h) { b2DestroyBody(id); return 0; }
     b2Body_SetUserData(id, h2ud(h));   /* so queries can map id -> handle */
     return h;
 }
 
+static void retire_body_children(b2BodyId id) {
+    int n = b2Body_GetShapeCount(id);
+    if (n > 0) {
+        b2ShapeId *buf = (b2ShapeId *)malloc((size_t)n * sizeof(b2ShapeId));
+        if (buf) {
+            int got = b2Body_GetShapes(id, buf, n);
+            for (int i = 0; i < got; i++) retire_shape_id(buf[i]);
+            free(buf);
+        }
+    }
+    n = b2Body_GetJointCount(id);
+    if (n > 0) {
+        b2JointId *buf = (b2JointId *)malloc((size_t)n * sizeof(b2JointId));
+        if (buf) {
+            int got = b2Body_GetJoints(id, buf, n);
+            for (int i = 0; i < got; i++) retire_joint_id(buf[i]);
+            free(buf);
+        }
+    }
+}
+
 LC_API void b2lc_body_destroy(int b) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2DestroyBody(id);
+    if (b2Body_IsValid(id)) {
+        retire_body_children(id);
+        b2DestroyBody(id);
+        retire_invalid_child_handles();
+    }
     bodies_free_handle(b);
 }
 
@@ -204,40 +302,40 @@ LC_API double b2lc_body_gravity_scale(int b)   { b2BodyId id = bodies_get(b); re
 
 LC_API void b2lc_body_set_transform(int b, double x, double y, double angle) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2Body_SetTransform(id, v2(x, y), rotOf(angle));
+    if (b2Body_IsValid(id) && finite3(x, y, angle)) b2Body_SetTransform(id, v2(x, y), rotOf(angle));
 }
 LC_API void b2lc_body_set_velocity(int b, double vx, double vy) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2Body_SetLinearVelocity(id, v2(vx, vy));
+    if (b2Body_IsValid(id) && finite2(vx, vy)) b2Body_SetLinearVelocity(id, v2(vx, vy));
 }
 LC_API void b2lc_body_set_angular_velocity(int b, double w) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2Body_SetAngularVelocity(id, (float)w);
+    if (b2Body_IsValid(id) && finite1(w)) b2Body_SetAngularVelocity(id, (float)w);
 }
 LC_API void b2lc_body_apply_force(int b, double fx, double fy, int wake) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2Body_ApplyForceToCenter(id, v2(fx, fy), wake ? true : false);
+    if (b2Body_IsValid(id) && finite2(fx, fy)) b2Body_ApplyForceToCenter(id, v2(fx, fy), wake ? true : false);
 }
 LC_API void b2lc_body_apply_impulse(int b, double ix, double iy, int wake) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2Body_ApplyLinearImpulseToCenter(id, v2(ix, iy), wake ? true : false);
+    if (b2Body_IsValid(id) && finite2(ix, iy)) b2Body_ApplyLinearImpulseToCenter(id, v2(ix, iy), wake ? true : false);
 }
 LC_API void b2lc_body_apply_torque(int b, double t, int wake) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2Body_ApplyTorque(id, (float)t, wake ? true : false);
+    if (b2Body_IsValid(id) && finite1(t)) b2Body_ApplyTorque(id, (float)t, wake ? true : false);
 }
 LC_API void b2lc_body_apply_angular_impulse(int b, double imp, int wake) {
     b2BodyId id = bodies_get(b);
-    if (b2Body_IsValid(id)) b2Body_ApplyAngularImpulse(id, (float)imp, wake ? true : false);
+    if (b2Body_IsValid(id) && finite1(imp)) b2Body_ApplyAngularImpulse(id, (float)imp, wake ? true : false);
 }
 LC_API void b2lc_body_set_bullet(int b, int flag)         { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetBullet(id, flag ? true : false); }
 LC_API void b2lc_body_set_awake(int b, int flag)          { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetAwake(id, flag ? true : false); }
 LC_API void b2lc_body_set_fixed_rotation(int b, int flag) { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetFixedRotation(id, flag ? true : false); }
-LC_API void b2lc_body_set_type(int b, int type)           { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetType(id, (b2BodyType)type); }
-LC_API void b2lc_body_set_linear_damping(int b, double d) { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetLinearDamping(id, (float)d); }
-LC_API void b2lc_body_set_angular_damping(int b, double d){ b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetAngularDamping(id, (float)d); }
-LC_API void b2lc_body_set_gravity_scale(int b, double s)  { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetGravityScale(id, (float)s); }
-LC_API void b2lc_body_set_sleep_threshold(int b, double v){ b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_SetSleepThreshold(id, (float)v); }
+LC_API void b2lc_body_set_type(int b, int type)           { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id) && valid_body_type(type)) b2Body_SetType(id, (b2BodyType)type); }
+LC_API void b2lc_body_set_linear_damping(int b, double d) { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id) && d >= 0.0 && finite1(d)) b2Body_SetLinearDamping(id, (float)d); }
+LC_API void b2lc_body_set_angular_damping(int b, double d){ b2BodyId id = bodies_get(b); if (b2Body_IsValid(id) && d >= 0.0 && finite1(d)) b2Body_SetAngularDamping(id, (float)d); }
+LC_API void b2lc_body_set_gravity_scale(int b, double s)  { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id) && finite1(s)) b2Body_SetGravityScale(id, (float)s); }
+LC_API void b2lc_body_set_sleep_threshold(int b, double v){ b2BodyId id = bodies_get(b); if (b2Body_IsValid(id) && v >= 0.0 && finite1(v)) b2Body_SetSleepThreshold(id, (float)v); }
 LC_API void b2lc_body_enable(int b)                       { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_Enable(id); }
 LC_API void b2lc_body_disable(int b)                      { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_Disable(id); }
 
@@ -263,9 +361,9 @@ static void reset_shapedef(void) {
 
 static void fill_shape_def(b2ShapeDef *sd, double density, double friction, double restitution) {
     *sd = b2DefaultShapeDef();
-    sd->density = (float)density;
-    sd->material.friction = (float)friction;       /* moved into material in v3.1 */
-    sd->material.restitution = (float)restitution;
+    sd->density = (float)nonneg_or(density, 0.0);
+    sd->material.friction = (float)nonneg_or(friction, 0.0);       /* moved into material in v3.1 */
+    sd->material.restitution = (float)nonneg_or(restitution, 0.0);
     sd->enableContactEvents = true;                /* off by default in v3.1; on so
                                                       b2ContactsUpdate() works out of
                                                       the box for collision detection */
@@ -298,7 +396,9 @@ LC_API void b2lc_shapedef_set_material_id(int id)          { s_sd.haveMaterialId
 
 /* register a freshly created shape, stamping its handle into userData */
 static int register_shape(b2ShapeId id) {
+    if (!b2Shape_IsValid(id)) return 0;
     int h = shapes_add(id);
+    if (!h) return 0;
     b2Shape_SetUserData(id, h2ud(h));
     return h;
 }
@@ -306,39 +406,51 @@ static int register_shape(b2ShapeId id) {
 LC_API int b2lc_shape_add_box(int b, double hw, double hh,
                               double density, double friction, double restitution) {
     b2BodyId body = bodies_get(b);
-    if (!b2Body_IsValid(body)) return 0;
+    if (!b2Body_IsValid(body) || !positive(hw) || !positive(hh)) return 0;
     b2ShapeDef sd; fill_shape_def(&sd, density, friction, restitution);
     b2Polygon box = b2MakeBox((float)hw, (float)hh);
-    return register_shape(b2CreatePolygonShape(body, &sd, &box));
+    b2ShapeId id = b2CreatePolygonShape(body, &sd, &box);
+    int h = register_shape(id);
+    if (!h && b2Shape_IsValid(id)) b2DestroyShape(id, true);
+    return h;
 }
 
 LC_API int b2lc_shape_add_circle(int b, double cx, double cy, double radius,
                                  double density, double friction, double restitution) {
     b2BodyId body = bodies_get(b);
-    if (!b2Body_IsValid(body)) return 0;
+    if (!b2Body_IsValid(body) || !finite2(cx, cy) || !positive(radius)) return 0;
     b2ShapeDef sd; fill_shape_def(&sd, density, friction, restitution);
     b2Circle c; c.center = v2(cx, cy); c.radius = (float)radius;
-    return register_shape(b2CreateCircleShape(body, &sd, &c));
+    b2ShapeId id = b2CreateCircleShape(body, &sd, &c);
+    int h = register_shape(id);
+    if (!h && b2Shape_IsValid(id)) b2DestroyShape(id, true);
+    return h;
 }
 
 /* Capsule: a rounded line from (x1,y1) to (x2,y2) with the given radius. */
 LC_API int b2lc_shape_add_capsule(int b, double x1, double y1, double x2, double y2,
                                   double radius, double density, double friction, double restitution) {
     b2BodyId body = bodies_get(b);
-    if (!b2Body_IsValid(body)) return 0;
+    if (!b2Body_IsValid(body) || !finite2(x1, y1) || !finite2(x2, y2) || !positive(radius)) return 0;
     b2ShapeDef sd; fill_shape_def(&sd, density, friction, restitution);
     b2Capsule cap; cap.center1 = v2(x1, y1); cap.center2 = v2(x2, y2); cap.radius = (float)radius;
-    return register_shape(b2CreateCapsuleShape(body, &sd, &cap));
+    b2ShapeId id = b2CreateCapsuleShape(body, &sd, &cap);
+    int h = register_shape(id);
+    if (!h && b2Shape_IsValid(id)) b2DestroyShape(id, true);
+    return h;
 }
 
 /* Segment: a one-sided line edge, best used on static bodies for ground. */
 LC_API int b2lc_shape_add_segment(int b, double x1, double y1, double x2, double y2,
                                   double friction, double restitution) {
     b2BodyId body = bodies_get(b);
-    if (!b2Body_IsValid(body)) return 0;
+    if (!b2Body_IsValid(body) || !finite2(x1, y1) || !finite2(x2, y2) || (x1 == x2 && y1 == y2)) return 0;
     b2ShapeDef sd; fill_shape_def(&sd, 0.0, friction, restitution);  /* segments are massless */
     b2Segment seg; seg.point1 = v2(x1, y1); seg.point2 = v2(x2, y2);
-    return register_shape(b2CreateSegmentShape(body, &sd, &seg));
+    b2ShapeId id = b2CreateSegmentShape(body, &sd, &seg);
+    int h = register_shape(id);
+    if (!h && b2Shape_IsValid(id)) b2DestroyShape(id, true);
+    return h;
 }
 
 /* Convex polygon builder: accumulate local points, then create.        */
@@ -349,7 +461,7 @@ static int    s_polyCnt = 0;
 
 LC_API void b2lc_poly_begin(void) { s_polyCnt = 0; }
 LC_API void b2lc_poly_add(double x, double y) {
-    if (s_polyCnt < LC_MAX_POLY) s_poly[s_polyCnt++] = v2(x, y);
+    if (s_polyCnt < LC_MAX_POLY && finite2(x, y)) s_poly[s_polyCnt++] = v2(x, y);
 }
 LC_API int b2lc_shape_add_polygon(int b, double density, double friction, double restitution) {
     b2BodyId body = bodies_get(b);
@@ -359,7 +471,10 @@ LC_API int b2lc_shape_add_polygon(int b, double density, double friction, double
     if (hull.count < 3) return 0;
     b2Polygon poly = b2MakePolygon(&hull, 0.0f);
     b2ShapeDef sd; fill_shape_def(&sd, density, friction, restitution);
-    return register_shape(b2CreatePolygonShape(body, &sd, &poly));
+    b2ShapeId id = b2CreatePolygonShape(body, &sd, &poly);
+    int h = register_shape(id);
+    if (!h && b2Shape_IsValid(id)) b2DestroyShape(id, true);
+    return h;
 }
 
 LC_API void b2lc_shape_destroy(int s) {
@@ -369,9 +484,9 @@ LC_API void b2lc_shape_destroy(int s) {
 }
 
 /* runtime material edits + queries */
-LC_API void b2lc_shape_set_friction(int s, double f)    { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id)) b2Shape_SetFriction(id, (float)f); }
-LC_API void b2lc_shape_set_restitution(int s, double r) { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id)) b2Shape_SetRestitution(id, (float)r); }
-LC_API void b2lc_shape_set_density(int s, double d)     { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id)) b2Shape_SetDensity(id, (float)d, true); }
+LC_API void b2lc_shape_set_friction(int s, double f)    { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id) && f >= 0.0 && finite1(f)) b2Shape_SetFriction(id, (float)f); }
+LC_API void b2lc_shape_set_restitution(int s, double r) { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id) && r >= 0.0 && finite1(r)) b2Shape_SetRestitution(id, (float)r); }
+LC_API void b2lc_shape_set_density(int s, double d)     { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id) && d >= 0.0 && finite1(d)) b2Shape_SetDensity(id, (float)d, true); }
 LC_API int  b2lc_shape_body(int s)                      { b2ShapeId id = shapes_get(s); return b2Shape_IsValid(id) ? ud2h(b2Body_GetUserData(b2Shape_GetBody(id))) : 0; }
 LC_API int  b2lc_shape_test_point(int s, double x, double y) { b2ShapeId id = shapes_get(s); return (b2Shape_IsValid(id) && b2Shape_TestPoint(id, v2(x, y))) ? 1 : 0; }
 
@@ -381,12 +496,14 @@ LC_API int  b2lc_shape_test_point(int s, double x, double y) { b2ShapeId id = sh
 /* register a freshly created joint, stamping its handle into userData so the
  * generic getters (GetBodyA/B), body->joint enumeration and round-trips work. */
 static int register_joint(b2JointId id) {
+    if (!b2Joint_IsValid(id)) return 0;
     int h = joints_add(id);
+    if (!h) { b2DestroyJoint(id); return 0; }
     b2Joint_SetUserData(id, h2ud(h));
     return h;
 }
 static int joint_handle_of(b2JointId j) {
-    return b2Joint_IsValid(j) ? ud2h(b2Joint_GetUserData(j)) : 0;
+    return joint_handle_of_id(j);
 }
 
 LC_API int b2lc_joint_revolute(int w, int bA, int bB,
@@ -635,9 +752,12 @@ typedef struct { int a, b; double px, py, nx, ny, speed; } LcHit;
 static LcHit *s_hit = NULL; static int s_hitCap = 0, s_hitCnt = 0;
 
 static int *ensure_cap(int *arr, int *cap, int needPairs) {
-    if (needPairs * 2 > *cap) {
-        *cap = needPairs * 2;
-        arr = (int *)realloc(arr, (size_t)(*cap) * sizeof(int));
+    int need = needPairs * 2;
+    if (need > *cap) {
+        int *p = (int *)realloc(arr, (size_t)need * sizeof(int));
+        if (!p) return NULL;
+        arr = p;
+        *cap = need;
     }
     return arr;
 }
@@ -648,23 +768,27 @@ LC_API int b2lc_contacts_update(int w) {
     if (!b2World_IsValid(wid)) return 0;
     b2ContactEvents ev = b2World_GetContactEvents(wid);
 
-    s_begin = ensure_cap(s_begin, &s_beginCap, ev.beginCount);
+    int *begin = ensure_cap(s_begin, &s_beginCap, ev.beginCount);
+    if (ev.beginCount > 0 && !begin) return 0;
+    s_begin = begin;
     for (int i = 0; i < ev.beginCount; i++) {
         s_begin[2 * i]     = body_handle_of_shape(ev.beginEvents[i].shapeIdA);
         s_begin[2 * i + 1] = body_handle_of_shape(ev.beginEvents[i].shapeIdB);
     }
     s_beginCnt = ev.beginCount;
 
-    s_end = ensure_cap(s_end, &s_endCap, ev.endCount);
+    int *end = ensure_cap(s_end, &s_endCap, ev.endCount);
+    if (ev.endCount > 0 && !end) { s_beginCnt = 0; return 0; }
+    s_end = end;
     for (int i = 0; i < ev.endCount; i++) {
         s_end[2 * i]     = body_handle_of_shape(ev.endEvents[i].shapeIdA);
         s_end[2 * i + 1] = body_handle_of_shape(ev.endEvents[i].shapeIdB);
     }
     s_endCnt = ev.endCount;
 
-    if (ev.hitCount > s_hitCap) {
-        s_hitCap = ev.hitCount;
-        s_hit = (LcHit *)realloc(s_hit, (size_t)s_hitCap * sizeof(LcHit));
+    if (!grow_buffer((void **)&s_hit, &s_hitCap, ev.hitCount, sizeof(LcHit))) {
+        s_beginCnt = s_endCnt = 0;
+        return 0;
     }
     for (int i = 0; i < ev.hitCount; i++) {
         s_hit[i].a  = body_handle_of_shape(ev.hitEvents[i].shapeIdA);
@@ -693,7 +817,7 @@ LC_API int b2lc_contact_end_b(int i)   { return (i >= 0 && i < s_endCnt)   ? s_e
 
 /* id -> integer-handle helpers (mirror body_handle_of_shape for bodies/shapes) */
 static int body_h(b2BodyId b)   { return b2Body_IsValid(b)  ? ud2h(b2Body_GetUserData(b))  : 0; }
-static int shape_h(b2ShapeId s) { return b2Shape_IsValid(s) ? ud2h(b2Shape_GetUserData(s)) : 0; }
+static int shape_h(b2ShapeId s) { return shape_handle_of_id(s); }
 
 /* ---- contact HIT events (snapshotted by b2lc_contacts_update) ------ */
 LC_API int    b2lc_contact_hit_count(void)  { return s_hitCnt; }
@@ -716,13 +840,17 @@ LC_API int b2lc_sensors_update(int w) {
     b2WorldId wid = worlds_get(w);
     if (!b2World_IsValid(wid)) return 0;
     b2SensorEvents ev = b2World_GetSensorEvents(wid);
-    s_senB = ensure_cap(s_senB, &s_senBCap, ev.beginCount);
+    int *senB = ensure_cap(s_senB, &s_senBCap, ev.beginCount);
+    if (ev.beginCount > 0 && !senB) return 0;
+    s_senB = senB;
     for (int i = 0; i < ev.beginCount; i++) {
         s_senB[2 * i]     = shape_h(ev.beginEvents[i].sensorShapeId);
         s_senB[2 * i + 1] = shape_h(ev.beginEvents[i].visitorShapeId);
     }
     s_senBCnt = ev.beginCount;
-    s_senE = ensure_cap(s_senE, &s_senECap, ev.endCount);
+    int *senE = ensure_cap(s_senE, &s_senECap, ev.endCount);
+    if (ev.endCount > 0 && !senE) { s_senBCnt = 0; return 0; }
+    s_senE = senE;
     for (int i = 0; i < ev.endCount; i++) {
         s_senE[2 * i]     = shape_h(ev.endEvents[i].sensorShapeId);   /* may be destroyed -> 0 */
         s_senE[2 * i + 1] = shape_h(ev.endEvents[i].visitorShapeId);
@@ -746,10 +874,7 @@ LC_API int b2lc_bodies_update(int w) {
     b2WorldId wid = worlds_get(w);
     if (!b2World_IsValid(wid)) return 0;
     b2BodyEvents ev = b2World_GetBodyEvents(wid);
-    if (ev.moveCount > s_moveCap) {
-        s_moveCap = ev.moveCount;
-        s_move = (LcMove *)realloc(s_move, (size_t)s_moveCap * sizeof(LcMove));
-    }
+    if (!grow_buffer((void **)&s_move, &s_moveCap, ev.moveCount, sizeof(LcMove))) return 0;
     for (int i = 0; i < ev.moveCount; i++) {
         b2Transform t = ev.moveEvents[i].transform;
         s_move[i].body   = ud2h(ev.moveEvents[i].userData);   /* the stored handle */
@@ -832,8 +957,8 @@ LC_API double b2lc_body_world_point_velocity_y(int b, double wx, double wy) { b2
 LC_API double b2lc_body_local_point_velocity_x(int b, double lx, double ly) { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetLocalPointVelocity(id, v2(lx, ly)).x : 0.0; }
 LC_API double b2lc_body_local_point_velocity_y(int b, double lx, double ly) { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetLocalPointVelocity(id, v2(lx, ly)).y : 0.0; }
 
-LC_API void b2lc_body_apply_force_at(int b, double fx, double fy, double px, double py, int wake) { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_ApplyForce(id, v2(fx, fy), v2(px, py), wake ? true : false); }
-LC_API void b2lc_body_apply_impulse_at(int b, double ix, double iy, double px, double py, int wake) { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id)) b2Body_ApplyLinearImpulse(id, v2(ix, iy), v2(px, py), wake ? true : false); }
+LC_API void b2lc_body_apply_force_at(int b, double fx, double fy, double px, double py, int wake) { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id) && finite2(fx, fy) && finite2(px, py)) b2Body_ApplyForce(id, v2(fx, fy), v2(px, py), wake ? true : false); }
+LC_API void b2lc_body_apply_impulse_at(int b, double ix, double iy, double px, double py, int wake) { b2BodyId id = bodies_get(b); if (b2Body_IsValid(id) && finite2(ix, iy) && finite2(px, py)) b2Body_ApplyLinearImpulse(id, v2(ix, iy), v2(px, py), wake ? true : false); }
 
 LC_API double b2lc_body_rotational_inertia(int b) { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetRotationalInertia(id) : 0.0; }
 LC_API double b2lc_body_local_center_x(int b)     { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetLocalCenterOfMass(id).x : 0.0; }
@@ -882,7 +1007,7 @@ LC_API int b2lc_body_shape_count(int b) {
     b2BodyId id = bodies_get(b);
     if (!b2Body_IsValid(id)) { s_bShapeCnt = 0; return 0; }
     int n = b2Body_GetShapeCount(id);
-    if (n > s_bShapesCap) { s_bShapesCap = n; s_bShapes = (b2ShapeId *)realloc(s_bShapes, (size_t)n * sizeof(b2ShapeId)); }
+    if (!grow_buffer((void **)&s_bShapes, &s_bShapesCap, n, sizeof(b2ShapeId))) { s_bShapeCnt = 0; return 0; }
     s_bShapeCnt = (n > 0) ? b2Body_GetShapes(id, s_bShapes, n) : 0;
     return s_bShapeCnt;
 }
@@ -891,7 +1016,7 @@ LC_API int b2lc_body_joint_count(int b) {
     b2BodyId id = bodies_get(b);
     if (!b2Body_IsValid(id)) { s_bJointCnt = 0; return 0; }
     int n = b2Body_GetJointCount(id);
-    if (n > s_bJointsCap) { s_bJointsCap = n; s_bJoints = (b2JointId *)realloc(s_bJoints, (size_t)n * sizeof(b2JointId)); }
+    if (!grow_buffer((void **)&s_bJoints, &s_bJointsCap, n, sizeof(b2JointId))) { s_bJointCnt = 0; return 0; }
     s_bJointCnt = (n > 0) ? b2Body_GetJoints(id, s_bJoints, n) : 0;
     return s_bJointCnt;
 }
@@ -911,7 +1036,7 @@ LC_API void   b2lc_shape_set_material_id(int s, int m) { b2ShapeId id = shapes_g
 
 LC_API void b2lc_shape_set_filter(int s, double cat, double mask, int group) {
     b2ShapeId id = shapes_get(s);
-    if (!b2Shape_IsValid(id)) return;
+    if (!b2Shape_IsValid(id) || cat < 0.0 || mask < 0.0 || !finite2(cat, mask)) return;
     b2Filter f; f.categoryBits = (uint64_t)(uint32_t)cat; f.maskBits = (uint64_t)(uint32_t)mask; f.groupIndex = group;
     b2Shape_SetFilter(id, f);
 }
@@ -954,9 +1079,9 @@ LC_API double b2lc_shape_polygon_vy(int i)     { return (i >= 0 && i < s_polyRea
 LC_API double b2lc_shape_polygon_radius(void)  { return (double)s_polyRead.radius; }
 
 /* geometry setters */
-LC_API void b2lc_shape_set_circle(int s, double cx, double cy, double r) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id)) return; b2Circle c; c.center = v2(cx, cy); c.radius = (float)r; b2Shape_SetCircle(id, &c); }
-LC_API void b2lc_shape_set_capsule(int s, double x1, double y1, double x2, double y2, double r) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id)) return; b2Capsule c; c.center1 = v2(x1, y1); c.center2 = v2(x2, y2); c.radius = (float)r; b2Shape_SetCapsule(id, &c); }
-LC_API void b2lc_shape_set_segment(int s, double x1, double y1, double x2, double y2) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id)) return; b2Segment g; g.point1 = v2(x1, y1); g.point2 = v2(x2, y2); b2Shape_SetSegment(id, &g); }
+LC_API void b2lc_shape_set_circle(int s, double cx, double cy, double r) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || !finite2(cx, cy) || !positive(r)) return; b2Circle c; c.center = v2(cx, cy); c.radius = (float)r; b2Shape_SetCircle(id, &c); }
+LC_API void b2lc_shape_set_capsule(int s, double x1, double y1, double x2, double y2, double r) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || !finite2(x1, y1) || !finite2(x2, y2) || !positive(r)) return; b2Capsule c; c.center1 = v2(x1, y1); c.center2 = v2(x2, y2); c.radius = (float)r; b2Shape_SetCapsule(id, &c); }
+LC_API void b2lc_shape_set_segment(int s, double x1, double y1, double x2, double y2) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || !finite2(x1, y1) || !finite2(x2, y2) || (x1 == x2 && y1 == y2)) return; b2Segment g; g.point1 = v2(x1, y1); g.point2 = v2(x2, y2); b2Shape_SetSegment(id, &g); }
 LC_API void b2lc_shape_set_polygon(int s) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || s_polyCnt < 3) return; b2Hull hull = b2ComputeHull(s_poly, s_polyCnt); if (hull.count < 3) return; b2Polygon p = b2MakePolygon(&hull, 0.0f); b2Shape_SetPolygon(id, &p); }
 
 /* per-shape ray cast (stash) */
@@ -995,7 +1120,7 @@ LC_API int b2lc_shape_sensor_overlaps_update(int s) {
     b2ShapeId id = shapes_get(s);
     if (!b2Shape_IsValid(id)) return 0;
     int cap = b2Shape_GetSensorCapacity(id);
-    if (cap > s_ovCap) { s_ovCap = cap; s_ov = (b2ShapeId *)realloc(s_ov, (size_t)cap * sizeof(b2ShapeId)); }
+    if (!grow_buffer((void **)&s_ov, &s_ovCap, cap, sizeof(b2ShapeId))) return 0;
     s_ovCnt = (cap > 0) ? b2Shape_GetSensorOverlaps(id, s_ov, cap) : 0;
     return s_ovCnt;
 }
@@ -1008,8 +1133,31 @@ LC_API int b2lc_shape_sensor_overlap_at(int i)   { return (i >= 0 && i < s_ovCnt
 #define LC_MAX_CHAIN 4096
 static b2Vec2 s_chain[LC_MAX_CHAIN];
 static int    s_chainCnt = 0;
+static b2ShapeId *s_chainSeg = NULL; static int s_chainSegCap = 0, s_chainSegCnt = 0;
 LC_API void b2lc_chain_begin(void) { s_chainCnt = 0; }
 LC_API void b2lc_chain_add_point(double x, double y) { if (s_chainCnt < LC_MAX_CHAIN) s_chain[s_chainCnt++] = v2(x, y); }
+static void retire_chain_segments(b2ChainId id) {
+    if (!b2Chain_IsValid(id)) return;
+    int n = b2Chain_GetSegmentCount(id);
+    if (n <= 0) return;
+    b2ShapeId *buf = (b2ShapeId *)malloc((size_t)n * sizeof(b2ShapeId));
+    if (!buf) return;
+    int got = b2Chain_GetSegments(id, buf, n);
+    for (int i = 0; i < got; i++) retire_shape_id(buf[i]);
+    free(buf);
+}
+static void register_chain_segments(b2ChainId id) {
+    if (!b2Chain_IsValid(id)) return;
+    int n = b2Chain_GetSegmentCount(id);
+    if (n <= 0) return;
+    b2ShapeId *buf = (b2ShapeId *)malloc((size_t)n * sizeof(b2ShapeId));
+    if (!buf) return;
+    int got = b2Chain_GetSegments(id, buf, n);
+    for (int i = 0; i < got; i++) {
+        if (shape_handle_of_id(buf[i]) == 0) (void)register_shape(buf[i]);
+    }
+    free(buf);
+}
 LC_API int b2lc_chain_create(int b, int isLoop, double friction, double restitution) {
     b2BodyId body = bodies_get(b);
     if (!b2Body_IsValid(body) || s_chainCnt < 4) return 0;
@@ -1030,20 +1178,29 @@ LC_API int b2lc_chain_create(int b, int isLoop, double friction, double restitut
     }
     b2ChainId id = b2CreateChain(body, &cd);
     reset_shapedef();
-    return chains_add(id);
+    int h = chains_add(id);
+    if (!h) { if (b2Chain_IsValid(id)) b2DestroyChain(id); return 0; }
+    register_chain_segments(id);
+    return h;
 }
-LC_API void b2lc_chain_destroy(int c)   { b2ChainId id = chains_get(c); if (b2Chain_IsValid(id)) b2DestroyChain(id); chains_free_handle(c); }
+LC_API void b2lc_chain_destroy(int c) {
+    b2ChainId id = chains_get(c);
+    if (b2Chain_IsValid(id)) {
+        retire_chain_segments(id);
+        b2DestroyChain(id);
+    }
+    chains_free_handle(c);
+}
 LC_API int  b2lc_chain_is_valid(int c)  { return b2Chain_IsValid(chains_get(c)) ? 1 : 0; }
 LC_API void b2lc_chain_set_friction(int c, double f)    { b2ChainId id = chains_get(c); if (b2Chain_IsValid(id)) b2Chain_SetFriction(id, (float)f); }
 LC_API double b2lc_chain_friction(int c)                { b2ChainId id = chains_get(c); return b2Chain_IsValid(id) ? (double)b2Chain_GetFriction(id) : 0.0; }
 LC_API void b2lc_chain_set_restitution(int c, double r) { b2ChainId id = chains_get(c); if (b2Chain_IsValid(id)) b2Chain_SetRestitution(id, (float)r); }
 LC_API double b2lc_chain_restitution(int c)             { b2ChainId id = chains_get(c); return b2Chain_IsValid(id) ? (double)b2Chain_GetRestitution(id) : 0.0; }
-static b2ShapeId *s_chainSeg = NULL; static int s_chainSegCap = 0, s_chainSegCnt = 0;
 LC_API int b2lc_chain_segment_count(int c) {
     b2ChainId id = chains_get(c);
     if (!b2Chain_IsValid(id)) { s_chainSegCnt = 0; return 0; }
     int n = b2Chain_GetSegmentCount(id);
-    if (n > s_chainSegCap) { s_chainSegCap = n; s_chainSeg = (b2ShapeId *)realloc(s_chainSeg, (size_t)n * sizeof(b2ShapeId)); }
+    if (!grow_buffer((void **)&s_chainSeg, &s_chainSegCap, n, sizeof(b2ShapeId))) { s_chainSegCnt = 0; return 0; }
     s_chainSegCnt = (n > 0) ? b2Chain_GetSegments(id, s_chainSeg, n) : 0;
     return s_chainSegCnt;
 }
@@ -1197,8 +1354,8 @@ static LcQRow *s_q = NULL; static int s_qCap = 0, s_qCnt = 0;
 static void q_reset(void) { s_qCnt = 0; }
 static void q_push(b2ShapeId sh, double px, double py, double nx, double ny, double f) {
     if (s_qCnt >= s_qCap) {
-        s_qCap = s_qCap ? s_qCap * 2 : 64;
-        s_q = (LcQRow *)realloc(s_q, (size_t)s_qCap * sizeof(LcQRow));
+        int nc = s_qCap ? s_qCap * 2 : 64;
+        if (!grow_buffer((void **)&s_q, &s_qCap, nc, sizeof(LcQRow))) return;
     }
     s_q[s_qCnt].shape = shape_h(sh);
     s_q[s_qCnt].body  = body_handle_of_shape(sh);
