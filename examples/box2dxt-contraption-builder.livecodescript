@@ -1751,8 +1751,8 @@ constant kEditTools    = "drag,delete,duplicate,multiply,link"
 constant kEditLabels   = "Drag,Delete,Duplicate,Multiply,Link"
 constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
-constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor,laser,thruster"
-constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor,Laser,Thruster"
+constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor,laser,thruster,goal"
+constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor,Laser,Thruster,Goal Zone"
 constant kTerrainTools = "platform,ramp,hill,draw"
 constant kTerrainLabels = "Platform,Ramp,Hill,Draw"
 constant kDrawStep = 14       -- min pixels between sampled points while drawing freehand terrain
@@ -1775,7 +1775,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "9"
+constant kUIVersion = "10"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1803,6 +1803,7 @@ constant kSensorW = 96, kSensorH = 72
 constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
 constant kLaserReach = 1600, kLaserStep = 45   -- laser ray length (px) and the angle step its direction cycles by
+constant kGoalW = 120, kGoalH = 120   -- a goal zone's base size (scaled by uGoalScale)
 constant kLaserBurn = 36   -- frames of sustained laser hit before a cutting beam destroys a part
 constant kContainMargin = 90   -- how far past the arena a body may stray before the containment net pulls it back
 constant kStressBatch = 50
@@ -2964,6 +2965,9 @@ function placePart pX, pY
       case "thruster"
          put placeThruster(pX, pY) into tCtrl
          break
+      case "goal"
+         put placeGoal(pX, pY) into tCtrl
+         break
       default
          return empty
    end switch
@@ -3384,7 +3388,7 @@ end kindIsDynamic
 
 -- Fans and magnets are GUI-only influence zones with no physics body.
 function kindHasBody pKind
-   return pKind is not "fan" and pKind is not "magnet" and pKind is not "laser"
+   return pKind is not "fan" and pKind is not "magnet" and pKind is not "laser" and pKind is not "goal"
 end kindHasBody
 
 -- Friendly singular name for status messages.
@@ -3401,7 +3405,7 @@ end friendlyKind
 
 -- Add a freshly tagged part to its per-kind list (for fast per-frame iteration).
 on registerKind pCtrl, pKind
-   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor,laser,thruster" then
+   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor,laser,thruster,goal" then
       put pCtrl & cr after gKindList[pKind]
    end if
    if pKind is "plate" then
@@ -3414,7 +3418,7 @@ end registerKind
 -- Drop a deleted part from any per-kind list it belonged to.
 on unregisterKind pCtrl
    local tKind, tP, tNew
-   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor,laser,thruster"
+   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor,laser,thruster,goal"
       if pCtrl is not in gKindList[tKind] then next repeat
       put empty into tNew
       repeat for each line tP in gKindList[tKind]
@@ -4292,6 +4296,9 @@ function partSpecial pCtrl
          put addKV(tS, "tpw=" & numOr(the uThrustPower of pCtrl, 0)) into tS
          put addKV(tS, "tsp=" & numOr(the uThrustSpin of pCtrl, 0)) into tS
          break
+      case "goal"
+         put addKV(tS, "gsc=" & numOr(the uGoalScale of pCtrl, 1)) into tS
+         break
    end switch
    return tS
 end partSpecial
@@ -4716,6 +4723,37 @@ function placeMagnet pX, pY
    return tRef
 end placeMagnet
 
+-- A goal zone: a no-body target area. In Play, getting a movable part inside it
+-- (all goals at once) wins the puzzle. Scaled by uGoalScale, like the fan.
+function placeGoal pX, pY
+   local tName, tRef
+   put "cb_goal_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "rectangle"
+   set the filled of tRef to true
+   set the backgroundColor of tRef to "92,210,120"
+   set the foregroundColor of tRef to "40,150,80"
+   set the lineSize of tRef to 3
+   set the blendLevel of tRef to 58                       -- translucent: a target zone, not a solid
+   set the uGoalScale of tRef to 1
+   set the width of tRef to kGoalW
+   set the height of tRef to kGoalH
+   set the loc of tRef to round(pX) & "," & round(pY)
+   tagPart tRef, "goal", "92,210,120", empty
+   return tRef
+end placeGoal
+
+-- Resize a goal zone around its centre from its scale.
+on drawGoalShape pGoal
+   local tLoc, tScale
+   put the loc of pGoal into tLoc
+   put numOr(the uGoalScale of pGoal, 1) into tScale
+   set the width of pGoal to round(kGoalW * tScale)
+   set the height of pGoal to round(kGoalH * tScale)
+   set the loc of pGoal to tLoc
+end drawGoalShape
+
 -- Rebuild the fan's arrow polygon around its current centre for its direction.
 on drawFanShape pFan
    local tCx, tCy, tScale, tHw, tHh
@@ -5014,6 +5052,11 @@ on applyPartSpecial pCtrl, pSpecial
          put specialValue(pSpecial, "tsp") into tV
          if tV is not empty then set the uThrustSpin of pCtrl to tV
          set the uThrustLit of pCtrl to false
+         break
+      case "goal"
+         put specialValue(pSpecial, "gsc") into tV
+         if tV is not empty then set the uGoalScale of pCtrl to tV
+         drawGoalShape pCtrl
          break
    end switch
    if tKind is "draw" then                       -- restore a freehand-drawn ground mass + its chain
@@ -5647,6 +5690,8 @@ function partProps pKind
          return "magpol,magforce,magrange,color"
       case "laser"
          return "laserdir,lasercut"
+      case "goal"
+         return "goalsize"
       case "thruster"
          return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,thrustdir,thrustpower,thrustspin"
    end switch
@@ -5752,6 +5797,8 @@ function propLabel pCtrl, pKey
       case "lasercut"
          if the uLaserCut of pCtrl is true then return "Mode: cutting (burns through parts)"
          return "Mode: sightline (harmless)"
+      case "goalsize"
+         return "Zone size: " & sizeLabel(numOr(the uGoalScale of pCtrl, 1))
       case "thrustdir"
          return "Thrust angle: " & numOr(the uThrustDir of pCtrl, 270) & "°"
       case "thrustpower"
@@ -6042,6 +6089,14 @@ on adjustPartProp pCtrl, pKey, pDir
          break
       case "lasercut"
          set the uLaserCut of pCtrl to not (the uLaserCut of pCtrl is true)
+         break
+      case "goalsize"
+         local tGs
+         put numOr(the uGoalScale of pCtrl, 1) + pDir * 0.25 into tGs
+         if tGs < 0.5 then put 0.5 into tGs
+         if tGs > 3 then put 3 into tGs
+         set the uGoalScale of pCtrl to tGs
+         drawGoalShape pCtrl
          break
       case "thrustdir"
          set the uThrustDir of pCtrl to ((numOr(the uThrustDir of pCtrl, 270) + pDir * kLaserStep + 360) mod 360)
@@ -7388,7 +7443,7 @@ function niceName pId
          & "poly=Polygon" & cr & "image=Picture" & cr & "anchor=Anchor" & cr & "delete=Delete" & cr \
          & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
-         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr & "laser=Laser" & cr & "thruster=Thruster" & cr \
+         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr & "laser=Laser" & cr & "thruster=Thruster" & cr & "goal=Goal Zone" & cr \
          & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "draw=Draw Terrain" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
          & "weld=Weld Joint" & cr & "servo=Servo Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
@@ -7410,7 +7465,7 @@ function toolGlyph pId
    local tGlyphs
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
          & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "link=↦" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
-         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr & "thruster=▲" & cr \
+         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr & "thruster=▲" & cr & "goal=⚑" & cr \
          & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
          & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
@@ -7466,6 +7521,8 @@ function toolHelp pId
          return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray from its emitter and draws the beam to the first thing it strikes (a wall counts). Set the beam angle in the inspector; while running, select it to read the live hit distance. Shows off the Kit's ray-casting."
       case "thruster"
          return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: on Run it pops off with an ignition kick, then applies a steady force along its own facing — plus optional spin. Set thrust angle, power and spin in the inspector; lock its rotation for a straight climb or let it tumble. Shows off b2kForce / b2kTorque / b2kPush."
+      case "goal"
+         return "A target zone — reach it to win." & cr & "A goal zone is the finish line for a puzzle. Press Play: get a movable part inside every goal zone at once and you have solved it. Resize the zone in the inspector. No body — parts pass through it."
       case "platform"
          return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery — a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf. Set its size, angle and grip in the inspector."
       case "ramp"
