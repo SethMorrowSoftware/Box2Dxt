@@ -4370,7 +4370,7 @@ end buildSampleSwing
 -- =====================================================================
 -- Serialise the whole scene to CB2 text (used by Save and by Reset's snapshot).
 function serializeText
-   local tOut, tP, tI
+   local tOut, tP, tI, tWsrc, tWtgt
    set the itemDelimiter to comma   -- partLine parses "x,y" locs by item; never assume the caller left it at comma
    put "CB2" & cr into tOut
    put "world" & tab & gGravityMode & tab & gWorldFeel & tab & (gCCD is true) & tab & \
@@ -4389,8 +4389,10 @@ function serializeText
    set the itemDelimiter to tab
    repeat for each line tP in gWires
       if tP is empty then next repeat
-      if (item 1 of tP) is among the lines of gParts and (item 2 of tP) is among the lines of gParts then
-         put "wire" & tab & (the uPartId of (item 1 of tP)) & tab & (the uPartId of (item 2 of tP)) & cr after tOut
+      put item 1 of tP into tWsrc          -- a long id in a variable resolves as an object;
+      put item 2 of tP into tWtgt          -- "the uPartId of (item 1 of tP)" trips OXT's object parser
+      if tWsrc is among the lines of gParts and tWtgt is among the lines of gParts then
+         put "wire" & tab & (the uPartId of tWsrc) & tab & (the uPartId of tWtgt) & cr after tOut
       end if
    end repeat
    return tOut
