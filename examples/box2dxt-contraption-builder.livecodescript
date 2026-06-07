@@ -1728,6 +1728,7 @@ local gWires                           -- CR-list of signal wires, each "srcCtrl
 local gWireSrc                         -- the pending wire source while the Link tool waits for a target
 local gPlaying                         -- true while in Play mode (Run + win-watching + a clean view)
 local gGameWon                         -- latches true the moment every goal zone is reached this run
+local gPlayStartMs                     -- the milliseconds Play started, for the solve timer
 local gFlash
 local gFrames, gFpsTime, gFps, gHudTime   -- gHudTime throttles the live HUD/telemetry refresh
 -- new-object + field-force state (balloons rise on their own; fans/magnets are
@@ -2782,6 +2783,9 @@ on handleAction pId
       case "play"
          if gPlaying then stopPlay
          else startPlay
+         break
+      case "winagain"
+         playAgain
          break
       case "winkeep"
          hideWin
@@ -4610,6 +4614,9 @@ on tickHud
    if gHudTime is empty or (the milliseconds - gHudTime) >= 100 then
       put the milliseconds into gHudTime
       updateHud
+      if gPlaying and not gGameWon and there is a field "ui_playbannerlbl" then
+         put "▶ PLAY — " & playElapsed() & "s    get a movable part into the goal" into field "ui_playbannerlbl"
+      end if
    end if
 end tickHud
 
@@ -5360,7 +5367,8 @@ end triggerSignal
 -- =====================================================================
 function isEmitter pCtrl
    if pCtrl is empty then return false
-   return (the uKind of pCtrl is "plate") or (the uKind of pCtrl is "sensor")
+   -- triggers start signal wires; a goal zone starts a "this object must reach me" wire
+   return (the uKind of pCtrl is "plate") or (the uKind of pCtrl is "sensor") or (the uKind of pCtrl is "goal")
 end isEmitter
 
 function isReceiver pCtrl
@@ -5385,21 +5393,23 @@ on handleLinkClick pHit
    end if
    if gWireSrc is empty then
       if not isEmitter(pHit) then
-         put "Wires start at a pressure plate or a sensor. Click one." into gStatus
+         put "Wires start at a trigger (plate/sensor) or a goal zone. Click one." into gStatus
          updateHud
          exit handleLinkClick
       end if
       put pHit into gWireSrc
-      put "Wiring from " & nameOf(pHit) & " — now click a bomb to set off." into gStatus
+      if the uKind of pHit is "goal" then put "Goal " & nameOf(pHit) & " — now click the object that must reach it." into gStatus
+      else put "Wiring from " & nameOf(pHit) & " — now click a part to set off." into gStatus
    else
       if pHit is gWireSrc then
          put empty into gWireSrc
          put "Wire cancelled." into gStatus
       else if not isReceiver(pHit) then
-         put "Wire to a bomb (the thing the trigger should set off)." into gStatus
+         put "Target a movable part." into gStatus
       else
          addWire gWireSrc, pHit
-         put "Wired " & nameOf(gWireSrc) & " to " & nameOf(pHit) & "." into gStatus
+         if the uKind of gWireSrc is "goal" then put "Goal " & nameOf(gWireSrc) & " now needs " & nameOf(pHit) & "." into gStatus
+         else put "Wired " & nameOf(gWireSrc) & " to " & nameOf(pHit) & "." into gStatus
          put empty into gWireSrc
       end if
    end if
@@ -5500,8 +5510,7 @@ end drawWires
 on checkGoals
    if gGameWon then exit checkGoals
    if gKindList["goal"] is empty then exit checkGoals
-   local tGoal, tTotal, tReached, tP, tGl, tGt, tGr, tGb, tCx, tCy, tpx, tpy, tIn
-   set the itemDelimiter to comma
+   local tGoal, tTotal, tReached, tP, tGl, tGt, tGr, tGb, tCx, tCy, tpx, tpy, tIn, tReq
    put 0 into tTotal
    put 0 into tReached
    repeat for each line tGoal in gKindList["goal"]
@@ -5511,6 +5520,10 @@ on checkGoals
          add 1 to tReached
          next repeat
       end if
+      -- the parts that satisfy this goal: its wired payload(s), or any movable part
+      put goalTargets(tGoal) into tReq
+      if tReq is empty then put dynamicParts() into tReq
+      set the itemDelimiter to comma
       put item 1 of the loc of tGoal into tCx
       put item 2 of the loc of tGoal into tCy
       put tCx - (the width of tGoal) / 2 into tGl
@@ -5518,8 +5531,8 @@ on checkGoals
       put tCy - (the height of tGoal) / 2 into tGt
       put tCy + (the height of tGoal) / 2 into tGb
       put false into tIn
-      repeat for each line tP in dynamicParts()
-         if tP is empty then next repeat
+      repeat for each line tP in tReq
+         if tP is empty or tP is not among the lines of gParts then next repeat
          put item 1 of the loc of tP into tpx
          put item 2 of the loc of tP into tpy
          if tpx >= tGl and tpx <= tGr and tpy >= tGt and tpy <= tGb then
@@ -5536,10 +5549,26 @@ on checkGoals
    if tTotal > 0 and tReached >= tTotal then winGame
 end checkGoals
 
+-- The payload parts a goal requires (wired from the goal with the Link tool);
+-- empty means "any movable part".
+function goalTargets pGoal
+   local tEdge, tList
+   set the itemDelimiter to tab
+   put empty into tList
+   repeat for each line tEdge in gWires
+      if item 1 of tEdge is pGoal then put (item 2 of tEdge) & cr after tList
+   end repeat
+   return tList
+end goalTargets
+
 on winGame
    put true into gGameWon
-   if gPlaying then showWin
-   else put "Goal reached! (Press Play to run it as a puzzle.)" into gStatus
+   if gPlaying then
+      if there is a field "ui_winsub" then put "Solved in " & playElapsed() & " seconds." into field "ui_winsub"
+      showWin
+   else
+      put "Goal reached! (Press Play to run it as a puzzle.)" into gStatus
+   end if
    updateHud
 end winGame
 
@@ -5563,12 +5592,26 @@ on startPlay
    end if
    if gMode is not "run" then toggleMode
    put true into gPlaying
+   put the milliseconds into gPlayStartMs
    resetGoals
    setPlayChrome true
    if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Stop"
    put "PLAY — get a movable part into the goal zone." into gStatus
    updateHud
 end startPlay
+
+-- Replay the puzzle from its starting layout.
+on playAgain
+   hideWin
+   resetMachine        -- restore the pre-Play build (also clears the Play chrome)
+   startPlay           -- and run it fresh
+end playAgain
+
+-- Elapsed Play time in seconds, one decimal.
+function playElapsed
+   if gPlayStartMs is empty then return "0.0"
+   return format("%.1f", (the milliseconds - gPlayStartMs) / 1000)
+end playElapsed
 
 -- Leave Play mode: stop the sim, restore the editor.
 on stopPlay
@@ -5607,7 +5650,7 @@ on buildPlayOverlay
    local tWide, tHigh, tW, tH, tL, tT
    put the width of this card into tWide
    put the height of this card into tHigh
-   put 360 into tW
+   put 420 into tW
    put 184 into tH
    put (tWide - tW) div 2 into tL
    put (tHigh - tH) div 2 into tT
@@ -5616,15 +5659,17 @@ on buildPlayOverlay
    set the uWinMenu of graphic "ui_winscrim" to true
    makeBar "ui_winbg", tL, tT, tL + tW, tT + tH, "40,120,72"
    set the uWinMenu of graphic "ui_winbg" to true
-   makeLabel "ui_wintitle", tL, tT + 30, tL + tW, tT + 70, "✓  Solved!", 26, "236,255,240", true
+   makeLabel "ui_wintitle", tL, tT + 28, tL + tW, tT + 68, "✓  Solved!", 26, "236,255,240", true
    set the textAlign of field "ui_wintitle" to center
    set the uWinMenu of field "ui_wintitle" to true
-   makeLabel "ui_winsub", tL, tT + 76, tL + tW, tT + 100, "You got a part into every goal zone.", 12, "210,240,220", false
+   makeLabel "ui_winsub", tL, tT + 74, tL + tW, tT + 98, "You got a part into every goal zone.", 12, "210,240,220", false
    set the textAlign of field "ui_winsub" to center
    set the uWinMenu of field "ui_winsub" to true
-   makeAction "winkeep", "Keep Playing", tL + 36, tT + tH - 48, 140, 30
+   makeAction "winagain", "Play Again", tL + 18, tT + tH - 48, 124, 30
+   set the uWinMenu of button "ui_act_winagain" to true
+   makeAction "winkeep", "Keep Playing", tL + 148, tT + tH - 48, 124, 30
    set the uWinMenu of button "ui_act_winkeep" to true
-   makeAction "winedit", "Edit", tL + tW - 126, tT + tH - 48, 90, 30
+   makeAction "winedit", "Edit", tL + 278, tT + tH - 48, 124, 30
    set the uWinMenu of button "ui_act_winedit" to true
    setWinVisible false
 end buildPlayOverlay
