@@ -4607,8 +4607,11 @@ on rebuildFromText pData
          put item 8 of tLine into tJSpecial
          set the itemDelimiter to comma
          put tMap[tIdA] into tA
-         if tIdB is 0 then put empty into tB
-         else put tMap[tIdB] into tB
+         if tIdB is 0 then
+            put empty into tB
+         else
+            put tMap[tIdB] into tB
+         end if
          if tA is not empty and (tB is not empty or tKind is "hinge" or tKind is "pin" or tKind is "deckpin") then
             if connectJoint(tKind, tA, tB, tPx, tPy, tMotor) then applyJointSpecial gJN, tJSpecial
          end if
@@ -5104,8 +5107,11 @@ on updateThrusters
       end if
       put numOr(the uThrustPower of tT, 0) into tPow
       -- world-fixed thrust by default (predictable); "body" aim steers with the rocket's nose
-      if the uThrustAim of tT is "body" then put (numOr(the uThrustDir of tT, 270) + b2kAngle(tT)) * kPI / 180 into tRad
-      else put numOr(the uThrustDir of tT, 270) * kPI / 180 into tRad
+      if the uThrustAim of tT is "body" then
+         put (numOr(the uThrustDir of tT, 270) + b2kAngle(tT)) * kPI / 180 into tRad
+      else
+         put numOr(the uThrustDir of tT, 270) * kPI / 180 into tRad
+      end if
       if the uThrustLit of tT is not true then    -- one-shot ignition kick
          b2kPush tT, 140 * cos(tRad), 140 * sin(tRad)
          set the uThrustLit of tT to true
@@ -5161,10 +5167,16 @@ on containParts
       put item 2 of tLoc into tY
       put tX into tNX
       put tY into tNY
-      if tX < gArenaL - kContainMargin then put gArenaL + 12 into tNX
-      else if tX > gArenaR + kContainMargin then put gArenaR - 12 into tNX
-      if tY < gArenaT - kContainMargin then put gArenaT + 12 into tNY
-      else if tY > gArenaB + kContainMargin then put gArenaB - 12 into tNY
+      if tX < gArenaL - kContainMargin then
+         put gArenaL + 12 into tNX
+      else if tX > gArenaR + kContainMargin then
+         put gArenaR - 12 into tNX
+      end if
+      if tY < gArenaT - kContainMargin then
+         put gArenaT + 12 into tNY
+      else if tY > gArenaB + kContainMargin then
+         put gArenaB - 12 into tNY
+      end if
       if tNX is not tX or tNY is not tY then
          b2kMoveTo tP, tNX, tNY, round(b2kAngle(tP))
          b2kSetVelocity tP, 0, 0
@@ -6403,8 +6415,11 @@ end showPropRow
 -- A +/- click on an inspector property row.
 on adjustProp pId
    local tDir
-   if char 6 to 8 of pId is "inc" then put 1 into tDir
-   else put -1 into tDir
+   if char 6 to 8 of pId is "inc" then
+      put 1 into tDir
+   else
+      put -1 into tDir
+   end if
    if gSelJoint is not empty then
       adjustJointProp gSelJoint, (the uPropKey of the target), tDir
       showJointInspector gSelJoint
@@ -7338,8 +7353,11 @@ end jointProps
 -- The human-readable "Name: value" shown on a joint property row.
 function jointPropLabel pMk, pKind, pKey
    local tUnit
-   if pKind is "slider" then put " px/s" into tUnit
-   else put "°/s" into tUnit
+   if pKind is "slider" then
+      put " px/s" into tUnit
+   else
+      put "°/s" into tUnit
+   end if
    switch pKey
       case "jmotoron"
          return "Motor: " & onOff(the uMotorOn of pMk is true)
