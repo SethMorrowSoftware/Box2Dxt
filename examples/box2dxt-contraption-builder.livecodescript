@@ -1723,6 +1723,9 @@ local gJPx, gJPy, gJMotor, gJVis, gJEnd
 local gArenaL, gArenaR, gArenaT, gArenaB
 local gStatus
 local gNextPid
+local gNameCount                       -- per-kind counter for auto-names (Bomb 1, Plate 2, ...)
+local gWires                           -- CR-list of signal wires, each "srcCtrl<tab>tgtCtrl" (long ids)
+local gWireSrc                         -- the pending wire source while the Link tool waits for a target
 local gFlash
 local gFrames, gFpsTime, gFps, gHudTime   -- gHudTime throttles the live HUD/telemetry refresh
 -- new-object + field-force state (balloons rise on their own; fans/magnets are
@@ -1772,7 +1775,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "7"
+constant kUIVersion = "8"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -2236,7 +2239,8 @@ on makeInspector
    put tWide - kInspectorW into tL
    put kTopBarH + kAccentH into tTop
    makeBar "ui_inspbg", tL, tTop, tWide, tHigh - kStatusH, kColPaletteBg
-   makeLabel "ui_insp_title", tL + 12, tTop + 10, tWide - 12, tTop + 34, "Inspector", 14, "236,238,245", true
+   makeLabel "ui_insp_title", tL + 12, tTop + 10, tWide - 86, tTop + 34, "Inspector", 14, "236,238,245", true
+   makeAction "rename", "Rename", tWide - 78, tTop + 8, 66, 22
    makeField "ui_insp_body", tL + 12, tTop + 40, tWide - 12, tTop + 118, 11, "190,194,206"
    -- settings tabs: group a part's many settings so each pane stays short
    makeAction "tab_shape", "Shape", tL + 12, tTop + 124, 50, 24
@@ -2763,6 +2767,9 @@ on handleAction pId
          break
       case "filterclose"
          hideFilterPanel
+         break
+      case "rename"
+         renamePart gSelPart
          break
       case "worldadv"
          openWorldPanel
@@ -3332,6 +3339,8 @@ end placeVehicle
 on tagPart pCtrl, pKind, pColor, pFile
    if pCtrl is empty then exit tagPart
    set the uPartId of pCtrl to gNextPid
+   add 1 to gNameCount[pKind]
+   set the uName of pCtrl to niceName(pKind) && gNameCount[pKind]   -- auto-name; user-renamable in the inspector
    set the uKind of pCtrl to pKind
    set the uColor of pCtrl to pColor
    set the uFile of pCtrl to pFile
@@ -4201,7 +4210,7 @@ function partLine pCtrl
          (item 1 of tLoc) & tab & (item 2 of tLoc) & tab & \
          numOr(the uW of pCtrl, the width of pCtrl) & tab & numOr(the uH of pCtrl, the height of pCtrl) & tab & \
          (the uBounce of pCtrl) & tab & (the uColor of pCtrl) & tab & (the uFile of pCtrl) & tab & \
-         partSpecial(pCtrl)
+         partSpecial(pCtrl) & tab & (the uName of pCtrl)
 end partLine
 
 -- Pack a part's per-kind extras as "key=value;key=value" (empty for plain shapes).
@@ -4336,7 +4345,7 @@ end loadContraption
 -- Load (from a file) and Reset (from the pre-run snapshot).
 on rebuildFromText pData
    local tLine, tRec, tMap, tNew
-   local tId, tKind, tX, tY, tW, tH, tBounce, tColor, tFileRef, tSpecial
+   local tId, tKind, tX, tY, tW, tH, tBounce, tColor, tFileRef, tSpecial, tNm
    local tIdA, tIdB, tPx, tPy, tMotor, tA, tB, tJSpecial
    clearAll
    put "normal" into gGravityMode
@@ -4358,6 +4367,7 @@ on rebuildFromText pData
          put item 9 of tLine into tColor
          put item 10 of tLine into tFileRef
          put item 11 of tLine into tSpecial
+         put item 12 of tLine into tNm
          set the itemDelimiter to comma
          put rebuildPart(tKind, tX, tY, tW, tH, tColor, tFileRef) into tNew
          if tNew is not empty then
@@ -4367,6 +4377,7 @@ on rebuildFromText pData
                if tBounce > 0 then b2kSetBounce tNew, tBounce
             end if
             applyPartSpecial tNew, tSpecial
+            if tNm is not empty then set the uName of tNew to tNm   -- restore a renamed part's name
          end if
       else if tRec is "joint" then
          put item 2 of tLine into tKind
@@ -5264,7 +5275,11 @@ on resetSceneState
    put empty into gRingX
    put empty into gRingY
    put empty into gRingF
+   put empty into gNameCount
+   put empty into gWires
+   put empty into gWireSrc
    deleteByPrefix "cb_ring_"
+   deleteByPrefix "cb_wire_"
 end resetSceneState
 
 on deleteByPrefix pPrefix
@@ -5327,12 +5342,34 @@ on setInspector pTitle, pBody
    if there is a field "ui_insp_body" then put pBody into field "ui_insp_body"
 end setInspector
 
+-- Rename the selected part. Names label wires and (later) puzzle goals.
+on renamePart pCtrl
+   if pCtrl is empty or pCtrl is not among the lines of gParts then
+      put "Select a part first, then press Rename." into gStatus
+      updateHud
+      exit renamePart
+   end if
+   ask "Name this part:" with (the uName of pCtrl)
+   if it is empty or the result is "Cancel" then exit renamePart
+   local tNm
+   put it into tNm
+   replace tab with space in tNm          -- names are tab-delimited in saves
+   replace return with space in tNm
+   set the uName of pCtrl to tNm
+   showPartInspector pCtrl                 -- refresh the title
+   put "Renamed to " & quote & tNm & quote & "." into gStatus
+   updateHud
+end renamePart
+
 -- Show a selected part's name, what it does, and the values you can change.
 on showPartInspector pCtrl
    if pCtrl is empty then exit showPartInspector
    local tKind, tKey, tRow, tAvail
    put the uKind of pCtrl into tKind
-   setInspector ("Selected: " & niceName(tKind)), (line 2 of toolHelp(tKind))
+   local tNm
+   put the uName of pCtrl into tNm
+   if tNm is empty then put niceName(tKind) into tNm
+   setInspector ("Selected: " & tNm), (line 2 of toolHelp(tKind))
    clearPropRows
    put partTabs(tKind) into tAvail
    if tAvail is empty then
