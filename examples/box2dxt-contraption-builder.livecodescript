@@ -2897,6 +2897,7 @@ on toggleMode
       put "build" into gMode
       put empty into gFps
       b2kStop                       -- freeze the loop; parts hold their place
+      deleteByPrefix "cb_flame_"    -- thruster exhaust is a Run-only effect
       if gPlaying then              -- any path back to Build also leaves Play cleanly
          put false into gPlaying
          hideWin
@@ -3515,7 +3516,15 @@ function importImage pX, pY
    set the loc of tRef to round(pX) & "," & round(pY)
    b2kAddBox tRef
    tagPart tRef, "image", empty, tFile
-   put "Image placed — it tumbles and rotates when you press Run." into gStatus
+   -- Respect the art's shape rather than its bounding rect: square-ish images
+   -- collide as a circle, clearly oblong ones as a capsule. (Switchable in the
+   -- inspector under 'Collision shape'.)
+   local tAR
+   put (the width of tRef) / (the height of tRef) into tAR
+   if tAR > 0.75 and tAR < 1.34 then set the uShape of tRef to "ball"
+   else set the uShape of tRef to "capsule"
+   b2kReshape tRef, (the uShape of tRef)
+   put "Image placed — collides as its shape (change it under Collision shape). It tumbles when you press Run." into gStatus
    updateHud
    return tRef
 end importImage
@@ -4324,6 +4333,7 @@ function partSpecial pCtrl
          put addKV(tS, "tdr=" & numOr(the uThrustDir of pCtrl, 270)) into tS
          put addKV(tS, "tpw=" & numOr(the uThrustPower of pCtrl, 0)) into tS
          put addKV(tS, "tsp=" & numOr(the uThrustSpin of pCtrl, 0)) into tS
+         if the uThrustAim of pCtrl is "body" then put addKV(tS, "tam=body") into tS
          break
       case "goal"
          put addKV(tS, "gsc=" & numOr(the uGoalScale of pCtrl, 1)) into tS
@@ -4899,7 +4909,10 @@ function placeThruster pX, pY
    set the uThrustPower of tRef to 700
    set the uThrustSpin of tRef to 0
    set the uThrustLit of tRef to false
+   set the uThrustAim of tRef to "world"     -- thrust a FIXED direction by default (predictable)
    tagPart tRef, "thruster", "74,84,104", empty
+   set the uFixedRot of tRef to true         -- and fly straight rather than tumble
+   b2kSetFixedRotation tRef, true
    return tRef
 end placeThruster
 
@@ -4918,18 +4931,55 @@ on updateThrusters
    local tT, tRad, tPow
    repeat for each line tT in gKindList["thruster"]
       if tT is empty then next repeat
-      if the uThrustArmed of tT is "false" then next repeat   -- a wired trigger can switch it off
+      if (the uThrustArmed of tT is "false") or (numOr(the uThrustPower of tT, 0) <= 0) then
+         hideThrusterFlame tT          -- off: no exhaust
+         next repeat
+      end if
       put numOr(the uThrustPower of tT, 0) into tPow
-      if tPow <= 0 then next repeat
-      put (numOr(the uThrustDir of tT, 270) + b2kAngle(tT)) * kPI / 180 into tRad
+      -- world-fixed thrust by default (predictable); "body" aim steers with the rocket's nose
+      if the uThrustAim of tT is "body" then put (numOr(the uThrustDir of tT, 270) + b2kAngle(tT)) * kPI / 180 into tRad
+      else put numOr(the uThrustDir of tT, 270) * kPI / 180 into tRad
       if the uThrustLit of tT is not true then    -- one-shot ignition kick
          b2kPush tT, 140 * cos(tRad), 140 * sin(tRad)
          set the uThrustLit of tT to true
       end if
       b2kForce tT, tPow * cos(tRad), tPow * sin(tRad)
       if numOr(the uThrustSpin of tT, 0) is not 0 then b2kTorque tT, (the uThrustSpin of tT)
+      drawThrusterFlame tT, tRad, tPow
    end repeat
 end updateThrusters
+
+-- A translucent exhaust flame at the thruster's tail (opposite the thrust),
+-- sized by power, so you can see which way it pushes and how hard.
+on drawThrusterFlame pT, pRad, pPow
+   local tName, tCx, tCy, tLen, tOff, tEx, tEy
+   put "cb_flame_" & (the uPartId of pT) into tName
+   if there is no graphic tName then
+      create graphic tName
+      set the style of graphic tName to "oval"
+      set the filled of graphic tName to true
+      set the lineSize of graphic tName to 0
+      set the backgroundColor of graphic tName to "255,150,50"
+      set the blendLevel of graphic tName to 28
+   end if
+   set the itemDelimiter to comma
+   put item 1 of the loc of pT into tCx
+   put item 2 of the loc of pT into tCy
+   put min(40, 14 + pPow / 50) into tLen          -- flame grows with thrust power
+   put (the height of pT) / 2 + tLen / 2 into tOff
+   put tCx - tOff * cos(pRad) into tEx            -- exhaust is opposite the thrust direction
+   put tCy - tOff * sin(pRad) into tEy
+   set the width of graphic tName to round(tLen)
+   set the height of graphic tName to round(tLen)
+   set the loc of graphic tName to round(tEx) & "," & round(tEy)
+   set the visible of graphic tName to true
+end drawThrusterFlame
+
+on hideThrusterFlame pT
+   local tName
+   put "cb_flame_" & (the uPartId of pT) into tName
+   if there is a graphic tName then set the visible of graphic tName to false
+end hideThrusterFlame
 
 -- Safety net: a body flung, blasted or thrust clean out of the arena (past a
 -- generous margin) is pulled back to the edge with its speed killed, so nothing
@@ -5083,6 +5133,7 @@ on applyPartSpecial pCtrl, pSpecial
          if tV is not empty then set the uThrustPower of pCtrl to tV
          put specialValue(pSpecial, "tsp") into tV
          if tV is not empty then set the uThrustSpin of pCtrl to tV
+         if specialValue(pSpecial, "tam") is "body" then set the uThrustAim of pCtrl to "body"
          set the uThrustLit of pCtrl to false
          break
       case "goal"
@@ -5921,7 +5972,7 @@ function partProps pKind
       case "goal"
          return "goalsize"
       case "thruster"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,thrustdir,thrustpower,thrustspin"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,thrustdir,thrustpower,thrustspin,thrustaim"
    end switch
    return empty
 end partProps
@@ -6033,6 +6084,9 @@ function propLabel pCtrl, pKey
          return "Thrust power: " & numOr(the uThrustPower of pCtrl, 0)
       case "thrustspin"
          return "Thrust spin: " & numOr(the uThrustSpin of pCtrl, 0)
+      case "thrustaim"
+         if the uThrustAim of pCtrl is "body" then return "Aim: steers with the body"
+         return "Aim: fixed direction"
    end switch
    return pKey
 end propLabel
@@ -6334,6 +6388,10 @@ on adjustPartProp pCtrl, pKey, pDir
          break
       case "thrustspin"
          set the uThrustSpin of pCtrl to clampRange(numOr(the uThrustSpin of pCtrl, 0) + pDir * 800, -40000, 40000)
+         break
+      case "thrustaim"
+         if the uThrustAim of pCtrl is "body" then set the uThrustAim of pCtrl to "world"
+         else set the uThrustAim of pCtrl to "body"
          break
       case "bombfuse"
          set the uFuseOnRun of pCtrl to not (the uFuseOnRun of pCtrl is true)
@@ -7748,7 +7806,7 @@ function toolHelp pId
       case "laser"
          return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray from its emitter and draws the beam to the first thing it strikes (a wall counts). Set the beam angle in the inspector; while running, select it to read the live hit distance. Shows off the Kit's ray-casting."
       case "thruster"
-         return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: on Run it pops off with an ignition kick, then applies a steady force along its own facing — plus optional spin. Set thrust angle, power and spin in the inspector; lock its rotation for a straight climb or let it tumble. Shows off b2kForce / b2kTorque / b2kPush."
+         return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: on Run it pops off with an ignition kick, then pushes steadily in a fixed direction — flying straight by default. Set thrust angle and power in the inspector; switch Aim to 'steers with the body' (and add spin) for a rocket you can rotate. A wired trigger can switch it on/off. Shows off b2kForce / b2kTorque / b2kPush."
       case "goal"
          return "A target zone — reach it to win." & cr & "A goal zone is the finish line for a puzzle. Press Play: get a movable part inside every goal zone at once and you have solved it. Resize the zone in the inspector. No body — parts pass through it."
       case "platform"
