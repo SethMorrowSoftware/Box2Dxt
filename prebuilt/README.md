@@ -11,16 +11,23 @@ LiveCode foreign-binding loader can find it), then load `box2dxt.lcb`.
 | Windows x64 | `box2dxt-windows-x64.dll` | committed here + GitHub **Releases** |
 
 When you deploy, rename the file to the bare name the loader resolves `box2dxt`
-to for your platform:
+to for your platform — **no `lib` prefix**:
 
 | Platform | Deploy as |
 |----------|-----------|
-| Linux    | `libbox2dxt.so` |
-| macOS    | `libbox2dxt.dylib` |
+| Linux    | `box2dxt.so` |
+| macOS    | `box2dxt.dylib` |
 | Windows  | `box2dxt.dll` |
 
 That bare name is what the `c:box2dxt>…` foreign-binding strings in `box2dxt.lcb`
-resolve to at run time.
+resolve to at run time. Note the committed Linux file is `libbox2dxt.so`, but the
+loader asks `dlopen` for `box2dxt.so` — rename it (dropping `lib`), or you'll get
+"unable to load foreign library".
+
+On **Linux** the dynamic loader does not search the stack's folder: put the file
+in a search path with `sudo cp box2dxt.so /usr/lib/ && sudo ldconfig`, place it
+next to the OXT engine binary, or set `LD_LIBRARY_PATH`. (If a specific engine
+asks for `libbox2dxt.*` instead, provide that name too — a copy or symlink.)
 
 ## Portability of the committed binaries
 

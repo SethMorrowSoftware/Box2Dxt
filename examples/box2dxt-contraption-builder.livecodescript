@@ -1875,6 +1875,26 @@ on startCB
       buildUI
       set the uUIVersion of this stack to kUIVersion
    end if
+   -- The physics world needs the native box2dxt library. Without it b2kSetup would
+   -- throw a raw "unable to load foreign library" LCB error; check first and explain
+   -- the fix in plain language instead. (b2Version is the shim ABI version; expect 3.)
+   local tVer
+   try
+      put b2Version() into tVer
+   catch tErr
+      put empty into tVer
+   end try
+   if tVer is not 3 then
+      if there is a field "ui_status" then put "Box2Dxt native library not loaded — physics is disabled. See the dialog." into field "ui_status"
+      answer "Box2Dxt — native library not loaded" & return & return & \
+            "The box2dxt extension is loaded, but its native library could not be found, so the physics engine cannot start." & return & return & \
+            "Put the library where OXT's loader looks, named WITHOUT a 'lib' prefix:" & return & \
+            "    Linux:    box2dxt.so   (copy to /usr/lib, then run: sudo ldconfig)" & return & \
+            "    macOS:    box2dxt.dylib" & return & \
+            "    Windows:  box2dxt.dll" & return & return & \
+            "Then reopen this stack. Full steps: docs/getting-started.md" with "OK"
+      exit startCB
+   end if
    b2kSetup 0, kDefaultGravity      -- creates the world; the loop stays stopped
    prepArena
    b2kFrameTarget the long id of this stack
