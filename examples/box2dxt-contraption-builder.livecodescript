@@ -1726,6 +1726,8 @@ local gNextPid
 local gNameCount                       -- per-kind counter for auto-names (Bomb 1, Plate 2, ...)
 local gWires                           -- CR-list of signal wires, each "srcCtrl<tab>tgtCtrl" (long ids)
 local gWireSrc                         -- the pending wire source while the Link tool waits for a target
+local gPlaying                         -- true while in Play mode (Run + win-watching + a clean view)
+local gGameWon                         -- latches true the moment every goal zone is reached this run
 local gFlash
 local gFrames, gFpsTime, gFps, gHudTime   -- gHudTime throttles the live HUD/telemetry refresh
 -- new-object + field-force state (balloons rise on their own; fans/magnets are
@@ -1775,7 +1777,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "10"
+constant kUIVersion = "11"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1966,6 +1968,7 @@ on buildUI
    buildRecipesMenu
    buildFilterPanel
    buildWorldPanel
+   buildPlayOverlay
    applyTooltips
 end buildUI
 
@@ -1977,9 +1980,9 @@ on makeTopBar
    makeBar "ui_accent", 0, kTopBarH, tWide, kTopBarH + kAccentH, kColAccentGreen
    makeLabel "ui_title", 18, 7, 280, 33, "Box2Dxt", 22, "236,238,245", true
    makeLabel "ui_sub", 20, 32, 560, 50, "Contraption Builder — build a machine, then press Run to bring it to life", 11, "150,154,166", false
-   put "mode,reset,clear,save,load,worldadv,recipes,info" into tIds
-   put "Run,Reset,Clear,Save,Load,World,Recipes,?" into tLbls
-   put "84,60,64,64,64,64,84,30" into tWidths
+   put "mode,play,reset,clear,save,load,worldadv,recipes,info" into tIds
+   put "Run,Play,Reset,Clear,Save,Load,World,Recipes,?" into tLbls
+   put "84,60,60,60,60,60,60,80,30" into tWidths
    put 6 into tGap
    put 0 into tW
    repeat for each item tId in tWidths
@@ -2717,7 +2720,8 @@ on handleAction pId
    end if
    switch pId
       case "mode"
-         toggleMode
+         if gPlaying then stopPlay      -- leaving Run also leaves Play
+         else toggleMode
          break
       case "reset"
          resetMachine
@@ -2774,6 +2778,16 @@ on handleAction pId
          break
       case "filterclose"
          hideFilterPanel
+         break
+      case "play"
+         if gPlaying then stopPlay
+         else startPlay
+         break
+      case "winkeep"
+         hideWin
+         break
+      case "winedit"
+         stopPlay
          break
       case "rename"
          renamePart gSelPart
@@ -2875,6 +2889,12 @@ on toggleMode
       put "build" into gMode
       put empty into gFps
       b2kStop                       -- freeze the loop; parts hold their place
+      if gPlaying then              -- any path back to Build also leaves Play cleanly
+         put false into gPlaying
+         hideWin
+         setPlayChrome false
+         if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Play"
+      end if
       renderBuild
       put "Build mode — arrange parts and connect joints, then press Run." into gStatus
    end if
@@ -3873,6 +3893,7 @@ on b2kFrame
    updateLasers
    updateThrusters
    containParts
+   checkGoals
    tickHud
 end b2kFrame
 
@@ -5470,6 +5491,164 @@ on drawWires
       set the points of tRef to round(tx0) & "," & round(ty0) & cr & round(tx1) & "," & round(ty1)
    end repeat
 end drawWires
+
+-- =====================================================================
+-- Play mode + goals: press Play, get a movable part into every goal zone to
+-- solve the puzzle. Build everything we have into actual puzzles.
+-- =====================================================================
+-- Each frame (Run): mark any goal a movable part is sitting in; win when all are.
+on checkGoals
+   if gGameWon then exit checkGoals
+   if gKindList["goal"] is empty then exit checkGoals
+   local tGoal, tTotal, tReached, tP, tGl, tGt, tGr, tGb, tCx, tCy, tpx, tpy, tIn
+   set the itemDelimiter to comma
+   put 0 into tTotal
+   put 0 into tReached
+   repeat for each line tGoal in gKindList["goal"]
+      if tGoal is empty then next repeat
+      add 1 to tTotal
+      if the uGoalReached of tGoal is true then
+         add 1 to tReached
+         next repeat
+      end if
+      put item 1 of the loc of tGoal into tCx
+      put item 2 of the loc of tGoal into tCy
+      put tCx - (the width of tGoal) / 2 into tGl
+      put tCx + (the width of tGoal) / 2 into tGr
+      put tCy - (the height of tGoal) / 2 into tGt
+      put tCy + (the height of tGoal) / 2 into tGb
+      put false into tIn
+      repeat for each line tP in dynamicParts()
+         if tP is empty then next repeat
+         put item 1 of the loc of tP into tpx
+         put item 2 of the loc of tP into tpy
+         if tpx >= tGl and tpx <= tGr and tpy >= tGt and tpy <= tGb then
+            put true into tIn
+            exit repeat
+         end if
+      end repeat
+      if tIn then
+         set the uGoalReached of tGoal to true
+         set the backgroundColor of tGoal to "150,245,175"   -- lit when satisfied
+         add 1 to tReached
+      end if
+   end repeat
+   if tTotal > 0 and tReached >= tTotal then winGame
+end checkGoals
+
+on winGame
+   put true into gGameWon
+   if gPlaying then showWin
+   else put "Goal reached! (Press Play to run it as a puzzle.)" into gStatus
+   updateHud
+end winGame
+
+-- Reset every goal zone to unsolved (called when a Run/Play starts).
+on resetGoals
+   put false into gGameWon
+   local tGoal
+   repeat for each line tGoal in gKindList["goal"]
+      if tGoal is empty then next repeat
+      set the uGoalReached of tGoal to false
+      set the backgroundColor of tGoal to "92,210,120"
+   end repeat
+end resetGoals
+
+-- Enter Play mode: run the sim, watch the goals, and clear the editor away.
+on startPlay
+   if gKindList["goal"] is empty then
+      put "Add a Goal Zone first (SPECIAL palette), then press Play." into gStatus
+      updateHud
+      exit startPlay
+   end if
+   if gMode is not "run" then toggleMode
+   put true into gPlaying
+   resetGoals
+   setPlayChrome true
+   if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Stop"
+   put "PLAY — get a movable part into the goal zone." into gStatus
+   updateHud
+end startPlay
+
+-- Leave Play mode: stop the sim, restore the editor.
+on stopPlay
+   put false into gPlaying
+   hideWin
+   setPlayChrome false
+   if gMode is "run" then toggleMode
+   resetGoals                        -- clear the lit/solved colouring
+   if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Play"
+   put "Back to building." into gStatus
+   updateHud
+end stopPlay
+
+-- Show/clear the Play scrims (over the palette + inspector) and the play banner.
+-- The arena stays live so you can fling and nudge parts to solve the puzzle.
+on setPlayChrome pOn
+   local tWide, tHigh
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   if pOn then
+      makeBar "ui_playscrimL", 0, kTopBarH + kAccentH, kPaletteW, tHigh - kStatusH, "16,18,24"
+      set the blendLevel of graphic "ui_playscrimL" to 78
+      makeBar "ui_playscrimR", tWide - kInspectorW, kTopBarH + kAccentH, tWide, tHigh - kStatusH, "16,18,24"
+      set the blendLevel of graphic "ui_playscrimR" to 78
+      makeBar "ui_playbanner", kPaletteW, kTopBarH + kAccentH, tWide - kInspectorW, kTopBarH + kAccentH + 26, "40,120,72"
+      makeLabel "ui_playbannerlbl", kPaletteW + 12, kTopBarH + kAccentH + 4, tWide - kInspectorW - 12, kTopBarH + kAccentH + 24, "▶ PLAY — solve the puzzle", 12, "236,255,240", true
+   else
+      deleteByPrefix "ui_playscrim"
+      if there is a graphic "ui_playbanner" then delete graphic "ui_playbanner"
+      if there is a field "ui_playbannerlbl" then delete field "ui_playbannerlbl"
+   end if
+end setPlayChrome
+
+-- The "Solved!" overlay, built once with the chrome and shown on a win.
+on buildPlayOverlay
+   local tWide, tHigh, tW, tH, tL, tT
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 360 into tW
+   put 184 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_winscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_winscrim" to 50
+   set the uWinMenu of graphic "ui_winscrim" to true
+   makeBar "ui_winbg", tL, tT, tL + tW, tT + tH, "40,120,72"
+   set the uWinMenu of graphic "ui_winbg" to true
+   makeLabel "ui_wintitle", tL, tT + 30, tL + tW, tT + 70, "✓  Solved!", 26, "236,255,240", true
+   set the textAlign of field "ui_wintitle" to center
+   set the uWinMenu of field "ui_wintitle" to true
+   makeLabel "ui_winsub", tL, tT + 76, tL + tW, tT + 100, "You got a part into every goal zone.", 12, "210,240,220", false
+   set the textAlign of field "ui_winsub" to center
+   set the uWinMenu of field "ui_winsub" to true
+   makeAction "winkeep", "Keep Playing", tL + 36, tT + tH - 48, 140, 30
+   set the uWinMenu of button "ui_act_winkeep" to true
+   makeAction "winedit", "Edit", tL + tW - 126, tT + tH - 48, 90, 30
+   set the uWinMenu of button "ui_act_winedit" to true
+   setWinVisible false
+end buildPlayOverlay
+
+on showWin
+   setWinVisible true
+end showWin
+
+on hideWin
+   setWinVisible false
+end hideWin
+
+on setWinVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uWinMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setWinVisible
 
 on toggleAllMotors
    local tI, tSpeed
@@ -7555,6 +7734,8 @@ end toolHelp
 
 function actionHelp pId
    switch pId
+      case "play"
+         return "Play the puzzle: run it and try to get a part into every goal zone."
       case "mode"
          return "Switch between Build (arrange) and Run (simulate)."
       case "reset"
