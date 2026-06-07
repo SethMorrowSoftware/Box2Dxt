@@ -19,6 +19,7 @@ extern void   b2lc_world_destroy(int);
 extern void   b2lc_world_step(int, double, int);
 extern int    b2lc_body_create(int, int, double, double, double, int, int);
 extern void   b2lc_body_destroy(int);
+extern void   b2lc_shape_destroy(int);
 extern double b2lc_body_x(int);
 extern double b2lc_body_y(int);
 extern double b2lc_body_mass(int);
@@ -68,6 +69,7 @@ extern void   b2lc_chain_begin(void);
 extern void   b2lc_chain_add_point(double, double);
 extern int    b2lc_chain_create(int, int, double, double);
 extern int    b2lc_chain_segment_count(int);
+extern int    b2lc_chain_segment_at(int);
 extern int    b2lc_shape_add_circle(int, double, double, double, double, double, double);
 extern double b2lc_body_vx(int);
 
@@ -83,6 +85,20 @@ int main(void) {
 
     int w = b2lc_world_create(0.0, -10.0, 1, 1);   /* gravity, sleep + CCD on */
     check("world handle valid", w > 0);
+
+    /* destroy paths are intentionally idempotent at the ABI boundary: stale or
+       double-destroyed handles must remain harmless and must not poison future
+       handle allocation. */
+    int tmp = b2lc_body_create(w, 2, -8.0, 2.0, 0.0, 0, 0);
+    int tmpShape = b2lc_shape_add_box(tmp, 0.25, 0.25, 1.0, 0.3, 0.0);
+    check("temporary body+shape created", tmp > 0 && tmpShape > 0);
+    b2lc_body_destroy(tmp);
+    b2lc_body_destroy(tmp);
+    b2lc_shape_destroy(tmpShape);
+    check("destroyed body getter is harmless", fabs(b2lc_body_y(tmp)) < 0.0001);
+    int tmp2 = b2lc_body_create(w, 2, -7.0, 2.0, 0.0, 0, 0);
+    check("handle allocation still works after double destroy", tmp2 > 0);
+    b2lc_body_destroy(tmp2);
 
     /* ground: a flat segment at y=0 spanning x=[-10,10] (tests b2AddSegment) */
     int ground = b2lc_body_create(w, 0, 0.0, 0.0, 0.0, 0, 0);
@@ -166,6 +182,7 @@ int main(void) {
 
     b2lc_world_destroy(w);
     check("world destroyed cleanly", 1);
+    check("world destroy retires child body handles", fabs(b2lc_body_y(box)) < 0.0001);
 
     /* ================= ABI v3 features (isolated world) ================= */
     int w2 = b2lc_world_create(0.0, -10.0, 1, 1);
@@ -224,6 +241,7 @@ int main(void) {
     /* a non-loop chain treats its first & last points as ghost vertices, so an
        n-point open chain yields n-3 collidable segments (6 -> 3). */
     check("open 6-point chain has 3 collidable segments", b2lc_chain_segment_count(chain) == 3);
+    check("chain segment exposes a shape handle", b2lc_chain_segment_at(0) > 0);
     int chainBox = b2lc_body_create(w2, 2, 0.0, -2.0, 0.0, 0, 0);
     b2lc_shape_add_box(chainBox, 0.5, 0.5, 1.0, 0.5, 0.0);
     for (int i = 0; i < 180; i++) b2lc_world_step(w2, 1.0 / 60.0, 4);
