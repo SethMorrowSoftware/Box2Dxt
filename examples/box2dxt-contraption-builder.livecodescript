@@ -1729,6 +1729,7 @@ local gWireSrc                         -- the pending wire source while the Link
 local gPlaying                         -- true while in Play mode (Run + win-watching + a clean view)
 local gGameWon                         -- latches true the moment every goal zone is reached this run
 local gPlayStartMs                     -- the milliseconds Play started, for the solve timer
+local gAssets                          -- the image library: CR-list of "path<tab>shape<tab>name"
 local gFlash
 local gFrames, gFpsTime, gFps, gHudTime   -- gHudTime throttles the live HUD/telemetry refresh
 -- new-object + field-force state (balloons rise on their own; fans/magnets are
@@ -1778,7 +1779,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "11"
+constant kUIVersion = "12"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1880,6 +1881,7 @@ on startCB
    raiseUI
    highlightAll
    layoutPalette                    -- re-apply accordion state to the persisted palette
+   loadImageLibrary                 -- restore the user's imported-image library
    showInspectorForTool
    put "Welcome! Pick a part on the left, drop it on the stage, then press Run. New here? The ? button (top bar) replays the quick tour." into gStatus
    updateHud
@@ -1970,6 +1972,7 @@ on buildUI
    buildFilterPanel
    buildWorldPanel
    buildPlayOverlay
+   buildImagePanel
    applyTooltips
 end buildUI
 
@@ -1981,9 +1984,9 @@ on makeTopBar
    makeBar "ui_accent", 0, kTopBarH, tWide, kTopBarH + kAccentH, kColAccentGreen
    makeLabel "ui_title", 18, 7, 280, 33, "Box2Dxt", 22, "236,238,245", true
    makeLabel "ui_sub", 20, 32, 560, 50, "Contraption Builder — build a machine, then press Run to bring it to life", 11, "150,154,166", false
-   put "mode,play,reset,clear,save,load,worldadv,recipes,info" into tIds
-   put "Run,Play,Reset,Clear,Save,Load,World,Recipes,?" into tLbls
-   put "84,60,60,60,60,60,60,80,30" into tWidths
+   put "mode,play,reset,clear,save,load,worldadv,images,recipes,info" into tIds
+   put "Run,Play,Reset,Clear,Save,Load,World,Images,Recipes,?" into tLbls
+   put "84,58,58,58,58,58,58,66,78,30" into tWidths
    put 6 into tGap
    put 0 into tW
    repeat for each item tId in tWidths
@@ -2677,6 +2680,10 @@ on handleUiClick
       hideWorldPanel
       exit handleUiClick
    end if
+   if tName is "ui_imgscrim" then
+      hideImagePanel
+      exit handleUiClick
+   end if
    -- Click a settings value to type an exact number (steppers stay on the +/- keys).
    if "ui_prop_lbl_" is in tName then
       editPropValue (the uPropKey of the target)
@@ -2727,6 +2734,14 @@ on handleAction pId
    end if
    if char 1 to 5 of pId is "wopt_" then
       handleWorldToggle pId
+      exit handleAction
+   end if
+   if char 1 to 6 of pId is "asset_" then
+      placeAssetFromPanel (char 7 to -1 of pId)
+      exit handleAction
+   end if
+   if char 1 to 10 of pId is "imgremove_" then
+      removeFromLibrary (char 11 to -1 of pId)
       exit handleAction
    end if
    switch pId
@@ -2808,6 +2823,15 @@ on handleAction pId
          break
       case "worldadv"
          openWorldPanel
+         break
+      case "images"
+         openImagePanel
+         break
+      case "imgimport"
+         importToLibrary
+         break
+      case "imgclose"
+         hideImagePanel
          break
       case "worldclose"
          hideWorldPanel
@@ -3485,8 +3509,47 @@ function dynamicParts
 end dynamicParts
 
 -- Pick an image file and drop it in as a dynamic body (it rotates via `the angle`).
+-- Create an image-backed part from a known file + collision shape. Shared by the
+-- one-off Image tool and the image library. pShape "auto" picks from the art's
+-- aspect: square-ish -> circle, clearly oblong -> capsule (vs the bounding rect).
+function spawnImageFrom pPath, pShape, pX, pY
+   if there is no file pPath then return empty
+   local tName, tRef, tW, tH, tScale, tErr, tAR
+   put "cb_img_" & the milliseconds & "_" & random(99999) into tName
+   create image tName
+   put the long id of image tName into tRef
+   try
+      set the filename of tRef to pPath
+   catch tErr
+      delete tRef
+      return empty
+   end try
+   put the formattedWidth of tRef into tW
+   put the formattedHeight of tRef into tH
+   if tW < 1 or tH < 1 then
+      delete tRef
+      return empty
+   end if
+   put kImageMax / max(tW, tH) into tScale
+   if tScale > 1 then put 1 into tScale
+   set the width of tRef to max(8, round(tW * tScale))
+   set the height of tRef to max(8, round(tH * tScale))
+   set the loc of tRef to round(pX) & "," & round(pY)
+   b2kAddBox tRef
+   tagPart tRef, "image", empty, pPath
+   if pShape is empty or pShape is "auto" then
+      put (the width of tRef) / (the height of tRef) into tAR
+      if tAR > 0.75 and tAR < 1.34 then put "ball" into pShape
+      else put "capsule" into pShape
+   end if
+   set the uShape of tRef to pShape
+   b2kReshape tRef, pShape
+   return tRef
+end spawnImageFrom
+
+-- The Image tool: pick a file, drop it, and remember it in the library for reuse.
 function importImage pX, pY
-   local tFile, tName, tRef, tW, tH, tScale
+   local tFile, tRef
    answer file "Choose an image (PNG or JPG):" with type "Images|png,jpg,jpeg,gif"
    put it into tFile
    if tFile is empty or the result is "cancel" then
@@ -3499,45 +3562,90 @@ function importImage pX, pY
       updateHud
       return empty
    end if
-   put "cb_img_" & the milliseconds & "_" & random(99999) into tName
-   create image tName
-   put the long id of image tName into tRef
-   local tErr
-   try
-      set the filename of tRef to tFile
-   catch tErr
-      delete tRef
-      put "Could not load that image." into gStatus
-      updateHud
-      return empty
-   end try
-   put the formattedWidth of tRef into tW
-   put the formattedHeight of tRef into tH
-   if tW < 1 or tH < 1 then
-      delete tRef
-      put "That image could not be read (it may be empty or corrupt)." into gStatus
+   put spawnImageFrom(tFile, "auto", pX, pY) into tRef
+   if tRef is empty then
+      put "That image could not be loaded (it may be empty or corrupt)." into gStatus
       updateHud
       return empty
    end if
-   put kImageMax / max(tW, tH) into tScale
-   if tScale > 1 then put 1 into tScale
-   set the width of tRef to max(8, round(tW * tScale))
-   set the height of tRef to max(8, round(tH * tScale))
-   set the loc of tRef to round(pX) & "," & round(pY)
-   b2kAddBox tRef
-   tagPart tRef, "image", empty, tFile
-   -- Respect the art's shape rather than its bounding rect: square-ish images
-   -- collide as a circle, clearly oblong ones as a capsule. (Switchable in the
-   -- inspector under 'Collision shape'.)
-   local tAR
-   put (the width of tRef) / (the height of tRef) into tAR
-   if tAR > 0.75 and tAR < 1.34 then set the uShape of tRef to "ball"
-   else set the uShape of tRef to "capsule"
-   b2kReshape tRef, (the uShape of tRef)
-   put "Image placed — collides as its shape (change it under Collision shape). It tumbles when you press Run." into gStatus
+   addToLibrary tFile, (the uShape of tRef)
+   put "Image placed and saved to your Images library for reuse. Collides as its shape (change under Collision shape)." into gStatus
    updateHud
    return tRef
 end importImage
+
+-- ===================================================================
+-- Image library: import once (with a collision shape), reuse forever.
+-- The library lives in a stack property, so it persists across sessions;
+-- placed instances are ordinary image parts that save with the scene.
+-- ===================================================================
+on loadImageLibrary
+   put the uImageLibrary of this stack into gAssets
+end loadImageLibrary
+
+on saveImageLibrary
+   set the uImageLibrary of this stack to gAssets
+end saveImageLibrary
+
+-- A friendly name from a file path: the file name without folders or extension.
+function assetNameFromPath pPath
+   local tN
+   set the itemDelimiter to "/"        -- LiveCode uses "/" in paths on every platform
+   put the last item of pPath into tN
+   set the itemDelimiter to "."
+   if the number of items of tN > 1 then delete the last item of tN
+   return tN
+end assetNameFromPath
+
+-- Add a file to the library (deduped by path), with its import-time shape.
+on addToLibrary pPath, pShape
+   if pPath is empty then exit addToLibrary
+   set the itemDelimiter to tab
+   local tRec
+   repeat for each line tRec in gAssets
+      if item 1 of tRec is pPath then exit addToLibrary    -- already in the library
+   end repeat
+   if pShape is empty then put "auto" into pShape
+   put pPath & tab & pShape & tab & assetNameFromPath(pPath) & cr after gAssets
+   if the last char of gAssets is return then delete the last char of gAssets
+   saveImageLibrary
+end addToLibrary
+
+on removeFromLibrary pIndex
+   if pIndex < 1 or pIndex > the number of lines of gAssets then exit removeFromLibrary
+   delete line pIndex of gAssets
+   saveImageLibrary
+   refreshImagePanel
+end removeFromLibrary
+
+-- Place an instance of a library image — an ordinary image part.
+function placeAssetInstance pIndex, pX, pY
+   set the itemDelimiter to tab
+   local tRec
+   put line pIndex of gAssets into tRec
+   if tRec is empty then return empty
+   return spawnImageFrom(item 1 of tRec, item 2 of tRec, pX, pY)
+end placeAssetInstance
+
+-- Import a new image into the library, choosing how it collides now.
+on importToLibrary
+   answer file "Choose an image to add to your library:" with type "Images|png,jpg,jpeg,gif"
+   local tFile, tShape
+   put it into tFile
+   if tFile is empty or the result is "cancel" then exit importToLibrary
+   if there is no file tFile then
+      put "Could not find that image file." into gStatus
+      updateHud
+      exit importToLibrary
+   end if
+   answer "How should it collide?" with "Auto" or "Ball" or "Box"
+   put it into tShape
+   if tShape is empty then put "Auto" into tShape
+   addToLibrary tFile, toLower(tShape)
+   refreshImagePanel
+   put "Added " & assetNameFromPath(tFile) & " to your Images library." into gStatus
+   updateHud
+end importToLibrary
 
 -- =====================================================================
 -- Joints (two-click: part A, then part B)
@@ -5760,6 +5868,106 @@ on setWinVisible pFlag
    end repeat
 end setWinVisible
 
+-- ===================================================================
+-- Image library popup: import images (with a collision shape) and click one
+-- to drop a fresh instance. Static frame built once; the rows are rebuilt to
+-- match gAssets each time it opens.
+-- ===================================================================
+on buildImagePanel
+   local tWide, tHigh, tW, tH, tL, tT
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 470 into tW
+   put 440 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_imgscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_imgscrim" to 60
+   set the uImgMenu of graphic "ui_imgscrim" to true
+   makeBar "ui_imgbg", tL, tT, tL + tW, tT + tH, "34,38,48"
+   set the uImgMenu of graphic "ui_imgbg" to true
+   makeLabel "ui_img_title", tL + 18, tT + 14, tL + tW - 150, tT + 38, "Image Library", 15, "236,238,245", true
+   set the uImgMenu of field "ui_img_title" to true
+   makeAction "imgimport", "Import New…", tL + tW - 142, tT + 12, 124, 28
+   set the uImgMenu of button "ui_act_imgimport" to true
+   makeField "ui_img_empty", tL + 18, tT + 52, tL + tW - 18, tT + 96, 11, "168,172,184"
+   set the uImgMenu of field "ui_img_empty" to true
+   makeAction "imgclose", "Close", tL + tW - 92, tT + tH - 38, 76, 26
+   set the uImgMenu of button "ui_act_imgclose" to true
+   setImageVisible false
+end buildImagePanel
+
+on openImagePanel
+   refreshImagePanel
+end openImagePanel
+
+on hideImagePanel
+   setImageVisible false
+end hideImagePanel
+
+-- Rebuild one row per library image (a place button + a remove button), then show.
+on refreshImagePanel
+   if there is no graphic "ui_imgbg" then exit refreshImagePanel
+   deleteByPrefix "ui_act_asset_"
+   deleteByPrefix "ui_act_imgremove_"
+   local tBg, tL, tW, tT, tN, tI, tRec, tRowY, tName, tShape
+   set the itemDelimiter to comma
+   put the rect of graphic "ui_imgbg" into tBg
+   put item 1 of tBg into tL
+   put item 3 of tBg - item 1 of tBg into tW
+   put item 2 of tBg into tT
+   put the number of lines of gAssets into tN
+   if there is a field "ui_img_empty" then
+      if tN is 0 then put "Your library is empty. Click 'Import New...' to add an image; it stays here for reuse, and an image collides as its shape." into field "ui_img_empty"
+      else if tN > 9 then put "Showing the first 9 of " & tN & " images." into field "ui_img_empty"
+      else put empty into field "ui_img_empty"
+      set the visible of field "ui_img_empty" to (the text of field "ui_img_empty" is not empty)
+   end if
+   set the itemDelimiter to tab
+   repeat with tI = 1 to min(tN, 9)
+      put line tI of gAssets into tRec
+      put item 3 of tRec into tName
+      put item 2 of tRec into tShape
+      put tT + 96 + (tI - 1) * 34 into tRowY
+      makeAction ("asset_" & tI), (tName & "   (" & tShape & ")"), tL + 18, tRowY, tW - 84, 28
+      set the uImgMenu of button ("ui_act_asset_" & tI) to true
+      makeAction ("imgremove_" & tI), "✕", tL + tW - 56, tRowY, 38, 28
+      set the uImgMenu of button ("ui_act_imgremove_" & tI) to true
+   end repeat
+   setImageVisible true
+end refreshImagePanel
+
+-- Place an instance of a library image at the top of the stage, then select it.
+on placeAssetFromPanel pIndex
+   hideImagePanel
+   local tNew
+   put placeAssetInstance(pIndex, (gArenaL + gArenaR) div 2, gArenaT + 90) into tNew
+   if tNew is empty then
+      put "Could not place that image — its file may have moved." into gStatus
+      updateHud
+      exit placeAssetFromPanel
+   end if
+   renderBuild
+   put "drag" into gTool
+   selectPart tNew
+   highlightAll
+   put "Placed " & nameOf(tNew) & " — drag it where you want." into gStatus
+   updateHud
+end placeAssetFromPanel
+
+on setImageVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uImgMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setImageVisible
+
 on toggleAllMotors
    local tI, tSpeed
    put not gMotorsRunning into gMotorsRunning
@@ -7879,6 +8087,8 @@ function actionHelp pId
          return "Close this menu."
       case "filterclose"
          return "Close the collision filter."
+      case "images"
+         return "Your image library — import pictures (with a collision shape) and reuse them."
       case "worldadv"
          return "Advanced world solver settings (CCD, sleeping, sub-steps…)."
       case "worldclose"
