@@ -2818,6 +2818,10 @@ on handleAction pId
          hideRecipesMenu
          buildRecipePlateBomb
          break
+      case "chainpuzzle"
+         hideRecipesMenu
+         buildRecipeChainPuzzle
+         break
       case "fantower"
          hideRecipesMenu
          buildRecipeFanTower
@@ -7880,7 +7884,7 @@ on buildRecipesMenu
    put the width of this card into tWide
    put the height of this card into tHigh
    put 420 into tW
-   put 476 into tH
+   put 528 into tH
    put (tWide - tW) div 2 into tL
    put (tHigh - tH) div 2 into tT
    makeBar "ui_recipescrim", 0, 0, tWide, tHigh, "10,11,15"
@@ -7891,6 +7895,8 @@ on buildRecipesMenu
    makeLabel "ui_recipe_title", tL + 18, tT + 14, tL + tW - 18, tT + 38, "Example Machines", 15, "236,238,245", true
    set the uRecipeMenu of field "ui_recipe_title" to true
    put tT + 46 into tBy
+   put recipeCategory("Puzzles (press Play)", "chainpuzzle", \
+         "Demolish & Deliver", tL, tW, tBy) into tBy
    put recipeCategory("Launchers", "catapult,cannon,trebuchet,wreckingball", \
          "Catapult,Cannon,Trebuchet,Wrecking Ball", tL, tW, tBy) into tBy
    put recipeCategory("Machines", "crane,cart,fantower,magnetcatch,balloonlift", \
@@ -8210,6 +8216,42 @@ on buildRecipePlateBomb
    put "Plate → Bomb — press Run: the ball lands on the plate, the bomb fires, the tower topples." into gStatus
    updateHud
 end buildRecipePlateBomb
+
+-- A complete, Play-able puzzle: the ball rolls over a plate that is wired to a
+-- demolition bomb; the bomb clears the wall, and the ball carries on into the
+-- goal. Shows the whole loop (launch + plate + wire + demolish + goal) in one.
+on buildRecipeChainPuzzle
+   if gMode is "run" then toggleMode
+   clearAll
+   local tBall, tPlate, tBomb, tGoal, tI, tWx
+   put gArenaL + 440 into tWx
+   -- the payload, launched to the right on Play
+   put placeBall(gArenaL + 70, gArenaB - 34, 34, "232,182,92") into tBall
+   set the uLaunchSpeed of tBall to 820
+   set the uLaunchDir of tBall to 0
+   set the uDensity of tBall to 1.6
+   b2kSetDensity tBall, 1.6
+   -- a trigger plate it rolls over first
+   put placePlate(gArenaL + 210, gArenaB - 8) into tPlate
+   -- a crate wall blocking the way
+   repeat with tI = 0 to 3
+      get placeBox(tWx, gArenaB - 26 - tI * 30, 40, 28, "200,120,80")
+   end repeat
+   -- a demolition bomb at the wall, fired only by the plate (not its own fuse)
+   put placeBomb(tWx, gArenaB - 26) into tBomb
+   set the uFuseOnRun of tBomb to false
+   set the uDestroys of tBomb to true
+   set the uBlastRadius of tBomb to 190
+   set the uBlastPower of tBomb to 900
+   addWire tPlate, tBomb
+   -- the goal, past the cleared wall
+   put placeGoal(gArenaL + 650, gArenaB - 64) into tGoal
+   set the uGoalScale of tGoal to 1.3
+   drawGoalShape tGoal
+   renderBuild
+   put "Demolish & Deliver — press Play! The ball trips the plate, the bomb clears the wall, and it rolls into the goal (nudge it if it stalls)." into gStatus
+   updateHud
+end buildRecipeChainPuzzle
 
 -- An upward fan juggles a few light balls.
 on buildRecipeFanTower
