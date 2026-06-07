@@ -1803,6 +1803,7 @@ constant kSensorW = 96, kSensorH = 72
 constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
 constant kLaserReach = 1600, kLaserStep = 45   -- laser ray length (px) and the angle step its direction cycles by
+constant kLaserBurn = 36   -- frames of sustained laser hit before a cutting beam destroys a part
 constant kContainMargin = 90   -- how far past the arena a body may stray before the containment net pulls it back
 constant kStressBatch = 50
 constant kSizeMin = 16, kSizeMax = 240
@@ -4280,9 +4281,11 @@ function partSpecial pCtrl
          put addKV(tS, "fuse=" & (the uFuseOnRun of pCtrl is true)) into tS
          put addKV(tS, "flen=" & numOr(the uFuseLen of pCtrl, kBombFuseFrames)) into tS
          if the uSoftBlast of pCtrl is true then put addKV(tS, "soft=true") into tS
+         if the uDestroys of pCtrl is true then put addKV(tS, "demo=true") into tS
          break
       case "laser"
          put addKV(tS, "ldr=" & numOr(the uLaserDir of pCtrl, 0)) into tS
+         if the uLaserCut of pCtrl is true then put addKV(tS, "cut=true") into tS
          break
       case "thruster"
          put addKV(tS, "tdr=" & numOr(the uThrustDir of pCtrl, 270)) into tS
@@ -4625,6 +4628,7 @@ function placeBomb pX, pY
    set the uFuseOnRun of tCtrl to true     -- bombs arm on Run by default (fuse length set in the inspector)
    set the uFuse of tCtrl to 0
    set the uFuseLen of tCtrl to kBombFuseFrames    -- countdown frames once armed (60 = ~1s)
+   set the uDestroys of tCtrl to false             -- default: push parts; toggle 'Demolish' to vaporise them
    set the uBlastRadius of tCtrl to kBombRadius
    set the uBlastPower of tCtrl to kBombPower
    return tCtrl
@@ -4766,6 +4770,7 @@ function placeLaser pX, pY
    set the lineSize of tRef to 5
    set the foregroundColor of tRef to "236,80,80"
    set the uLaserDir of tRef to 0            -- 0=right 90=down 180=left 270=up (45° steps)
+   set the uLaserCut of tRef to false        -- default: a sightline; toggle 'Cut' to burn through parts
    set the points of tRef to round(pX) & "," & round(pY) & cr & round(pX + 40) & "," & round(pY)
    tagPart tRef, "laser", "236,80,80", empty
    drawLaserBeam tRef
@@ -4795,6 +4800,12 @@ on drawLaserBeam pLaser
       set the uLaserDist of pLaser to empty
    end if
    set the points of pLaser to round(tEx) & "," & round(tEy) & cr & round(tHx) & "," & round(tHy)
+   -- Cutting beam: a sustained hit on a movable part burns through and destroys it.
+   if gMode is "run" and the uLaserCut of pLaser is true and tHitCtrl is not empty \
+         and (tHitCtrl is among the lines of gParts) and kindIsDynamic(the uKind of tHitCtrl) then
+      set the uBurn of tHitCtrl to numOr(the uBurn of tHitCtrl, 0) + 1
+      if the uBurn of tHitCtrl >= kLaserBurn then destroyPart tHitCtrl
+   end if
 end drawLaserBeam
 
 -- Recast every laser (called each frame while running and on every build redraw).
@@ -4826,7 +4837,9 @@ end placeThruster
 on armThrusters
    local tT
    repeat for each line tT in gKindList["thruster"]
-      if tT is not empty then set the uThrustLit of tT to false
+      if tT is empty then next repeat
+      set the uThrustLit of tT to false
+      set the uThrustArmed of tT to true      -- thrusters start armed each Run; a trigger can switch them off
    end repeat
 end armThrusters
 
@@ -4835,6 +4848,7 @@ on updateThrusters
    local tT, tRad, tPow
    repeat for each line tT in gKindList["thruster"]
       if tT is empty then next repeat
+      if the uThrustArmed of tT is "false" then next repeat   -- a wired trigger can switch it off
       put numOr(the uThrustPower of tT, 0) into tPow
       if tPow <= 0 then next repeat
       put (numOr(the uThrustDir of tT, 270) + b2kAngle(tT)) * kPI / 180 into tRad
@@ -4984,10 +4998,12 @@ on applyPartSpecial pCtrl, pSpecial
          put specialValue(pSpecial, "flen") into tV
          if tV is not empty then set the uFuseLen of pCtrl to tV
          if specialValue(pSpecial, "soft") is "true" then set the uSoftBlast of pCtrl to true
+         if specialValue(pSpecial, "demo") is "true" then set the uDestroys of pCtrl to true
          break
       case "laser"
          put specialValue(pSpecial, "ldr") into tV
          if tV is not empty then set the uLaserDir of pCtrl to tV
+         if specialValue(pSpecial, "cut") is "true" then set the uLaserCut of pCtrl to true
          drawLaserBeam pCtrl
          break
       case "thruster"
@@ -5147,6 +5163,7 @@ on detonateBomb pBomb
    else b2kExplode tLx, tLy, tRad, tPow                                             -- shape-aware native blast
    spawnRing tLx, tLy
    popBalloonsNear tLx, tLy, tRad
+   if the uDestroys of pBomb is true then demolishNear tLx, tLy, tRad              -- demolition bomb: vaporise what it reaches
    deletePart pBomb
 end detonateBomb
 
@@ -5168,6 +5185,33 @@ on popBalloonsNear pX, pY, pRadius
       deletePart tBalloon
    end repeat
 end popBalloonsNear
+
+-- Destroy a part with a little poof of debris (a ring puff), then remove it and
+-- everything attached (joints, wires). The destruction primitive shared by the
+-- demolition bomb and the cutting laser.
+on destroyPart pCtrl
+   if pCtrl is empty then exit destroyPart
+   if pCtrl is not among the lines of gParts then exit destroyPart
+   set the itemDelimiter to comma
+   spawnRing (item 1 of the loc of pCtrl), (item 2 of the loc of pCtrl)
+   deletePart pCtrl
+end destroyPart
+
+-- Demolition blast: remove every dynamic, non-bomb part inside the radius (the
+-- bomb's impulse has already shoved everything; this vaporises what it can reach).
+on demolishNear pX, pY, pRadius
+   local tP, tList
+   put empty into tList
+   set the itemDelimiter to comma
+   repeat for each line tP in b2kOverlapCircle(pX, pY, pRadius)
+      if tP is empty or tP is not among the lines of gParts then next repeat
+      if the uKind of tP is "bomb" then next repeat          -- don't chain-vaporise other bombs
+      if kindIsDynamic(the uKind of tP) then put tP & cr after tList
+   end repeat
+   repeat for each line tP in tList
+      destroyPart tP
+   end repeat
+end demolishNear
 
 -- An expanding shock ring (purely decorative), ported from the showcase demo.
 on spawnRing pX, pY
@@ -5257,7 +5301,7 @@ end isEmitter
 
 function isReceiver pCtrl
    if pCtrl is empty then return false
-   return the uKind of pCtrl is "bomb"
+   return kindIsDynamic(the uKind of pCtrl)    -- bombs, thrusters, and any movable part can be a target
 end isReceiver
 
 function nameOf pCtrl
@@ -5341,12 +5385,18 @@ on fireEmitter pEmitter
    if not tFired then triggerSignal
 end fireEmitter
 
--- Set off one wired target by kind.
+-- Set off one wired target by kind: detonate a bomb, toggle a thruster, or give
+-- any other movable part a kick.
 on fireTarget pTgt
    switch the uKind of pTgt
       case "bomb"
          set the uFuse of pTgt to 1          -- detonate next frame, safely outside the contact callback
          break
+      case "thruster"
+         set the uThrustArmed of pTgt to (the uThrustArmed of pTgt is "false")   -- toggle on/off
+         break
+      default
+         b2kImpulse pTgt, 0, -360            -- a trigger pops any other part upward
    end switch
 end fireTarget
 
@@ -5577,7 +5627,7 @@ function partProps pKind
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
-         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse,bombfuselen,bombsoft"
+         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse,bombfuselen,bombsoft,bombdemo"
       case "plate"
          return "width,height,color,angle,friction"
       case "sensor"
@@ -5596,7 +5646,7 @@ function partProps pKind
       case "magnet"
          return "magpol,magforce,magrange,color"
       case "laser"
-         return "laserdir"
+         return "laserdir,lasercut"
       case "thruster"
          return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,thrustdir,thrustpower,thrustspin"
    end switch
@@ -5682,6 +5732,9 @@ function propLabel pCtrl, pKey
       case "bombsoft"
          if the uSoftBlast of pCtrl is true then return "Blast style: soft (legacy, size-blind)"
          return "Blast style: shape-aware (native)"
+      case "bombdemo"
+         if the uDestroys of pCtrl is true then return "On blast: demolish parts in range"
+         return "On blast: push parts (keep them)"
       case "fandir"
          return "Direction: " & dirName(the uFanDir of pCtrl)
       case "fanforce"
@@ -5696,6 +5749,9 @@ function propLabel pCtrl, pKey
          return "Reach: " & (the uMagRange of pCtrl)
       case "laserdir"
          return "Beam angle: " & numOr(the uLaserDir of pCtrl, 0) & "°"
+      case "lasercut"
+         if the uLaserCut of pCtrl is true then return "Mode: cutting (burns through parts)"
+         return "Mode: sightline (harmless)"
       case "thrustdir"
          return "Thrust angle: " & numOr(the uThrustDir of pCtrl, 270) & "°"
       case "thrustpower"
@@ -5984,6 +6040,9 @@ on adjustPartProp pCtrl, pKey, pDir
          set the uLaserDir of pCtrl to ((numOr(the uLaserDir of pCtrl, 0) + pDir * kLaserStep + 360) mod 360)
          drawLaserBeam pCtrl
          break
+      case "lasercut"
+         set the uLaserCut of pCtrl to not (the uLaserCut of pCtrl is true)
+         break
       case "thrustdir"
          set the uThrustDir of pCtrl to ((numOr(the uThrustDir of pCtrl, 270) + pDir * kLaserStep + 360) mod 360)
          break
@@ -6001,6 +6060,9 @@ on adjustPartProp pCtrl, pKey, pDir
          break
       case "bombsoft"
          set the uSoftBlast of pCtrl to not (the uSoftBlast of pCtrl is true)
+         break
+      case "bombdemo"
+         set the uDestroys of pCtrl to not (the uDestroys of pCtrl is true)
          break
    end switch
 end adjustPartProp
