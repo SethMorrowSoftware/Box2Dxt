@@ -1881,7 +1881,7 @@ on startCB
    highlightAll
    layoutPalette                    -- re-apply accordion state to the persisted palette
    showInspectorForTool
-   put "Welcome! Pick a shape on the left, click the stage to drop it, then press Run." into gStatus
+   put "Welcome! Pick a part on the left, drop it on the stage, then press Run. New here? The ? button (top bar) replays the quick tour." into gStatus
    updateHud
    maybeShowOnboarding
 end startCB
