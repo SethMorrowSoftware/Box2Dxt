@@ -7029,8 +7029,10 @@ on setPartDimension pCtrl, pAxis, pValue
    put numOr(the uW of pCtrl, the width of pCtrl) into tW
    put numOr(the uH of pCtrl, the height of pCtrl) into tH
    put clampDim(pValue) into pValue
-   if pAxis is "w" then put pValue into tW
-   else if pAxis is "h" then put pValue into tH
+   if pAxis is "w" then
+      put pValue into tW
+   else if pAxis is "h" then
+      put pValue into tH
    else if pAxis is "d" then
       put pValue into tW
       put pValue into tH
