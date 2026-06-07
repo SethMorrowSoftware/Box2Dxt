@@ -5425,6 +5425,7 @@ on applyMagnet pMag, pPart, pPx, pPy
    put item 1 of the loc of pMag into tMx
    put item 2 of the loc of pMag into tMy
    put the uMagRange of pMag into tRange
+   if tRange <= 0 then exit applyMagnet      -- a 0/blank reach (e.g. a hand-edited save) would divide by zero below
    put tMx - pPx into tdx
    put tMy - pPy into tdy
    put sqrt(tdx * tdx + tdy * tdy) into tDist
