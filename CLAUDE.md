@@ -133,10 +133,10 @@ The flagship example and the file most work happens in (~320 KB). Mental model:
 - **The per-frame loop is `on b2kFrame`** (the Kit calls it each tick while running). It fans out to
   `renderJoints`, `updateFlashes`, `applyFieldForces`, `updateBombs`, `updateRings`,
   `updateLasers`, `updateThrusters`, `tickHud`. Build-mode redraws go through `renderBuild`.
-- **No-body specials vs body parts.** Fans, magnets, and the laser have **no Box2D body** — they
-  are pure graphics driven each frame. `kindHasBody(kind)` **must exclude them** (it returns false
-  only for `fan`/`magnet`/`laser`), or body-only code (`b2kAngle`, `reseatDragged`, …) will error
-  on them. `kindIsDynamic` lists the kinds that fans/magnets can push.
+- **No-body specials vs body parts.** Fans, magnets, the laser, and the goal zone have **no Box2D
+  body** — they are pure graphics driven each frame. `kindHasBody(kind)` **must exclude them** (it
+  returns false only for `fan`/`magnet`/`laser`/`goal`), or body-only code (`b2kAngle`,
+  `reseatDragged`, …) will error on them. `kindIsDynamic` lists the kinds that fans/magnets can push.
 - **Save/load** is text: `serializeText` emits `part` / `joint` / `world` records; each part packs
   its extras via `partSpecial` (KV string like `"ldr=45;tpw=700"`) and restores them in
   `applyPartSpecial`. `partLine` saves a part's **anchor** = its `loc`, **except** kinds whose
