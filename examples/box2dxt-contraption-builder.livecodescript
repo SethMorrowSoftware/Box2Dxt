@@ -4240,6 +4240,12 @@ on removeJointAt pIndex
 end removeJointAt
 
 on clearAll
+   if gPlaying then              -- clearing while playing exits Play cleanly (no stuck scrims)
+      put false into gPlaying
+      hideWin
+      setPlayChrome false
+      highlightActions
+   end if
    resetPend
    deselectPart
    local tP
@@ -5804,18 +5810,17 @@ on setPlayChrome pOn
    local tWide, tHigh
    put the width of this card into tWide
    put the height of this card into tHigh
-   if pOn then
-      makeBar "ui_playscrimL", 0, kTopBarH + kAccentH, kPaletteW, tHigh - kStatusH, "16,18,24"
-      set the blendLevel of graphic "ui_playscrimL" to 78
-      makeBar "ui_playscrimR", tWide - kInspectorW, kTopBarH + kAccentH, tWide, tHigh - kStatusH, "16,18,24"
-      set the blendLevel of graphic "ui_playscrimR" to 78
-      makeBar "ui_playbanner", kPaletteW, kTopBarH + kAccentH, tWide - kInspectorW, kTopBarH + kAccentH + 26, "40,120,72"
-      makeLabel "ui_playbannerlbl", kPaletteW + 12, kTopBarH + kAccentH + 4, tWide - kInspectorW - 12, kTopBarH + kAccentH + 24, "▶ PLAY — solve the puzzle", 12, "236,255,240", true
-   else
-      deleteByPrefix "ui_playscrim"
-      if there is a graphic "ui_playbanner" then delete graphic "ui_playbanner"
-      if there is a field "ui_playbannerlbl" then delete field "ui_playbannerlbl"
-   end if
+   -- always tear down first, so it's idempotent (no duplicate scrims)
+   deleteByPrefix "ui_playscrim"
+   if there is a graphic "ui_playbanner" then delete graphic "ui_playbanner"
+   if there is a field "ui_playbannerlbl" then delete field "ui_playbannerlbl"
+   if not pOn then exit setPlayChrome
+   makeBar "ui_playscrimL", 0, kTopBarH + kAccentH, kPaletteW, tHigh - kStatusH, "16,18,24"
+   set the blendLevel of graphic "ui_playscrimL" to 78
+   makeBar "ui_playscrimR", tWide - kInspectorW, kTopBarH + kAccentH, tWide, tHigh - kStatusH, "16,18,24"
+   set the blendLevel of graphic "ui_playscrimR" to 78
+   makeBar "ui_playbanner", kPaletteW, kTopBarH + kAccentH, tWide - kInspectorW, kTopBarH + kAccentH + 26, "40,120,72"
+   makeLabel "ui_playbannerlbl", kPaletteW + 12, kTopBarH + kAccentH + 4, tWide - kInspectorW - 12, kTopBarH + kAccentH + 24, "▶ PLAY — solve the puzzle", 12, "236,255,240", true
 end setPlayChrome
 
 -- The "Solved!" overlay, built once with the chrome and shown on a win.
@@ -6022,6 +6027,7 @@ on resetSceneState
    put empty into gWireSrc
    deleteByPrefix "cb_ring_"
    deleteByPrefix "cb_wire_"
+   deleteByPrefix "cb_flame_"        -- thruster exhaust is a transient run-only effect
 end resetSceneState
 
 on deleteByPrefix pPrefix
