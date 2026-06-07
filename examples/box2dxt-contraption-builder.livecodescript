@@ -3561,8 +3561,9 @@ end makeJoint
 -- rope of small links. Each segment is a normal part and each link an exact-pivot
 -- "pin" joint, so the whole span renders, saves/loads and deletes like anything else.
 on buildSpan pKind, pA, pB, pEx, pEy
-   local tSx, tSy, tD, tN, tHt, tColor, tDens, tSag, tPinKind
-   local tI, tT, tJx0, tJy0, tJx1, tJy1, tCx, tCy, tLen, tAng, tSeg, tPrev
+   local tSx, tSy, tD, tN, tHt, tColor, tDens, tPinKind, tPts, tNpts
+   local tI, tJx0, tJy0, tJx1, tJy1, tCx, tCy, tLen, tAng, tSeg, tPrev
+   local tAx, tAy, tHalf, tT
    put gPendX into tSx
    put gPendY into tSy
    put sqrt((pEx - tSx) ^ 2 + (pEy - tSy) ^ 2) into tD
@@ -3570,28 +3571,47 @@ on buildSpan pKind, pA, pB, pEx, pEy
       put "That span is too short — click two points further apart." into gStatus
       exit buildSpan
    end if
+   set the itemDelimiter to comma
+   -- Build the list of pin points first, then place one equal-length link between
+   -- each consecutive pair. A bridge is a straight run of planks; a chain is a
+   -- shallow tent (equal links + real slack) that the free pins round into a
+   -- natural catenary the moment gravity takes hold on Run.
    if pKind is "bridge" then
-      put "deckpin" into tPinKind             -- planks flex a little but never fold back
-      put max(2, min(20, round(tD / 60))) into tN
+      put "deckpin" into tPinKind            -- planks flex a little but never fold back
       put 12 into tHt
       put "168,146,98" into tColor
       put 1 into tDens
-      put 0 into tSag                        -- straight; sags under load
+      put max(2, min(24, round(tD / 60))) into tN
+      put empty into tPts
+      repeat with tI = 0 to tN
+         put tI / tN into tT
+         put round(tSx + tT * (pEx - tSx)) & comma & round(tSy + tT * (pEy - tSy)) & cr after tPts
+      end repeat
    else
       put "pin" into tPinKind                 -- links pivot freely so the chain drapes
-      put max(6, min(40, round(tD / 18))) into tN   -- more, finer links → a smoother curve
-      put 7 into tHt
+      put 8 into tHt
       put "150,154,170" into tColor
-      put 0.3 into tDens                      -- lighter, so it settles into a natural catenary
-      put tD * 0.18 into tSag                 -- a deeper initial drape
+      put 0.3 into tDens                      -- light links settle into a natural curve
+      put (tSx + pEx) / 2 into tAx
+      put (tSy + pEy) / 2 + tD * 0.22 into tAy   -- apex sags below the midpoint (the slack)
+      put max(3, min(20, round(tD / 34))) into tHalf
+      put empty into tPts
+      repeat with tI = 0 to tHalf             -- equal links: start -> apex
+         put tI / tHalf into tT
+         put round(tSx + tT * (tAx - tSx)) & comma & round(tSy + tT * (tAy - tSy)) & cr after tPts
+      end repeat
+      repeat with tI = 1 to tHalf             -- equal links: apex -> end
+         put tI / tHalf into tT
+         put round(tAx + tT * (pEx - tAx)) & comma & round(tAy + tT * (pEy - tAy)) & cr after tPts
+      end repeat
    end if
-   put tSx into tJx0
-   put tSy into tJy0
+   put the number of lines of tPts into tNpts
    put empty into tPrev
-   repeat with tI = 1 to tN
-      put tI / tN into tT
-      put tSx + tT * (pEx - tSx) into tJx1
-      put tSy + tT * (pEy - tSy) + tSag * sin(kPI * tT) into tJy1
+   repeat with tI = 1 to tNpts - 1
+      put item 1 of line tI of tPts into tJx0
+      put item 2 of line tI of tPts into tJy0
+      put item 1 of line (tI + 1) of tPts into tJx1
+      put item 2 of line (tI + 1) of tPts into tJy1
       put (tJx0 + tJx1) / 2 into tCx
       put (tJy0 + tJy1) / 2 into tCy
       put sqrt((tJx1 - tJx0) ^ 2 + (tJy1 - tJy0) ^ 2) into tLen
@@ -3605,11 +3625,9 @@ on buildSpan pKind, pA, pB, pEx, pEy
       if tI is 1 then get connectJoint(tPinKind, pA, tSeg, round(tJx0), round(tJy0), 0)
       else get connectJoint(tPinKind, tPrev, tSeg, round(tJx0), round(tJy0), 0)
       put tSeg into tPrev
-      put tJx1 into tJx0
-      put tJy1 into tJy0
    end repeat
    get connectJoint(tPinKind, tPrev, pB, round(pEx), round(pEy), 0)
-   put (niceName(pKind) & " built from " & tN & " segments. Press Run to test it.") into gStatus
+   put (niceName(pKind) & " built from " & (tNpts - 1) & " segments. Press Run to test it.") into gStatus
 end buildSpan
 
 -- The shared joint builder. Picks a sensible pivot per kind, records the joint
@@ -7641,13 +7659,14 @@ end buildRecipeBalloonLift
 on buildRecipePlateBomb
    if gMode is "run" then toggleMode
    clearAll
-   local tCx, tPlateX, tTowerX, tI
+   local tCx, tPlateX, tTowerX, tI, tBomb
    put (gArenaL + gArenaR) div 2 into tCx
    put tCx - 130 into tPlateX
    put tCx + 120 into tTowerX
    get placePlate(tPlateX, gArenaB - 8)
    get placeBall(tPlateX, gArenaT + 60, 40, "232,182,92")
-   get placeBomb(tTowerX, gArenaB - 28)
+   put placeBomb(tTowerX, gArenaB - 28) into tBomb
+   set the uFuseOnRun of tBomb to false        -- this bomb fires from the PLATE, not its own fuse
    repeat with tI = 1 to 4
       get placeBox(tTowerX, gArenaB - 66 - tI * 34, 46, 30, "214,92,92")
    end repeat
@@ -7846,8 +7865,8 @@ on buildRecipeCradle
       else
          put placeBall(tX, tTopY + tLen, tDiam, "120,200,232") into tBall
       end if
-      set the uBounce of tBall to 0
-      b2kSetBounce tBall, 0
+      set the uBounce of tBall to 0.92         -- near-elastic, so momentum kicks the far ball out
+      b2kSetBounce tBall, 0.92
       set the uDensity of tBall to 2
       b2kSetDensity tBall, 2
       get connectJoint("rope", tBall, tAnchor, tX, tTopY, 0)
