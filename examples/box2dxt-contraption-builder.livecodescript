@@ -3182,6 +3182,10 @@ end rebuildHillChain
 on beginDrawTerrain pX, pY
    set the itemDelimiter to comma
    put "draw" into gDragMode
+   -- Clamp the first vertex to the arena, exactly like extendDrawTerrain — a draw
+   -- that begins off the play area must not seed an out-of-bounds point.
+   put max(gArenaL, min(gArenaR, pX)) into pX
+   put max(gArenaT, min(gArenaB, pY)) into pY
    put round(pX) & "," & round(pY) into gDrawPts
    put "cb_terrain_" & the milliseconds & "_" & random(99999) into gDrawCtrl
    create graphic gDrawCtrl
@@ -4565,7 +4569,7 @@ function placeBomb pX, pY
    b2kSpawnBall pX, pY, kBombDiam, "150,40,40"
    put the result into tCtrl
    tagPart tCtrl, "bomb", "150,40,40", empty
-   set the uFuseOnRun of tCtrl to false
+   set the uFuseOnRun of tCtrl to true     -- bombs arm on Run by default (fuse length set in the inspector)
    set the uFuse of tCtrl to 0
    set the uBlastRadius of tCtrl to kBombRadius
    set the uBlastPower of tCtrl to kBombPower
@@ -4717,7 +4721,7 @@ end placeLaser
 -- Recast a laser's ray from its emitter (point 1) along uLaserDir and stretch the
 -- beam to the first hit; store the distance for the live readout.
 on drawLaserBeam pLaser
-   local tHead, tEx, tEy, tRad, tFx, tFy, tHx, tHy
+   local tHead, tEx, tEy, tRad, tFx, tFy, tHx, tHy, tHitCtrl
    set the itemDelimiter to comma
    put line 1 of the points of pLaser into tHead
    if tHead is empty then exit drawLaserBeam
@@ -4726,7 +4730,8 @@ on drawLaserBeam pLaser
    put numOr(the uLaserDir of pLaser, 0) * kPI / 180 into tRad
    put tEx + kLaserReach * cos(tRad) into tFx
    put tEy + kLaserReach * sin(tRad) into tFy
-   if b2kRayHit(tEx, tEy, tFx, tFy) then
+   put b2kRayHit(tEx, tEy, tFx, tFy) into tHitCtrl   -- returns the hit control (or empty), NOT a boolean
+   if tHitCtrl is not empty then
       put b2kRayHitX() into tHx
       put b2kRayHitY() into tHy
       set the uLaserDist of pLaser to round(b2kRayDist())
