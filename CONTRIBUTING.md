@@ -48,8 +48,18 @@ python3 tools/sync-embedded-kit.py
 ```
 
 Never hand-edit the region between the sentinels — your change would be
-overwritten on the next sync. CI runs `tools/sync-embedded-kit.py --check` and
-fails if an embedded copy has drifted, so commit the re-synced examples
+overwritten on the next sync.
+
+OXT/LiveCode cannot compile headlessly in CI, so static checks stand in. After
+editing any `.livecodescript`, run:
+
+```sh
+python3 tools/check-livecodescript.py
+```
+
+It verifies no smart quotes, balanced handlers/control structures, and that the
+embedded Kit copies are in sync (it wraps `sync-embedded-kit.py --check`). CI
+runs the same script and fails on any of these, so commit the re-synced examples
 alongside the Kit change.
 
 ## Conventions

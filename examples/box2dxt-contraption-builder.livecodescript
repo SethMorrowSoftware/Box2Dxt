@@ -1723,8 +1723,15 @@ local gJPx, gJPy, gJMotor, gJVis, gJEnd
 local gArenaL, gArenaR, gArenaT, gArenaB
 local gStatus
 local gNextPid
+local gNameCount                       -- per-kind counter for auto-names (Bomb 1, Plate 2, ...)
+local gWires                           -- CR-list of signal wires, each "srcCtrl<tab>tgtCtrl" (long ids)
+local gWireSrc                         -- the pending wire source while the Link tool waits for a target
+local gPlaying                         -- true while in Play mode (Run + win-watching + a clean view)
+local gGameWon                         -- latches true the moment every goal zone is reached this run
+local gPlayStartMs                     -- the milliseconds Play started, for the solve timer
+local gAssets                          -- the image library: CR-list of "path<tab>shape<tab>name"
 local gFlash
-local gFrames, gFpsTime, gFps
+local gFrames, gFpsTime, gFps, gHudTime   -- gHudTime throttles the live HUD/telemetry refresh
 -- new-object + field-force state (balloons rise on their own; fans/magnets are
 -- body-less zones that push parts each frame; plates count what rests on them).
 -- gKindList[kind] holds a CR-delimited control list per special kind.
@@ -1740,15 +1747,16 @@ local gFilterPart                      -- part whose collision filter the popup 
 local gInspTab                         -- active inspector tab: shape | physics | collide | special
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
 local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
+local gCCD, gSleepOn, gWarmStart, gSubsteps   -- advanced world solver toggles (the "World · Advanced" panel)
 local gPreRun                          -- snapshot of the build, taken when Run starts
 local gPalOpen                         -- CR-list of palette section titles currently expanded
 
-constant kEditTools    = "drag,delete,duplicate,multiply"
-constant kEditLabels   = "Drag,Delete,Duplicate,Multiply"
+constant kEditTools    = "drag,delete,duplicate,multiply,link"
+constant kEditLabels   = "Drag,Delete,Duplicate,Multiply,Link"
 constant kShapeTools   = "box,ball,capsule,poly,image,anchor"
 constant kShapeLabels  = "Box,Ball,Capsule,Polygon,Image,Anchor"
-constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor"
-constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor"
+constant kSpecialTools = "balloon,bomb,plate,fan,magnet,sensor,laser,thruster,goal"
+constant kSpecialLabels = "Balloon,Bomb,Pressure Plate,Fan,Magnet,Sensor,Laser,Thruster,Goal Zone"
 constant kTerrainTools = "platform,ramp,hill,draw"
 constant kTerrainLabels = "Platform,Ramp,Hill,Draw"
 constant kDrawStep = 14       -- min pixels between sampled points while drawing freehand terrain
@@ -1771,7 +1779,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "5"
+constant kUIVersion = "12"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1798,6 +1806,10 @@ constant kPlateW = 120, kPlateH = 16
 constant kSensorW = 96, kSensorH = 72
 constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
+constant kLaserReach = 1600, kLaserStep = 45   -- laser ray length (px) and the angle step its direction cycles by
+constant kGoalW = 120, kGoalH = 120   -- a goal zone's base size (scaled by uGoalScale)
+constant kLaserBurn = 36   -- frames of sustained laser hit before a cutting beam destroys a part
+constant kContainMargin = 90   -- how far past the arena a body may stray before the containment net pulls it back
 constant kStressBatch = 50
 constant kSizeMin = 16, kSizeMax = 240
 -- Terrain (static scenery) can be larger than parts — wide ledges, long ramps.
@@ -1851,6 +1863,7 @@ on startCB
    put "shape" into gInspTab
    put "normal" into gGravityMode
    put "default" into gWorldFeel
+   setWorldOptionDefaults
    put empty into gHoverId
    put 0 into gStressCount
    put "SHAPES" into gPalOpen        -- single-open accordion: SHAPES is the category open first
@@ -1868,8 +1881,9 @@ on startCB
    raiseUI
    highlightAll
    layoutPalette                    -- re-apply accordion state to the persisted palette
+   loadImageLibrary                 -- restore the user's imported-image library
    showInspectorForTool
-   put "Welcome! Pick a shape on the left, click the stage to drop it, then press Run." into gStatus
+   put "Welcome! Pick a part on the left, drop it on the stage, then press Run. New here? The ? button (top bar) replays the quick tour." into gStatus
    updateHud
    maybeShowOnboarding
 end startCB
@@ -1896,6 +1910,8 @@ on renderBuild
    lock screen
    b2kSync
    renderJoints
+   updateLasers
+   drawWires
    unlock screen
 end renderBuild
 
@@ -1903,6 +1919,7 @@ end renderBuild
 -- Arena (walls + a framed play field, mirrors the showcase demo)
 -- =====================================================================
 on prepArena
+   set the acceleratedRendering of this stack to true   -- GPU compositing so dynamic-layer bodies move without trails/clipping
    local tWide, tHigh, tCanvasL, tCanvasR, tCanvasT, tCanvasB
    put the width of this card into tWide
    put the height of this card into tHigh
@@ -1953,6 +1970,9 @@ on buildUI
    makeStatusBar
    buildRecipesMenu
    buildFilterPanel
+   buildWorldPanel
+   buildPlayOverlay
+   buildImagePanel
    applyTooltips
 end buildUI
 
@@ -1964,9 +1984,9 @@ on makeTopBar
    makeBar "ui_accent", 0, kTopBarH, tWide, kTopBarH + kAccentH, kColAccentGreen
    makeLabel "ui_title", 18, 7, 280, 33, "Box2Dxt", 22, "236,238,245", true
    makeLabel "ui_sub", 20, 32, 560, 50, "Contraption Builder — build a machine, then press Run to bring it to life", 11, "150,154,166", false
-   put "mode,reset,clear,save,load,recipes,info" into tIds
-   put "Run,Reset,Clear,Save,Load,Recipes,?" into tLbls
-   put "84,60,64,64,64,84,30" into tWidths
+   put "mode,play,reset,clear,save,load,worldadv,images,recipes,info" into tIds
+   put "Run,Play,Reset,Clear,Save,Load,World,Images,Recipes,?" into tLbls
+   put "84,58,58,58,58,58,58,66,78,30" into tWidths
    put 6 into tGap
    put 0 into tW
    repeat for each item tId in tWidths
@@ -2229,7 +2249,8 @@ on makeInspector
    put tWide - kInspectorW into tL
    put kTopBarH + kAccentH into tTop
    makeBar "ui_inspbg", tL, tTop, tWide, tHigh - kStatusH, kColPaletteBg
-   makeLabel "ui_insp_title", tL + 12, tTop + 10, tWide - 12, tTop + 34, "Inspector", 14, "236,238,245", true
+   makeLabel "ui_insp_title", tL + 12, tTop + 10, tWide - 86, tTop + 34, "Inspector", 14, "236,238,245", true
+   makeAction "rename", "Rename", tWide - 78, tTop + 8, 66, 22
    makeField "ui_insp_body", tL + 12, tTop + 40, tWide - 12, tTop + 118, 11, "190,194,206"
    -- settings tabs: group a part's many settings so each pane stays short
    makeAction "tab_shape", "Shape", tL + 12, tTop + 124, 50, 24
@@ -2443,6 +2464,16 @@ on highlightActions
          setBtnActive "ui_act_mode", kColAccentGreen
       end if
    end if
+   -- the Play button stands out (blue), turning amber 'Stop' while a puzzle runs
+   if there is a button "ui_act_play" then
+      if gPlaying then
+         set the label of button "ui_act_play" to "Stop"
+         setBtnActive "ui_act_play", kColAccentAmber
+      else
+         set the label of button "ui_act_play" to "Play"
+         setBtnActive "ui_act_play", kColToggleBlue
+      end if
+   end if
    -- A clear, full-width cue for which mode you're in: green accent + neutral
    -- subtitle while building; amber accent + a "running" subtitle while simulating.
    if gMode is "run" then
@@ -2480,6 +2511,10 @@ on mouseDown
    put the mouseH into tx
    put the mouseV into ty
    if gMode is "run" then
+      if the shiftKey is down then       -- Shift-click kicks the body under the pointer
+         kickPartAt tx, ty
+         exit mouseDown
+      end if
       get b2kGrab(tx, ty)
       if it is not empty then put "run" into gDragMode
       exit mouseDown
@@ -2520,6 +2555,10 @@ on mouseDown
       if tHit is not empty then multiplyPart tHit
       exit mouseDown
    end if
+   if gTool is "link" then
+      handleLinkClick tHit
+      exit mouseDown
+   end if
    if tHit is not empty then
       put tHit into gDragCtrl
       put "build" into gDragMode
@@ -2547,6 +2586,12 @@ on mouseMove pX, pY
       local tCx, tCy, tOld, tDx, tDy, tGroup, tP
       put max(gArenaL, min(gArenaR, pX)) into tCx
       put max(gArenaT, min(gArenaB, pY)) into tCy
+      if the uKind of gDragCtrl is "laser" then       -- drag a laser by its emitter, not the beam midpoint
+         set the points of gDragCtrl to round(tCx) & "," & round(tCy) & cr & (line 2 of the points of gDragCtrl)
+         drawLaserBeam gDragCtrl
+         put true into gDragMoved
+         exit mouseMove
+      end if
       put the loc of gDragCtrl into tOld
       put round(tCx) - item 1 of tOld into tDx       -- how far the grabbed part moved
       put round(tCy) - item 2 of tOld into tDy
@@ -2606,6 +2651,20 @@ on mouseRelease
    put empty into gDragMode
 end mouseRelease
 
+-- Shift-click during Run kicks the dynamic body under the pointer: a sharp,
+-- mass-aware upward impulse with a little sideways scatter, plus a tumble. Shows
+-- off the one-shot b2kImpulse / b2kAngularImpulse force handlers.
+on kickPartAt pX, pY
+   local tHit
+   put b2kControlAt(pX, pY) into tHit
+   if tHit is empty then exit kickPartAt
+   if b2kBodyType(tHit) is not "dynamic" then exit kickPartAt
+   b2kImpulse tHit, (random(401) - 200), -380       -- up, with random horizontal scatter
+   b2kAngularImpulse tHit, (random(481) - 240)       -- a tumble either way
+   put "Kicked it! Shift-click any moving part during Run to bat it around." into gStatus
+   updateHud
+end kickPartAt
+
 on handleUiClick
    local tName, tId
    put the short name of the target into tName
@@ -2615,6 +2674,14 @@ on handleUiClick
    end if
    if tName is "ui_filterscrim" then
       hideFilterPanel
+      exit handleUiClick
+   end if
+   if tName is "ui_worldscrim" then
+      hideWorldPanel
+      exit handleUiClick
+   end if
+   if tName is "ui_imgscrim" then
+      hideImagePanel
       exit handleUiClick
    end if
    -- Click a settings value to type an exact number (steppers stay on the +/- keys).
@@ -2665,9 +2732,22 @@ on handleAction pId
       handleFilterToggle pId
       exit handleAction
    end if
+   if char 1 to 5 of pId is "wopt_" then
+      handleWorldToggle pId
+      exit handleAction
+   end if
+   if char 1 to 6 of pId is "asset_" then
+      placeAssetFromPanel (char 7 to -1 of pId)
+      exit handleAction
+   end if
+   if char 1 to 10 of pId is "imgremove_" then
+      removeFromLibrary (char 11 to -1 of pId)
+      exit handleAction
+   end if
    switch pId
       case "mode"
-         toggleMode
+         if gPlaying then stopPlay      -- leaving Run also leaves Play
+         else toggleMode
          break
       case "reset"
          resetMachine
@@ -2725,6 +2805,37 @@ on handleAction pId
       case "filterclose"
          hideFilterPanel
          break
+      case "play"
+         if gPlaying then stopPlay
+         else startPlay
+         break
+      case "winagain"
+         playAgain
+         break
+      case "winkeep"
+         hideWin
+         break
+      case "winedit"
+         stopPlay
+         break
+      case "rename"
+         renamePart gSelPart
+         break
+      case "worldadv"
+         openWorldPanel
+         break
+      case "images"
+         openImagePanel
+         break
+      case "imgimport"
+         importToLibrary
+         break
+      case "imgclose"
+         hideImagePanel
+         break
+      case "worldclose"
+         hideWorldPanel
+         break
       case "cart"
          hideRecipesMenu
          buildSampleCart
@@ -2740,6 +2851,10 @@ on handleAction pId
       case "platebomb"
          hideRecipesMenu
          buildRecipePlateBomb
+         break
+      case "chainpuzzle"
+         hideRecipesMenu
+         buildRecipeChainPuzzle
          break
       case "fantower"
          hideRecipesMenu
@@ -2803,16 +2918,26 @@ on toggleMode
       deselectJoint
       put true into gMotorsRunning
       put empty into gSensorCount   -- every sensor zone starts empty each Run
+      deleteByPrefix "cb_wire_"     -- wires are a build-time authoring aid; hide them during Run
       armFuses
+      armThrusters
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
       applyWorldFeel                -- re-apply the world-tuning preset to the live world
+      applyWorldOptions             -- and the advanced solver toggles (CCD, sleeping, substeps…)
       armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
-      put "Run mode — gravity, motors and special parts are live. Drag bodies with the mouse." into gStatus
+      put "Run — gravity & motors live. Drag bodies; Shift-click to kick." into gStatus
    else
       put "build" into gMode
       put empty into gFps
       b2kStop                       -- freeze the loop; parts hold their place
+      deleteByPrefix "cb_flame_"    -- thruster exhaust is a Run-only effect
+      if gPlaying then              -- any path back to Build also leaves Play cleanly
+         put false into gPlaying
+         hideWin
+         setPlayChrome false
+         if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Play"
+      end if
       renderBuild
       put "Build mode — arrange parts and connect joints, then press Run." into gStatus
    end if
@@ -2896,6 +3021,15 @@ function placePart pX, pY
          break
       case "magnet"
          put placeMagnet(pX, pY) into tCtrl
+         break
+      case "laser"
+         put placeLaser(pX, pY) into tCtrl
+         break
+      case "thruster"
+         put placeThruster(pX, pY) into tCtrl
+         break
+      case "goal"
+         put placeGoal(pX, pY) into tCtrl
          break
       default
          return empty
@@ -3131,6 +3265,10 @@ end rebuildHillChain
 on beginDrawTerrain pX, pY
    set the itemDelimiter to comma
    put "draw" into gDragMode
+   -- Clamp the first vertex to the arena, exactly like extendDrawTerrain — a draw
+   -- that begins off the play area must not seed an out-of-bounds point.
+   put max(gArenaL, min(gArenaR, pX)) into pX
+   put max(gArenaT, min(gArenaB, pY)) into pY
    put round(pX) & "," & round(pY) into gDrawPts
    put "cb_terrain_" & the milliseconds & "_" & random(99999) into gDrawCtrl
    create graphic gDrawCtrl
@@ -3275,6 +3413,8 @@ end placeVehicle
 on tagPart pCtrl, pKind, pColor, pFile
    if pCtrl is empty then exit tagPart
    set the uPartId of pCtrl to gNextPid
+   add 1 to gNameCount[pKind]
+   set the uPartName of pCtrl to niceName(pKind) && gNameCount[pKind]   -- auto-name; user-renamable in the inspector
    set the uKind of pCtrl to pKind
    set the uColor of pCtrl to pColor
    set the uFile of pCtrl to pFile
@@ -3299,18 +3439,19 @@ on tagPart pCtrl, pKind, pColor, pFile
       set the uDensity of pCtrl to 1
       set the uGravity of pCtrl to 1
       set the uFixedRot of pCtrl to false
+      set the layerMode of pCtrl to "dynamic"   -- moving bodies composite on their own GPU layer (no smear/clip artifacts)
       b2kWake pCtrl                       -- so the first sync draws it
    end if
 end tagPart
 
 -- Whether a kind moves under gravity (so it gets bounce, waking, field forces).
 function kindIsDynamic pKind
-   return pKind is among the items of "box,ball,capsule,poly,image,balloon,bomb"
+   return pKind is among the items of "box,ball,capsule,poly,image,balloon,bomb,thruster"
 end kindIsDynamic
 
 -- Fans and magnets are GUI-only influence zones with no physics body.
 function kindHasBody pKind
-   return pKind is not "fan" and pKind is not "magnet"
+   return pKind is not "fan" and pKind is not "magnet" and pKind is not "laser" and pKind is not "goal"
 end kindHasBody
 
 -- Friendly singular name for status messages.
@@ -3327,7 +3468,7 @@ end friendlyKind
 
 -- Add a freshly tagged part to its per-kind list (for fast per-frame iteration).
 on registerKind pCtrl, pKind
-   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor" then
+   if pKind is among the items of "balloon,bomb,plate,fan,magnet,sensor,laser,thruster,goal" then
       put pCtrl & cr after gKindList[pKind]
    end if
    if pKind is "plate" then
@@ -3340,7 +3481,7 @@ end registerKind
 -- Drop a deleted part from any per-kind list it belonged to.
 on unregisterKind pCtrl
    local tKind, tP, tNew
-   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor"
+   repeat for each item tKind in "balloon,bomb,plate,fan,magnet,sensor,laser,thruster,goal"
       if pCtrl is not in gKindList[tKind] then next repeat
       put empty into tNew
       repeat for each line tP in gKindList[tKind]
@@ -3368,8 +3509,47 @@ function dynamicParts
 end dynamicParts
 
 -- Pick an image file and drop it in as a dynamic body (it rotates via `the angle`).
+-- Create an image-backed part from a known file + collision shape. Shared by the
+-- one-off Image tool and the image library. pShape "auto" picks from the art's
+-- aspect: square-ish -> circle, clearly oblong -> capsule (vs the bounding rect).
+function spawnImageFrom pPath, pShape, pX, pY
+   if there is no file pPath then return empty
+   local tName, tRef, tW, tH, tScale, tErr, tAR
+   put "cb_img_" & the milliseconds & "_" & random(99999) into tName
+   create image tName
+   put the long id of image tName into tRef
+   try
+      set the filename of tRef to pPath
+   catch tErr
+      delete tRef
+      return empty
+   end try
+   put the formattedWidth of tRef into tW
+   put the formattedHeight of tRef into tH
+   if tW < 1 or tH < 1 then
+      delete tRef
+      return empty
+   end if
+   put kImageMax / max(tW, tH) into tScale
+   if tScale > 1 then put 1 into tScale
+   set the width of tRef to max(8, round(tW * tScale))
+   set the height of tRef to max(8, round(tH * tScale))
+   set the loc of tRef to round(pX) & "," & round(pY)
+   b2kAddBox tRef
+   tagPart tRef, "image", empty, pPath
+   if pShape is empty or pShape is "auto" then
+      put (the width of tRef) / (the height of tRef) into tAR
+      if tAR > 0.75 and tAR < 1.34 then put "ball" into pShape
+      else put "capsule" into pShape
+   end if
+   set the uShape of tRef to pShape
+   b2kReshape tRef, pShape
+   return tRef
+end spawnImageFrom
+
+-- The Image tool: pick a file, drop it, and remember it in the library for reuse.
 function importImage pX, pY
-   local tFile, tName, tRef, tW, tH, tScale
+   local tFile, tRef
    answer file "Choose an image (PNG or JPG):" with type "Images|png,jpg,jpeg,gif"
    put it into tFile
    if tFile is empty or the result is "cancel" then
@@ -3382,37 +3562,90 @@ function importImage pX, pY
       updateHud
       return empty
    end if
-   put "cb_img_" & the milliseconds & "_" & random(99999) into tName
-   create image tName
-   put the long id of image tName into tRef
-   local tErr
-   try
-      set the filename of tRef to tFile
-   catch tErr
-      delete tRef
-      put "Could not load that image." into gStatus
-      updateHud
-      return empty
-   end try
-   put the formattedWidth of tRef into tW
-   put the formattedHeight of tRef into tH
-   if tW < 1 or tH < 1 then
-      delete tRef
-      put "That image could not be read (it may be empty or corrupt)." into gStatus
+   put spawnImageFrom(tFile, "auto", pX, pY) into tRef
+   if tRef is empty then
+      put "That image could not be loaded (it may be empty or corrupt)." into gStatus
       updateHud
       return empty
    end if
-   put kImageMax / max(tW, tH) into tScale
-   if tScale > 1 then put 1 into tScale
-   set the width of tRef to max(8, round(tW * tScale))
-   set the height of tRef to max(8, round(tH * tScale))
-   set the loc of tRef to round(pX) & "," & round(pY)
-   b2kAddBox tRef
-   tagPart tRef, "image", empty, tFile
-   put "Image placed — it tumbles and rotates when you press Run." into gStatus
+   addToLibrary tFile, (the uShape of tRef)
+   put "Image placed and saved to your Images library for reuse. Collides as its shape (change under Collision shape)." into gStatus
    updateHud
    return tRef
 end importImage
+
+-- ===================================================================
+-- Image library: import once (with a collision shape), reuse forever.
+-- The library lives in a stack property, so it persists across sessions;
+-- placed instances are ordinary image parts that save with the scene.
+-- ===================================================================
+on loadImageLibrary
+   put the uImageLibrary of this stack into gAssets
+end loadImageLibrary
+
+on saveImageLibrary
+   set the uImageLibrary of this stack to gAssets
+end saveImageLibrary
+
+-- A friendly name from a file path: the file name without folders or extension.
+function assetNameFromPath pPath
+   local tN
+   set the itemDelimiter to "/"        -- LiveCode uses "/" in paths on every platform
+   put the last item of pPath into tN
+   set the itemDelimiter to "."
+   if the number of items of tN > 1 then delete the last item of tN
+   return tN
+end assetNameFromPath
+
+-- Add a file to the library (deduped by path), with its import-time shape.
+on addToLibrary pPath, pShape
+   if pPath is empty then exit addToLibrary
+   set the itemDelimiter to tab
+   local tRec
+   repeat for each line tRec in gAssets
+      if item 1 of tRec is pPath then exit addToLibrary    -- already in the library
+   end repeat
+   if pShape is empty then put "auto" into pShape
+   put pPath & tab & pShape & tab & assetNameFromPath(pPath) & cr after gAssets
+   if the last char of gAssets is return then delete the last char of gAssets
+   saveImageLibrary
+end addToLibrary
+
+on removeFromLibrary pIndex
+   if pIndex < 1 or pIndex > the number of lines of gAssets then exit removeFromLibrary
+   delete line pIndex of gAssets
+   saveImageLibrary
+   refreshImagePanel
+end removeFromLibrary
+
+-- Place an instance of a library image — an ordinary image part.
+function placeAssetInstance pIndex, pX, pY
+   set the itemDelimiter to tab
+   local tRec
+   put line pIndex of gAssets into tRec
+   if tRec is empty then return empty
+   return spawnImageFrom(item 1 of tRec, item 2 of tRec, pX, pY)
+end placeAssetInstance
+
+-- Import a new image into the library, choosing how it collides now.
+on importToLibrary
+   answer file "Choose an image to add to your library:" with type "Images|png,jpg,jpeg,gif"
+   local tFile, tShape
+   put it into tFile
+   if tFile is empty or the result is "cancel" then exit importToLibrary
+   if there is no file tFile then
+      put "Could not find that image file." into gStatus
+      updateHud
+      exit importToLibrary
+   end if
+   answer "How should it collide?" with "Auto" or "Ball" or "Box"
+   put it into tShape
+   if tShape is empty then put "Auto" into tShape
+   addToLibrary tFile, toLower(tShape)
+   refreshImagePanel
+   put "Added " & assetNameFromPath(tFile) & " to your Images library." into gStatus
+   updateHud
+end importToLibrary
 
 -- =====================================================================
 -- Joints (two-click: part A, then part B)
@@ -3503,8 +3736,9 @@ end makeJoint
 -- rope of small links. Each segment is a normal part and each link an exact-pivot
 -- "pin" joint, so the whole span renders, saves/loads and deletes like anything else.
 on buildSpan pKind, pA, pB, pEx, pEy
-   local tSx, tSy, tD, tN, tHt, tColor, tDens, tSag, tPinKind
-   local tI, tT, tJx0, tJy0, tJx1, tJy1, tCx, tCy, tLen, tAng, tSeg, tPrev
+   local tSx, tSy, tD, tN, tHt, tColor, tDens, tPinKind, tPts, tNpts
+   local tI, tJx0, tJy0, tJx1, tJy1, tCx, tCy, tLen, tAng, tSeg, tPrev
+   local tAx, tAy, tHalf, tT
    put gPendX into tSx
    put gPendY into tSy
    put sqrt((pEx - tSx) ^ 2 + (pEy - tSy) ^ 2) into tD
@@ -3512,28 +3746,47 @@ on buildSpan pKind, pA, pB, pEx, pEy
       put "That span is too short — click two points further apart." into gStatus
       exit buildSpan
    end if
+   set the itemDelimiter to comma
+   -- Build the list of pin points first, then place one equal-length link between
+   -- each consecutive pair. A bridge is a straight run of planks; a chain is a
+   -- shallow tent (equal links + real slack) that the free pins round into a
+   -- natural catenary the moment gravity takes hold on Run.
    if pKind is "bridge" then
-      put "deckpin" into tPinKind             -- planks flex a little but never fold back
-      put max(2, min(20, round(tD / 60))) into tN
+      put "deckpin" into tPinKind            -- planks flex a little but never fold back
       put 12 into tHt
       put "168,146,98" into tColor
       put 1 into tDens
-      put 0 into tSag                        -- straight; sags under load
+      put max(2, min(24, round(tD / 60))) into tN
+      put empty into tPts
+      repeat with tI = 0 to tN
+         put tI / tN into tT
+         put round(tSx + tT * (pEx - tSx)) & comma & round(tSy + tT * (pEy - tSy)) & cr after tPts
+      end repeat
    else
       put "pin" into tPinKind                 -- links pivot freely so the chain drapes
-      put max(6, min(40, round(tD / 18))) into tN   -- more, finer links → a smoother curve
-      put 7 into tHt
+      put 8 into tHt
       put "150,154,170" into tColor
-      put 0.3 into tDens                      -- lighter, so it settles into a natural catenary
-      put tD * 0.18 into tSag                 -- a deeper initial drape
+      put 0.3 into tDens                      -- light links settle into a natural curve
+      put (tSx + pEx) / 2 into tAx
+      put (tSy + pEy) / 2 + tD * 0.22 into tAy   -- apex sags below the midpoint (the slack)
+      put max(3, min(20, round(tD / 34))) into tHalf
+      put empty into tPts
+      repeat with tI = 0 to tHalf             -- equal links: start -> apex
+         put tI / tHalf into tT
+         put round(tSx + tT * (tAx - tSx)) & comma & round(tSy + tT * (tAy - tSy)) & cr after tPts
+      end repeat
+      repeat with tI = 1 to tHalf             -- equal links: apex -> end
+         put tI / tHalf into tT
+         put round(tAx + tT * (pEx - tAx)) & comma & round(tAy + tT * (pEy - tAy)) & cr after tPts
+      end repeat
    end if
-   put tSx into tJx0
-   put tSy into tJy0
+   put the number of lines of tPts into tNpts
    put empty into tPrev
-   repeat with tI = 1 to tN
-      put tI / tN into tT
-      put tSx + tT * (pEx - tSx) into tJx1
-      put tSy + tT * (pEy - tSy) + tSag * sin(kPI * tT) into tJy1
+   repeat with tI = 1 to tNpts - 1
+      put item 1 of line tI of tPts into tJx0
+      put item 2 of line tI of tPts into tJy0
+      put item 1 of line (tI + 1) of tPts into tJx1
+      put item 2 of line (tI + 1) of tPts into tJy1
       put (tJx0 + tJx1) / 2 into tCx
       put (tJy0 + tJy1) / 2 into tCy
       put sqrt((tJx1 - tJx0) ^ 2 + (tJy1 - tJy0) ^ 2) into tLen
@@ -3547,11 +3800,9 @@ on buildSpan pKind, pA, pB, pEx, pEy
       if tI is 1 then get connectJoint(tPinKind, pA, tSeg, round(tJx0), round(tJy0), 0)
       else get connectJoint(tPinKind, tPrev, tSeg, round(tJx0), round(tJy0), 0)
       put tSeg into tPrev
-      put tJx1 into tJx0
-      put tJy1 into tJy0
    end repeat
    get connectJoint(tPinKind, tPrev, pB, round(pEx), round(pEy), 0)
-   put (niceName(pKind) & " built from " & tN & " segments. Press Run to test it.") into gStatus
+   put (niceName(pKind) & " built from " & (tNpts - 1) & " segments. Press Run to test it.") into gStatus
 end buildSpan
 
 -- The shared joint builder. Picks a sensible pivot per kind, records the joint
@@ -3774,6 +4025,10 @@ on b2kFrame
    applyFieldForces
    updateBombs
    updateRings
+   updateLasers
+   updateThrusters
+   containParts
+   checkGoals
    tickHud
 end b2kFrame
 
@@ -3803,8 +4058,8 @@ on b2kSensorEnter pSensor, pVisitor
       try
          set the backgroundColor of pSensor to "120,230,140"   -- lit while occupied
       end try
-      put "A sensor zone triggered — bombs go off and motors switch!" into gStatus
-      triggerSignal
+      put "A sensor zone triggered its signal!" into gStatus
+      fireEmitter pSensor
       updateHud
    end if
 end b2kSensorEnter
@@ -3858,6 +4113,8 @@ on deletePart pCtrl
    if pCtrl is empty then exit deletePart
    if gPendCtrl is pCtrl then resetPend
    if gSelPart is pCtrl then deselectPart
+   if gWireSrc is pCtrl then put empty into gWireSrc
+   removeWiresFor pCtrl
    local tI, tP, tNew
    if gJN >= 1 then
       repeat with tI = 1 to gJN
@@ -3983,6 +4240,12 @@ on removeJointAt pIndex
 end removeJointAt
 
 on clearAll
+   if gPlaying then              -- clearing while playing exits Play cleanly (no stuck scrims)
+      put false into gPlaying
+      hideWin
+      setPlayChrome false
+      highlightActions
+   end if
    resetPend
    deselectPart
    local tP
@@ -4080,7 +4343,8 @@ end buildSampleSwing
 function serializeText
    local tOut, tP, tI
    put "CB2" & cr into tOut
-   put "world" & tab & gGravityMode & tab & gWorldFeel & cr after tOut
+   put "world" & tab & gGravityMode & tab & gWorldFeel & tab & (gCCD is true) & tab & \
+         (gSleepOn is true) & tab & (gWarmStart is true) & tab & numOr(gSubsteps, 4) & cr after tOut
    repeat for each line tP in gParts
       if tP is empty then next repeat
       try
@@ -4092,6 +4356,13 @@ function serializeText
          if gJKind[tI] is not empty then put jointLine(tI) & cr after tOut
       end repeat
    end if
+   set the itemDelimiter to tab
+   repeat for each line tP in gWires
+      if tP is empty then next repeat
+      if (item 1 of tP) is among the lines of gParts and (item 2 of tP) is among the lines of gParts then
+         put "wire" & tab & (the uPartId of (item 1 of tP)) & tab & (the uPartId of (item 2 of tP)) & cr after tOut
+      end if
+   end repeat
    return tOut
 end serializeText
 
@@ -4116,11 +4387,12 @@ end saveContraption
 function partLine pCtrl
    local tLoc
    put the loc of pCtrl into tLoc
+   if the uKind of pCtrl is "laser" then put (line 1 of the points of pCtrl) into tLoc   -- a laser's anchor is its emitter, not the beam's bbox centre
    return "part" & tab & (the uPartId of pCtrl) & tab & (the uKind of pCtrl) & tab & \
          (item 1 of tLoc) & tab & (item 2 of tLoc) & tab & \
          numOr(the uW of pCtrl, the width of pCtrl) & tab & numOr(the uH of pCtrl, the height of pCtrl) & tab & \
          (the uBounce of pCtrl) & tab & (the uColor of pCtrl) & tab & (the uFile of pCtrl) & tab & \
-         partSpecial(pCtrl)
+         partSpecial(pCtrl) & tab & (the uPartName of pCtrl)
 end partLine
 
 -- Pack a part's per-kind extras as "key=value;key=value" (empty for plain shapes).
@@ -4173,6 +4445,22 @@ function partSpecial pCtrl
          put addKV(tS, "bradius=" & (the uBlastRadius of pCtrl)) into tS
          put addKV(tS, "bpower=" & (the uBlastPower of pCtrl)) into tS
          put addKV(tS, "fuse=" & (the uFuseOnRun of pCtrl is true)) into tS
+         put addKV(tS, "flen=" & numOr(the uFuseLen of pCtrl, kBombFuseFrames)) into tS
+         if the uSoftBlast of pCtrl is true then put addKV(tS, "soft=true") into tS
+         if the uDestroys of pCtrl is true then put addKV(tS, "demo=true") into tS
+         break
+      case "laser"
+         put addKV(tS, "ldr=" & numOr(the uLaserDir of pCtrl, 0)) into tS
+         if the uLaserCut of pCtrl is true then put addKV(tS, "cut=true") into tS
+         break
+      case "thruster"
+         put addKV(tS, "tdr=" & numOr(the uThrustDir of pCtrl, 270)) into tS
+         put addKV(tS, "tpw=" & numOr(the uThrustPower of pCtrl, 0)) into tS
+         put addKV(tS, "tsp=" & numOr(the uThrustSpin of pCtrl, 0)) into tS
+         if the uThrustAim of pCtrl is "body" then put addKV(tS, "tam=body") into tS
+         break
+      case "goal"
+         put addKV(tS, "gsc=" & numOr(the uGoalScale of pCtrl, 1)) into tS
          break
    end switch
    return tS
@@ -4245,11 +4533,12 @@ end loadContraption
 -- Load (from a file) and Reset (from the pre-run snapshot).
 on rebuildFromText pData
    local tLine, tRec, tMap, tNew
-   local tId, tKind, tX, tY, tW, tH, tBounce, tColor, tFileRef, tSpecial
+   local tId, tKind, tX, tY, tW, tH, tBounce, tColor, tFileRef, tSpecial, tNm
    local tIdA, tIdB, tPx, tPy, tMotor, tA, tB, tJSpecial
    clearAll
    put "normal" into gGravityMode
    put "default" into gWorldFeel
+   setWorldOptionDefaults
    put empty into tMap
    lock screen
    repeat for each line tLine in pData
@@ -4266,6 +4555,7 @@ on rebuildFromText pData
          put item 9 of tLine into tColor
          put item 10 of tLine into tFileRef
          put item 11 of tLine into tSpecial
+         put item 12 of tLine into tNm
          set the itemDelimiter to comma
          put rebuildPart(tKind, tX, tY, tW, tH, tColor, tFileRef) into tNew
          if tNew is not empty then
@@ -4275,6 +4565,7 @@ on rebuildFromText pData
                if tBounce > 0 then b2kSetBounce tNew, tBounce
             end if
             applyPartSpecial tNew, tSpecial
+            if tNm is not empty then set the uPartName of tNew to tNm   -- restore a renamed part's name
          end if
       else if tRec is "joint" then
          put item 2 of tLine into tKind
@@ -4291,10 +4582,18 @@ on rebuildFromText pData
          if tA is not empty and (tB is not empty or tKind is "hinge" or tKind is "pin" or tKind is "deckpin") then
             if connectJoint(tKind, tA, tB, tPx, tPy, tMotor) then applyJointSpecial gJN, tJSpecial
          end if
+      else if tRec is "wire" then
+         put item 2 of tLine into tIdA
+         put item 3 of tLine into tIdB
+         if (tIdA is among the keys of tMap) and (tIdB is among the keys of tMap) then addWire tMap[tIdA], tMap[tIdB]
       else if tRec is "world" then
          put item 2 of tLine into gGravityMode
          put item 3 of tLine into gWorldFeel
          if gWorldFeel is empty then put "default" into gWorldFeel
+         if item 4 of tLine is not empty then put (item 4 of tLine is "true") into gCCD
+         if item 5 of tLine is not empty then put (item 5 of tLine is "true") into gSleepOn
+         if item 6 of tLine is not empty then put (item 6 of tLine is "true") into gWarmStart
+         if item 7 of tLine is not empty then put item 7 of tLine into gSubsteps
          set the itemDelimiter to comma
       else
          set the itemDelimiter to comma
@@ -4393,18 +4692,69 @@ on updateHud
    put tInfo & "    Parts: " & b2kBodyCount() & "    Joints: " & liveJointCount() into tInfo
    if gBouncy then put tInfo & "    Bouncy" into tInfo
    if gMode is "run" and gFps is not empty then put tInfo & "    " & gFps & " fps" into tInfo
+   if gMode is "run" then put tInfo & hudPerf() & hudSelection() into tInfo
    if gStatus is not empty then put tInfo & "     |  " & gStatus into tInfo
    if there is a field "ui_status" then put tInfo into field "ui_status"
 end updateHud
 
+-- Live engine telemetry for the status bar (Run only): solver step time + how many
+-- bodies are still awake. b2kProfile returns "totalStep,collide,solve" in ms.
+function hudPerf
+   local tProf
+   put b2kProfile() into tProf
+   if tProf is empty then return empty
+   set the itemDelimiter to comma
+   return "    step " & fmtMs(item 1 of tProf) & "ms · awake " & b2kAwakeBodyCount()
+end hudPerf
+
+-- Live readout for the selected part or joint, so the inspector numbers can be
+-- watched changing during a run (speed/mass/angle, or a joint's own measure).
+function hudSelection
+   local tK, tH
+   if gSelJoint is not empty then
+      put gJKind[gSelJoint] into tK
+      put gJHandle[gSelJoint] into tH
+      if tK is "hinge" then return "    hinge " & round(b2kHingeAngle(tH)) & "°"
+      if tK is "rope" then return "    rope " & round(b2kRopeLength(tH)) & " px"
+      if tK is "slider" then return "    slider " & round(b2kSliderPos(tH)) & " px"
+      return empty
+   end if
+   if gSelPart is not empty and the uKind of gSelPart is "laser" then
+      if the uLaserDist of gSelPart is empty then return "    beam: no hit"
+      return "    beam: " & (the uLaserDist of gSelPart) & " px"
+   end if
+   if gSelPart is empty or not kindHasBody(the uKind of gSelPart) then return empty
+   return "    sel: " & round(b2kSpeed(gSelPart)) & " px/s · " & fmtMass(b2kMass(gSelPart)) & " · " & round(b2kAngle(gSelPart)) & "°"
+end hudSelection
+
+-- Small number formatters for the readouts.
+function fmtMs pN
+   if pN is empty or pN is not a number then return "0.0"
+   return format("%.1f", pN)
+end fmtMs
+
+function fmtMass pN
+   if pN is empty or pN is not a number then return "0 kg"
+   if pN < 10 then return format("%.1f", pN) & " kg"
+   return round(pN) & " kg"
+end fmtMass
+
 on tickHud
    add 1 to gFrames
    if gFpsTime is empty then put the milliseconds into gFpsTime
-   if the milliseconds - gFpsTime >= 500 then
+   if the milliseconds - gFpsTime >= kFpsWindowMs then
       put round(gFrames * 1000 / (the milliseconds - gFpsTime)) into gFps
       put 0 into gFrames
       put the milliseconds into gFpsTime
+   end if
+   -- Refresh the HUD ~10x/sec while running so the live telemetry reads smoothly,
+   -- without rebuilding the whole status string every single frame.
+   if gHudTime is empty or (the milliseconds - gHudTime) >= 100 then
+      put the milliseconds into gHudTime
       updateHud
+      if gPlaying and not gGameWon and there is a field "ui_playbannerlbl" then
+         put "▶ PLAY — " & playElapsed() & "s    get a movable part into the goal" into field "ui_playbannerlbl"
+      end if
    end if
 end tickHud
 
@@ -4448,8 +4798,10 @@ function placeBomb pX, pY
    b2kSpawnBall pX, pY, kBombDiam, "150,40,40"
    put the result into tCtrl
    tagPart tCtrl, "bomb", "150,40,40", empty
-   set the uFuseOnRun of tCtrl to false
+   set the uFuseOnRun of tCtrl to true     -- bombs arm on Run by default (fuse length set in the inspector)
    set the uFuse of tCtrl to 0
+   set the uFuseLen of tCtrl to kBombFuseFrames    -- countdown frames once armed (60 = ~1s)
+   set the uDestroys of tCtrl to false             -- default: push parts; toggle 'Demolish' to vaporise them
    set the uBlastRadius of tCtrl to kBombRadius
    set the uBlastPower of tCtrl to kBombPower
    return tCtrl
@@ -4537,6 +4889,37 @@ function placeMagnet pX, pY
    return tRef
 end placeMagnet
 
+-- A goal zone: a no-body target area. In Play, getting a movable part inside it
+-- (all goals at once) wins the puzzle. Scaled by uGoalScale, like the fan.
+function placeGoal pX, pY
+   local tName, tRef
+   put "cb_goal_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "rectangle"
+   set the filled of tRef to true
+   set the backgroundColor of tRef to "92,210,120"
+   set the foregroundColor of tRef to "40,150,80"
+   set the lineSize of tRef to 3
+   set the blendLevel of tRef to 58                       -- translucent: a target zone, not a solid
+   set the uGoalScale of tRef to 1
+   set the width of tRef to kGoalW
+   set the height of tRef to kGoalH
+   set the loc of tRef to round(pX) & "," & round(pY)
+   tagPart tRef, "goal", "92,210,120", empty
+   return tRef
+end placeGoal
+
+-- Resize a goal zone around its centre from its scale.
+on drawGoalShape pGoal
+   local tLoc, tScale
+   put the loc of pGoal into tLoc
+   put numOr(the uGoalScale of pGoal, 1) into tScale
+   set the width of pGoal to round(kGoalW * tScale)
+   set the height of pGoal to round(kGoalH * tScale)
+   set the loc of pGoal to tLoc
+end drawGoalShape
+
 -- Rebuild the fan's arrow polygon around its current centre for its direction.
 on drawFanShape pFan
    local tCx, tCy, tScale, tHw, tHh
@@ -4577,6 +4960,174 @@ function fanArrowPoints pCx, pCy, pHw, pHh, pDir
    put (line 1 of tP) after tP                -- close the triangle
    return tP
 end fanArrowPoints
+
+-- A laser: a no-body emitter that casts a ray each frame and draws the beam to
+-- whatever it hits first (a wall counts), marking the distance. Shows off the
+-- Kit's ray API (b2kRayHit + b2kRayHitX/Y + b2kRayDist). The graphic is the beam
+-- itself — a thick line from the emitter (point 1) to the hit point (point 2).
+function placeLaser pX, pY
+   local tName, tRef
+   put "cb_laser_" & the milliseconds & "_" & random(99999) into tName
+   create graphic tName
+   put the long id of graphic tName into tRef
+   set the style of tRef to "line"
+   set the lineSize of tRef to 5
+   set the foregroundColor of tRef to "236,80,80"
+   set the uLaserDir of tRef to 0            -- 0=right 90=down 180=left 270=up (45° steps)
+   set the uLaserCut of tRef to false        -- default: a sightline; toggle 'Cut' to burn through parts
+   set the points of tRef to round(pX) & "," & round(pY) & cr & round(pX + 40) & "," & round(pY)
+   tagPart tRef, "laser", "236,80,80", empty
+   drawLaserBeam tRef
+   return tRef
+end placeLaser
+
+-- Recast a laser's ray from its emitter (point 1) along uLaserDir and stretch the
+-- beam to the first hit; store the distance for the live readout.
+on drawLaserBeam pLaser
+   local tHead, tEx, tEy, tRad, tFx, tFy, tHx, tHy, tHitCtrl
+   set the itemDelimiter to comma
+   put line 1 of the points of pLaser into tHead
+   if tHead is empty then exit drawLaserBeam
+   put item 1 of tHead into tEx
+   put item 2 of tHead into tEy
+   put numOr(the uLaserDir of pLaser, 0) * kPI / 180 into tRad
+   put tEx + kLaserReach * cos(tRad) into tFx
+   put tEy + kLaserReach * sin(tRad) into tFy
+   put b2kRayHit(tEx, tEy, tFx, tFy) into tHitCtrl   -- returns the hit control (or empty), NOT a boolean
+   if tHitCtrl is not empty then
+      put b2kRayHitX() into tHx
+      put b2kRayHitY() into tHy
+      set the uLaserDist of pLaser to round(b2kRayDist())
+   else
+      put tFx into tHx
+      put tFy into tHy
+      set the uLaserDist of pLaser to empty
+   end if
+   set the points of pLaser to round(tEx) & "," & round(tEy) & cr & round(tHx) & "," & round(tHy)
+   -- Cutting beam: a sustained hit on a movable part burns through and destroys it.
+   if gMode is "run" and the uLaserCut of pLaser is true and tHitCtrl is not empty \
+         and (tHitCtrl is among the lines of gParts) and kindIsDynamic(the uKind of tHitCtrl) then
+      set the uBurn of tHitCtrl to numOr(the uBurn of tHitCtrl, 0) + 1
+      if the uBurn of tHitCtrl >= kLaserBurn then destroyPart tHitCtrl
+   end if
+end drawLaserBeam
+
+-- Recast every laser (called each frame while running and on every build redraw).
+on updateLasers
+   local tL
+   repeat for each line tL in gKindList["laser"]
+      if tL is not empty then drawLaserBeam tL
+   end repeat
+end updateLasers
+
+-- A thruster: a dynamic rocket body that drives itself. Each frame it applies a
+-- continuous force along its own facing (b2kForce) and, when its ignition fires
+-- on the first Run frame, a one-shot velocity pop (b2kPush); an optional spin
+-- adds continuous torque (b2kTorque). Lock its rotation for a straight climb, or
+-- leave it free to tumble.
+function placeThruster pX, pY
+   local tRef
+   b2kSpawnBox pX, pY, 38, 56, "74,84,104"      -- a tall rocket body
+   put the result into tRef
+   set the uThrustDir of tRef to 270             -- thrust upward by default (lifts off)
+   set the uThrustPower of tRef to 700
+   set the uThrustSpin of tRef to 0
+   set the uThrustLit of tRef to false
+   set the uThrustAim of tRef to "world"     -- thrust a FIXED direction by default (predictable)
+   tagPart tRef, "thruster", "74,84,104", empty
+   set the uFixedRot of tRef to true         -- and fly straight rather than tumble
+   b2kSetFixedRotation tRef, true
+   return tRef
+end placeThruster
+
+-- Reset every thruster's ignition so a fresh Run pops it off the pad once.
+on armThrusters
+   local tT
+   repeat for each line tT in gKindList["thruster"]
+      if tT is empty then next repeat
+      set the uThrustLit of tT to false
+      set the uThrustArmed of tT to true      -- thrusters start armed each Run; a trigger can switch them off
+   end repeat
+end armThrusters
+
+-- Drive every thruster each frame: ignition pop, then sustained thrust + spin.
+on updateThrusters
+   local tT, tRad, tPow
+   repeat for each line tT in gKindList["thruster"]
+      if tT is empty then next repeat
+      if (the uThrustArmed of tT is "false") or (numOr(the uThrustPower of tT, 0) <= 0) then
+         hideThrusterFlame tT          -- off: no exhaust
+         next repeat
+      end if
+      put numOr(the uThrustPower of tT, 0) into tPow
+      -- world-fixed thrust by default (predictable); "body" aim steers with the rocket's nose
+      if the uThrustAim of tT is "body" then put (numOr(the uThrustDir of tT, 270) + b2kAngle(tT)) * kPI / 180 into tRad
+      else put numOr(the uThrustDir of tT, 270) * kPI / 180 into tRad
+      if the uThrustLit of tT is not true then    -- one-shot ignition kick
+         b2kPush tT, 140 * cos(tRad), 140 * sin(tRad)
+         set the uThrustLit of tT to true
+      end if
+      b2kForce tT, tPow * cos(tRad), tPow * sin(tRad)
+      if numOr(the uThrustSpin of tT, 0) is not 0 then b2kTorque tT, (the uThrustSpin of tT)
+      drawThrusterFlame tT, tRad, tPow
+   end repeat
+end updateThrusters
+
+-- A translucent exhaust flame at the thruster's tail (opposite the thrust),
+-- sized by power, so you can see which way it pushes and how hard.
+on drawThrusterFlame pT, pRad, pPow
+   local tName, tCx, tCy, tLen, tOff, tEx, tEy
+   put "cb_flame_" & (the uPartId of pT) into tName
+   if there is no graphic tName then
+      create graphic tName
+      set the style of graphic tName to "oval"
+      set the filled of graphic tName to true
+      set the lineSize of graphic tName to 0
+      set the backgroundColor of graphic tName to "255,150,50"
+      set the blendLevel of graphic tName to 28
+   end if
+   set the itemDelimiter to comma
+   put item 1 of the loc of pT into tCx
+   put item 2 of the loc of pT into tCy
+   put min(40, 14 + pPow / 50) into tLen          -- flame grows with thrust power
+   put (the height of pT) / 2 + tLen / 2 into tOff
+   put tCx - tOff * cos(pRad) into tEx            -- exhaust is opposite the thrust direction
+   put tCy - tOff * sin(pRad) into tEy
+   set the width of graphic tName to round(tLen)
+   set the height of graphic tName to round(tLen)
+   set the loc of graphic tName to round(tEx) & "," & round(tEy)
+   set the visible of graphic tName to true
+end drawThrusterFlame
+
+on hideThrusterFlame pT
+   local tName
+   put "cb_flame_" & (the uPartId of pT) into tName
+   if there is a graphic tName then set the visible of graphic tName to false
+end hideThrusterFlame
+
+-- Safety net: a body flung, blasted or thrust clean out of the arena (past a
+-- generous margin) is pulled back to the edge with its speed killed, so nothing
+-- is ever lost off-screen. CCD stops most tunnelling; this catches the rest.
+on containParts
+   local tP, tLoc, tX, tY, tNX, tNY
+   set the itemDelimiter to comma
+   repeat for each line tP in dynamicParts()
+      if tP is empty then next repeat
+      put the loc of tP into tLoc
+      put item 1 of tLoc into tX
+      put item 2 of tLoc into tY
+      put tX into tNX
+      put tY into tNY
+      if tX < gArenaL - kContainMargin then put gArenaL + 12 into tNX
+      else if tX > gArenaR + kContainMargin then put gArenaR - 12 into tNX
+      if tY < gArenaT - kContainMargin then put gArenaT + 12 into tNY
+      else if tY > gArenaB + kContainMargin then put gArenaB - 12 into tNY
+      if tNX is not tX or tNY is not tY then
+         b2kMoveTo tP, tNX, tNY, round(b2kAngle(tP))
+         b2kSetVelocity tP, 0, 0
+      end if
+   end repeat
+end containParts
 
 -- Restore every saved per-part setting (common body props + per-kind extras).
 on applyPartSpecial pCtrl, pSpecial
@@ -4688,6 +5239,31 @@ on applyPartSpecial pCtrl, pSpecial
          put specialValue(pSpecial, "bpower") into tV
          if tV is not empty then set the uBlastPower of pCtrl to tV
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
+         put specialValue(pSpecial, "flen") into tV
+         if tV is not empty then set the uFuseLen of pCtrl to tV
+         if specialValue(pSpecial, "soft") is "true" then set the uSoftBlast of pCtrl to true
+         if specialValue(pSpecial, "demo") is "true" then set the uDestroys of pCtrl to true
+         break
+      case "laser"
+         put specialValue(pSpecial, "ldr") into tV
+         if tV is not empty then set the uLaserDir of pCtrl to tV
+         if specialValue(pSpecial, "cut") is "true" then set the uLaserCut of pCtrl to true
+         drawLaserBeam pCtrl
+         break
+      case "thruster"
+         put specialValue(pSpecial, "tdr") into tV
+         if tV is not empty then set the uThrustDir of pCtrl to tV
+         put specialValue(pSpecial, "tpw") into tV
+         if tV is not empty then set the uThrustPower of pCtrl to tV
+         put specialValue(pSpecial, "tsp") into tV
+         if tV is not empty then set the uThrustSpin of pCtrl to tV
+         if specialValue(pSpecial, "tam") is "body" then set the uThrustAim of pCtrl to "body"
+         set the uThrustLit of pCtrl to false
+         break
+      case "goal"
+         put specialValue(pSpecial, "gsc") into tV
+         if tV is not empty then set the uGoalScale of pCtrl to tV
+         drawGoalShape pCtrl
          break
    end switch
    if tKind is "draw" then                       -- restore a freehand-drawn ground mass + its chain
@@ -4797,7 +5373,7 @@ end applyMagnet
 on armFuses
    local tB
    repeat for each line tB in gKindList["bomb"]
-      if tB is not empty and the uFuseOnRun of tB is true then set the uFuse of tB to kBombFuseFrames
+      if tB is not empty and the uFuseOnRun of tB is true then set the uFuse of tB to numOr(the uFuseLen of tB, kBombFuseFrames)
    end repeat
 end armFuses
 
@@ -4833,9 +5409,11 @@ on detonateBomb pBomb
    if tRad is empty then put kBombRadius into tRad
    put the uBlastPower of pBomb into tPow
    if tPow is empty then put kBombPower into tPow
-   b2kExplode tLx, tLy, tRad, tPow
+   if the uSoftBlast of pBomb is true then b2kExplodeLegacy tLx, tLy, tRad, tPow   -- old velocity-based feel
+   else b2kExplode tLx, tLy, tRad, tPow                                             -- shape-aware native blast
    spawnRing tLx, tLy
    popBalloonsNear tLx, tLy, tRad
+   if the uDestroys of pBomb is true then demolishNear tLx, tLy, tRad              -- demolition bomb: vaporise what it reaches
    deletePart pBomb
 end detonateBomb
 
@@ -4857,6 +5435,33 @@ on popBalloonsNear pX, pY, pRadius
       deletePart tBalloon
    end repeat
 end popBalloonsNear
+
+-- Destroy a part with a little poof of debris (a ring puff), then remove it and
+-- everything attached (joints, wires). The destruction primitive shared by the
+-- demolition bomb and the cutting laser.
+on destroyPart pCtrl
+   if pCtrl is empty then exit destroyPart
+   if pCtrl is not among the lines of gParts then exit destroyPart
+   set the itemDelimiter to comma
+   spawnRing (item 1 of the loc of pCtrl), (item 2 of the loc of pCtrl)
+   deletePart pCtrl
+end destroyPart
+
+-- Demolition blast: remove every dynamic, non-bomb part inside the radius (the
+-- bomb's impulse has already shoved everything; this vaporises what it can reach).
+on demolishNear pX, pY, pRadius
+   local tP, tList
+   put empty into tList
+   set the itemDelimiter to comma
+   repeat for each line tP in b2kOverlapCircle(pX, pY, pRadius)
+      if tP is empty or tP is not among the lines of gParts then next repeat
+      if the uKind of tP is "bomb" then next repeat          -- don't chain-vaporise other bombs
+      if kindIsDynamic(the uKind of tP) then put tP & cr after tList
+   end repeat
+   repeat for each line tP in tList
+      destroyPart tP
+   end repeat
+end demolishNear
 
 -- An expanding shock ring (purely decorative), ported from the showcase demo.
 on spawnRing pX, pY
@@ -4912,8 +5517,8 @@ on platePressed pPlate
    try
       set the backgroundColor of pPlate to "120,230,140"
    end try
-   put "A pressure plate fired — bombs go off and motors switch!" into gStatus
-   triggerSignal
+   put "A pressure plate fired its signal!" into gStatus
+   fireEmitter pPlate
    updateHud
 end platePressed
 
@@ -4933,6 +5538,440 @@ on triggerSignal
    end repeat
    toggleAllMotors
 end triggerSignal
+
+-- =====================================================================
+-- Signal wiring: the Link tool connects a trigger (pressure plate / sensor)
+-- to a target (a bomb). A trigger fires ONLY its wired targets; an unwired
+-- trigger keeps the old "fire everything" behaviour so it still does something.
+-- =====================================================================
+function isEmitter pCtrl
+   if pCtrl is empty then return false
+   -- triggers start signal wires; a goal zone starts a "this object must reach me" wire
+   return (the uKind of pCtrl is "plate") or (the uKind of pCtrl is "sensor") or (the uKind of pCtrl is "goal")
+end isEmitter
+
+function isReceiver pCtrl
+   if pCtrl is empty then return false
+   return kindIsDynamic(the uKind of pCtrl)    -- bombs, thrusters, and any movable part can be a target
+end isReceiver
+
+function nameOf pCtrl
+   if pCtrl is empty then return "?"
+   if the uPartName of pCtrl is not empty then return the uPartName of pCtrl
+   return niceName(the uKind of pCtrl)
+end nameOf
+
+-- A click with the Link tool: first pick a trigger, then pick its target.
+on handleLinkClick pHit
+   if pHit is empty then
+      put empty into gWireSrc
+      put "Link: click a trigger (a pressure plate or a sensor) to start a wire." into gStatus
+      renderBuild
+      updateHud
+      exit handleLinkClick
+   end if
+   if gWireSrc is empty then
+      if not isEmitter(pHit) then
+         put "Wires start at a trigger (plate/sensor) or a goal zone. Click one." into gStatus
+         updateHud
+         exit handleLinkClick
+      end if
+      put pHit into gWireSrc
+      if the uKind of pHit is "goal" then put "Goal " & nameOf(pHit) & " — now click the object that must reach it." into gStatus
+      else put "Wiring from " & nameOf(pHit) & " — now click a part to set off." into gStatus
+   else
+      if pHit is gWireSrc then
+         put empty into gWireSrc
+         put "Wire cancelled." into gStatus
+      else if not isReceiver(pHit) then
+         put "Target a movable part." into gStatus
+      else
+         addWire gWireSrc, pHit
+         if the uKind of gWireSrc is "goal" then put "Goal " & nameOf(gWireSrc) & " now needs " & nameOf(pHit) & "." into gStatus
+         else put "Wired " & nameOf(gWireSrc) & " to " & nameOf(pHit) & "." into gStatus
+         put empty into gWireSrc
+      end if
+   end if
+   renderBuild
+   updateHud
+end handleLinkClick
+
+-- Record a wire (deduped). Edges are "srcCtrl<tab>tgtCtrl" long ids.
+on addWire pSrc, pTgt
+   if pSrc is empty or pTgt is empty then exit addWire
+   local tEdge
+   put pSrc & tab & pTgt into tEdge
+   if tEdge is among the lines of gWires then exit addWire
+   put tEdge & cr after gWires
+   if the last char of gWires is return then delete the last char of gWires
+end addWire
+
+-- Drop every wire touching a part (called when the part is deleted).
+on removeWiresFor pCtrl
+   if gWires is empty then exit removeWiresFor
+   local tEdge, tKept
+   set the itemDelimiter to tab
+   put empty into tKept
+   repeat for each line tEdge in gWires
+      if item 1 of tEdge is pCtrl or item 2 of tEdge is pCtrl then next repeat
+      put tEdge & cr after tKept
+   end repeat
+   if the last char of tKept is return then delete the last char of tKept
+   put tKept into gWires
+end removeWiresFor
+
+-- A trigger fired: set off its wired targets, or — if it has none — fall back to
+-- the legacy global signal so an unwired plate/sensor still does something.
+on fireEmitter pEmitter
+   local tEdge, tTgt, tFired
+   put false into tFired
+   set the itemDelimiter to tab
+   repeat for each line tEdge in gWires
+      if item 1 of tEdge is pEmitter then
+         put item 2 of tEdge into tTgt
+         if tTgt is not empty and tTgt is among the lines of gParts then
+            fireTarget tTgt
+            put true into tFired
+         end if
+      end if
+   end repeat
+   if not tFired then triggerSignal
+end fireEmitter
+
+-- Set off one wired target by kind: detonate a bomb, toggle a thruster, or give
+-- any other movable part a kick.
+on fireTarget pTgt
+   switch the uKind of pTgt
+      case "bomb"
+         set the uFuse of pTgt to 1          -- detonate next frame, safely outside the contact callback
+         break
+      case "thruster"
+         set the uThrustArmed of pTgt to (the uThrustArmed of pTgt is "false")   -- toggle on/off
+         break
+      default
+         b2kImpulse pTgt, 0, -360            -- a trigger pops any other part upward
+   end switch
+end fireTarget
+
+-- Redraw the signal wires as amber connector lines between parts (build mode).
+on drawWires
+   deleteByPrefix "cb_wire_"
+   if gWires is empty then exit drawWires
+   local tEdge, tSrc, tTgt, tN, tName, tRef, tx0, ty0, tx1, ty1
+   put 0 into tN
+   repeat for each line tEdge in gWires
+      set the itemDelimiter to tab
+      put item 1 of tEdge into tSrc
+      put item 2 of tEdge into tTgt
+      if tSrc is empty or tTgt is empty then next repeat
+      if tSrc is not among the lines of gParts or tTgt is not among the lines of gParts then next repeat
+      set the itemDelimiter to comma
+      put item 1 of the loc of tSrc into tx0
+      put item 2 of the loc of tSrc into ty0
+      put item 1 of the loc of tTgt into tx1
+      put item 2 of the loc of tTgt into ty1
+      add 1 to tN
+      put "cb_wire_" & tN into tName
+      create graphic tName
+      put the long id of graphic tName into tRef
+      set the style of tRef to "line"
+      set the lineSize of tRef to 2
+      set the foregroundColor of tRef to "232,200,72"
+      set the points of tRef to round(tx0) & "," & round(ty0) & cr & round(tx1) & "," & round(ty1)
+   end repeat
+end drawWires
+
+-- =====================================================================
+-- Play mode + goals: press Play, get a movable part into every goal zone to
+-- solve the puzzle. Build everything we have into actual puzzles.
+-- =====================================================================
+-- Each frame (Run): mark any goal a movable part is sitting in; win when all are.
+on checkGoals
+   if gGameWon then exit checkGoals
+   if gKindList["goal"] is empty then exit checkGoals
+   local tGoal, tTotal, tReached, tP, tGl, tGt, tGr, tGb, tCx, tCy, tpx, tpy, tIn, tReq
+   put 0 into tTotal
+   put 0 into tReached
+   repeat for each line tGoal in gKindList["goal"]
+      if tGoal is empty then next repeat
+      add 1 to tTotal
+      if the uGoalReached of tGoal is true then
+         add 1 to tReached
+         next repeat
+      end if
+      -- the parts that satisfy this goal: its wired payload(s), or any movable part
+      put goalTargets(tGoal) into tReq
+      if tReq is empty then put dynamicParts() into tReq
+      set the itemDelimiter to comma
+      put item 1 of the loc of tGoal into tCx
+      put item 2 of the loc of tGoal into tCy
+      put tCx - (the width of tGoal) / 2 into tGl
+      put tCx + (the width of tGoal) / 2 into tGr
+      put tCy - (the height of tGoal) / 2 into tGt
+      put tCy + (the height of tGoal) / 2 into tGb
+      put false into tIn
+      repeat for each line tP in tReq
+         if tP is empty or tP is not among the lines of gParts then next repeat
+         put item 1 of the loc of tP into tpx
+         put item 2 of the loc of tP into tpy
+         if tpx >= tGl and tpx <= tGr and tpy >= tGt and tpy <= tGb then
+            put true into tIn
+            exit repeat
+         end if
+      end repeat
+      if tIn then
+         set the uGoalReached of tGoal to true
+         set the backgroundColor of tGoal to "150,245,175"   -- lit when satisfied
+         add 1 to tReached
+      end if
+   end repeat
+   if tTotal > 0 and tReached >= tTotal then winGame
+end checkGoals
+
+-- The payload parts a goal requires (wired from the goal with the Link tool);
+-- empty means "any movable part".
+function goalTargets pGoal
+   local tEdge, tList
+   set the itemDelimiter to tab
+   put empty into tList
+   repeat for each line tEdge in gWires
+      if item 1 of tEdge is pGoal then put (item 2 of tEdge) & cr after tList
+   end repeat
+   return tList
+end goalTargets
+
+on winGame
+   put true into gGameWon
+   if gPlaying then
+      if there is a field "ui_winsub" then put "Solved in " & playElapsed() & " seconds." into field "ui_winsub"
+      showWin
+   else
+      put "Goal reached! (Press Play to run it as a puzzle.)" into gStatus
+   end if
+   updateHud
+end winGame
+
+-- Reset every goal zone to unsolved (called when a Run/Play starts).
+on resetGoals
+   put false into gGameWon
+   local tGoal
+   repeat for each line tGoal in gKindList["goal"]
+      if tGoal is empty then next repeat
+      set the uGoalReached of tGoal to false
+      set the backgroundColor of tGoal to "92,210,120"
+   end repeat
+end resetGoals
+
+-- Enter Play mode: run the sim, watch the goals, and clear the editor away.
+on startPlay
+   if gKindList["goal"] is empty then
+      put "Add a Goal Zone first (SPECIAL palette), then press Play." into gStatus
+      updateHud
+      exit startPlay
+   end if
+   if gMode is not "run" then toggleMode
+   put true into gPlaying
+   put the milliseconds into gPlayStartMs
+   resetGoals
+   setPlayChrome true
+   highlightActions                   -- recolour the Play button to amber 'Stop'
+   put "PLAY — get a movable part into the goal zone." into gStatus
+   updateHud
+end startPlay
+
+-- Replay the puzzle from its starting layout.
+on playAgain
+   hideWin
+   resetMachine        -- restore the pre-Play build (also clears the Play chrome)
+   startPlay           -- and run it fresh
+end playAgain
+
+-- Elapsed Play time in seconds, one decimal.
+function playElapsed
+   if gPlayStartMs is empty then return "0.0"
+   return format("%.1f", (the milliseconds - gPlayStartMs) / 1000)
+end playElapsed
+
+-- Leave Play mode: stop the sim, restore the editor.
+on stopPlay
+   put false into gPlaying
+   hideWin
+   setPlayChrome false
+   if gMode is "run" then toggleMode
+   resetGoals                        -- clear the lit/solved colouring
+   highlightActions                  -- recolour the Play button back to blue 'Play'
+   put "Back to building." into gStatus
+   updateHud
+end stopPlay
+
+-- Show/clear the Play scrims (over the palette + inspector) and the play banner.
+-- The arena stays live so you can fling and nudge parts to solve the puzzle.
+on setPlayChrome pOn
+   local tWide, tHigh
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   -- always tear down first, so it's idempotent (no duplicate scrims)
+   deleteByPrefix "ui_playscrim"
+   if there is a graphic "ui_playbanner" then delete graphic "ui_playbanner"
+   if there is a field "ui_playbannerlbl" then delete field "ui_playbannerlbl"
+   if not pOn then exit setPlayChrome
+   makeBar "ui_playscrimL", 0, kTopBarH + kAccentH, kPaletteW, tHigh - kStatusH, "16,18,24"
+   set the blendLevel of graphic "ui_playscrimL" to 78
+   makeBar "ui_playscrimR", tWide - kInspectorW, kTopBarH + kAccentH, tWide, tHigh - kStatusH, "16,18,24"
+   set the blendLevel of graphic "ui_playscrimR" to 78
+   makeBar "ui_playbanner", kPaletteW, kTopBarH + kAccentH, tWide - kInspectorW, kTopBarH + kAccentH + 26, "40,120,72"
+   makeLabel "ui_playbannerlbl", kPaletteW + 12, kTopBarH + kAccentH + 4, tWide - kInspectorW - 12, kTopBarH + kAccentH + 24, "▶ PLAY — solve the puzzle", 12, "236,255,240", true
+end setPlayChrome
+
+-- The "Solved!" overlay, built once with the chrome and shown on a win.
+on buildPlayOverlay
+   local tWide, tHigh, tW, tH, tL, tT
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 420 into tW
+   put 184 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_winscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_winscrim" to 50
+   set the uWinMenu of graphic "ui_winscrim" to true
+   makeBar "ui_winbg", tL, tT, tL + tW, tT + tH, "40,120,72"
+   set the uWinMenu of graphic "ui_winbg" to true
+   makeLabel "ui_wintitle", tL, tT + 28, tL + tW, tT + 68, "✓  Solved!", 26, "236,255,240", true
+   set the textAlign of field "ui_wintitle" to center
+   set the uWinMenu of field "ui_wintitle" to true
+   makeLabel "ui_winsub", tL, tT + 74, tL + tW, tT + 98, "You got a part into every goal zone.", 12, "210,240,220", false
+   set the textAlign of field "ui_winsub" to center
+   set the uWinMenu of field "ui_winsub" to true
+   makeAction "winagain", "Play Again", tL + 18, tT + tH - 48, 124, 30
+   set the uWinMenu of button "ui_act_winagain" to true
+   makeAction "winkeep", "Keep Playing", tL + 148, tT + tH - 48, 124, 30
+   set the uWinMenu of button "ui_act_winkeep" to true
+   makeAction "winedit", "Edit", tL + 278, tT + tH - 48, 124, 30
+   set the uWinMenu of button "ui_act_winedit" to true
+   setWinVisible false
+end buildPlayOverlay
+
+on showWin
+   setWinVisible true
+end showWin
+
+on hideWin
+   setWinVisible false
+end hideWin
+
+on setWinVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uWinMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setWinVisible
+
+-- ===================================================================
+-- Image library popup: import images (with a collision shape) and click one
+-- to drop a fresh instance. Static frame built once; the rows are rebuilt to
+-- match gAssets each time it opens.
+-- ===================================================================
+on buildImagePanel
+   local tWide, tHigh, tW, tH, tL, tT
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 470 into tW
+   put 440 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_imgscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_imgscrim" to 60
+   set the uImgMenu of graphic "ui_imgscrim" to true
+   makeBar "ui_imgbg", tL, tT, tL + tW, tT + tH, "34,38,48"
+   set the uImgMenu of graphic "ui_imgbg" to true
+   makeLabel "ui_img_title", tL + 18, tT + 14, tL + tW - 150, tT + 38, "Image Library", 15, "236,238,245", true
+   set the uImgMenu of field "ui_img_title" to true
+   makeAction "imgimport", "Import New…", tL + tW - 142, tT + 12, 124, 28
+   set the uImgMenu of button "ui_act_imgimport" to true
+   makeField "ui_img_empty", tL + 18, tT + 52, tL + tW - 18, tT + 96, 11, "168,172,184"
+   set the uImgMenu of field "ui_img_empty" to true
+   makeAction "imgclose", "Close", tL + tW - 92, tT + tH - 38, 76, 26
+   set the uImgMenu of button "ui_act_imgclose" to true
+   setImageVisible false
+end buildImagePanel
+
+on openImagePanel
+   refreshImagePanel
+end openImagePanel
+
+on hideImagePanel
+   setImageVisible false
+end hideImagePanel
+
+-- Rebuild one row per library image (a place button + a remove button), then show.
+on refreshImagePanel
+   if there is no graphic "ui_imgbg" then exit refreshImagePanel
+   deleteByPrefix "ui_act_asset_"
+   deleteByPrefix "ui_act_imgremove_"
+   local tBg, tL, tW, tT, tN, tI, tRec, tRowY, tName, tShape
+   set the itemDelimiter to comma
+   put the rect of graphic "ui_imgbg" into tBg
+   put item 1 of tBg into tL
+   put item 3 of tBg - item 1 of tBg into tW
+   put item 2 of tBg into tT
+   put the number of lines of gAssets into tN
+   if there is a field "ui_img_empty" then
+      if tN is 0 then put "Your library is empty. Click 'Import New...' to add an image; it stays here for reuse, and an image collides as its shape." into field "ui_img_empty"
+      else if tN > 9 then put "Showing the first 9 of " & tN & " images." into field "ui_img_empty"
+      else put empty into field "ui_img_empty"
+      set the visible of field "ui_img_empty" to (the text of field "ui_img_empty" is not empty)
+   end if
+   set the itemDelimiter to tab
+   repeat with tI = 1 to min(tN, 9)
+      put line tI of gAssets into tRec
+      put item 3 of tRec into tName
+      put item 2 of tRec into tShape
+      put tT + 96 + (tI - 1) * 34 into tRowY
+      makeAction ("asset_" & tI), (tName & "   (" & tShape & ")"), tL + 18, tRowY, tW - 84, 28
+      set the uImgMenu of button ("ui_act_asset_" & tI) to true
+      makeAction ("imgremove_" & tI), "✕", tL + tW - 56, tRowY, 38, 28
+      set the uImgMenu of button ("ui_act_imgremove_" & tI) to true
+   end repeat
+   setImageVisible true
+end refreshImagePanel
+
+-- Place an instance of a library image at the top of the stage, then select it.
+on placeAssetFromPanel pIndex
+   hideImagePanel
+   local tNew
+   put placeAssetInstance(pIndex, (gArenaL + gArenaR) div 2, gArenaT + 90) into tNew
+   if tNew is empty then
+      put "Could not place that image — its file may have moved." into gStatus
+      updateHud
+      exit placeAssetFromPanel
+   end if
+   renderBuild
+   put "drag" into gTool
+   selectPart tNew
+   highlightAll
+   put "Placed " & nameOf(tNew) & " — drag it where you want." into gStatus
+   updateHud
+end placeAssetFromPanel
+
+on setImageVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uImgMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setImageVisible
 
 on toggleAllMotors
    local tI, tSpeed
@@ -4983,7 +6022,12 @@ on resetSceneState
    put empty into gRingX
    put empty into gRingY
    put empty into gRingF
+   put empty into gNameCount
+   put empty into gWires
+   put empty into gWireSrc
    deleteByPrefix "cb_ring_"
+   deleteByPrefix "cb_wire_"
+   deleteByPrefix "cb_flame_"        -- thruster exhaust is a transient run-only effect
 end resetSceneState
 
 on deleteByPrefix pPrefix
@@ -5046,12 +6090,34 @@ on setInspector pTitle, pBody
    if there is a field "ui_insp_body" then put pBody into field "ui_insp_body"
 end setInspector
 
+-- Rename the selected part. Names label wires and (later) puzzle goals.
+on renamePart pCtrl
+   if pCtrl is empty or pCtrl is not among the lines of gParts then
+      put "Select a part first, then press Rename." into gStatus
+      updateHud
+      exit renamePart
+   end if
+   ask "Name this part:" with (the uPartName of pCtrl)
+   if it is empty or the result is "Cancel" then exit renamePart
+   local tNm
+   put it into tNm
+   replace tab with space in tNm          -- names are tab-delimited in saves
+   replace return with space in tNm
+   set the uPartName of pCtrl to tNm
+   showPartInspector pCtrl                 -- refresh the title
+   put "Renamed to " & quote & tNm & quote & "." into gStatus
+   updateHud
+end renamePart
+
 -- Show a selected part's name, what it does, and the values you can change.
 on showPartInspector pCtrl
    if pCtrl is empty then exit showPartInspector
    local tKind, tKey, tRow, tAvail
    put the uKind of pCtrl into tKind
-   setInspector ("Selected: " & niceName(tKind)), (line 2 of toolHelp(tKind))
+   local tNm
+   put the uPartName of pCtrl into tNm
+   if tNm is empty then put niceName(tKind) into tNm
+   setInspector ("Selected: " & tNm), (line 2 of toolHelp(tKind))
    clearPropRows
    put partTabs(tKind) into tAvail
    if tAvail is empty then
@@ -5070,7 +6136,26 @@ on showPartInspector pCtrl
    end repeat
    if tRow > 0 then setSettingsHint empty           -- rows are showing; hide the prompt
    else setSettingsHint "Nothing to adjust on this tab."
+   if tKind is "bomb" then setSettingsHint blastPreviewText(pCtrl)   -- live "what it would hit"
 end showPartInspector
+
+-- A live preview of a bomb's reach: how many parts currently sit inside its blast
+-- radius, found with the Kit's region query b2kOverlapCircle. Refreshes whenever
+-- the bomb is selected or its radius is nudged.
+function blastPreviewText pBomb
+   local tCx, tCy, tR, tP, tN, tPlural
+   set the itemDelimiter to comma
+   put item 1 of the loc of pBomb into tCx
+   put item 2 of the loc of pBomb into tCy
+   put numOr(the uBlastRadius of pBomb, kBombRadius) into tR
+   put 0 into tN
+   repeat for each line tP in b2kOverlapCircle(tCx, tCy, tR)
+      if tP is not empty and tP is not pBomb then add 1 to tN
+   end repeat
+   if tN is 1 then put "part" into tPlural
+   else put "parts" into tPlural
+   return "Blast radius " & tR & " px — reaches " & tN && tPlural & " right now."
+end blastPreviewText
 
 -- The ordered list of adjustable settings shown for each kind of part.
 function partProps pKind
@@ -5088,7 +6173,7 @@ function partProps pKind
       case "balloon"
          return "diameter,color,bounce,density,friction,gravity"
       case "bomb"
-         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse"
+         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse,bombfuselen,bombsoft,bombdemo"
       case "plate"
          return "width,height,color,angle,friction"
       case "sensor"
@@ -5106,6 +6191,12 @@ function partProps pKind
          return "fandir,fanforce,fansize,color"
       case "magnet"
          return "magpol,magforce,magrange,color"
+      case "laser"
+         return "laserdir,lasercut"
+      case "goal"
+         return "goalsize"
+      case "thruster"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,thrustdir,thrustpower,thrustspin,thrustaim"
    end switch
    return empty
 end partProps
@@ -5184,6 +6275,14 @@ function propLabel pCtrl, pKey
          return "Blast power: " & (the uBlastPower of pCtrl)
       case "bombfuse"
          return "Light fuse on Run: " & yesNo(the uFuseOnRun of pCtrl)
+      case "bombfuselen"
+         return "Fuse length: " & format("%.1f", numOr(the uFuseLen of pCtrl, kBombFuseFrames) / 60) & " s"
+      case "bombsoft"
+         if the uSoftBlast of pCtrl is true then return "Blast style: soft (legacy, size-blind)"
+         return "Blast style: shape-aware (native)"
+      case "bombdemo"
+         if the uDestroys of pCtrl is true then return "On blast: demolish parts in range"
+         return "On blast: push parts (keep them)"
       case "fandir"
          return "Direction: " & dirName(the uFanDir of pCtrl)
       case "fanforce"
@@ -5196,6 +6295,22 @@ function propLabel pCtrl, pKey
          return "Strength: " & (the uMagForce of pCtrl)
       case "magrange"
          return "Reach: " & (the uMagRange of pCtrl)
+      case "laserdir"
+         return "Beam angle: " & numOr(the uLaserDir of pCtrl, 0) & "°"
+      case "lasercut"
+         if the uLaserCut of pCtrl is true then return "Mode: cutting (burns through parts)"
+         return "Mode: sightline (harmless)"
+      case "goalsize"
+         return "Zone size: " & sizeLabel(numOr(the uGoalScale of pCtrl, 1))
+      case "thrustdir"
+         return "Thrust angle: " & numOr(the uThrustDir of pCtrl, 270) & "°"
+      case "thrustpower"
+         return "Thrust power: " & numOr(the uThrustPower of pCtrl, 0)
+      case "thrustspin"
+         return "Thrust spin: " & numOr(the uThrustSpin of pCtrl, 0)
+      case "thrustaim"
+         if the uThrustAim of pCtrl is "body" then return "Aim: steers with the body"
+         return "Aim: fixed direction"
    end switch
    return pKey
 end propLabel
@@ -5426,23 +6541,23 @@ on adjustPartProp pCtrl, pKey, pDir
       case "blastradius"
          put the uBlastRadius of pCtrl into tBr
          if tBr is empty then put kBombRadius into tBr
-         put tBr + pDir * 40 into tBr
+         put tBr + pDir * 60 into tBr
          if tBr < 60 then put 60 into tBr
-         if tBr > 500 then put 500 into tBr
+         if tBr > 1200 then put 1200 into tBr
          set the uBlastRadius of pCtrl to tBr
          break
       case "blastpower"
          put the uBlastPower of pCtrl into tPow
          if tPow is empty then put kBombPower into tPow
-         put tPow + pDir * 120 into tPow
+         put tPow + pDir * 600 into tPow
          if tPow < 200 then put 200 into tPow
-         if tPow > 2000 then put 2000 into tPow
+         if tPow > 30000 then put 30000 into tPow
          set the uBlastPower of pCtrl to tPow
          break
       case "fanforce"
-         put (the uFanForce of pCtrl) + pDir * 150 into tF
+         put (the uFanForce of pCtrl) + pDir * 600 into tF
          if tF < 0 then put 0 into tF
-         if tF > 3000 then put 3000 into tF
+         if tF > 40000 then put 40000 into tF
          set the uFanForce of pCtrl to tF
          break
       case "fandir"
@@ -5463,19 +6578,56 @@ on adjustPartProp pCtrl, pKey, pDir
          set the uMagPolarity of pCtrl to (the uMagPolarity of pCtrl) * -1
          break
       case "magforce"
-         put (the uMagForce of pCtrl) + pDir * 200 into tMf
+         put (the uMagForce of pCtrl) + pDir * 800 into tMf
          if tMf < 100 then put 100 into tMf
-         if tMf > 4000 then put 4000 into tMf
+         if tMf > 50000 then put 50000 into tMf
          set the uMagForce of pCtrl to tMf
          break
       case "magrange"
-         put (the uMagRange of pCtrl) + pDir * 40 into tMr
+         put (the uMagRange of pCtrl) + pDir * 80 into tMr
          if tMr < 60 then put 60 into tMr
-         if tMr > 520 then put 520 into tMr
+         if tMr > 1400 then put 1400 into tMr
          set the uMagRange of pCtrl to tMr
+         break
+      case "laserdir"
+         set the uLaserDir of pCtrl to ((numOr(the uLaserDir of pCtrl, 0) + pDir * kLaserStep + 360) mod 360)
+         drawLaserBeam pCtrl
+         break
+      case "lasercut"
+         set the uLaserCut of pCtrl to not (the uLaserCut of pCtrl is true)
+         break
+      case "goalsize"
+         local tGs
+         put numOr(the uGoalScale of pCtrl, 1) + pDir * 0.25 into tGs
+         if tGs < 0.5 then put 0.5 into tGs
+         if tGs > 3 then put 3 into tGs
+         set the uGoalScale of pCtrl to tGs
+         drawGoalShape pCtrl
+         break
+      case "thrustdir"
+         set the uThrustDir of pCtrl to ((numOr(the uThrustDir of pCtrl, 270) + pDir * kLaserStep + 360) mod 360)
+         break
+      case "thrustpower"
+         set the uThrustPower of pCtrl to clampRange(numOr(the uThrustPower of pCtrl, 0) + pDir * 600, 0, 40000)
+         break
+      case "thrustspin"
+         set the uThrustSpin of pCtrl to clampRange(numOr(the uThrustSpin of pCtrl, 0) + pDir * 800, -40000, 40000)
+         break
+      case "thrustaim"
+         if the uThrustAim of pCtrl is "body" then set the uThrustAim of pCtrl to "world"
+         else set the uThrustAim of pCtrl to "body"
          break
       case "bombfuse"
          set the uFuseOnRun of pCtrl to not (the uFuseOnRun of pCtrl is true)
+         break
+      case "bombfuselen"
+         set the uFuseLen of pCtrl to clampRange(numOr(the uFuseLen of pCtrl, kBombFuseFrames) + pDir * 30, 15, 900)
+         break
+      case "bombsoft"
+         set the uSoftBlast of pCtrl to not (the uSoftBlast of pCtrl is true)
+         break
+      case "bombdemo"
+         set the uDestroys of pCtrl to not (the uDestroys of pCtrl is true)
          break
    end switch
 end adjustPartProp
@@ -5702,7 +6854,7 @@ function propGroup pKey
    if pKey is among the items of "width,height,length,thickness,diameter,size,imgshape,angle,facing,color" then return "shape"
    if pKey is among the items of "bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material" then return "physics"
    if pKey is among the items of "layer,sensor,filter,active,sleep" then return "collide"
-   return "special"   -- launchspeed,launchdir,spinrate and the fan/magnet/bomb keys
+   return "special"   -- launchspeed,launchdir,spinrate, laserdir, and the fan/magnet/bomb keys
 end propGroup
 
 -- The tabs that actually have settings for this kind (so empty tabs stay hidden).
@@ -6638,6 +7790,23 @@ on applyWorldFeel
    end switch
 end applyWorldFeel
 
+-- The advanced solver toggles default to Box2D's recommended setup.
+on setWorldOptionDefaults
+   put true into gCCD           -- continuous collision ON: fast bodies don't tunnel through walls
+   put true into gSleepOn       -- resting bodies sleep (saves CPU)
+   put true into gWarmStart     -- reuse last frame's solution (stabler + faster)
+   put 4 into gSubsteps         -- solver sub-steps per step
+end setWorldOptionDefaults
+
+-- Push the advanced toggles into the live world (re-applied on every Run).
+on applyWorldOptions
+   b2kEnableContinuous (gCCD is true)
+   b2kEnableSleeping (gSleepOn is true)
+   b2kEnableWarmStarting (gWarmStart is true)
+   b2kSetSubsteps numOr(gSubsteps, 4)
+   b2kSetJointTuning 60, 2       -- a sane default joint stiffness (hz, damping)
+end applyWorldOptions
+
 on cycleWorldFeel
    local tOrder, tI
    put "default,bouncy,floaty,snappy" into tOrder
@@ -6784,7 +7953,7 @@ function niceName pId
          & "poly=Polygon" & cr & "image=Picture" & cr & "anchor=Anchor" & cr & "delete=Delete" & cr \
          & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
-         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr \
+         & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr & "laser=Laser" & cr & "thruster=Thruster" & cr & "goal=Goal Zone" & cr \
          & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "draw=Draw Terrain" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
          & "weld=Weld Joint" & cr & "servo=Servo Joint" & cr & "rope=Rope Joint" & cr & "slider=Slider Joint" & cr \
          & "wheel=Wheel Joint" & cr & "bridge=Bridge" & cr & "chain=Chain (rope)" into tNames
@@ -6805,8 +7974,8 @@ end niceName
 function toolGlyph pId
    local tGlyphs
    put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
-         & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
-         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr \
+         & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "link=↦" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
+         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr & "thruster=▲" & cr & "goal=⚑" & cr \
          & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
          & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
    local tLine
@@ -6844,6 +8013,8 @@ function toolHelp pId
          return "Copy a part you click on." & cr & "Duplicate tool. Click any part to drop an identical copy — same size, colour and settings — then drag it where you want."
       case "multiply"
          return "Make many copies of a part at once." & cr & "Multiply tool. Click any part and choose how many copies to make; they drop into a tidy grid, each identical to the original. Great for crates, dominoes and bricks."
+      case "link"
+         return "Wire a trigger to a bomb." & cr & "Link tool. Click a pressure plate or sensor, then click a bomb — an amber wire connects them and that trigger now sets off only that bomb. An unwired trigger still sets off everything. Wires show while building."
       case "balloon"
          return "A helium balloon that floats upward." & cr & "A balloon rises on its own. Tie it to a part with a Rope joint to lift that part. A nearby bomb blast pops it."
       case "bomb"
@@ -6856,6 +8027,12 @@ function toolHelp pId
          return "A wind zone that blows parts along." & cr & "A fan pushes any part inside its zone in the arrow's direction. Set the direction and strength in the inspector. No body — parts pass through it."
       case "magnet"
          return "A magnet that pulls parts toward it." & cr & "A magnet attracts nearby parts (or repels them). Set attract/repel, strength and reach in the inspector. No body — parts pass through it."
+      case "laser"
+         return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray from its emitter and draws the beam to the first thing it strikes (a wall counts). Set the beam angle in the inspector; while running, select it to read the live hit distance. Shows off the Kit's ray-casting."
+      case "thruster"
+         return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: on Run it pops off with an ignition kick, then pushes steadily in a fixed direction — flying straight by default. Set thrust angle and power in the inspector; switch Aim to 'steers with the body' (and add spin) for a rocket you can rotate. A wired trigger can switch it on/off. Shows off b2kForce / b2kTorque / b2kPush."
+      case "goal"
+         return "A target zone — reach it to win." & cr & "A goal zone is the finish line for a puzzle. Press Play: get a movable part inside every goal zone at once and you have solved it. Resize the zone in the inspector. No body — parts pass through it."
       case "platform"
          return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery — a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf. Set its size, angle and grip in the inspector."
       case "ramp"
@@ -6888,6 +8065,8 @@ end toolHelp
 
 function actionHelp pId
    switch pId
+      case "play"
+         return "Play the puzzle: run it and try to get a part into every goal zone."
       case "mode"
          return "Switch between Build (arrange) and Run (simulate)."
       case "reset"
@@ -6914,7 +8093,14 @@ function actionHelp pId
          return "Close this menu."
       case "filterclose"
          return "Close the collision filter."
+      case "images"
+         return "Your image library — import pictures (with a collision shape) and reuse them."
+      case "worldadv"
+         return "Advanced world solver settings (CCD, sleeping, sub-steps…)."
+      case "worldclose"
+         return "Close the world settings."
    end switch
+   if char 1 to 5 of pId is "wopt_" then return "Toggle this world solver setting."
    if char 1 to 9 of pId is "prop_inc_" then return "Increase this value."
    if char 1 to 9 of pId is "prop_dec_" then return "Decrease this value."
    if char 1 to 9 of pId is "filt_cat_" then return "Toggle whether this part is on channel " & (char 10 to -1 of pId) & "."
@@ -6982,7 +8168,7 @@ on buildRecipesMenu
    put the width of this card into tWide
    put the height of this card into tHigh
    put 420 into tW
-   put 476 into tH
+   put 528 into tH
    put (tWide - tW) div 2 into tL
    put (tHigh - tH) div 2 into tT
    makeBar "ui_recipescrim", 0, 0, tWide, tHigh, "10,11,15"
@@ -6993,6 +8179,8 @@ on buildRecipesMenu
    makeLabel "ui_recipe_title", tL + 18, tT + 14, tL + tW - 18, tT + 38, "Example Machines", 15, "236,238,245", true
    set the uRecipeMenu of field "ui_recipe_title" to true
    put tT + 46 into tBy
+   put recipeCategory("Puzzles (press Play)", "chainpuzzle", \
+         "Demolish & Deliver", tL, tW, tBy) into tBy
    put recipeCategory("Launchers", "catapult,cannon,trebuchet,wreckingball", \
          "Catapult,Cannon,Trebuchet,Wrecking Ball", tL, tW, tBy) into tBy
    put recipeCategory("Machines", "crane,cart,fantower,magnetcatch,balloonlift", \
@@ -7179,6 +8367,103 @@ on setFilterVisible pFlag
    end repeat
 end setFilterVisible
 
+-- =====================================================================
+-- World · Advanced popup: the solver toggles the Feel presets don't cover
+-- (continuous collision, sleeping, warm-starting, sub-steps). Built once
+-- with the chrome, hidden, like the recipes and filter popups.
+-- =====================================================================
+on buildWorldPanel
+   local tWide, tHigh, tW, tH, tL, tT, tRy
+   put the width of this card into tWide
+   put the height of this card into tHigh
+   put 340 into tW
+   put 250 into tH
+   put (tWide - tW) div 2 into tL
+   put (tHigh - tH) div 2 into tT
+   makeBar "ui_worldscrim", 0, 0, tWide, tHigh, "10,11,15"
+   set the blendLevel of graphic "ui_worldscrim" to 62
+   set the uWorldMenu of graphic "ui_worldscrim" to true
+   makeBar "ui_worldbg", tL, tT, tL + tW, tT + tH, "34,38,48"
+   set the uWorldMenu of graphic "ui_worldbg" to true
+   makeLabel "ui_world_title", tL + 18, tT + 14, tL + tW - 18, tT + 36, "World · Advanced", 15, "236,238,245", true
+   set the uWorldMenu of field "ui_world_title" to true
+   put tT + 48 into tRy
+   makeAction "wopt_ccd", "Continuous collision: off", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_ccd" to true
+   add 36 to tRy
+   makeAction "wopt_sleep", "Sleeping: on", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_sleep" to true
+   add 36 to tRy
+   makeAction "wopt_warm", "Warm starting: on", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_warm" to true
+   add 36 to tRy
+   makeAction "wopt_sub", "Solver sub-steps: 4", tL + 18, tRy, tW - 36, 28
+   set the uWorldMenu of button "ui_act_wopt_sub" to true
+   makeAction "worldclose", "Close", tL + tW - 92, tT + tH - 34, 76, 26
+   set the uWorldMenu of button "ui_act_worldclose" to true
+   setWorldVisible false
+end buildWorldPanel
+
+on openWorldPanel
+   refreshWorldPanel
+   setWorldVisible true
+end openWorldPanel
+
+on hideWorldPanel
+   setWorldVisible false
+end hideWorldPanel
+
+-- Paint each toggle to its current state (and light the ON ones blue).
+on refreshWorldPanel
+   if there is a button "ui_act_wopt_ccd" then set the label of button "ui_act_wopt_ccd" to "Continuous collision: " & onOff(gCCD)
+   if there is a button "ui_act_wopt_sleep" then set the label of button "ui_act_wopt_sleep" to "Sleeping: " & onOff(gSleepOn)
+   if there is a button "ui_act_wopt_warm" then set the label of button "ui_act_wopt_warm" to "Warm starting: " & onOff(gWarmStart)
+   if there is a button "ui_act_wopt_sub" then set the label of button "ui_act_wopt_sub" to "Solver sub-steps: " & numOr(gSubsteps, 4)
+   setToggle "ui_act_wopt_ccd", (gCCD is true)
+   setToggle "ui_act_wopt_sleep", (gSleepOn is true)
+   setToggle "ui_act_wopt_warm", (gWarmStart is true)
+end refreshWorldPanel
+
+-- "on"/"off" for a boolean-ish global.
+function onOff pFlag
+   if pFlag is true then return "on"
+   return "off"
+end onOff
+
+-- A click on a world-option toggle: flip it, push it live, repaint.
+on handleWorldToggle pId
+   switch pId
+      case "wopt_ccd"
+         put not (gCCD is true) into gCCD
+         break
+      case "wopt_sleep"
+         put not (gSleepOn is true) into gSleepOn
+         break
+      case "wopt_warm"
+         put not (gWarmStart is true) into gWarmStart
+         break
+      case "wopt_sub"
+         put numOr(gSubsteps, 4) + 1 into gSubsteps
+         if gSubsteps > 8 then put 1 into gSubsteps
+         break
+   end switch
+   if gMode is "run" then applyWorldOptions      -- take effect immediately while running
+   refreshWorldPanel
+end handleWorldToggle
+
+on setWorldVisible pFlag
+   local tI, tCtrl, tList
+   put empty into tList
+   repeat with tI = 1 to the number of controls of this card
+      put the long id of control tI of this card into tCtrl
+      if the uWorldMenu of tCtrl is true then put tCtrl & cr after tList
+   end repeat
+   repeat for each line tCtrl in tList
+      set the visible of tCtrl to pFlag
+      if pFlag then set the layer of tCtrl to top
+   end repeat
+end setWorldVisible
+
 -- A balloon hauls a box up by a rope.
 on buildRecipeBalloonLift
    if gMode is "run" then toggleMode
@@ -7200,13 +8485,14 @@ end buildRecipeBalloonLift
 on buildRecipePlateBomb
    if gMode is "run" then toggleMode
    clearAll
-   local tCx, tPlateX, tTowerX, tI
+   local tCx, tPlateX, tTowerX, tI, tBomb
    put (gArenaL + gArenaR) div 2 into tCx
    put tCx - 130 into tPlateX
    put tCx + 120 into tTowerX
    get placePlate(tPlateX, gArenaB - 8)
    get placeBall(tPlateX, gArenaT + 60, 40, "232,182,92")
-   get placeBomb(tTowerX, gArenaB - 28)
+   put placeBomb(tTowerX, gArenaB - 28) into tBomb
+   set the uFuseOnRun of tBomb to false        -- this bomb fires from the PLATE, not its own fuse
    repeat with tI = 1 to 4
       get placeBox(tTowerX, gArenaB - 66 - tI * 34, 46, 30, "214,92,92")
    end repeat
@@ -7214,6 +8500,42 @@ on buildRecipePlateBomb
    put "Plate → Bomb — press Run: the ball lands on the plate, the bomb fires, the tower topples." into gStatus
    updateHud
 end buildRecipePlateBomb
+
+-- A complete, Play-able puzzle: the ball rolls over a plate that is wired to a
+-- demolition bomb; the bomb clears the wall, and the ball carries on into the
+-- goal. Shows the whole loop (launch + plate + wire + demolish + goal) in one.
+on buildRecipeChainPuzzle
+   if gMode is "run" then toggleMode
+   clearAll
+   local tBall, tPlate, tBomb, tGoal, tI, tWx
+   put gArenaL + 440 into tWx
+   -- the payload, launched to the right on Play
+   put placeBall(gArenaL + 70, gArenaB - 34, 34, "232,182,92") into tBall
+   set the uLaunchSpeed of tBall to 820
+   set the uLaunchDir of tBall to 0
+   set the uDensity of tBall to 1.6
+   b2kSetDensity tBall, 1.6
+   -- a trigger plate it rolls over first
+   put placePlate(gArenaL + 210, gArenaB - 8) into tPlate
+   -- a crate wall blocking the way
+   repeat with tI = 0 to 3
+      get placeBox(tWx, gArenaB - 26 - tI * 30, 40, 28, "200,120,80")
+   end repeat
+   -- a demolition bomb at the wall, fired only by the plate (not its own fuse)
+   put placeBomb(tWx, gArenaB - 26) into tBomb
+   set the uFuseOnRun of tBomb to false
+   set the uDestroys of tBomb to true
+   set the uBlastRadius of tBomb to 190
+   set the uBlastPower of tBomb to 900
+   addWire tPlate, tBomb
+   -- the goal, past the cleared wall
+   put placeGoal(gArenaL + 650, gArenaB - 64) into tGoal
+   set the uGoalScale of tGoal to 1.3
+   drawGoalShape tGoal
+   renderBuild
+   put "Demolish & Deliver — press Play! The ball trips the plate, the bomb clears the wall, and it rolls into the goal (nudge it if it stalls)." into gStatus
+   updateHud
+end buildRecipeChainPuzzle
 
 -- An upward fan juggles a few light balls.
 on buildRecipeFanTower
@@ -7405,8 +8727,8 @@ on buildRecipeCradle
       else
          put placeBall(tX, tTopY + tLen, tDiam, "120,200,232") into tBall
       end if
-      set the uBounce of tBall to 0
-      b2kSetBounce tBall, 0
+      set the uBounce of tBall to 0.92         -- near-elastic, so momentum kicks the far ball out
+      b2kSetBounce tBall, 0.92
       set the uDensity of tBall to 2
       b2kSetDensity tBall, 2
       get connectJoint("rope", tBall, tAnchor, tX, tTopY, 0)
@@ -7505,31 +8827,35 @@ on showOnboardingStep
    local tTitle, tText
    switch gOnbStep
       case 1
-         put "Step 1 of 4 — Pick a part" into tTitle
-         put "On the left is your toolbox. Click a shape under SHAPES (try Box or Ball), or something fun under SPECIAL like a Balloon or a Bomb." into tText
+         put "Step 1 of 5 — Pick a part" into tTitle
+         put "On the left is your toolbox. Click a shape under SHAPES (try Box or Ball), or something fun under SPECIAL — a Balloon, a Bomb, a Thruster, a Laser." into tText
          break
       case 2
-         put "Step 2 of 4 — Drop it on the stage" into tTitle
-         put "Click anywhere on the dark stage in the middle to drop your part, then drag parts to arrange them. The panel on the right always explains the selected part." into tText
+         put "Step 2 of 5 — Drop it and arrange" into tTitle
+         put "Click the dark stage in the middle to drop your part, then drag parts to arrange them. The panel on the right explains and tunes whatever you select (and Rename names it)." into tText
          break
       case 3
-         put "Step 3 of 4 — Connect with joints" into tTitle
-         put "Pick a joint under JOINTS (a Hinge is a pin things can spin around), then click part A and part B to link them. Turn on Motor first to make hinges and wheels drive themselves." into tText
+         put "Step 3 of 5 — Connect with joints" into tTitle
+         put "Pick a joint under JOINTS (a Hinge is a pin things spin around), then click part A and part B to link them. Turn Motor on first to make hinges and wheels drive themselves." into tText
+         break
+      case 4
+         put "Step 4 of 5 — Wire up triggers" into tTitle
+         put "Use the Link tool (under TOOLS): click a Pressure Plate or Sensor, then click a Bomb to wire them — an amber wire means that trigger sets off that bomb. Set a bomb to 'Demolish' or a laser to 'Cut' to destroy parts." into tText
          break
       default
-         put "Step 4 of 4 — Press Run" into tTitle
-         put "Hit Run (top-right) to start gravity and watch your machine move; press it again to keep building. Open Recipes for ready-made examples to explore." into tText
+         put "Step 5 of 5 — Set a goal and Play" into tTitle
+         put "Drop a Goal Zone (under SPECIAL), then press Play (top bar): get a movable part into the goal to solve it. Run just tests physics; Play is the puzzle. Open Recipes > Puzzles for a ready-made one." into tText
    end switch
    if there is a field "ui_onb_title" then put tTitle into field "ui_onb_title"
    if there is a field "ui_onb_text" then put tText into field "ui_onb_text"
-   if gOnbStep >= 4 then set the label of button "ui_act_onbnext" to "Start building"
+   if gOnbStep >= 5 then set the label of button "ui_act_onbnext" to "Start building"
    else set the label of button "ui_act_onbnext" to "Next"
    raiseOnboarding
 end showOnboardingStep
 
 on onboardingNext
    add 1 to gOnbStep
-   if gOnbStep > 4 then dismissOnboarding
+   if gOnbStep > 5 then dismissOnboarding
    else showOnboardingStep
 end onboardingNext
 

@@ -25,15 +25,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Cheap gate: the examples embed a generated copy of the Kit; fail fast if it
-  # has drifted from the canonical src/box2dxt-kit.livecodescript.
+  # Cheap gate: static checks on the .livecodescript layer (OXT cannot compile in
+  # CI). Verifies no smart quotes, balanced handlers/control structures, and that
+  # the examples' embedded Kit copy has not drifted from src/box2dxt-kit.livecodescript.
   embedded-kit:
-    name: embedded Kit in sync
+    name: lint .livecodescript
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify examples embed the canonical Kit
-        run: python3 tools/sync-embedded-kit.py --check
+      - name: Static checks (quotes, handler balance, embedded-Kit sync)
+        run: python3 tools/check-livecodescript.py
 
   build:
     name: build & smoke-test (${{ matrix.name }})
