@@ -4618,7 +4618,9 @@ on rebuildFromText pData
       else if tRec is "wire" then
          put item 2 of tLine into tIdA
          put item 3 of tLine into tIdB
-         if (tIdA is among the keys of tMap) and (tIdB is among the keys of tMap) then addWire tMap[tIdA], tMap[tIdB]
+         if (tIdA is among the keys of tMap) and (tIdB is among the keys of tMap) then
+            addWire tMap[tIdA], tMap[tIdB]
+         end if
       else if tRec is "world" then
          put item 2 of tLine into gGravityMode
          put item 3 of tLine into gWorldFeel
