@@ -1809,6 +1809,7 @@ constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
 constant kLaserReach = 1600, kLaserStep = 45   -- laser ray length (px) and the angle step its direction cycles by
 constant kGoalW = 120, kGoalH = 120   -- a goal zone's base size (scaled by uGoalScale)
 constant kLaserBurn = 36   -- frames of sustained laser hit before a cutting beam destroys a part
+constant kLaserCool = 250  -- ms without a hit after which a part's accrued burn cools back to zero
 constant kContainMargin = 90   -- how far past the arena a body may stray before the containment net pulls it back
 constant kStressBatch = 50
 constant kSizeMin = 16, kSizeMax = 240
@@ -2616,12 +2617,17 @@ on mouseUp
       handleUiClick
       exit mouseUp
    end if
+   endDrag
+end mouseUp
+
+-- Finish an in-progress drag/draw and clear the drag state. Shared by mouseUp
+-- (released over the same control) and mouseRelease (released elsewhere, e.g. over
+-- a side panel) so the two paths can never diverge: both must reseat a build-drag's
+-- body and finalise a freehand draw, not just release a run-grab.
+on endDrag
    if gDragMode is "draw" then
       finishDrawTerrain
-      put empty into gDragMode
-      exit mouseUp
-   end if
-   if gDragMode is "build" and gDragCtrl is not empty and gDragMoved then
+   else if gDragMode is "build" and gDragCtrl is not empty and gDragMoved then
       local tGroup, tP
       reseatDragged gDragCtrl
       put the uGroup of gDragCtrl into tGroup
@@ -2631,11 +2637,12 @@ on mouseUp
          end repeat
       end if
       renderBuild
+   else if gDragMode is "run" then
+      b2kRelease
    end if
-   if gDragMode is "run" then b2kRelease
    put empty into gDragCtrl
    put empty into gDragMode
-end mouseUp
+end endDrag
 
 -- Re-seat a dragged part's body where its graphic was dropped (angle preserved).
 on reseatDragged pCtrl
@@ -2645,10 +2652,12 @@ on reseatDragged pCtrl
    b2kMoveTo pCtrl, item 1 of tLoc, item 2 of tLoc, b2kAngle(pCtrl)
 end reseatDragged
 
+-- The engine sends mouseRelease (not mouseUp) when the pointer is let go over a
+-- different control than the one that got mouseDown — e.g. dragging a part toward
+-- the right edge and releasing over the inspector. Route it through the same
+-- endDrag so the move/draw is never lost.
 on mouseRelease
-   if gDragMode is "run" then b2kRelease
-   put empty into gDragCtrl
-   put empty into gDragMode
+   endDrag
 end mouseRelease
 
 -- Shift-click during Run kicks the dynamic body under the pointer: a sharp,
@@ -2702,14 +2711,14 @@ on handleUiClick
       resetPend
       deselectPart
       deselectJoint
-      put "Tool: " & friendlyKind(gTool) into gStatus
+      put "Tool: " & niceName(gTool) & "." into gStatus
       showInspectorForTool
    else if "ui_joint_" is in tName then
       put the uJointId of the target into gJointTool
       resetPend
       deselectPart
       deselectJoint
-      put "Joint: " & gJointTool & " — click part A, then part B." into gStatus
+      put niceName(gJointTool) & " — click part A, then part B." into gStatus
       showInspectorForTool
    else if "ui_act_" is in tName then
       put the uActId of the target into tId
@@ -2763,7 +2772,7 @@ on handleAction pId
          break
       case "motor"
          put not gMotorOn into gMotorOn
-         if gMotorOn then put "Motor ON for new Hinge/Wheel joints (" & gMotorSpeed & " deg/sec)." into gStatus
+         if gMotorOn then put "Motor ON for new Hinge/Wheel joints (" & gMotorSpeed & "°/s)." into gStatus
          else put "Motor OFF." into gStatus
          break
       case "bouncy"
@@ -2773,12 +2782,12 @@ on handleAction pId
          break
       case "spddn"
          put max(kMotorMin, gMotorSpeed - 30) into gMotorSpeed
-         put "Motor speed: " & gMotorSpeed & " deg/sec." into gStatus
+         put "Motor speed: " & gMotorSpeed & "°/s." into gStatus
          refreshSpeedLabel
          break
       case "spdup"
          put min(kMotorMax, gMotorSpeed + 30) into gMotorSpeed
-         put "Motor speed: " & gMotorSpeed & " deg/sec." into gStatus
+         put "Motor speed: " & gMotorSpeed & "°/s." into gStatus
          refreshSpeedLabel
          break
       case "gravity"
@@ -2918,6 +2927,7 @@ on toggleMode
       deselectJoint
       put true into gMotorsRunning
       put empty into gSensorCount   -- every sensor zone starts empty each Run
+      resetGoals                    -- and every goal starts unsolved (clears any lit colour from a prior run)
       deleteByPrefix "cb_wire_"     -- wires are a build-time authoring aid; hide them during Run
       armFuses
       armThrusters
@@ -3461,6 +3471,14 @@ function friendlyKind pKind
          return "pressure plate"
       case "balloon"
          return "helium balloon"
+      case "poly"
+         return "polygon"
+      case "image"
+         return "picture"
+      case "draw"
+         return "terrain sketch"
+      case "goal"
+         return "goal zone"
       default
          return pKind
    end switch
@@ -3694,6 +3712,8 @@ end resetPend
 on flashSelect pCtrl
    if pCtrl is empty then exit flashSelect
    try
+      set the uPendFg of pCtrl to the foregroundColor of pCtrl   -- save the real outline (anchors and
+      set the uPendLine of pCtrl to the lineSize of pCtrl        -- balloons have custom rims) to restore
       set the foregroundColor of pCtrl to "255,255,255"
       set the lineSize of pCtrl to 3
    end try
@@ -3702,8 +3722,8 @@ end flashSelect
 on unflashSelect pCtrl
    if pCtrl is empty then exit unflashSelect
    try
-      set the foregroundColor of pCtrl to "20,20,24"
-      set the lineSize of pCtrl to 1
+      set the foregroundColor of pCtrl to the uPendFg of pCtrl
+      set the lineSize of pCtrl to the uPendLine of pCtrl
    end try
 end unflashSelect
 
@@ -3953,6 +3973,7 @@ on recordJoint pKind, pJoint, pA, pB, pX, pY, pVis
       end if
    end if
    -- default editable joint settings, stored on the marker (like parts' u-props)
+   set the uJKind of graphic tG to pKind     -- the joint's kind, so per-kind defaults are reachable from the marker alone
    set the uMotorOn of graphic tG to false
    set the uMotorSpeed of graphic tG to gMotorSpeed
    set the uMotorPower of graphic tG to motorPowerDefault(pKind)
@@ -4082,6 +4103,10 @@ on flashCtrl pCtrl
    if the uKind of pCtrl is among the items of "plate,anchor,fan,magnet" then exit flashCtrl
    if pCtrl is gSelPart then exit flashCtrl   -- don't fight the selection outline
    try
+      if pCtrl is not among the keys of gFlash then     -- remember the REAL outline once, so a
+         set the uFlashFg of pCtrl to the foregroundColor of pCtrl   -- re-flash before expiry can't
+         set the uFlashLine of pCtrl to the lineSize of pCtrl        -- bake the white flash colour in
+      end if
       set the foregroundColor of pCtrl to "255,255,255"
       set the lineSize of pCtrl to 2
       put the milliseconds + kFlashMs into gFlash[pCtrl]
@@ -4095,8 +4120,8 @@ on updateFlashes
    repeat for each key tCtrl in gFlash
       if tNow >= gFlash[tCtrl] then
          try
-            set the foregroundColor of tCtrl to "20,20,24"
-            set the lineSize of tCtrl to 1
+            set the foregroundColor of tCtrl to the uFlashFg of tCtrl   -- restore the part's own
+            set the lineSize of tCtrl to the uFlashLine of tCtrl        -- outline, not a generic grey
          end try
          put tCtrl & cr after tDead
       end if
@@ -4127,6 +4152,7 @@ on deletePart pCtrl
    end repeat
    put tNew into gParts
    unregisterKind pCtrl
+   if pCtrl is among the keys of gFlash then delete variable gFlash[pCtrl]   -- don't leave a dead handle for updateFlashes
    put true into gDynDirty
    try
       b2kRemove pCtrl
@@ -4237,6 +4263,9 @@ on removeJointAt pIndex
    put empty into gJCb[pIndex]
    put empty into gJVis[pIndex]
    put empty into gJEnd[pIndex]
+   put empty into gJPx[pIndex]    -- clear ALL nine parallel arrays so a dead slot holds no ghost data
+   put empty into gJPy[pIndex]
+   put 0 into gJMotor[pIndex]
 end removeJointAt
 
 on clearAll
@@ -4342,6 +4371,7 @@ end buildSampleSwing
 -- Serialise the whole scene to CB2 text (used by Save and by Reset's snapshot).
 function serializeText
    local tOut, tP, tI
+   set the itemDelimiter to comma   -- partLine parses "x,y" locs by item; never assume the caller left it at comma
    put "CB2" & cr into tOut
    put "world" & tab & gGravityMode & tab & gWorldFeel & tab & (gCCD is true) & tab & \
          (gSleepOn is true) & tab & (gWarmStart is true) & tab & numOr(gSubsteps, 4) & cr after tOut
@@ -4657,6 +4687,12 @@ function rebuildPart pKind, pX, pY, pW, pH, pColor, pFile
          return placeFan(pX, pY)
       case "magnet"
          return placeMagnet(pX, pY)
+      case "laser"
+         return placeLaser(pX, pY)        -- emitter restored from the saved anchor; beam recast by applyPartSpecial
+      case "thruster"
+         return placeThruster(pX, pY)
+      case "goal"
+         return placeGoal(pX, pY)
    end switch
    return empty
 end rebuildPart
@@ -4683,11 +4719,11 @@ on updateHud
    local tInfo, tModeTxt, tMotorTxt
    if gMode is "run" then put "RUN" into tModeTxt
    else put "BUILD" into tModeTxt
-   if gMotorOn then put "Motor ON " & gMotorSpeed & " deg/s" into tMotorTxt
-   else put "Motor OFF (" & gMotorSpeed & " deg/s)" into tMotorTxt
+   if gMotorOn then put "Motor ON " & gMotorSpeed & "°/s" into tMotorTxt
+   else put "Motor OFF (" & gMotorSpeed & "°/s)" into tMotorTxt
    put "Mode: " & tModeTxt into tInfo
-   if gJointTool is not empty then put tInfo & "    Joint: " & gJointTool into tInfo
-   else put tInfo & "    Tool: " & gTool into tInfo
+   if gJointTool is not empty then put tInfo & "    Joint: " & niceName(gJointTool) into tInfo
+   else put tInfo & "    Tool: " & niceName(gTool) into tInfo
    put tInfo & "    " & tMotorTxt into tInfo
    put tInfo & "    Parts: " & b2kBodyCount() & "    Joints: " & liveJointCount() into tInfo
    if gBouncy then put tInfo & "    Bouncy" into tInfo
@@ -5004,9 +5040,16 @@ on drawLaserBeam pLaser
       set the uLaserDist of pLaser to empty
    end if
    set the points of pLaser to round(tEx) & "," & round(tEy) & cr & round(tHx) & "," & round(tHy)
-   -- Cutting beam: a sustained hit on a movable part burns through and destroys it.
+   -- Cutting beam: a SUSTAINED hit on a movable part burns through and destroys it.
+   -- The burn cools back to zero after kLaserCool ms without a hit, so only continuous
+   -- exposure accumulates — a part that merely grazes the beam (or a fresh Run) never
+   -- inherits stale burn.
    if gMode is "run" and the uLaserCut of pLaser is true and tHitCtrl is not empty \
          and (tHitCtrl is among the lines of gParts) and kindIsDynamic(the uKind of tHitCtrl) then
+      local tNow
+      put the milliseconds into tNow
+      if tNow - numOr(the uBurnAt of tHitCtrl, 0) > kLaserCool then set the uBurn of tHitCtrl to 0
+      set the uBurnAt of tHitCtrl to tNow
       set the uBurn of tHitCtrl to numOr(the uBurn of tHitCtrl, 0) + 1
       if the uBurn of tHitCtrl >= kLaserBurn then destroyPart tHitCtrl
    end if
@@ -5307,18 +5350,26 @@ end applyPartSpecial
 -- Fans and magnets push the dynamic parts in/near them. The candidate part
 -- list is cached (dynamicParts) so this stays cheap as the scene grows.
 on applyFieldForces
-   local tFans, tMags, tParts, tP, tPx, tPy, tF, tM
+   local tFans, tMags, tParts, tP, tPx, tPy, tF, tM, tFanRects, tR
    put gKindList["fan"] into tFans
    put gKindList["magnet"] into tMags
    if tFans is empty and tMags is empty then exit applyFieldForces
    put dynamicParts() into tParts
    if tParts is empty then exit applyFieldForces
+   set the itemDelimiter to comma                 -- loc and rect are both comma lists
+   -- A fan's zone rect can't change within a frame, so read each one ONCE here
+   -- instead of re-reading it for every dynamic part in the loop below.
+   repeat for each line tF in tFans
+      if tF is not empty then put the rect of tF into tFanRects[tF]
+   end repeat
    repeat for each line tP in tParts
       if tP is empty then next repeat
       put item 1 of the loc of tP into tPx
       put item 2 of the loc of tP into tPy
       repeat for each line tF in tFans
-         if tF is not empty and ptInRect(tF, tPx, tPy) then applyFan tF, tP
+         if tF is empty then next repeat
+         put tFanRects[tF] into tR
+         if tPx >= item 1 of tR and tPx <= item 3 of tR and tPy >= item 2 of tR and tPy <= item 4 of tR then applyFan tF, tP
       end repeat
       repeat for each line tM in tMags
          if tM is not empty then applyMagnet tM, tP, tPx, tPy
@@ -5477,8 +5528,9 @@ on spawnRing pX, pY
 end spawnRing
 
 on updateRings
-   local tI, tName, tFrame, tRad
+   local tI, tName, tFrame, tRad, tLive
    if gRingN < 1 then exit updateRings
+   put 0 into tLive
    repeat with tI = 1 to gRingN
       if gRingF[tI] is empty then next repeat
       put "cb_ring_" & tI into tName
@@ -5494,7 +5546,9 @@ on updateRings
          set the rect of graphic tName to (gRingX[tI] - tRad), (gRingY[tI] - tRad), (gRingX[tI] + tRad), (gRingY[tI] + tRad)
          set the lineSize of graphic tName to max(1, 5 - (tFrame div 4))
       end if
+      add 1 to tLive
    end repeat
+   if tLive is 0 then put 0 into gRingN   -- every ring has expired: reset so the early-out fires again
 end updateRings
 
 -- =====================================================================
@@ -6217,8 +6271,8 @@ function propLabel pCtrl, pKey
       case "diameter"
          return "Diameter: " & numOr(the uW of pCtrl, the width of pCtrl) & " px"
       case "angle"
-         if kindIsTerrain(the uKind of pCtrl) then return "Angle: " & numOr(the uAngle of pCtrl, 0) & " deg"
-         return "Angle: " & round(b2kAngle(pCtrl)) & " deg"
+         if kindIsTerrain(the uKind of pCtrl) then return "Angle: " & numOr(the uAngle of pCtrl, 0) & "°"
+         return "Angle: " & round(b2kAngle(pCtrl)) & "°"
       case "facing"
          if the uFlip of pCtrl is true then return "Facing: high on the left"
          return "Facing: high on the right"
@@ -6266,9 +6320,9 @@ function propLabel pCtrl, pKey
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
-         return "Launch angle: " & numOr(the uLaunchDir of pCtrl, 0) & " deg"
+         return "Launch angle: " & numOr(the uLaunchDir of pCtrl, 0) & "°"
       case "spinrate"
-         return "Launch spin: " & numOr(the uSpinRate of pCtrl, 0) & " deg/s"
+         return "Launch spin: " & numOr(the uSpinRate of pCtrl, 0) & "°/s"
       case "blastradius"
          return "Blast size: " & (the uBlastRadius of pCtrl)
       case "blastpower"
@@ -7009,7 +7063,11 @@ on editPropValue pKey
       exit editPropValue
    end if
    set the itemDelimiter to comma
-   if pKey is not among the items of kEntryKeys then exit editPropValue
+   if pKey is not among the items of kEntryKeys then     -- colours, materials and toggles step with +/−, not type-in
+      put "Use the +/− buttons to change this." into gStatus
+      updateHud
+      exit editPropValue
+   end if
    ask ("Set " & propEditName(gSelPart, pKey) & ":") with currentPropValue(gSelPart, pKey)
    if it is empty or the result is "Cancel" then exit editPropValue
    if it is not a number then
@@ -7279,7 +7337,7 @@ end jointProps
 function jointPropLabel pMk, pKind, pKey
    local tUnit
    if pKind is "slider" then put " px/s" into tUnit
-   else put " deg/s" into tUnit
+   else put "°/s" into tUnit
    switch pKey
       case "jmotoron"
          return "Motor: " & onOff(the uMotorOn of pMk is true)
@@ -7291,10 +7349,10 @@ function jointPropLabel pMk, pKind, pKey
          return "Limits: " & onOff(the uLimitOn of pMk is true)
       case "jlimitlo"
          if pKind is "slider" then return "Limit min: " & numOr(the uLimitLo of pMk, -100) & " px"
-         return "Limit min: " & numOr(the uLimitLo of pMk, -45) & " deg"
+         return "Limit min: " & numOr(the uLimitLo of pMk, -45) & "°"
       case "jlimithi"
          if pKind is "slider" then return "Limit max: " & numOr(the uLimitHi of pMk, 100) & " px"
-         return "Limit max: " & numOr(the uLimitHi of pMk, 45) & " deg"
+         return "Limit max: " & numOr(the uLimitHi of pMk, 45) & "°"
       case "jspringhz"
          return "Springiness: " & numOr(the uSpringHz of pMk, 0) & " Hz"
       case "jspringdamp"
@@ -7307,6 +7365,7 @@ function jointPropLabel pMk, pKind, pKey
    return pKey
 end jointPropLabel
 
+-- "on"/"off" for a boolean-ish global (shared by the joint, filter and world panels).
 function onOff pFlag
    if pFlag is true then return "on"
    return "off"
@@ -7468,7 +7527,7 @@ function jointValueOf pMk, pKey
       case "jmotorspeed"
          return numOr(the uMotorSpeed of pMk, gMotorSpeed)
       case "jmotorpower"
-         return numOr(the uMotorPower of pMk, 1000)
+         return numOr(the uMotorPower of pMk, motorPowerDefault(the uJKind of pMk))
       case "jlimitlo"
          return numOr(the uLimitLo of pMk, 0)
       case "jlimithi"
@@ -7951,7 +8010,7 @@ function niceName pId
    local tNames
    put "drag=Move / Drag" & cr & "box=Box" & cr & "ball=Ball" & cr & "capsule=Capsule" & cr \
          & "poly=Polygon" & cr & "image=Picture" & cr & "anchor=Anchor" & cr & "delete=Delete" & cr \
-         & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr \
+         & "duplicate=Duplicate" & cr & "multiply=Multiply" & cr & "link=Link" & cr \
          & "balloon=Helium Balloon" & cr & "bomb=Bomb" & cr & "plate=Pressure Plate" & cr \
          & "fan=Fan / Wind" & cr & "magnet=Magnet" & cr & "sensor=Sensor" & cr & "laser=Laser" & cr & "thruster=Thruster" & cr & "goal=Goal Zone" & cr \
          & "platform=Platform" & cr & "ramp=Ramp" & cr & "hill=Hill" & cr & "draw=Draw Terrain" & cr & "car=Car" & cr & "hinge=Hinge Joint" & cr \
@@ -8424,12 +8483,6 @@ on refreshWorldPanel
    setToggle "ui_act_wopt_warm", (gWarmStart is true)
 end refreshWorldPanel
 
--- "on"/"off" for a boolean-ish global.
-function onOff pFlag
-   if pFlag is true then return "on"
-   return "off"
-end onOff
-
 -- A click on a world-option toggle: flip it, push it live, repaint.
 on handleWorldToggle pId
    switch pId
@@ -8828,7 +8881,7 @@ on showOnboardingStep
    switch gOnbStep
       case 1
          put "Step 1 of 5 — Pick a part" into tTitle
-         put "On the left is your toolbox. Click a shape under SHAPES (try Box or Ball), or something fun under SPECIAL — a Balloon, a Bomb, a Thruster, a Laser." into tText
+         put "On the left is your toolbox. Click a category header (SHAPES, SPECIAL, JOINTS…) to open it — only one opens at a time. Try a shape under SHAPES (Box or Ball), or something fun under SPECIAL — a Balloon, a Bomb, a Thruster, a Laser." into tText
          break
       case 2
          put "Step 2 of 5 — Drop it and arrange" into tTitle
