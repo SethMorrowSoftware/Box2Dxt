@@ -2461,6 +2461,16 @@ on highlightActions
          setBtnActive "ui_act_mode", kColAccentGreen
       end if
    end if
+   -- the Play button stands out (blue), turning amber 'Stop' while a puzzle runs
+   if there is a button "ui_act_play" then
+      if gPlaying then
+         set the label of button "ui_act_play" to "Stop"
+         setBtnActive "ui_act_play", kColAccentAmber
+      else
+         set the label of button "ui_act_play" to "Play"
+         setBtnActive "ui_act_play", kColToggleBlue
+      end if
+   end if
    -- A clear, full-width cue for which mode you're in: green accent + neutral
    -- subtitle while building; amber accent + a "running" subtitle while simulating.
    if gMode is "run" then
@@ -5650,7 +5660,7 @@ on startPlay
    put the milliseconds into gPlayStartMs
    resetGoals
    setPlayChrome true
-   if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Stop"
+   highlightActions                   -- recolour the Play button to amber 'Stop'
    put "PLAY — get a movable part into the goal zone." into gStatus
    updateHud
 end startPlay
@@ -5675,7 +5685,7 @@ on stopPlay
    setPlayChrome false
    if gMode is "run" then toggleMode
    resetGoals                        -- clear the lit/solved colouring
-   if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Play"
+   highlightActions                  -- recolour the Play button back to blue 'Play'
    put "Back to building." into gStatus
    updateHud
 end stopPlay
@@ -8601,31 +8611,35 @@ on showOnboardingStep
    local tTitle, tText
    switch gOnbStep
       case 1
-         put "Step 1 of 4 — Pick a part" into tTitle
-         put "On the left is your toolbox. Click a shape under SHAPES (try Box or Ball), or something fun under SPECIAL like a Balloon or a Bomb." into tText
+         put "Step 1 of 5 — Pick a part" into tTitle
+         put "On the left is your toolbox. Click a shape under SHAPES (try Box or Ball), or something fun under SPECIAL — a Balloon, a Bomb, a Thruster, a Laser." into tText
          break
       case 2
-         put "Step 2 of 4 — Drop it on the stage" into tTitle
-         put "Click anywhere on the dark stage in the middle to drop your part, then drag parts to arrange them. The panel on the right always explains the selected part." into tText
+         put "Step 2 of 5 — Drop it and arrange" into tTitle
+         put "Click the dark stage in the middle to drop your part, then drag parts to arrange them. The panel on the right explains and tunes whatever you select (and Rename names it)." into tText
          break
       case 3
-         put "Step 3 of 4 — Connect with joints" into tTitle
-         put "Pick a joint under JOINTS (a Hinge is a pin things can spin around), then click part A and part B to link them. Turn on Motor first to make hinges and wheels drive themselves." into tText
+         put "Step 3 of 5 — Connect with joints" into tTitle
+         put "Pick a joint under JOINTS (a Hinge is a pin things spin around), then click part A and part B to link them. Turn Motor on first to make hinges and wheels drive themselves." into tText
+         break
+      case 4
+         put "Step 4 of 5 — Wire up triggers" into tTitle
+         put "Use the Link tool (under TOOLS): click a Pressure Plate or Sensor, then click a Bomb to wire them — an amber wire means that trigger sets off that bomb. Set a bomb to 'Demolish' or a laser to 'Cut' to destroy parts." into tText
          break
       default
-         put "Step 4 of 4 — Press Run" into tTitle
-         put "Hit Run (top-right) to start gravity and watch your machine move; press it again to keep building. Open Recipes for ready-made examples to explore." into tText
+         put "Step 5 of 5 — Set a goal and Play" into tTitle
+         put "Drop a Goal Zone (under SPECIAL), then press Play (top bar): get a movable part into the goal to solve it. Run just tests physics; Play is the puzzle. Open Recipes > Puzzles for a ready-made one." into tText
    end switch
    if there is a field "ui_onb_title" then put tTitle into field "ui_onb_title"
    if there is a field "ui_onb_text" then put tText into field "ui_onb_text"
-   if gOnbStep >= 4 then set the label of button "ui_act_onbnext" to "Start building"
+   if gOnbStep >= 5 then set the label of button "ui_act_onbnext" to "Start building"
    else set the label of button "ui_act_onbnext" to "Next"
    raiseOnboarding
 end showOnboardingStep
 
 on onboardingNext
    add 1 to gOnbStep
-   if gOnbStep > 4 then dismissOnboarding
+   if gOnbStep > 5 then dismissOnboarding
    else showOnboardingStep
 end onboardingNext
 
