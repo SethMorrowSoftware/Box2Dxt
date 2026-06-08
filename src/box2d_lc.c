@@ -39,6 +39,11 @@
 #include <stdint.h>
 #include <math.h>
 
+#if !defined(_WIN32)
+    #include <pthread.h>
+    #include <unistd.h>
+#endif
+
 #if defined(_WIN32)
     #define LC_API __declspec(dllexport)
 #else
@@ -46,7 +51,7 @@
 #endif
 
 /* Bump when the exported ABI changes so the LCB side can sanity-check. */
-#define LC_ABI_VERSION 3
+#define LC_ABI_VERSION 4
 
 /* ------------------------------------------------------------------ */
 /* Generic handle tables. Handles are 1-based; 0 == null/invalid.      */
@@ -154,6 +159,242 @@ static int positive(double v) { return isfinite(v) && v > 0.0; }
 static inline void *h2ud(int h)   { return (void *)(intptr_t)h; }
 static inline int   ud2h(void *p) { return (int)(intptr_t)p; }
 
+
+/* ------------------------------------------------------------------ */
+/* Optional Box2D task system.                                         */
+/* ------------------------------------------------------------------ */
+/* Box2D v3 can parallelize a single world step if the world definition
+ * provides workerCount/enqueueTask/finishTask. OXT/LC script execution stays
+ * single-threaded, but the native solver can still fan out during
+ * b2World_Step(). The pool below is deliberately private to the C shim: script
+ * code never touches Box2D objects from worker threads, and finishTask waits
+ * before control returns across the FFI boundary.
+ *
+ * On POSIX platforms we create workerCount-1 background pthreads and let the
+ * caller thread help in finishTask as worker 0. Other platforms fall back to
+ * Box2D's normal single-threaded path until a native backend is added. */
+#if !defined(_WIN32)
+typedef struct LcTaskPool LcTaskPool;
+typedef struct LcTaskGroup LcTaskGroup;
+
+struct LcTaskGroup {
+    b2TaskCallback *task;
+    void *taskContext;
+    int itemCount;
+    int minRange;
+    int nextIndex;
+    int remaining;
+    int queued;
+    LcTaskPool *pool;
+    LcTaskGroup *next;
+};
+
+struct LcTaskPool {
+    int workerCount;            /* total Box2D workers, including caller */
+    int threadCount;            /* background workers only */
+    pthread_t *threads;
+    pthread_mutex_t mutex;
+    pthread_cond_t workCond;
+    pthread_cond_t doneCond;
+    int stopping;
+    LcTaskGroup *head;
+    LcTaskGroup *tail;
+};
+
+static int lc_task_chunk_count(int itemCount, int minRange) {
+    if (itemCount <= 0) return 0;
+    if (minRange < 1) minRange = 1;
+    return (itemCount + minRange - 1) / minRange;
+}
+
+static void lc_task_unqueue_locked(LcTaskPool *pool, LcTaskGroup *group, LcTaskGroup *prev) {
+    if (!group->queued) return;
+    if (prev) prev->next = group->next; else pool->head = group->next;
+    if (pool->tail == group) pool->tail = prev;
+    group->next = NULL;
+    group->queued = 0;
+}
+
+static int lc_task_take_locked(LcTaskPool *pool, LcTaskGroup *group, int *start, int *end) {
+    if (group->nextIndex >= group->itemCount) return 0;
+    *start = group->nextIndex;
+    *end = *start + group->minRange;
+    if (*end > group->itemCount) *end = group->itemCount;
+    group->nextIndex = *end;
+    if (group->nextIndex >= group->itemCount && group->queued) {
+        LcTaskGroup *prev = NULL;
+        for (LcTaskGroup *g = pool->head; g; g = g->next) {
+            if (g == group) { lc_task_unqueue_locked(pool, group, prev); break; }
+            prev = g;
+        }
+    }
+    return 1;
+}
+
+static void lc_task_complete_locked(LcTaskPool *pool, LcTaskGroup *group) {
+    group->remaining -= 1;
+    if (group->remaining <= 0) pthread_cond_broadcast(&pool->doneCond);
+}
+
+static void *lc_task_worker(void *arg) {
+    LcTaskPool *pool = (LcTaskPool *)arg;
+    uintptr_t workerIndex = 1;
+    for (int i = 0; i < pool->threadCount; i++) {
+        if (pthread_equal(pool->threads[i], pthread_self())) { workerIndex = (uintptr_t)i + 1; break; }
+    }
+
+    for (;;) {
+        pthread_mutex_lock(&pool->mutex);
+        while (!pool->stopping && pool->head == NULL) pthread_cond_wait(&pool->workCond, &pool->mutex);
+        if (pool->stopping) { pthread_mutex_unlock(&pool->mutex); break; }
+        LcTaskGroup *group = pool->head;
+        int start = 0, end = 0;
+        int have = lc_task_take_locked(pool, group, &start, &end);
+        pthread_mutex_unlock(&pool->mutex);
+
+        if (have) {
+            group->task(start, end, (uint32_t)workerIndex, group->taskContext);
+            pthread_mutex_lock(&pool->mutex);
+            lc_task_complete_locked(pool, group);
+            pthread_mutex_unlock(&pool->mutex);
+        }
+    }
+    return NULL;
+}
+
+static LcTaskPool *lc_task_pool_create(int workerCount) {
+    if (workerCount < 2) return NULL;
+    int online = (int)sysconf(_SC_NPROCESSORS_ONLN);
+    if (online > 0 && workerCount > online) workerCount = online;
+    if (workerCount < 2) return NULL;
+    if (workerCount > 32) workerCount = 32;
+
+    LcTaskPool *pool = (LcTaskPool *)calloc(1, sizeof(LcTaskPool));
+    if (!pool) return NULL;
+    pool->workerCount = workerCount;
+    pool->threadCount = workerCount - 1;
+    pool->threads = (pthread_t *)calloc((size_t)pool->threadCount, sizeof(pthread_t));
+    if (!pool->threads) { free(pool); return NULL; }
+    if (pthread_mutex_init(&pool->mutex, NULL) != 0) { free(pool->threads); free(pool); return NULL; }
+    if (pthread_cond_init(&pool->workCond, NULL) != 0 || pthread_cond_init(&pool->doneCond, NULL) != 0) {
+        pthread_mutex_destroy(&pool->mutex); free(pool->threads); free(pool); return NULL;
+    }
+    for (int i = 0; i < pool->threadCount; i++) {
+        if (pthread_create(&pool->threads[i], NULL, lc_task_worker, pool) != 0) {
+            pthread_mutex_lock(&pool->mutex);
+            pool->stopping = 1;
+            pthread_cond_broadcast(&pool->workCond);
+            pthread_mutex_unlock(&pool->mutex);
+            for (int j = 0; j < i; j++) pthread_join(pool->threads[j], NULL);
+            pthread_cond_destroy(&pool->doneCond); pthread_cond_destroy(&pool->workCond);
+            pthread_mutex_destroy(&pool->mutex); free(pool->threads); free(pool);
+            return NULL;
+        }
+    }
+    return pool;
+}
+
+static void lc_task_pool_destroy(LcTaskPool *pool) {
+    if (!pool) return;
+    pthread_mutex_lock(&pool->mutex);
+    pool->stopping = 1;
+    pthread_cond_broadcast(&pool->workCond);
+    pthread_mutex_unlock(&pool->mutex);
+    for (int i = 0; i < pool->threadCount; i++) pthread_join(pool->threads[i], NULL);
+    pthread_cond_destroy(&pool->doneCond);
+    pthread_cond_destroy(&pool->workCond);
+    pthread_mutex_destroy(&pool->mutex);
+    free(pool->threads);
+    free(pool);
+}
+
+static void *lc_enqueue_task(b2TaskCallback *task, int itemCount, int minRange, void *taskContext, void *userContext) {
+    LcTaskPool *pool = (LcTaskPool *)userContext;
+    if (!pool || !task || itemCount <= 0) return NULL;
+    if (minRange < 1) minRange = 1;
+
+    int chunks = lc_task_chunk_count(itemCount, minRange);
+    if (chunks <= 1) {
+        task(0, itemCount, 0, taskContext);
+        return NULL;
+    }
+
+    LcTaskGroup *group = (LcTaskGroup *)calloc(1, sizeof(LcTaskGroup));
+    if (!group) {
+        task(0, itemCount, 0, taskContext);
+        return NULL;
+    }
+    group->task = task;
+    group->taskContext = taskContext;
+    group->itemCount = itemCount;
+    group->minRange = minRange;
+    group->remaining = chunks;
+    group->queued = 1;
+    group->pool = pool;
+
+    pthread_mutex_lock(&pool->mutex);
+    if (pool->tail) pool->tail->next = group; else pool->head = group;
+    pool->tail = group;
+    pthread_cond_broadcast(&pool->workCond);
+    pthread_mutex_unlock(&pool->mutex);
+    return group;
+}
+
+static void lc_finish_task(void *userTask, void *userContext) {
+    LcTaskGroup *group = (LcTaskGroup *)userTask;
+    LcTaskPool *pool = (LcTaskPool *)userContext;
+    if (!group || !pool) return;
+
+    for (;;) {
+        pthread_mutex_lock(&pool->mutex);
+        if (group->remaining <= 0) { pthread_mutex_unlock(&pool->mutex); break; }
+        int start = 0, end = 0;
+        int have = lc_task_take_locked(pool, group, &start, &end);
+        if (!have) {
+            while (group->remaining > 0) pthread_cond_wait(&pool->doneCond, &pool->mutex);
+            pthread_mutex_unlock(&pool->mutex);
+            break;
+        }
+        pthread_mutex_unlock(&pool->mutex);
+
+        group->task(start, end, 0, group->taskContext);
+        pthread_mutex_lock(&pool->mutex);
+        lc_task_complete_locked(pool, group);
+        pthread_mutex_unlock(&pool->mutex);
+    }
+    free(group);
+}
+#else
+typedef struct LcTaskPool LcTaskPool;
+static LcTaskPool *lc_task_pool_create(int workerCount) { (void)workerCount; return NULL; }
+static void lc_task_pool_destroy(LcTaskPool *pool) { (void)pool; }
+#endif
+
+static LcTaskPool **s_worldPools = NULL;
+static int s_worldPoolsCap = 0;
+
+static int world_pool_set(int h, LcTaskPool *pool) {
+    if (h <= 0) return 0;
+    if (h > s_worldPoolsCap) {
+        int nc = s_worldPoolsCap ? s_worldPoolsCap : 64;
+        while (nc < h) nc *= 2;
+        LcTaskPool **p = (LcTaskPool **)realloc(s_worldPools, (size_t)nc * sizeof(LcTaskPool *));
+        if (!p) return 0;
+        memset(p + s_worldPoolsCap, 0, (size_t)(nc - s_worldPoolsCap) * sizeof(LcTaskPool *));
+        s_worldPools = p;
+        s_worldPoolsCap = nc;
+    }
+    s_worldPools[h - 1] = pool;
+    return 1;
+}
+
+static LcTaskPool *world_pool_take(int h) {
+    if (h <= 0 || h > s_worldPoolsCap) return NULL;
+    LcTaskPool *pool = s_worldPools[h - 1];
+    s_worldPools[h - 1] = NULL;
+    return pool;
+}
+
 /* Recover integer handles from Box2D userData (0 if the object has gone away). */
 static int body_handle_of_shape(b2ShapeId s) {
     if (!b2Shape_IsValid(s)) return 0;
@@ -181,25 +422,62 @@ static void retire_joint_id(b2JointId j) {
 /* ------------------------------------------------------------------ */
 LC_API int b2lc_abi_version(void) { return LC_ABI_VERSION; }
 
-LC_API int b2lc_world_create(double gx, double gy, int enableSleep, int enableContinuous) {
+static int b2lc_world_create_internal(double gx, double gy, int enableSleep, int enableContinuous, int workerCount) {
     if (!finite2(gx, gy)) return 0;
     b2WorldDef wd = b2DefaultWorldDef();
     wd.gravity = v2(gx, gy);
     wd.enableSleep = enableSleep ? true : false;
     wd.enableContinuous = enableContinuous ? true : false;
+
+    LcTaskPool *pool = lc_task_pool_create(workerCount);
+#if !defined(_WIN32)
+    if (pool) {
+        wd.workerCount = pool->workerCount;
+        wd.enqueueTask = lc_enqueue_task;
+        wd.finishTask = lc_finish_task;
+        wd.userTaskContext = pool;
+    }
+#endif
+
     b2WorldId id = b2CreateWorld(&wd);
     int h = worlds_add(id);
     if (!h && b2World_IsValid(id)) b2DestroyWorld(id);
+    if (!h) { lc_task_pool_destroy(pool); return 0; }
+    if (!world_pool_set(h, pool)) {
+        b2DestroyWorld(id);
+        worlds_free_handle(h);
+        lc_task_pool_destroy(pool);
+        return 0;
+    }
     return h;
 }
 
+LC_API int b2lc_world_create(double gx, double gy, int enableSleep, int enableContinuous) {
+    return b2lc_world_create_internal(gx, gy, enableSleep, enableContinuous, 1);
+}
+
+LC_API int b2lc_world_create_threaded(double gx, double gy, int enableSleep, int enableContinuous, int workerCount) {
+    return b2lc_world_create_internal(gx, gy, enableSleep, enableContinuous, workerCount);
+}
+
+LC_API int b2lc_world_thread_count(int w) {
+    if (w <= 0 || w > s_worldPoolsCap || !s_worldPools[w - 1]) return 1;
+#if !defined(_WIN32)
+    return s_worldPools[w - 1]->workerCount;
+#else
+    return 1;
+#endif
+}
+
 LC_API void b2lc_world_destroy(int w) {
+    LcTaskPool *pool = world_pool_take(w);
     b2WorldId id = worlds_get(w);
     if (b2World_IsValid(id)) {
         b2DestroyWorld(id);
         retire_invalid_child_handles();
     }
     worlds_free_handle(w);
+    lc_task_pool_destroy(pool);
 }
 
 LC_API void b2lc_world_set_gravity(int w, double gx, double gy) {
@@ -280,7 +558,7 @@ LC_API void b2lc_body_destroy(int b) {
 /* transform read-back (scalar getters keep the FFI boundary simple) */
 LC_API double b2lc_body_x(int b)     { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetPosition(id).x : 0.0; }
 LC_API double b2lc_body_y(int b)     { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetPosition(id).y : 0.0; }
-LC_API double b2lc_body_angle(int b) { b2BodyId id = bodies_get(b); if (!b2Body_IsValid(id)) return 0.0; b2Rot q = b2Body_GetRotation(id); return atan2((double)q.s, (double)q.c); }
+LC_API double b2lc_body_angle(int b) { b2BodyId id = bodies_get(b); if (!b2Body_IsValid(id)) return 0.0; return (double)b2Rot_GetAngle(b2Body_GetRotation(id)); }
 
 LC_API double b2lc_body_vx(int b)    { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetLinearVelocity(id).x : 0.0; }
 LC_API double b2lc_body_vy(int b)    { b2BodyId id = bodies_get(b); return b2Body_IsValid(id) ? (double)b2Body_GetLinearVelocity(id).y : 0.0; }
@@ -880,7 +1158,7 @@ LC_API int b2lc_bodies_update(int w) {
         s_move[i].body   = ud2h(ev.moveEvents[i].userData);   /* the stored handle */
         s_move[i].x      = t.p.x;
         s_move[i].y      = t.p.y;
-        s_move[i].angle  = atan2((double)t.q.s, (double)t.q.c);
+        s_move[i].angle  = b2Rot_GetAngle(t.q);
         s_move[i].asleep = ev.moveEvents[i].fellAsleep ? 1 : 0;
     }
     s_moveCnt = ev.moveCount;

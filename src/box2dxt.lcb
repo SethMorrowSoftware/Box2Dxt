@@ -32,6 +32,8 @@ metadata version is "0.2.0"
 private foreign handler _abi_version() returns CInt binds to "c:box2dxt>b2lc_abi_version!cdecl"
 
 private foreign handler _world_create(in pGx as CDouble, in pGy as CDouble, in pSleep as CInt, in pCont as CInt) returns CInt binds to "c:box2dxt>b2lc_world_create!cdecl"
+private foreign handler _world_create_threaded(in pGx as CDouble, in pGy as CDouble, in pSleep as CInt, in pCont as CInt, in pWorkers as CInt) returns CInt binds to "c:box2dxt>b2lc_world_create_threaded!cdecl"
+private foreign handler _world_thread_count(in pW as CInt) returns CInt binds to "c:box2dxt>b2lc_world_thread_count!cdecl"
 private foreign handler _world_destroy(in pW as CInt) returns nothing binds to "c:box2dxt>b2lc_world_destroy!cdecl"
 private foreign handler _world_set_gravity(in pW as CInt, in pGx as CDouble, in pGy as CDouble) returns nothing binds to "c:box2dxt>b2lc_world_set_gravity!cdecl"
 private foreign handler _world_enable_sleeping(in pW as CInt, in pFlag as CInt) returns nothing binds to "c:box2dxt>b2lc_world_enable_sleeping!cdecl"
@@ -464,6 +466,22 @@ public handler b2NewWorld(in pGravityX as Number, in pGravityY as Number, in pAl
    variable tR as Integer
    unsafe
       put _world_create(pGravityX, pGravityY, bi(pAllowSleep), bi(pContinuous)) into tR
+   end unsafe
+   return tR
+end handler
+
+public handler b2NewThreadedWorld(in pGravityX as Number, in pGravityY as Number, in pAllowSleep as Boolean, in pContinuous as Boolean, in pWorkers as Integer) returns Integer
+   variable tR as Integer
+   unsafe
+      put _world_create_threaded(pGravityX, pGravityY, bi(pAllowSleep), bi(pContinuous), pWorkers) into tR
+   end unsafe
+   return tR
+end handler
+
+public handler b2WorldThreadCount(in pWorld as Integer) returns Integer
+   variable tR as Integer
+   unsafe
+      put _world_thread_count(pWorld) into tR
    end unsafe
    return tR
 end handler

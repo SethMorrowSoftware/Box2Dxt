@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(box2dxt LANGUAGES C)
 
+find_package(Threads REQUIRED)
+
 # ---------------------------------------------------------------------------
 # Box2Dxt — the native Box2D v3 module for OpenXTalk (OXT) / xTalk, also
 # compatible with LiveCode 9.6.3+. This builds the C shim (src/box2d_lc.c)
@@ -59,7 +61,7 @@ endif()
 # The xTalk Builder (LCB) FFI binding string "c:box2dxt>..." resolves to these.
 # ---------------------------------------------------------------------------
 add_library(box2dxt SHARED src/box2d_lc.c)
-target_link_libraries(box2dxt PRIVATE box2d)
+target_link_libraries(box2dxt PRIVATE box2d Threads::Threads)
 
 set_target_properties(box2dxt PROPERTIES
     C_STANDARD 17

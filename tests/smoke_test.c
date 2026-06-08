@@ -15,6 +15,8 @@
 /* ---- shim entry points (must match box2d_lc.c signatures) ---- */
 extern int    b2lc_abi_version(void);
 extern int    b2lc_world_create(double, double, int, int);
+extern int    b2lc_world_create_threaded(double, double, int, int, int);
+extern int    b2lc_world_thread_count(int);
 extern void   b2lc_world_destroy(int);
 extern void   b2lc_world_step(int, double, int);
 extern int    b2lc_body_create(int, int, double, double, double, int, int);
@@ -81,7 +83,12 @@ static void check(const char *name, int ok) {
 
 int main(void) {
     printf("box2dxt ABI version = %d\n", b2lc_abi_version());
-    check("ABI version is 3", b2lc_abi_version() == 3);
+    check("ABI version is 4", b2lc_abi_version() == 4);
+
+    int threaded = b2lc_world_create_threaded(0.0, -10.0, 1, 1, 2);
+    check("threaded world creates", threaded > 0);
+    check("threaded world reports at least one worker", b2lc_world_thread_count(threaded) >= 1);
+    if (threaded > 0) b2lc_world_destroy(threaded);
 
     int w = b2lc_world_create(0.0, -10.0, 1, 1);   /* gravity, sleep + CCD on */
     check("world handle valid", w > 0);

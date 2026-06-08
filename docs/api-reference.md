@@ -12,7 +12,7 @@ when you need something the Kit doesn't expose.
 - Distances are **metres**, angles are **radians**. Convert to pixels/degrees at
   draw time.
 - Body type codes: `0` static, `1` kinematic, `2` dynamic.
-- `b2Version()` → int returns the shim ABI version (currently `3`) — call it once
+- `b2Version()` → int returns the shim ABI version (currently `4`) — call it once
   as a load/version check that the extension and native library are in sync.
 
 - [World](#world)
@@ -29,7 +29,9 @@ when you need something the Kit doesn't expose.
 
 | Handler | Purpose |
 |---------|---------|
-| `b2NewWorld(gx, gy, allowSleep, continuous)` → world | Create a world with a gravity vector. |
+| `b2NewWorld(gx, gy, allowSleep, continuous)` → world | Create a single-threaded world with a gravity vector. |
+| `b2NewThreadedWorld(gx, gy, allowSleep, continuous, workers)` → world | Create a world whose native `b2Step` can use a Box2D worker pool on supported platforms. OXT/LC script remains single-threaded; the C shim waits before returning. |
+| `b2WorldThreadCount(world)` → count | Return the active native Box2D worker count for a world (`1` means serial or unsupported platform). |
 | `b2DestroyWorld(world)` | Destroy a world and everything in it. |
 | `b2SetGravity(world, gx, gy)` | Change gravity. |
 | `b2EnableSleeping(world, flag)` / `b2EnableContinuous(world, flag)` | Toggle sleeping / CCD. |
