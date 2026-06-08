@@ -9235,13 +9235,19 @@ end buildRecipeFanTower
 on buildRecipeMagnetCatch
    if gMode is "run" then toggleMode
    clearAll
-   local tCx, tCy, tMag, tI
+   local tCx, tCy, tMag, tI, tLoX, tHiX, tLoY, tHiY
    put (gArenaL + gArenaR) div 2 into tCx
    put (gArenaT + gArenaB) div 2 into tCy
    put placeMagnet(tCx, tCy) into tMag
-   set the uMagRange of tMag to 340
+   set the uMagRange of tMag to 360
+   -- Scatter the balls INSIDE the magnet's reach (clamped to the arena), so every
+   -- one is actually caught -- not just whichever happened to land within range.
+   put max(gArenaL + 40, tCx - 280) into tLoX
+   put min(gArenaR - 40, tCx + 280) into tHiX
+   put max(gArenaT + 40, tCy - 170) into tLoY
+   put min(gArenaB - 50, tCy + 170) into tHiY
    repeat with tI = 1 to 6
-      get placeBall(rnd(gArenaL + 50, gArenaR - 50), rnd(gArenaT + 40, gArenaB - 60), 30, "206,124,206")
+      get placeBall(rnd(tLoX, tHiX), rnd(tLoY, tHiY), 30, "206,124,206")
    end repeat
    renderBuild
    put "Magnet Catch — press Run: the magnet pulls the scattered balls toward it." into gStatus
@@ -9344,12 +9350,12 @@ on buildRecipeCrane
    put placeBox(tX, tBaseY - 110, 26, 220, "92,98,112") into tMast
    set the uBodyType of tMast to "static"
    b2kSetType tMast, "static"
-   put placeAnchor(tX, tTop) into tPivot
-   put placeBox(tX + 96, tTop, 210, 14, "180,150,90") into tJib
+   put placeAnchor(tX + 13, tTop) into tPivot                    -- pivot at the mast's right edge
+   put placeBox(tX + 118, tTop, 210, 14, "180,150,90") into tJib -- jib cantilevers RIGHT from the pivot, clear of the mast (its left end used to overlap the mast and jam the swing)
    set the uDensity of tJib to 0.4
    b2kSetDensity tJib, 0.4
-   get connectJoint("hinge", tJib, tPivot, tX, tTop, 26)   -- 26 deg/s motor swings the jib
-   put placeBall(tX + 184, tTop + 92, 34, "232,182,92") into tLoad
+   get connectJoint("hinge", tJib, tPivot, tX + 13, tTop, 26)    -- 26 deg/s motor swings the jib
+   put placeBall(tX + 200, tTop + 92, 34, "232,182,92") into tLoad
    set the uDensity of tLoad to 2
    b2kSetDensity tLoad, 2
    get connectJoint("rope", tJib, tLoad)
