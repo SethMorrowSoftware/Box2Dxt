@@ -1821,7 +1821,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "12"
+constant kUIVersion = "13"
 
 -- Palette theme: one source of truth for the chrome colours (RGB strings) so the
 -- idle / active / hover styling never drifts apart. Used by the setBtn*, highlight*
@@ -1860,7 +1860,7 @@ constant kSizeMin = 16, kSizeMax = 240
 -- Terrain (static scenery) can be larger than parts — wide ledges, long ramps.
 constant kTerrainMin = 20, kTerrainMax = 600
 -- inspector: rows shown per tab, dimension nudge (px), joint click radius (px)
-constant kPropRows = 10, kDimStep = 8, kJointHitR = 16
+constant kPropRows = 8, kDimStep = 8, kJointHitR = 16
 -- the eight collision channels the filter popup exposes (1..8 -> bits 1,2,4..128)
 constant kFilterChannels = 8, kAllChannels = "1,2,3,4,5,6,7,8"
 -- numeric settings a user may type an exact value for (toggles/colour stay stepper-only)
@@ -2326,8 +2326,9 @@ on makeInspector
    -- a clearly-marked, divided settings block so adjustable values stand out
    makeBar "ui_settings_div", tL + 12, tTop + 156, tWide - 12, tTop + 157, "60,66,80"
    makeLabel "ui_settings_hdr", tL + 12, tTop + 162, tWide - 12, tTop + 182, "PART SETTINGS", 11, "120,220,150", true
-   makeField "ui_settings_hint", tL + 12, tTop + 186, tWide - 12, tTop + 250, 11, "150,154,166"
-   put tTop + 186 into tRy
+   makeField "ui_settings_hint", tL + 12, tTop + 186, tWide - 12, tTop + 238, 11, "150,154,166"
+   -- Keep live setting descriptions above the rows; rows start after the hint so text never overlaps.
+   put tTop + 242 into tRy
    repeat with tI = 1 to kPropRows
       makeField ("ui_prop_lbl_" & tI), tL + 12, tRy + 3, tWide - 92, tRy + 25, 11, "232,236,246"
       makePropBtn ("prop_dec_" & tI), "−", tWide - 84, tRy, 32, 26
