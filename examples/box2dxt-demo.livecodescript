@@ -31,7 +31,7 @@
 -- PIXELS, SCREEN coordinates and DEGREES; the kit converts to Box2D's
 -- metres / radians / y-up for you, runs the world, and moves your controls.
 -- Runs in OpenXTalk (OXT); compatible with LiveCode 9.6.3+.
--- Requires the box2dxt extension loaded (put b2Version() should return 3).
+-- Requires the box2dxt extension loaded (put b2Version() should return 4).
 --
 -- =====================  60-SECOND START  =============================
 --   on openCard
@@ -316,7 +316,7 @@ function b2kWorld
    return sWorld
 end b2kWorld
 
--- Sanity check from kit-only code: returns the native shim's ABI version (3),
+-- Sanity check from kit-only code: returns the native shim's ABI version (4),
 -- i.e. that the box2dxt extension and its native library are loaded and in sync.
 function b2kVersion
    return b2Version()
@@ -600,6 +600,7 @@ end b2kSetDensity
 -- Resize the control's graphic first, then re-apply materials afterwards.
 command b2kReshape pControl, pShape
    local tRef, tBody, tOld, tHw, tHh, tWm, tHm, tR, tL, tHoriz, tCx, tCy, p, lx, ly, tCount, tNewVerts
+   local tWx, tWy, tWa
    put the long id of pControl into tRef
    if sBody[tRef] is empty then exit b2kReshape
    put sBody[tRef] into tBody
@@ -675,7 +676,18 @@ command b2kReshape pControl, pShape
          end if
    end switch
    if tOld is not empty then b2DestroyShape tOld   -- now safe to release the old shape
-   delete variable sDrawKey[tRef]       -- size/outline changed; force the next visual update
+   -- The size/outline changed but the body need not have moved, so the move-event
+   -- sync would skip it (an at-rest body produces no move event). Bust the
+   -- pose-keyed draw cache and redraw at the body's current pose right now so the
+   -- new shape is visible immediately, awake or asleep.
+   delete variable sDrawKey[tRef]
+   put b2BodyX(tBody) into tWx
+   put b2BodyY(tBody) into tWy
+   if sRender[tRef] is "poly" or sRender[tRef] is "image" then put b2BodyAngle(tBody) into tWa
+   else put 0 into tWa
+   lock screen
+   b2kDrawBody tRef, tWx, tWy, tWa
+   unlock screen
 end b2kReshape
 
 command b2kSetBullet pControl, pFlag
@@ -1547,8 +1559,13 @@ command b2kRelease
 end b2kRelease
 
 -- =====================================================================
--- The loop  (fixed timestep, generation-guarded; sync locks only rendering)
+-- The loop  (fixed timestep, generation-guarded; one screen lock per frame)
 -- =====================================================================
+-- The whole frame -- body sync, contact/sensor dispatch and the app's own
+-- b2kFrame drawing -- runs inside a single lock screen / unlock screen so it
+-- composites in ONE redraw (no tearing between bodies and the joints/HUD a user
+-- draws on top). The try/catch guarantees the unlock even if a user handler
+-- throws, so a faulty event handler can never leave the screen frozen.
 on b2kStep pGen
    if not sRunning then exit b2kStep
    if pGen is not sGen then exit b2kStep
@@ -1567,10 +1584,15 @@ on b2kStep pGen
       if sDragging then
          b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
       end if
-      b2kSync                  -- locks screen internally for render updates only
-      b2kDispatchContacts      -- user handlers run after the screen is unlocked
-      b2kDispatchSensors
-      if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+      lock screen
+      try
+         b2kSyncBodies         -- lock-free; this frame's single lock is held here
+         b2kDispatchContacts
+         b2kDispatchSensors
+         if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+      catch tErr               -- a user handler error must never freeze the screen
+      end try
+      unlock screen
    end if
    send ("b2kStep " & sGen) to me in 16 milliseconds
 end b2kStep
@@ -1582,28 +1604,54 @@ command b2kStepOnce
    if sDragging then
       b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
    end if
-   b2kSync
-   b2kDispatchContacts
-   b2kDispatchSensors
-   if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+   lock screen
+   try
+      b2kSyncBodies
+      b2kDispatchContacts
+      b2kDispatchSensors
+      if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+   catch tErr
+   end try
+   unlock screen
 end b2kStepOnce
 
+-- Public, standalone-safe sync: locks the screen and always unlocks, even if a
+-- draw throws. The loop instead holds one lock across the whole frame and calls
+-- the lock-free b2kSyncBodies directly, so sync + events are a single redraw.
 command b2kSync
-   -- Fast path: Box2D already gives us the bodies that moved during the last
-   -- step. Use that event list instead of scanning every tracked control and
-   -- calling body-is-awake/x/y/angle across the FFI for each one.
+   lock screen
+   try
+      b2kSyncBodies
+   catch tErr
+   end try
+   unlock screen
+end b2kSync
+
+command b2kSyncAll
+   lock screen
+   try
+      b2kSyncAllBodies
+   catch tErr
+   end try
+   unlock screen
+end b2kSyncAll
+
+-- Lock-free body sync (the caller owns the screen lock). Fast path: Box2D already
+-- gives us the bodies that moved during the last step, so we use that event list
+-- instead of scanning every tracked control and calling body-is-awake/x/y/angle
+-- across the FFI for each one.
+command b2kSyncBodies
    if sNeedFullSync is true then
-      b2kSyncAll
+      b2kSyncAllBodies
       put false into sNeedFullSync
-      exit b2kSync
+      exit b2kSyncBodies
    end if
 
-   local tN, i, tBody, tRef, tWx, tWy, tWa, tDead, d
+   local tN, i, tBody, tRef, tWx, tWy, tWa, tDead
    put empty into tDead
    put b2BodiesUpdate(sWorld) into tN
-   if tN <= 0 then exit b2kSync
+   if tN <= 0 then exit b2kSyncBodies
 
-   lock screen
    repeat with i = 1 to tN
       put b2BodyMoveBody(i) into tBody
       if tBody <= 0 then next repeat
@@ -1623,16 +1671,15 @@ command b2kSync
          put tRef & cr after tDead   -- control vanished; clean up below
       end try
    end repeat
-   unlock screen
    b2kPruneDeadRefs tDead
-end b2kSync
+end b2kSyncBodies
 
-command b2kSyncAll
-   -- Slow but comprehensive fallback for script-side edits that do not come
-   -- from a Box2D step event (for example changing a body type while paused).
-   local tRef, tBody, tWx, tWy, tWa, tDead, d
+-- Lock-free full scan (the caller owns the screen lock). Comprehensive fallback
+-- for script-side edits that do not come from a Box2D step event (for example
+-- changing a body type while paused).
+command b2kSyncAllBodies
+   local tRef, tBody, tWx, tWy, tWa, tDead
    put empty into tDead
-   lock screen
    repeat for each key tRef in sBody
       if sStatic[tRef] is true then next repeat
       put sBody[tRef] into tBody
@@ -1650,9 +1697,8 @@ command b2kSyncAll
          put tRef & cr after tDead   -- control vanished; clean up below
       end try
    end repeat
-   unlock screen
    b2kPruneDeadRefs tDead
-end b2kSyncAll
+end b2kSyncAllBodies
 
 command b2kPruneDeadRefs pDead
    local d, tBody
