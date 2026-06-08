@@ -1849,7 +1849,9 @@ constant kFanW = 130, kFanH = 150, kFanForce = 900
 constant kMagnetRange = 220, kMagnetForce = 1400, kMagnetMinDist = 16
 constant kLaserReach = 1600, kLaserStep = 45   -- laser ray length (px) and the angle step its direction cycles by
 constant kGoalW = 120, kGoalH = 120   -- a goal zone's base size (scaled by uGoalScale)
-constant kLaserBurn = 36   -- frames of sustained laser hit before a cutting beam destroys a part
+constant kLaserBurnDefault = 36   -- default frames of sustained laser hit before a cutting beam destroys a normal part
+constant kToughnessDefault = 36   -- default part toughness, also in sustained laser-hit frames
+constant kLaserBurnStep = 12      -- inspector nudge for laser burn time / part toughness
 constant kLaserCool = 250  -- ms without a hit after which a part's accrued burn cools back to zero
 constant kContainMargin = 90   -- how far past the arena a body may stray before the containment net pulls it back
 constant kStressBatch = 50
@@ -1861,7 +1863,7 @@ constant kPropRows = 10, kDimStep = 8, kJointHitR = 16
 -- the eight collision channels the filter popup exposes (1..8 -> bits 1,2,4..128)
 constant kFilterChannels = 8, kAllChannels = "1,2,3,4,5,6,7,8"
 -- numeric settings a user may type an exact value for (toggles/colour stay stepper-only)
-constant kEntryKeys = "width,height,length,thickness,diameter,size,angle,bounce,density,friction,gravity,lindamp,angdamp,launchspeed,launchdir,spinrate,blastradius,blastpower,fanforce,fansize,magforce,magrange"
+constant kEntryKeys = "width,height,length,thickness,diameter,size,angle,bounce,density,friction,gravity,lindamp,angdamp,launchspeed,launchdir,spinrate,toughness,blastradius,blastpower,bombfuselen,fanforce,fansize,magforce,magrange,laserburn,goalsize,thrustdir,thrustpower,thrustspin"
 
 -- =====================================================================
 -- Lifecycle
@@ -3331,7 +3333,9 @@ end rebuildHillChain
 
 -- =====================================================================
 -- Freehand "Draw" terrain: press-drag to sketch a ground line; on release it
--- becomes a smooth ONE-SIDED chain (b2kAddChain, open) bodies rest on top of.
+-- becomes a closed, self-contained ribbon that follows the stroke. It no longer
+-- drops hidden edges to the arena floor, so drawn ground stays where the user
+-- put it and can float as a ledge, bridge or obstacle.
 -- =====================================================================
 on beginDrawTerrain pX, pY
    set the itemDelimiter to comma
@@ -3377,16 +3381,14 @@ on finishDrawTerrain
       put "Press and drag to draw a ground line." into gStatus
       exit finishDrawTerrain
    end if
-   -- Normalise the contour left→right, then build a CLOSED, filled ground mass:
-   -- the drawn surface on top, straight down to the arena floor. The top is laid
-   -- right→left so the chain's solid side faces up (Box2D: solid = right of the
-   -- travel direction), matching the smoke test's ground chain — bodies rest on it.
-   local tShape, tFloor, tFirstX, tLastX
+   -- Normalise the contour left→right, then build a CLOSED, filled ribbon. The
+   -- drawn surface is still the upper collision edge, but the underside follows
+   -- the same stroke a few pixels lower instead of connecting to the arena floor.
+   -- The top is laid right→left so the chain's solid side faces up (Box2D: solid
+   -- = right of the travel direction), matching the smoke test's ground chain.
+   local tShape
    if (item 1 of the last line of tPts) < (item 1 of line 1 of tPts) then put reversedLines(tPts) into tPts
-   put item 1 of line 1 of tPts into tFirstX
-   put item 1 of the last line of tPts into tLastX
-   put gArenaB into tFloor
-   put tLastX & "," & tFloor & cr & reversedLines(tPts) & cr & tFirstX & "," & tFloor into tShape
+   put drawTerrainRibbon(tPts, kDrawLineSize) into tShape
    set the style of gDrawCtrl to "polygon"
    set the filled of gDrawCtrl to true
    set the backgroundColor of gDrawCtrl to "120,96,60"
@@ -3402,6 +3404,26 @@ on finishDrawTerrain
    put empty into gDrawPts
    updateHud
 end finishDrawTerrain
+
+-- Build a closed outline around a freehand stroke without anchoring it to the
+-- arena floor. The upper edge is the user's stroke; the lower edge is the same
+-- stroke offset downward by the drawn line thickness (clamped to the arena).
+function drawTerrainRibbon pPts, pThickness
+   local tTop, tUnder, tP, tx, ty
+   set the itemDelimiter to comma
+   if pThickness is empty or pThickness is not a number or pThickness < 1 then put kDrawLineSize into pThickness
+   put empty into tUnder
+   repeat for each line tP in pPts
+      if tP is empty then next repeat
+      put item 1 of tP into tx
+      put (item 2 of tP) + pThickness into ty
+      if ty > gArenaB then put gArenaB into ty
+      put round(tx) & "," & round(ty) & cr after tUnder
+   end repeat
+   if the last char of tUnder is cr then delete the last char of tUnder
+   put reversedLines(pPts) into tTop
+   return tTop & cr & tUnder
+end drawTerrainRibbon
 
 -- A placeholder line graphic for a saved drawn-terrain part; applyPartSpecial
 -- fills in its points and chain from the saved point list.
@@ -3509,6 +3531,7 @@ on tagPart pCtrl, pKind, pColor, pFile
    if kindIsDynamic(pKind) then
       set the uDensity of pCtrl to 1
       set the uGravity of pCtrl to 1
+      set the uToughness of pCtrl to kToughnessDefault
       set the uFixedRot of pCtrl to false
       set the layerMode of pCtrl to "dynamic"   -- moving bodies composite on their own GPU layer (no smear/clip artifacts)
       b2kWake pCtrl                       -- so the first sync draws it
@@ -3573,14 +3596,18 @@ on unregisterKind pCtrl
    if pCtrl is among the keys of gSensorCount then delete variable gSensorCount[pCtrl]
 end unregisterKind
 
--- The dynamic (gravity-affected) parts, cached and rebuilt only when parts change.
+-- The dynamic (force-responsive) parts, cached and rebuilt only when parts or
+-- body types change. This deliberately checks the live Box2D body type, not just
+-- the part kind: a user can turn a box/ball/etc. into a static or kinematic
+-- body in the inspector, and field forces, goals and containment should then
+-- stop treating it as a movable dynamic body.
 function dynamicParts
    if not gDynDirty then return gDynParts
    local tP, tList
    put empty into tList
    repeat for each line tP in gParts
       if tP is empty then next repeat
-      if kindIsDynamic(the uKind of tP) then put tP & cr after tList
+      if kindIsDynamic(the uKind of tP) and b2kBodyType(tP) is "dynamic" then put tP & cr after tList
    end repeat
    put tList into gDynParts
    put false into gDynDirty
@@ -4516,6 +4543,7 @@ function partSpecial pCtrl
       if the uGroup of pCtrl is not empty then put addKV(tS, "grp=" & (the uGroup of pCtrl)) into tS
       if numOr(the uLayer of pCtrl, 0) > 0 then put addKV(tS, "lyr=" & (the uLayer of pCtrl)) into tS
       if numOr(the uSleep of pCtrl, 0) > 0 then put addKV(tS, "slp=" & (the uSleep of pCtrl)) into tS
+      if kindIsDynamic(the uKind of pCtrl) then put addKV(tS, "tuf=" & numOr(the uToughness of pCtrl, kToughnessDefault)) into tS
       if the uKind of pCtrl is "image" and the uShape of pCtrl is not empty then put addKV(tS, "ishp=" & (the uShape of pCtrl)) into tS
       if the uActive of pCtrl is false then put addKV(tS, "act=false") into tS
       if the uSensor of pCtrl is true then put addKV(tS, "sen=true") into tS
@@ -4544,6 +4572,7 @@ function partSpecial pCtrl
          break
       case "laser"
          put addKV(tS, "ldr=" & numOr(the uLaserDir of pCtrl, 0)) into tS
+         put addKV(tS, "lburn=" & numOr(the uLaserBurn of pCtrl, kLaserBurnDefault)) into tS
          if the uLaserCut of pCtrl is true then put addKV(tS, "cut=true") into tS
          break
       case "thruster"
@@ -4654,6 +4683,7 @@ on rebuildFromText pData
          if tNew is not empty then
             put tNew into tMap[tId]
             if tBounce is not empty then
+               put clampRange(tBounce, 0, 0.9) into tBounce
                set the uBounce of tNew to tBounce
                if tBounce > 0 then b2kSetBounce tNew, tBounce
             end if
@@ -5079,6 +5109,7 @@ function placeLaser pX, pY
    set the foregroundColor of tRef to "236,80,80"
    set the uLaserDir of tRef to 0            -- 0=right 90=down 180=left 270=up (45° steps)
    set the uLaserCut of tRef to false        -- default: a sightline; toggle 'Cut' to burn through parts
+   set the uLaserBurn of tRef to kLaserBurnDefault
    set the points of tRef to round(pX) & "," & round(pY) & cr & round(pX + 40) & "," & round(pY)
    tagPart tRef, "laser", "236,80,80", empty
    drawLaserBeam tRef
@@ -5119,9 +5150,21 @@ on drawLaserBeam pLaser
       if tNow - numOr(the uBurnAt of tHitCtrl, 0) > kLaserCool then set the uBurn of tHitCtrl to 0
       set the uBurnAt of tHitCtrl to tNow
       set the uBurn of tHitCtrl to numOr(the uBurn of tHitCtrl, 0) + 1
-      if the uBurn of tHitCtrl >= kLaserBurn then destroyPart tHitCtrl
+      if the uBurn of tHitCtrl >= laserDestroyFrames(pLaser, tHitCtrl) then destroyPart tHitCtrl
    end if
 end drawLaserBeam
+
+-- Required sustained-hit frames for this laser to cut through this target. The
+-- laser can be tuned to cut faster/slower, while each dynamic part can be made
+-- tougher; the larger value wins so tough parts resist even fast-cut lasers.
+function laserDestroyFrames pLaser, pTarget
+   local tLaserFrames, tToughFrames
+   put round(numOr(the uLaserBurn of pLaser, kLaserBurnDefault)) into tLaserFrames
+   put round(numOr(the uToughness of pTarget, kToughnessDefault)) into tToughFrames
+   if tLaserFrames < 1 then put 1 into tLaserFrames
+   if tToughFrames < 1 then put 1 into tToughFrames
+   return max(tLaserFrames, tToughFrames)
+end laserDestroyFrames
 
 -- Recast every laser (called each frame while running and on every build redraw).
 on updateLasers
@@ -5267,16 +5310,19 @@ on applyPartSpecial pCtrl, pSpecial
    if kindHasBody(tKind) then
       put specialValue(pSpecial, "fric") into tV
       if tV is not empty then
+         put clampRange(tV, 0, 2) into tV
          set the uFriction of pCtrl to tV
          b2kSetFriction pCtrl, tV
       end if
       put specialValue(pSpecial, "dens") into tV
       if tV is not empty then
+         put clampRange(tV, 0.3, 3) into tV
          set the uDensity of pCtrl to tV
          b2kSetDensity pCtrl, tV
       end if
       put specialValue(pSpecial, "grav") into tV
       if tV is not empty then
+         put clampRange(tV, -2, 3) into tV
          set the uGravity of pCtrl to tV
          b2kSetGravityScale pCtrl, tV
       end if
@@ -5288,9 +5334,11 @@ on applyPartSpecial pCtrl, pSpecial
       if tV is "static" or tV is "kinematic" then
          set the uBodyType of pCtrl to tV
          b2kSetType pCtrl, tV
+         put true into gDynDirty
       end if
       put specialValue(pSpecial, "slp") into tV
       if tV is not empty then
+         put clampRange(tV, 0, 200) into tV
          set the uSleep of pCtrl to tV
          b2kSetSleepThreshold pCtrl, tV
       end if
@@ -5300,11 +5348,13 @@ on applyPartSpecial pCtrl, pSpecial
       end if
       put specialValue(pSpecial, "ldmp") into tV
       if tV is not empty then
+         put clampRange(tV, 0, 5) into tV
          set the uLinDamp of pCtrl to tV
          b2kSetDamping pCtrl, tV, empty
       end if
       put specialValue(pSpecial, "admp") into tV
       if tV is not empty then
+         put clampRange(tV, 0, 5) into tV
          set the uAngDamp of pCtrl to tV
          b2kSetDamping pCtrl, empty, tV
       end if
@@ -5313,16 +5363,18 @@ on applyPartSpecial pCtrl, pSpecial
          b2kSetBullet pCtrl, true
       end if
       put specialValue(pSpecial, "lspd") into tV
-      if tV is not empty then set the uLaunchSpeed of pCtrl to tV
+      if tV is not empty then set the uLaunchSpeed of pCtrl to clampRange(tV, 0, 1500)
       put specialValue(pSpecial, "ldir") into tV
-      if tV is not empty then set the uLaunchDir of pCtrl to tV
+      if tV is not empty then set the uLaunchDir of pCtrl to normDegrees(tV, 0)
       put specialValue(pSpecial, "spin") into tV
-      if tV is not empty then set the uSpinRate of pCtrl to tV
+      if tV is not empty then set the uSpinRate of pCtrl to clampRange(tV, -720, 720)
+      put specialValue(pSpecial, "tuf") into tV
+      if tV is not empty then set the uToughness of pCtrl to clampRange(tV, 1, 600)
       put specialValue(pSpecial, "grp") into tV
       if tV is not empty then set the uGroup of pCtrl to tV
       put specialValue(pSpecial, "lyr") into tV
       if tV is not empty then
-         set the uLayer of pCtrl to tV
+         set the uLayer of pCtrl to clampRange(tV, 0, 8)
          applyCollisionLayer pCtrl
       end if
       put specialValue(pSpecial, "cat") into tV
@@ -5332,57 +5384,59 @@ on applyPartSpecial pCtrl, pSpecial
       applyPartFilter pCtrl                  -- no-op unless cat/msk were set above
       put specialValue(pSpecial, "ang") into tV
       if tV is not empty and tV is not 0 then
-         b2kMoveTo pCtrl, item 1 of the loc of pCtrl, item 2 of the loc of pCtrl, tV
+         b2kMoveTo pCtrl, item 1 of the loc of pCtrl, item 2 of the loc of pCtrl, normDegrees(tV, 0)
       end if
    end if
    switch tKind
       case "fan"
          put specialValue(pSpecial, "dir") into tV
-         if tV is not empty then set the uFanDir of pCtrl to tV
+         if tV is not empty then set the uFanDir of pCtrl to normDegrees(tV, 270)
          put specialValue(pSpecial, "force") into tV
-         if tV is not empty then set the uFanForce of pCtrl to tV
+         if tV is not empty then set the uFanForce of pCtrl to clampRange(tV, 0, 40000)
          put specialValue(pSpecial, "fscale") into tV
-         if tV is not empty then set the uFanScale of pCtrl to tV
+         if tV is not empty then set the uFanScale of pCtrl to clampRange(tV, 0.5, 2.5)
          drawFanShape pCtrl
          break
       case "magnet"
          put specialValue(pSpecial, "pol") into tV
-         if tV is not empty then set the uMagPolarity of pCtrl to tV
+         if tV is not empty and tV is a number and tV < 0 then set the uMagPolarity of pCtrl to -1
          put specialValue(pSpecial, "force") into tV
-         if tV is not empty then set the uMagForce of pCtrl to tV
+         if tV is not empty then set the uMagForce of pCtrl to clampRange(tV, 100, 50000)
          put specialValue(pSpecial, "range") into tV
-         if tV is not empty then set the uMagRange of pCtrl to tV
+         if tV is not empty then set the uMagRange of pCtrl to clampRange(tV, 60, 1400)
          break
       case "bomb"
          put specialValue(pSpecial, "bradius") into tV
-         if tV is not empty then set the uBlastRadius of pCtrl to tV
+         if tV is not empty then set the uBlastRadius of pCtrl to clampRange(tV, 60, 1200)
          put specialValue(pSpecial, "bpower") into tV
-         if tV is not empty then set the uBlastPower of pCtrl to tV
+         if tV is not empty then set the uBlastPower of pCtrl to clampRange(tV, 200, 30000)
          if specialValue(pSpecial, "fuse") is "true" then set the uFuseOnRun of pCtrl to true
          put specialValue(pSpecial, "flen") into tV
-         if tV is not empty then set the uFuseLen of pCtrl to tV
+         if tV is not empty then set the uFuseLen of pCtrl to clampRange(tV, 15, 900)
          if specialValue(pSpecial, "soft") is "true" then set the uSoftBlast of pCtrl to true
          if specialValue(pSpecial, "demo") is "true" then set the uDestroys of pCtrl to true
          break
       case "laser"
          put specialValue(pSpecial, "ldr") into tV
-         if tV is not empty then set the uLaserDir of pCtrl to tV
+         if tV is not empty then set the uLaserDir of pCtrl to normDegrees(tV, 0)
+         put specialValue(pSpecial, "lburn") into tV
+         if tV is not empty then set the uLaserBurn of pCtrl to clampRange(tV, 1, 600)
          if specialValue(pSpecial, "cut") is "true" then set the uLaserCut of pCtrl to true
          drawLaserBeam pCtrl
          break
       case "thruster"
          put specialValue(pSpecial, "tdr") into tV
-         if tV is not empty then set the uThrustDir of pCtrl to tV
+         if tV is not empty then set the uThrustDir of pCtrl to normDegrees(tV, 270)
          put specialValue(pSpecial, "tpw") into tV
-         if tV is not empty then set the uThrustPower of pCtrl to tV
+         if tV is not empty then set the uThrustPower of pCtrl to clampRange(tV, 0, 40000)
          put specialValue(pSpecial, "tsp") into tV
-         if tV is not empty then set the uThrustSpin of pCtrl to tV
+         if tV is not empty then set the uThrustSpin of pCtrl to clampRange(tV, -40000, 40000)
          if specialValue(pSpecial, "tam") is "body" then set the uThrustAim of pCtrl to "body"
          set the uThrustLit of pCtrl to false
          break
       case "goal"
          put specialValue(pSpecial, "gsc") into tV
-         if tV is not empty then set the uGoalScale of pCtrl to tV
+         if tV is not empty then set the uGoalScale of pCtrl to clampRange(tV, 0.5, 3)
          drawGoalShape pCtrl
          break
    end switch
@@ -5425,78 +5479,91 @@ end applyPartSpecial
 -- =====================================================================
 
 -- Fans and magnets push the dynamic parts in/near them. The candidate part
--- list is cached (dynamicParts) so this stays cheap as the scene grows.
+-- list is cached (dynamicParts) so this stays cheap as the scene grows. Per-frame
+-- fan/magnet properties are snapshotted once, outside the nested part loop, so a
+-- large contraption does not repeatedly ask LiveCode for the same rect/loc/custom
+-- properties for every dynamic body.
 on applyFieldForces
-   local tFans, tMags, tParts, tP, tPx, tPy, tF, tM, tFanRects, tR
+   local tFans, tMags, tParts, tP, tPx, tPy, tF, tM, tFanRects, tFanFx, tFanFy, tR
+   local tMagX, tMagY, tMagRange, tMagForce, tMagPol, tLoc, tDir, tForce, tPol
+   local tMx, tMy, tdx, tdy, tDist, tRange, tPull, tFx, tFy
    put gKindList["fan"] into tFans
    put gKindList["magnet"] into tMags
    if tFans is empty and tMags is empty then exit applyFieldForces
    put dynamicParts() into tParts
    if tParts is empty then exit applyFieldForces
    set the itemDelimiter to comma                 -- loc and rect are both comma lists
-   -- A fan's zone rect can't change within a frame, so read each one ONCE here
-   -- instead of re-reading it for every dynamic part in the loop below.
+
+   -- A fan's rect/direction/force cannot change within one frame: convert each
+   -- fan into a cached zone rect plus a screen-oriented force vector.
    repeat for each line tF in tFans
-      if tF is not empty then put the rect of tF into tFanRects[tF]
+      if tF is empty then next repeat
+      put the rect of tF into tFanRects[tF]
+      put clampRange(numOr(the uFanForce of tF, kFanForce), 0, 40000) into tForce
+      put normDegrees(the uFanDir of tF, 270) into tDir
+      put 0 into tFanFx[tF]
+      put 0 into tFanFy[tF]
+      switch tDir
+         case 0
+            put tForce into tFanFx[tF]
+            break
+         case 90
+            put tForce into tFanFy[tF]
+            break
+         case 180
+            put - tForce into tFanFx[tF]
+            break
+         default
+            put - tForce into tFanFy[tF]
+      end switch
    end repeat
+
+   -- Same for magnets: cache centre/range/force/polarity once, and skip invalid
+   -- ranges before the nested part loop to avoid per-part guards.
+   repeat for each line tM in tMags
+      if tM is empty then next repeat
+      put clampRange(numOr(the uMagRange of tM, kMagnetRange), 0, 1400) into tRange
+      if tRange <= 0 then next repeat
+      put the loc of tM into tLoc
+      put item 1 of tLoc into tMagX[tM]
+      put item 2 of tLoc into tMagY[tM]
+      put tRange into tMagRange[tM]
+      put clampRange(numOr(the uMagForce of tM, kMagnetForce), 0, 50000) into tMagForce[tM]
+      put numOr(the uMagPolarity of tM, 1) into tPol
+      if tPol is not a number then put 1 into tPol
+      if tPol < 0 then put -1 into tMagPol[tM]
+      else put 1 into tMagPol[tM]
+   end repeat
+
    repeat for each line tP in tParts
       if tP is empty then next repeat
-      put item 1 of the loc of tP into tPx
-      put item 2 of the loc of tP into tPy
+      put the loc of tP into tLoc
+      put item 1 of tLoc into tPx
+      put item 2 of tLoc into tPy
       repeat for each line tF in tFans
          if tF is empty then next repeat
          put tFanRects[tF] into tR
-         if tPx >= item 1 of tR and tPx <= item 3 of tR and tPy >= item 2 of tR and tPy <= item 4 of tR then applyFan tF, tP
+         if tPx >= item 1 of tR and tPx <= item 3 of tR and tPy >= item 2 of tR and tPy <= item 4 of tR then
+            b2kForce tP, tFanFx[tF], tFanFy[tF]
+         end if
       end repeat
       repeat for each line tM in tMags
-         if tM is not empty then applyMagnet tM, tP, tPx, tPy
+         if tM is empty or tMagRange[tM] is empty then next repeat
+         put tMagX[tM] into tMx
+         put tMagY[tM] into tMy
+         put tMagRange[tM] into tRange
+         put tMx - tPx into tdx
+         put tMy - tPy into tdy
+         put sqrt(tdx * tdx + tdy * tdy) into tDist
+         if tDist > tRange then next repeat
+         if tDist < kMagnetMinDist then put kMagnetMinDist into tDist
+         put tMagPol[tM] * tMagForce[tM] * (1 - tDist / tRange) into tPull
+         put tPull * tdx / tDist into tFx
+         put tPull * tdy / tDist into tFy
+         b2kForce tP, tFx, tFy
       end repeat
    end repeat
 end applyFieldForces
-
-function ptInRect pZone, pX, pY
-   local tR
-   put the rect of pZone into tR
-   return pX >= item 1 of tR and pX <= item 3 of tR and pY >= item 2 of tR and pY <= item 4 of tR
-end ptInRect
-
-on applyFan pFan, pPart
-   local tForce, tFx, tFy
-   put the uFanForce of pFan into tForce
-   put 0 into tFx
-   put 0 into tFy
-   switch the uFanDir of pFan
-      case 0
-         put tForce into tFx
-         break
-      case 90
-         put tForce into tFy
-         break
-      case 180
-         put -tForce into tFx
-         break
-      default
-         put -tForce into tFy
-   end switch
-   b2kForce pPart, tFx, tFy
-end applyFan
-
-on applyMagnet pMag, pPart, pPx, pPy
-   local tMx, tMy, tdx, tdy, tDist, tRange, tPull, tFx, tFy
-   put item 1 of the loc of pMag into tMx
-   put item 2 of the loc of pMag into tMy
-   put the uMagRange of pMag into tRange
-   if tRange <= 0 then exit applyMagnet      -- a 0/blank reach (e.g. a hand-edited save) would divide by zero below
-   put tMx - pPx into tdx
-   put tMy - pPy into tdy
-   put sqrt(tdx * tdx + tdy * tdy) into tDist
-   if tDist > tRange then exit applyMagnet
-   if tDist < kMagnetMinDist then put kMagnetMinDist into tDist
-   put (the uMagPolarity of pMag) * (the uMagForce of pMag) * (1 - tDist / tRange) into tPull
-   put tPull * tdx / tDist into tFx
-   put tPull * tdy / tDist into tFy
-   b2kForce pPart, tFx, tFy
-end applyMagnet
 
 -- Bombs: light the fuse on Run for any armed for it, then tick all fuses down.
 on armFuses
@@ -5821,7 +5888,7 @@ end drawWires
 on checkGoals
    if gGameWon then exit checkGoals
    if gKindList["goal"] is empty then exit checkGoals
-   local tGoal, tTotal, tReached, tP, tGl, tGt, tGr, tGb, tCx, tCy, tpx, tpy, tIn, tReq
+   local tGoal, tTotal, tReached, tP, tGl, tGt, tGr, tGb, tCx, tCy, tpx, tpy, tIn, tReq, tCheckMember
    put 0 into tTotal
    put 0 into tReached
    repeat for each line tGoal in gKindList["goal"]
@@ -5833,7 +5900,11 @@ on checkGoals
       end if
       -- the parts that satisfy this goal: its wired payload(s), or any movable part
       put goalTargets(tGoal) into tReq
-      if tReq is empty then put dynamicParts() into tReq
+      put true into tCheckMember
+      if tReq is empty then
+         put dynamicParts() into tReq
+         put false into tCheckMember          -- dynamicParts is already live/valid; skip O(n) membership checks below
+      end if
       set the itemDelimiter to comma
       put item 1 of the loc of tGoal into tCx
       put item 2 of the loc of tGoal into tCy
@@ -5843,7 +5914,11 @@ on checkGoals
       put tCy + (the height of tGoal) / 2 into tGb
       put false into tIn
       repeat for each line tP in tReq
-         if tP is empty or tP is not among the lines of gParts then next repeat
+         if tP is empty then next repeat
+         if tCheckMember then
+            if tP is not among the lines of gParts then next repeat
+            if b2kBodyType(tP) is not "dynamic" then next repeat
+         end if
          put item 1 of the loc of tP into tpx
          put item 2 of the loc of tP into tpy
          if tpx >= tGl and tpx <= tGr and tpy >= tGt and tpy <= tGb then
@@ -6293,19 +6368,19 @@ end blastPreviewText
 function partProps pKind
    switch pKind
       case "box"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate,toughness"
       case "image"
-         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
+         return "width,height,imgshape,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate,toughness"
       case "ball"
-         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
+         return "diameter,color,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate,toughness"
       case "capsule"
-         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
+         return "length,thickness,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate,toughness"
       case "poly"
-         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate"
+         return "size,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,lindamp,angdamp,bullet,material,layer,sensor,filter,active,sleep,launchspeed,launchdir,spinrate,toughness"
       case "balloon"
-         return "diameter,color,bounce,density,friction,gravity"
+         return "diameter,color,bounce,density,friction,gravity,toughness"
       case "bomb"
-         return "diameter,color,bounce,density,blastradius,blastpower,bombfuse,bombfuselen,bombsoft,bombdemo"
+         return "diameter,color,bounce,density,toughness,blastradius,blastpower,bombfuse,bombfuselen,bombsoft,bombdemo"
       case "plate"
          return "width,height,color,angle,friction"
       case "sensor"
@@ -6324,11 +6399,11 @@ function partProps pKind
       case "magnet"
          return "magpol,magforce,magrange,color"
       case "laser"
-         return "laserdir,lasercut"
+         return "laserdir,lasercut,laserburn"
       case "goal"
          return "goalsize"
       case "thruster"
-         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,thrustdir,thrustpower,thrustspin,thrustaim"
+         return "width,height,color,angle,bounce,density,friction,gravity,fixedrot,bodytype,material,layer,toughness,thrustdir,thrustpower,thrustspin,thrustaim"
    end switch
    return empty
 end partProps
@@ -6401,6 +6476,8 @@ function propLabel pCtrl, pKey
          return "Launch angle: " & numOr(the uLaunchDir of pCtrl, 0) & "°"
       case "spinrate"
          return "Launch spin: " & numOr(the uSpinRate of pCtrl, 0) & "°/s"
+      case "toughness"
+         return "Toughness: " & format("%.1f", numOr(the uToughness of pCtrl, kToughnessDefault) / 60) & " s laser exposure"
       case "blastradius"
          return "Blast size: " & (the uBlastRadius of pCtrl)
       case "blastpower"
@@ -6432,6 +6509,8 @@ function propLabel pCtrl, pKey
       case "lasercut"
          if the uLaserCut of pCtrl is true then return "Mode: cutting (burns through parts)"
          return "Mode: sightline (harmless)"
+      case "laserburn"
+         return "Cut time: " & format("%.1f", numOr(the uLaserBurn of pCtrl, kLaserBurnDefault) / 60) & " s minimum"
       case "goalsize"
          return "Zone size: " & sizeLabel(numOr(the uGoalScale of pCtrl, 1))
       case "thrustdir"
@@ -6597,6 +6676,7 @@ on adjustPartProp pCtrl, pKey, pDir
                set the uBodyType of pCtrl to "static"
          end switch
          b2kSetType pCtrl, (the uBodyType of pCtrl)
+         put true into gDynDirty
          break
       case "lindamp"
          put the uLinDamp of pCtrl into tLd
@@ -6673,6 +6753,9 @@ on adjustPartProp pCtrl, pKey, pDir
          put numOr(the uSpinRate of pCtrl, 0) + pDir * 45 into tSr
          set the uSpinRate of pCtrl to clampRange(tSr, -720, 720)
          break
+      case "toughness"
+         set the uToughness of pCtrl to clampRange(numOr(the uToughness of pCtrl, kToughnessDefault) + pDir * kLaserBurnStep, 1, 600)
+         break
       case "blastradius"
          put the uBlastRadius of pCtrl into tBr
          if tBr is empty then put kBombRadius into tBr
@@ -6730,6 +6813,9 @@ on adjustPartProp pCtrl, pKey, pDir
          break
       case "lasercut"
          set the uLaserCut of pCtrl to not (the uLaserCut of pCtrl is true)
+         break
+      case "laserburn"
+         set the uLaserBurn of pCtrl to clampRange(numOr(the uLaserBurn of pCtrl, kLaserBurnDefault) + pDir * kLaserBurnStep, 1, 600)
          break
       case "goalsize"
          local tGs
@@ -7069,10 +7155,24 @@ function numOr pV, pDefault
 end numOr
 
 function clampRange pV, pLo, pHi
+   if pV is empty or pV is not a number then return pLo
    if pV < pLo then return pLo
    if pV > pHi then return pHi
    return pV
 end clampRange
+
+function normDegrees pDeg, pDefault
+   if pDeg is empty or pDeg is not a number then put pDefault into pDeg
+   return ((round(pDeg) mod 360) + 360) mod 360
+end normDegrees
+
+-- Convert a user-facing seconds value to the frame counters used by fuses,
+-- laser burn and toughness. These systems tick at the fixed 60 Hz sim rate, so
+-- storing frames keeps save files deterministic while the inspector shows time.
+function secondsToFrames pSeconds, pMinFrames, pMaxFrames
+   if pSeconds is empty or pSeconds is not a number then return pMinFrames
+   return round(clampRange(pSeconds * 60, pMinFrames, pMaxFrames))
+end secondsToFrames
 
 -- Keep a part dimension within the allowed pixel range.
 function clampDim pV
@@ -7202,10 +7302,14 @@ function currentPropValue pCtrl, pKey
          return numOr(the uLaunchDir of pCtrl, 0)
       case "spinrate"
          return numOr(the uSpinRate of pCtrl, 0)
+      case "toughness"
+         return format("%.2f", numOr(the uToughness of pCtrl, kToughnessDefault) / 60)
       case "blastradius"
          return numOr(the uBlastRadius of pCtrl, kBombRadius)
       case "blastpower"
          return numOr(the uBlastPower of pCtrl, kBombPower)
+      case "bombfuselen"
+         return format("%.2f", numOr(the uFuseLen of pCtrl, kBombFuseFrames) / 60)
       case "fanforce"
          return numOr(the uFanForce of pCtrl, kFanForce)
       case "fansize"
@@ -7214,6 +7318,16 @@ function currentPropValue pCtrl, pKey
          return numOr(the uMagForce of pCtrl, kMagnetForce)
       case "magrange"
          return numOr(the uMagRange of pCtrl, kMagnetRange)
+      case "laserburn"
+         return format("%.2f", numOr(the uLaserBurn of pCtrl, kLaserBurnDefault) / 60)
+      case "goalsize"
+         return numOr(the uGoalScale of pCtrl, 1)
+      case "thrustdir"
+         return numOr(the uThrustDir of pCtrl, 270)
+      case "thrustpower"
+         return numOr(the uThrustPower of pCtrl, 0)
+      case "thrustspin"
+         return numOr(the uThrustSpin of pCtrl, 0)
    end switch
    return empty
 end currentPropValue
@@ -7272,29 +7386,51 @@ on applyPropValue pCtrl, pKey, pVal
          set the uLaunchSpeed of pCtrl to clampRange(pVal, 0, 1500)
          break
       case "launchdir"
-         set the uLaunchDir of pCtrl to ((pVal + 360) mod 360)
+         set the uLaunchDir of pCtrl to normDegrees(pVal, 0)
          break
       case "spinrate"
          set the uSpinRate of pCtrl to clampRange(pVal, -720, 720)
          break
+      case "toughness"
+         set the uToughness of pCtrl to secondsToFrames(pVal, 1, 600)
+         break
       case "blastradius"
-         set the uBlastRadius of pCtrl to clampRange(pVal, 60, 500)
+         set the uBlastRadius of pCtrl to clampRange(pVal, 60, 1200)
          break
       case "blastpower"
-         set the uBlastPower of pCtrl to clampRange(pVal, 200, 2000)
+         set the uBlastPower of pCtrl to clampRange(pVal, 200, 30000)
+         break
+      case "bombfuselen"
+         set the uFuseLen of pCtrl to secondsToFrames(pVal, 15, 900)
          break
       case "fanforce"
-         set the uFanForce of pCtrl to clampRange(pVal, 0, 3000)
+         set the uFanForce of pCtrl to clampRange(pVal, 0, 40000)
          break
       case "fansize"
          set the uFanScale of pCtrl to clampRange(pVal, 0.5, 2.5)
          drawFanShape pCtrl
          break
       case "magforce"
-         set the uMagForce of pCtrl to clampRange(pVal, 100, 4000)
+         set the uMagForce of pCtrl to clampRange(pVal, 100, 50000)
          break
       case "magrange"
-         set the uMagRange of pCtrl to clampRange(pVal, 60, 520)
+         set the uMagRange of pCtrl to clampRange(pVal, 60, 1400)
+         break
+      case "laserburn"
+         set the uLaserBurn of pCtrl to secondsToFrames(pVal, 1, 600)
+         break
+      case "goalsize"
+         set the uGoalScale of pCtrl to clampRange(pVal, 0.5, 3)
+         drawGoalShape pCtrl
+         break
+      case "thrustdir"
+         set the uThrustDir of pCtrl to normDegrees(pVal, 270)
+         break
+      case "thrustpower"
+         set the uThrustPower of pCtrl to clampRange(pVal, 0, 40000)
+         break
+      case "thrustspin"
+         set the uThrustSpin of pCtrl to clampRange(pVal, -40000, 40000)
          break
    end switch
 end applyPropValue
@@ -7785,14 +7921,14 @@ on setPartAngle pCtrl, pDeg
    local tCx, tCy
    -- Terrain bakes its angle into the points (a static body never re-syncs).
    if kindIsTerrain(the uKind of pCtrl) then
-      set the uAngle of pCtrl to ((round(pDeg) mod 360) + 360) mod 360
+      set the uAngle of pCtrl to normDegrees(pDeg, 0)
       regenTerrain pCtrl
       exit setPartAngle
    end if
    if not kindHasBody(the uKind of pCtrl) then exit setPartAngle
    put item 1 of the loc of pCtrl into tCx
    put item 2 of the loc of pCtrl into tCy
-   put (((round(pDeg)) mod 360) + 360) mod 360 into pDeg
+   put normDegrees(pDeg, 0) into pDeg
    b2kMoveTo pCtrl, tCx, tCy, pDeg
    renderBuild
 end setPartAngle
