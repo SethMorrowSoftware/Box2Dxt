@@ -9149,8 +9149,8 @@ on buildRecipeBalloonLift
    put (gArenaL + gArenaR) div 2 into tCx
    put gArenaB - 36 into tBaseY
    put placeBox(tCx, tBaseY, 42, 42, "120,200,232") into tBox
-   b2kSetDensity tBox, 0.35              -- light enough for one balloon to lift
-   set the uDensity of tBox to 0.35
+   b2kSetDensity tBox, 0.1               -- light enough that one balloon's buoyancy (0.6g) actually lifts it
+   set the uDensity of tBox to 0.1
    put placeBalloon(tCx, tBaseY - 150) into tBalloon
    get connectJoint("rope", tBalloon, tBox, tCx, tBaseY - 80, 0)
    renderBuild
@@ -9162,14 +9162,15 @@ end buildRecipeBalloonLift
 on buildRecipePlateBomb
    if gMode is "run" then toggleMode
    clearAll
-   local tCx, tPlateX, tTowerX, tI, tBomb
+   local tCx, tPlateX, tTowerX, tI, tBomb, tPlate
    put (gArenaL + gArenaR) div 2 into tCx
    put tCx - 130 into tPlateX
    put tCx + 120 into tTowerX
-   get placePlate(tPlateX, gArenaB - 8)
+   put placePlate(tPlateX, gArenaB - 8) into tPlate
    get placeBall(tPlateX, gArenaT + 60, 40, "232,182,92")
    put placeBomb(tTowerX, gArenaB - 28) into tBomb
-   set the uFuseOnRun of tBomb to false        -- this bomb fires from the PLATE, not its own fuse
+   set the uFuseOnRun of tBomb to false        -- this bomb fires from the PLATE's wire, not its own fuse
+   addWire tPlate, tBomb                        -- the trigger link (this was missing): plate -> bomb
    repeat with tI = 1 to 4
       get placeBox(tTowerX, gArenaB - 66 - tI * 34, 46, 30, "214,92,92")
    end repeat
@@ -9234,13 +9235,19 @@ end buildRecipeFanTower
 on buildRecipeMagnetCatch
    if gMode is "run" then toggleMode
    clearAll
-   local tCx, tCy, tMag, tI
+   local tCx, tCy, tMag, tI, tLoX, tHiX, tLoY, tHiY
    put (gArenaL + gArenaR) div 2 into tCx
    put (gArenaT + gArenaB) div 2 into tCy
    put placeMagnet(tCx, tCy) into tMag
-   set the uMagRange of tMag to 340
+   set the uMagRange of tMag to 360
+   -- Scatter the balls INSIDE the magnet's reach (clamped to the arena), so every
+   -- one is actually caught -- not just whichever happened to land within range.
+   put max(gArenaL + 40, tCx - 280) into tLoX
+   put min(gArenaR - 40, tCx + 280) into tHiX
+   put max(gArenaT + 40, tCy - 170) into tLoY
+   put min(gArenaB - 50, tCy + 170) into tHiY
    repeat with tI = 1 to 6
-      get placeBall(rnd(gArenaL + 50, gArenaR - 50), rnd(gArenaT + 40, gArenaB - 60), 30, "206,124,206")
+      get placeBall(rnd(tLoX, tHiX), rnd(tLoY, tHiY), 30, "206,124,206")
    end repeat
    renderBuild
    put "Magnet Catch — press Run: the magnet pulls the scattered balls toward it." into gStatus
@@ -9254,15 +9261,15 @@ on buildRecipeCatapult
    local tCx, tBaseY, tFulcrum, tArm, tBall, tWeight
    put (gArenaL + gArenaR) div 2 into tCx
    put gArenaB - 70 into tBaseY
-   put placeAnchor(tCx, tBaseY) into tFulcrum
+   put placeAnchor(tCx, tBaseY - 16) into tFulcrum   -- pivot ON the arm centreline; was 16px below its CG (an unstable inverted pivot that tipped the arm over before the weight landed)
    put placeBox(tCx, tBaseY - 16, 200, 14, "180,150,90") into tArm
    set the uDensity of tArm to 0.6
    b2kSetDensity tArm, 0.6
    get connectJoint("hinge", tArm, tFulcrum, tCx, tBaseY - 16, 0)
-   put placeBall(tCx - 84, tBaseY - 36, 30, "232,182,92") into tBall
-   put placeBox(tCx + 78, tBaseY - 172, 54, 54, "214,92,92") into tWeight
-   set the uDensity of tWeight to 2.6
-   b2kSetDensity tWeight, 2.6
+   put placeBall(tCx - 84, tBaseY - 39, 30, "232,182,92") into tBall   -- rests on the left arm
+   put placeBox(tCx + 78, tBaseY - 110, 54, 54, "214,92,92") into tWeight   -- drops a short, fast way onto the right arm
+   set the uDensity of tWeight to 3.4
+   b2kSetDensity tWeight, 3.4
    renderBuild
    put "Catapult — press Run: the heavy block drops on the right arm and flings the ball off the left." into gStatus
    updateHud
@@ -9276,7 +9283,7 @@ end buildRecipeCatapult
 on buildRecipeCannon
    if gMode is "run" then toggleMode
    clearAll
-   local tX, tBaseY, tBarrel, tBase, tBall, tI
+   local tX, tBaseY, tBarrel, tBase, tBall, tI, tStackX
    put gArenaL + 80 into tX
    put gArenaB - 96 into tBaseY
    put placeBox(tX + 18, tBaseY + 34, 66, 30, "92,70,52") into tBase     -- carriage
@@ -9290,12 +9297,15 @@ on buildRecipeCannon
    put placeBall(tX + 88, tBaseY, 26, "40,42,50") into tBall             -- cannonball at the muzzle
    set the uDensity of tBall to 2.6
    b2kSetDensity tBall, 2.6
-   set the uLaunchSpeed of tBall to 1150
-   set the uLaunchDir of tBall to 18                                      -- across and slightly up
+   set the uLaunchSpeed of tBall to 1000
+   set the uLaunchDir of tBall to 8                                       -- a near-flat shot, so it strikes the stack instead of arcing over it
    set the uLayer of tBall to 1
    applyCollisionLayer tBall
-   repeat with tI = 0 to 4                                                -- crate stack downrange
-      get placeBox(gArenaR - 150, gArenaB - 22 - tI * 30, 46, 28, "200,120,80")
+   -- Put the stack a fixed distance downrange (inside the flat shot's range), not
+   -- at the far wall — otherwise on a wide stage the ball drops short or sails past.
+   put min(tX + 688, gArenaR - 110) into tStackX
+   repeat with tI = 0 to 4                                                -- crate stack
+      get placeBox(tStackX, gArenaB - 22 - tI * 30, 46, 28, "200,120,80")
    end repeat
    renderBuild
    put "Cannon — press Run: the ball fires across the field. Knock the crate stack down!" into gStatus
@@ -9320,7 +9330,7 @@ on buildRecipeTrebuchet
    set the uDensity of tWeight to 4
    b2kSetDensity tWeight, 4
    get connectJoint("weld", tWeight, tArm)
-   put placeBall(tCx + 162, tBaseY + 6, 26, "232,182,92") into tBall
+   put placeBall(tCx + 162, tBaseY - 19, 26, "232,182,92") into tBall   -- rests ON TOP of the long arm so the whip-up flings it (was below the arm)
    set the uDensity of tBall to 0.8
    b2kSetDensity tBall, 0.8
    renderBuild
@@ -9340,12 +9350,12 @@ on buildRecipeCrane
    put placeBox(tX, tBaseY - 110, 26, 220, "92,98,112") into tMast
    set the uBodyType of tMast to "static"
    b2kSetType tMast, "static"
-   put placeAnchor(tX, tTop) into tPivot
-   put placeBox(tX + 96, tTop, 210, 14, "180,150,90") into tJib
+   put placeAnchor(tX + 13, tTop) into tPivot                    -- pivot at the mast's right edge
+   put placeBox(tX + 118, tTop, 210, 14, "180,150,90") into tJib -- jib cantilevers RIGHT from the pivot, clear of the mast (its left end used to overlap the mast and jam the swing)
    set the uDensity of tJib to 0.4
    b2kSetDensity tJib, 0.4
-   get connectJoint("hinge", tJib, tPivot, tX, tTop, 26)   -- 26 deg/s motor swings the jib
-   put placeBall(tX + 184, tTop + 92, 34, "232,182,92") into tLoad
+   get connectJoint("hinge", tJib, tPivot, tX + 13, tTop, 26)    -- 26 deg/s motor swings the jib
+   put placeBall(tX + 200, tTop + 92, 34, "232,182,92") into tLoad
    set the uDensity of tLoad to 2
    b2kSetDensity tLoad, 2
    get connectJoint("rope", tJib, tLoad)
@@ -9359,31 +9369,31 @@ end buildRecipeCrane
 on buildRecipeWreckingBall
    if gMode is "run" then toggleMode
    clearAll
-   local tX, tBaseY, tTop, tLeg, tBeam, tPivot, tBall, tI
-   put gArenaL + 120 into tX
-   put gArenaB - 30 into tBaseY
-   put tBaseY - 210 into tTop
-   put placeBox(tX, tBaseY - 105, 18, 210, "92,98,112") into tLeg
-   set the uBodyType of tLeg to "static"
-   b2kSetType tLeg, "static"
-   put placeBox(tX + 230, tBaseY - 105, 18, 210, "92,98,112") into tLeg
-   set the uBodyType of tLeg to "static"
-   b2kSetType tLeg, "static"
-   put placeBox(tX + 115, tTop, 260, 16, "92,98,112") into tBeam
+   local tX, tTop, tMast, tBeam, tPivot, tBall, tWallX, tI
+   put gArenaL + 130 into tX
+   put gArenaB - 250 into tTop
+   -- A mast with a beam cantilevered to the right; the ball hangs off the beam end and
+   -- swings RIGHT into the wall. (The old gantry pinned the ball between two legs, so its
+   -- short arc never reached the far wall.)
+   put placeBox(tX, (gArenaB + tTop) div 2, 22, gArenaB - tTop, "92,98,112") into tMast
+   set the uBodyType of tMast to "static"
+   b2kSetType tMast, "static"
+   put placeBox(tX + 100, tTop, 200, 16, "92,98,112") into tBeam
    set the uBodyType of tBeam to "static"
    b2kSetType tBeam, "static"
-   put placeAnchor(tX + 40, tTop) into tPivot
-   put placeBall(tX + 40, tTop + 140, 40, "60,64,74") into tBall
-   set the uDensity of tBall to 4.5
-   b2kSetDensity tBall, 4.5
+   put placeAnchor(tX + 188, tTop) into tPivot
+   put placeBall(tX + 188, tTop + 150, 44, "60,64,74") into tBall   -- heavy ball roped to the beam end
+   set the uDensity of tBall to 5
+   b2kSetDensity tBall, 5
    get connectJoint("rope", tPivot, tBall)
-   set the uLaunchSpeed of tBall to 540
+   set the uLaunchSpeed of tBall to 600
    set the uLaunchDir of tBall to 0                         -- shove right, into the wall
+   put tX + 300 into tWallX                                  -- inside the ball's forward swing reach
    repeat with tI = 0 to 5
-      get placeBox(gArenaR - 160, gArenaB - 22 - tI * 30, 60, 28, "200,120,80")
+      get placeBox(tWallX, gArenaB - 22 - tI * 30, 60, 28, "200,120,80")
    end repeat
    renderBuild
-   put "Wrecking Ball — press Run: the ball swings into the brick wall and smashes it down." into gStatus
+   put "Wrecking Ball — press Run: the ball swings off the beam into the brick wall and smashes it down." into gStatus
    updateHud
 end buildRecipeWreckingBall
 
