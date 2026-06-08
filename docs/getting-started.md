@@ -74,7 +74,7 @@ Open the Message Box and run:
 put b2Version()
 ```
 
-You should see `3` (the shim ABI version). If you get an error instead, the
+You should see `4` (the shim ABI version). If you get an error instead, the
 extension didn't load or the native library can't be found — jump to
 [Troubleshooting](#troubleshooting).
 

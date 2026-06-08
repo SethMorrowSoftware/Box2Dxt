@@ -90,7 +90,7 @@ non-deterministic.
 ## The ABI version
 
 The shim exports `b2lc_abi_version()`, surfaced to scripts as `b2Version()`. It
-returns the integer `LC_ABI_VERSION` defined in `src/box2d_lc.c` (currently `3`).
+returns the integer `LC_ABI_VERSION` defined in `src/box2d_lc.c` (currently `4`).
 Use it as a load/version sanity check, and **bump it whenever the exported ABI
 changes** so the `.lcb` and native library can't silently drift apart.
 

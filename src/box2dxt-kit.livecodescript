@@ -5,7 +5,7 @@
 -- PIXELS, SCREEN coordinates and DEGREES; the kit converts to Box2D's
 -- metres / radians / y-up for you, runs the world, and moves your controls.
 -- Runs in OpenXTalk (OXT); compatible with LiveCode 9.6.3+.
--- Requires the box2dxt extension loaded (put b2Version() should return 3).
+-- Requires the box2dxt extension loaded (put b2Version() should return 4).
 --
 -- =====================  60-SECOND START  =============================
 --   on openCard
@@ -93,6 +93,8 @@ local sFrameObj      -- object that receives an on b2kFrame message each frame
 local sRayX, sRayY   -- last b2kRayHit point (screen pixels)
 local sRayNX, sRayNY -- last b2kRayHit surface normal (screen-oriented)
 local sRayDist       -- last b2kRayHit distance from the ray start (pixels)
+local sNeedFullSync  -- true when a script-side transform/type edit bypassed move events
+local sDrawKey       -- ctrlRef -> last rendered pixel/angle key; avoids redundant redraws
 
 constant kPI = 3.14159265358979
 
@@ -116,6 +118,7 @@ command b2kSetup pGravityX, pGravityY
    put false into sDragging
    put false into sRunning
    put false into sPaused
+   put false into sNeedFullSync
 end b2kSetup
 
 command b2kResetTables
@@ -126,7 +129,9 @@ command b2kResetTables
    put empty into sVerts
    put empty into sRad
    put empty into sImgAngle
+   put empty into sDrawKey
    put empty into sStatic
+   put false into sNeedFullSync
    put empty into sSpawned
    put empty into sSensor
 end b2kResetTables
@@ -285,7 +290,7 @@ function b2kWorld
    return sWorld
 end b2kWorld
 
--- Sanity check from kit-only code: returns the native shim's ABI version (3),
+-- Sanity check from kit-only code: returns the native shim's ABI version (4),
 -- i.e. that the box2dxt extension and its native library are loaded and in sync.
 function b2kVersion
    return b2Version()
@@ -569,6 +574,7 @@ end b2kSetDensity
 -- Resize the control's graphic first, then re-apply materials afterwards.
 command b2kReshape pControl, pShape
    local tRef, tBody, tOld, tHw, tHh, tWm, tHm, tR, tL, tHoriz, tCx, tCy, p, lx, ly, tCount, tNewVerts
+   local tWx, tWy, tWa
    put the long id of pControl into tRef
    if sBody[tRef] is empty then exit b2kReshape
    put sBody[tRef] into tBody
@@ -644,6 +650,18 @@ command b2kReshape pControl, pShape
          end if
    end switch
    if tOld is not empty then b2DestroyShape tOld   -- now safe to release the old shape
+   -- The size/outline changed but the body need not have moved, so the move-event
+   -- sync would skip it (an at-rest body produces no move event). Bust the
+   -- pose-keyed draw cache and redraw at the body's current pose right now so the
+   -- new shape is visible immediately, awake or asleep.
+   delete variable sDrawKey[tRef]
+   put b2BodyX(tBody) into tWx
+   put b2BodyY(tBody) into tWy
+   if sRender[tRef] is "poly" or sRender[tRef] is "image" then put b2BodyAngle(tBody) into tWa
+   else put 0 into tWa
+   lock screen
+   b2kDrawBody tRef, tWx, tWy, tWa
+   unlock screen
 end b2kReshape
 
 command b2kSetBullet pControl, pFlag
@@ -748,6 +766,7 @@ command b2kSetType pControl, pType
    b2SetBodyType sBody[tRef], tCode
    put (tCode is 0) into sStatic[tRef]   -- only true statics are skipped by sync
    if tCode is not 0 then b2SetAwake sBody[tRef], true
+   put true into sNeedFullSync
 end b2kSetType
 
 command b2kSetStatic pControl
@@ -769,11 +788,18 @@ end b2kDisable
 
 command b2kEnable pControl
    b2EnableBody sBody[the long id of pControl]
+   put true into sNeedFullSync
 end b2kEnable
 
 command b2kMoveTo pControl, pScreenX, pScreenY, pAngleDeg
+   local tRef, tWx, tWy, tWa
    if pAngleDeg is empty then put 0 into pAngleDeg
-   b2SetTransform sBody[the long id of pControl], b2kToWorldX(pScreenX), b2kToWorldY(pScreenY), pAngleDeg * kPI / 180
+   put the long id of pControl into tRef
+   put b2kToWorldX(pScreenX) into tWx
+   put b2kToWorldY(pScreenY) into tWy
+   put pAngleDeg * kPI / 180 into tWa
+   b2SetTransform sBody[tRef], tWx, tWy, tWa
+   b2kDrawBody tRef, tWx, tWy, tWa
 end b2kMoveTo
 
 command b2kRemove pControl
@@ -1507,8 +1533,13 @@ command b2kRelease
 end b2kRelease
 
 -- =====================================================================
--- The loop  (fixed timestep, generation-guarded; sync locks only rendering)
+-- The loop  (fixed timestep, generation-guarded; one screen lock per frame)
 -- =====================================================================
+-- The whole frame -- body sync, contact/sensor dispatch and the app's own
+-- b2kFrame drawing -- runs inside a single lock screen / unlock screen so it
+-- composites in ONE redraw (no tearing between bodies and the joints/HUD a user
+-- draws on top). The try/catch guarantees the unlock even if a user handler
+-- throws, so a faulty event handler can never leave the screen frozen.
 on b2kStep pGen
    if not sRunning then exit b2kStep
    if pGen is not sGen then exit b2kStep
@@ -1527,10 +1558,15 @@ on b2kStep pGen
       if sDragging then
          b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
       end if
-      b2kSync                  -- locks screen internally for render updates only
-      b2kDispatchContacts      -- user handlers run after the screen is unlocked
-      b2kDispatchSensors
-      if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+      lock screen
+      try
+         b2kSyncBodies         -- lock-free; this frame's single lock is held here
+         b2kDispatchContacts
+         b2kDispatchSensors
+         if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+      catch tErr               -- a user handler error must never freeze the screen
+      end try
+      unlock screen
    end if
    send ("b2kStep " & sGen) to me in 16 milliseconds
 end b2kStep
@@ -1542,16 +1578,82 @@ command b2kStepOnce
    if sDragging then
       b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
    end if
-   b2kSync
-   b2kDispatchContacts
-   b2kDispatchSensors
-   if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+   lock screen
+   try
+      b2kSyncBodies
+      b2kDispatchContacts
+      b2kDispatchSensors
+      if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
+   catch tErr
+   end try
+   unlock screen
 end b2kStepOnce
 
+-- Public, standalone-safe sync: locks the screen and always unlocks, even if a
+-- draw throws. The loop instead holds one lock across the whole frame and calls
+-- the lock-free b2kSyncBodies directly, so sync + events are a single redraw.
 command b2kSync
-   local tRef, tBody, tWx, tWy, tDead, d
-   put empty into tDead
    lock screen
+   try
+      b2kSyncBodies
+   catch tErr
+   end try
+   unlock screen
+end b2kSync
+
+command b2kSyncAll
+   lock screen
+   try
+      b2kSyncAllBodies
+   catch tErr
+   end try
+   unlock screen
+end b2kSyncAll
+
+-- Lock-free body sync (the caller owns the screen lock). Fast path: Box2D already
+-- gives us the bodies that moved during the last step, so we use that event list
+-- instead of scanning every tracked control and calling body-is-awake/x/y/angle
+-- across the FFI for each one.
+command b2kSyncBodies
+   if sNeedFullSync is true then
+      b2kSyncAllBodies
+      put false into sNeedFullSync
+      exit b2kSyncBodies
+   end if
+
+   local tN, i, tBody, tRef, tWx, tWy, tWa, tDead
+   put empty into tDead
+   put b2BodiesUpdate(sWorld) into tN
+   if tN <= 0 then exit b2kSyncBodies
+
+   repeat with i = 1 to tN
+      put b2BodyMoveBody(i) into tBody
+      if tBody <= 0 then next repeat
+      put sCtrl[tBody] into tRef
+      if tRef is empty then next repeat
+      if sStatic[tRef] is true then next repeat
+      try
+         put b2BodyMoveX(i) into tWx
+         put b2BodyMoveY(i) into tWy
+         if sRender[tRef] is "poly" or sRender[tRef] is "image" then
+            put b2BodyMoveAngle(i) into tWa
+         else
+            put 0 into tWa
+         end if
+         b2kDrawBody tRef, tWx, tWy, tWa
+      catch tErr
+         put tRef & cr after tDead   -- control vanished; clean up below
+      end try
+   end repeat
+   b2kPruneDeadRefs tDead
+end b2kSyncBodies
+
+-- Lock-free full scan (the caller owns the screen lock). Comprehensive fallback
+-- for script-side edits that do not come from a Box2D step event (for example
+-- changing a body type while paused).
+command b2kSyncAllBodies
+   local tRef, tBody, tWx, tWy, tWa, tDead
+   put empty into tDead
    repeat for each key tRef in sBody
       if sStatic[tRef] is true then next repeat
       put sBody[tRef] into tBody
@@ -1559,34 +1661,60 @@ command b2kSync
       try
          put b2BodyX(tBody) into tWx
          put b2BodyY(tBody) into tWy
-         switch sRender[tRef]
-            case "poly"
-               b2kDrawPoly tRef, tWx, tWy, b2BodyAngle(tBody)
-               break
-            case "ball"
-               b2kDrawBall tRef, tWx, tWy
-               break
-            case "image"
-               b2kDrawImage tRef, tWx, tWy, b2BodyAngle(tBody)
-               break
-            default
-               set the loc of tRef to round(b2kToScreenX(tWx)) & "," & round(b2kToScreenY(tWy))
-         end switch
+         if sRender[tRef] is "poly" or sRender[tRef] is "image" then
+            put b2BodyAngle(tBody) into tWa
+         else
+            put 0 into tWa
+         end if
+         b2kDrawBody tRef, tWx, tWy, tWa
       catch tErr
          put tRef & cr after tDead   -- control vanished; clean up below
       end try
    end repeat
-   unlock screen
-   repeat for each line d in tDead
+   b2kPruneDeadRefs tDead
+end b2kSyncAllBodies
+
+command b2kPruneDeadRefs pDead
+   local d, tBody
+   repeat for each line d in pDead
       if d is not empty then
-         if sBody[d] is not empty then b2DestroyBody sBody[d]
+         put sBody[d] into tBody
+         if tBody is not empty then
+            b2DestroyBody tBody
+            delete variable sCtrl[tBody]
+         end if
          delete variable sBody[d]
+         delete variable sDrawKey[d]
       end if
    end repeat
-end b2kSync
+end b2kPruneDeadRefs
+
+command b2kDrawBody pRef, pWx, pWy, pWa
+   local tSx, tSy, tKey
+   switch sRender[pRef]
+      case "poly"
+         b2kDrawPoly pRef, pWx, pWy, pWa
+         break
+      case "ball"
+         b2kDrawBall pRef, pWx, pWy
+         break
+      case "image"
+         b2kDrawImage pRef, pWx, pWy, pWa
+         break
+      default
+         put round(b2kToScreenX(pWx)) into tSx
+         put round(b2kToScreenY(pWy)) into tSy
+         put tSx & "," & tSy into tKey
+         if sDrawKey[pRef] is tKey then exit b2kDrawBody
+         set the loc of pRef to tKey
+         put tKey into sDrawKey[pRef]
+   end switch
+end b2kDrawBody
 
 command b2kDrawPoly pRef, pWx, pWy, pWa
-   local c, s, p, pt, tPts, tFirst
+   local c, s, p, pt, tPts, tFirst, tKey
+   put round(b2kToScreenX(pWx)) & "," & round(b2kToScreenY(pWy)) & "," & round(pWa * 1800 / kPI) into tKey
+   if sDrawKey[pRef] is tKey then exit b2kDrawPoly
    put cos(pWa) into c
    put sin(pWa) into s
    put empty into tPts
@@ -1598,14 +1726,18 @@ command b2kDrawPoly pRef, pWx, pWy, pWa
    end repeat
    put tFirst after tPts
    set the points of pRef to tPts
+   put tKey into sDrawKey[pRef]
 end b2kDrawPoly
 
 command b2kDrawBall pRef, pWx, pWy
-   local tRp, tSx, tSy
+   local tRp, tSx, tSy, tKey
    put sRad[pRef] * sScale into tRp
-   put b2kToScreenX(pWx) into tSx
-   put b2kToScreenY(pWy) into tSy
+   put round(b2kToScreenX(pWx)) into tSx
+   put round(b2kToScreenY(pWy)) into tSy
+   put tSx & "," & tSy & "," & round(tRp) into tKey
+   if sDrawKey[pRef] is tKey then exit b2kDrawBall
    set the rect of pRef to round(tSx - tRp), round(tSy - tRp), round(tSx + tRp), round(tSy + tRp)
+   put tKey into sDrawKey[pRef]
 end b2kDrawBall
 
 -- Position + rotate an image control to follow its body. The body angle is in
@@ -1614,13 +1746,18 @@ end b2kDrawBall
 -- the image at its design size and skip redundant re-rotations (each set of the
 -- angle resamples the image, but always from the original, so there's no drift).
 command b2kDrawImage pRef, pWx, pWy, pWa
-   local tDeg
+   local tDeg, tSx, tSy, tKey
    put ((round(pWa * 180 / kPI) mod 360) + 360) mod 360 into tDeg
+   put round(b2kToScreenX(pWx)) into tSx
+   put round(b2kToScreenY(pWy)) into tSy
+   put tSx & "," & tSy & "," & tDeg into tKey
+   if sDrawKey[pRef] is tKey then exit b2kDrawImage
    if sImgAngle[pRef] is not tDeg then
       set the angle of pRef to tDeg
       put tDeg into sImgAngle[pRef]
    end if
-   set the loc of pRef to round(b2kToScreenX(pWx)) & "," & round(b2kToScreenY(pWy))
+   set the loc of pRef to tSx & "," & tSy
+   put tKey into sDrawKey[pRef]
 end b2kDrawImage
 
 function b2kCorner pWx, pWy, pLx, pLy, c, s

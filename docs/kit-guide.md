@@ -718,10 +718,12 @@ put b2kProfile()           -- "totalStep,collide,solve" ms for the last step —
 put b2kAwakeBodyCount()    -- awake dynamic bodies (native count)
 ```
 
-> **Performance habits the Kit already follows:** sleeping is on, joint markers
-> that haven't moved aren't redrawn, and per-frame work is cached. Keep sleeping
-> enabled and avoid doing heavy work every `on b2kFrame` and big scenes stay
-> smooth.
+> **Performance habits the Kit already follows:** sleeping is on, the renderer
+> syncs from Box2D body-move events instead of scanning every body each frame,
+> angle reads are skipped for non-rotating controls, pixel-identical redraws are
+> skipped, joint markers that haven't moved aren't redrawn, and per-frame work is
+> cached. Keep sleeping enabled and
+> avoid doing heavy work every `on b2kFrame` and big scenes stay smooth.
 
 ---
 

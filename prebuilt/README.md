@@ -45,3 +45,13 @@ only way to get binaries compiled and tested on each operating system.
 > `src/box2d_lc.c`. When in doubt, build from source (two `cmake` commands — see
 > [docs/building.md](../docs/building.md)) or grab the matching Release for a
 > given tag.
+
+> **Heads-up — the committed binaries are currently outdated.** They predate most
+> of the C shim: they report **ABI 3** and export only ~92 of the ~370 handlers the
+> LCB now binds, missing whole families the Kit relies on (sensors, chains, spatial
+> queries, body move-events, and more). The current Kit and examples will not run
+> against them. The contraption builder now probes `b2Version()` against the ABI it
+> needs (**4**) and shows a "rebuild from source" dialog instead of crashing mid-run
+> on the first unresolved handler. Regenerate these files — build from source, or
+> attach fresh per-tag binaries from the Release workflow (on a portable toolchain;
+> e.g. an `manylinux`/older-glibc runner for Linux) — before relying on them.

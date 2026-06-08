@@ -69,7 +69,7 @@ b2kStart
 | `b2kWall x1, y1, x2, y2` | A static collision segment between two screen points (custom walls, ramps, ledges). Invisible — draw your own graphic to match. |
 | `b2kClear` | Remove all bodies/controls the Kit created, keep the world. |
 | `b2kTeardown` | Stop and destroy the world and all Kit state. |
-| `b2kVersion()` | Native shim ABI version (`3`) — a load / in-sync check from Kit-only code. |
+| `b2kVersion()` | Native shim ABI version (`4`) — a load / in-sync check from Kit-only code. |
 
 ## Configuration
 
@@ -301,6 +301,10 @@ other's mask (and no shared negative group forbids it).
   via `the angle`). Buttons, fields, and other controls follow position only and
   have their rotation locked, so the simulation stays consistent with the
   upright render.
+- The Kit render loop uses Box2D body-move events, so it only considers bodies
+  that moved in the latest step, avoids per-body awake/position polling for
+  sleeping objects, and skips redraws when the rounded screen pixel/angle did
+  not change.
 - When you need something the Kit doesn't expose, drop to the
   [core `b2…` API](api-reference.md): `b2kWorld()` returns the world and
   `b2kBodyOf(control)` the body, and `b2kToWorldX/Y(px)` / `b2kToScreenX/Y(m)`

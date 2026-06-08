@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.22)
 project(box2dxt LANGUAGES C)
 
+find_package(Threads REQUIRED)
+
+# Box2D builds as a static lib that we link into our shared library, so every
+# Box2D object must be position-independent. Ubuntu's gcc defaults to PIE (local
+# builds link fine), but toolchains that don't -- e.g. the manylinux2014
+# devtoolset used for the portable release binaries -- otherwise fail to link the
+# .so on x86-64 with "relocation R_X86_64_32 against `.text` ... recompile with
+# -fPIC". Forcing PIC here (before Box2D's targets are created) fixes it on every
+# toolchain and is always valid on the architectures we ship.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # ---------------------------------------------------------------------------
 # Box2Dxt — the native Box2D v3 module for OpenXTalk (OXT) / xTalk, also
 # compatible with LiveCode 9.6.3+. This builds the C shim (src/box2d_lc.c)
@@ -59,7 +70,7 @@ endif()
 # The xTalk Builder (LCB) FFI binding string "c:box2dxt>..." resolves to these.
 # ---------------------------------------------------------------------------
 add_library(box2dxt SHARED src/box2d_lc.c)
-target_link_libraries(box2dxt PRIVATE box2d)
+target_link_libraries(box2dxt PRIVATE box2d Threads::Threads)
 
 set_target_properties(box2dxt PROPERTIES
     C_STANDARD 17
