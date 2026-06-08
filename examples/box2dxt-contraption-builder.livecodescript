@@ -1923,6 +1923,7 @@ local gSelPart, gHoverId, gOnbStep, gStressCount
 local gSelJoint                        -- selected joint index (1..gJN), empty if none
 local gFilterPart                      -- part whose collision filter the popup panel is editing
 local gInspTab                         -- active inspector tab: shape | physics | collide | special
+local gInspectorMode                   -- "simple" (hides expert-only rows) | "advanced"; empty == simple
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
 local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
 local gCCD, gSleepOn, gWarmStart, gSubsteps   -- advanced world solver toggles (the "World · Advanced" panel)
@@ -1957,7 +1958,7 @@ constant kCanvasInset = 2, kGroundBarH = 22
 constant kPalPadX = 12, kPalBtnH = 28, kPalBtnGap = 4
 constant kPalSectionGap = 8, kPalHeaderH = 22, kPalScrollW = 16, kPalGutterW = 22
 -- Bump kUIVersion whenever the built chrome changes, so older saved stacks rebuild once.
-constant kUIVersion = "12"
+constant kUIVersion = "13"
 -- The native shim ABI this build expects; MUST track LC_ABI_VERSION in src/box2d_lc.c.
 -- startCB probes b2Version() against this so an outdated/missing library fails fast with
 -- a plain-language fix instead of crashing mid-run on an unresolved foreign handler.
@@ -2473,7 +2474,8 @@ on makeInspector
    makeAction "tab_special", "Special", tL + 180, tTop + 124, 56, 24
    -- a clearly-marked, divided settings block so adjustable values stand out
    makeBar "ui_settings_div", tL + 12, tTop + 156, tWide - 12, tTop + 157, "60,66,80"
-   makeLabel "ui_settings_hdr", tL + 12, tTop + 162, tWide - 12, tTop + 182, "PART SETTINGS", 11, "120,220,150", true
+   makeLabel "ui_settings_hdr", tL + 12, tTop + 162, tWide - 96, tTop + 182, "PART SETTINGS", 11, "120,220,150", true
+   makeAction "inspmode", "Simple", tWide - 84, tTop + 160, 72, 22   -- simple/advanced detail toggle
    makeField "ui_settings_hint", tL + 12, tTop + 186, tWide - 12, tTop + 250, 11, "150,154,166"
    put tTop + 186 into tRy
    repeat with tI = 1 to kPropRows
@@ -2504,6 +2506,7 @@ on makeInspector
    refreshSpeedLabel
    refreshGravityLabel
    refreshWorldFeelLabel
+   refreshInspectorModeLabel
 end makeInspector
 
 -- A prominent accent-green +/- button for adjusting a part's settings.
@@ -3042,6 +3045,9 @@ on handleAction pId
          break
       case "rename"
          renamePart gSelPart
+         break
+      case "inspmode"
+         toggleInspectorMode
          break
       case "worldadv"
          openWorldPanel
@@ -6476,7 +6482,7 @@ on showPartInspector pCtrl
    if tNm is empty then put niceName(tKind) into tNm
    setInspector ("Selected: " & tNm), (line 2 of toolHelp(tKind))
    clearPropRows
-   put partTabs(tKind) into tAvail
+   put partTabsForInspector(tKind) into tAvail   -- mode-aware: simple hides expert-only tabs
    if tAvail is empty then
       setSettingsHint "This part has no adjustable settings."
       exit showPartInspector
@@ -6485,15 +6491,27 @@ on showPartInspector pCtrl
    if gInspTab is not among the items of tAvail then put item 1 of tAvail into gInspTab
    refreshInspTabs tAvail
    put 0 into tRow
-   repeat for each item tKey in partProps(tKind)
+   repeat for each item tKey in partPropsForInspector(tKind)   -- mode-aware row list
       if propGroup(tKey) is not gInspTab then next repeat
       add 1 to tRow
       if tRow > kPropRows then exit repeat
       showPropRow tRow, propLabel(pCtrl, tKey), tKey
    end repeat
-   if tRow > 0 then setSettingsHint empty           -- rows are showing; hide the prompt
-   else setSettingsHint "Nothing to adjust on this tab."
-   if tKind is "bomb" then setSettingsHint blastPreviewText(pCtrl)   -- live "what it would hit"
+   if tRow > 0 then
+      if gInspectorMode is "simple" and advancedPropCount(tKind, gInspTab) > 0 then
+         setSettingsHint "Simple mode hides some expert settings on this tab — switch to Advanced (top of this block) to show them all."
+      else
+         setSettingsHint empty           -- rows are showing; hide the prompt
+      end if
+   else
+      setSettingsHint "Nothing to adjust on this tab."
+   end if
+   -- A live, plain-language preview for the special kinds (overrides the hint above).
+   if tKind is "bomb" then setSettingsHint blastPreviewText(pCtrl)
+   else if tKind is "laser" then setSettingsHint laserPreviewText(pCtrl)
+   else if tKind is "fan" then setSettingsHint fanPreviewText(pCtrl)
+   else if tKind is "magnet" then setSettingsHint magnetPreviewText(pCtrl)
+   else if tKind is "goal" then setSettingsHint goalPreviewText(pCtrl)
 end showPartInspector
 
 -- A live preview of a bomb's reach: how many parts currently sit inside its blast
@@ -6513,6 +6531,232 @@ function blastPreviewText pBomb
    else put "parts" into tPlural
    return "Blast radius " & tR & " px — reaches " & tN && tPlural & " right now."
 end blastPreviewText
+
+-- Live, plain-language preview lines for the other special parts, shown in the
+-- inspector hint area so a setting's effect is obvious before you press Run.
+function laserPreviewText pLaser
+   if the uLaserCut of pLaser is true then return "Laser CUT mode: burns through dynamic parts after about " & format("%.1f", numOr(the uLaserBurn of pLaser, kLaserBurnDefault) / 60) & " s of contact (tougher parts take longer)."
+   return "Laser is a sightline only. Toggle Cut to make it destroy dynamic parts after sustained exposure."
+end laserPreviewText
+
+function fanPreviewText pFan
+   return "Fan pushes dynamic parts in its arrow zone. Direction " & dirName(the uFanDir of pFan) & ", strength " & numOr(the uFanForce of pFan, kFanForce) & "."
+end fanPreviewText
+
+function magnetPreviewText pMag
+   return "Magnet " & magName(the uMagPolarity of pMag) & " parts within " & numOr(the uMagRange of pMag, kMagnetRange) & " px, at strength " & numOr(the uMagForce of pMag, kMagnetForce) & "."
+end magnetPreviewText
+
+function goalPreviewText pGoal
+   local tReq
+   put goalTargets(pGoal) into tReq
+   if tReq is empty then return "Goal accepts any dynamic part. Link it to a part to make it a specific puzzle target."
+   return "Goal requires " & (the number of lines of tReq) && "linked target(s) to reach this zone."
+end goalPreviewText
+
+-- =====================================================================
+-- Inspector simple/advanced mode (PR #15 UX): simple hides expert-only rows so
+-- newcomers see only everyday controls; advanced shows everything. Empty == simple.
+-- =====================================================================
+-- The keys treated as "expert" and hidden while the inspector is in simple mode.
+function propIsAdvanced pKey
+   set the itemDelimiter to comma
+   return pKey is among the items of "lindamp,angdamp,bullet,sleep,active,filter,launchspeed,launchdir,spinrate,bodytype,sensor,layer"
+end propIsAdvanced
+
+-- A kind's property keys, filtered for the current inspector mode.
+function partPropsForInspector pKind
+   local tKey, tOut
+   if gInspectorMode is "advanced" then return partProps(pKind)
+   set the itemDelimiter to comma
+   put empty into tOut
+   repeat for each item tKey in partProps(pKind)
+      if not propIsAdvanced(tKey) then put addItem(tOut, tKey) into tOut
+   end repeat
+   return tOut
+end partPropsForInspector
+
+-- How many expert-only keys a tab holds (drives the "settings hidden" hint).
+function advancedPropCount pKind, pGroup
+   local tKey, tN
+   put 0 into tN
+   set the itemDelimiter to comma
+   repeat for each item tKey in partProps(pKind)
+      if propGroup(tKey) is pGroup and propIsAdvanced(tKey) then add 1 to tN
+   end repeat
+   return tN
+end advancedPropCount
+
+-- The tabs with at least one VISIBLE setting in the current mode, so a tab made
+-- empty by simple mode is hidden rather than shown blank.
+function partTabsForInspector pKind
+   local tKey, tHasShape, tHasPhys, tHasCollide, tHasSpec, tOut
+   put false into tHasShape
+   put false into tHasPhys
+   put false into tHasCollide
+   put false into tHasSpec
+   set the itemDelimiter to comma
+   repeat for each item tKey in partPropsForInspector(pKind)
+      switch propGroup(tKey)
+         case "shape"
+            put true into tHasShape
+            break
+         case "physics"
+            put true into tHasPhys
+            break
+         case "collide"
+            put true into tHasCollide
+            break
+         case "special"
+            put true into tHasSpec
+            break
+      end switch
+   end repeat
+   put empty into tOut
+   if tHasShape then put "shape" into tOut
+   if tHasPhys then put addItem(tOut, "physics") into tOut
+   if tHasCollide then put addItem(tOut, "collide") into tOut
+   if tHasSpec then put addItem(tOut, "special") into tOut
+   return tOut
+end partTabsForInspector
+
+on toggleInspectorMode
+   if gInspectorMode is "advanced" then put "simple" into gInspectorMode
+   else put "advanced" into gInspectorMode
+   refreshInspectorModeLabel
+   if gSelPart is not empty then showPartInspector gSelPart
+   else if gSelJoint is not empty then showJointInspector gSelJoint
+   else showInspectorForTool
+   if gInspectorMode is "advanced" then put "Inspector: all expert settings are now visible." into gStatus
+   else put "Inspector: simple mode hides expert-only settings." into gStatus
+   updateHud
+end toggleInspectorMode
+
+on refreshInspectorModeLabel
+   if gInspectorMode is empty then put "simple" into gInspectorMode
+   if there is a button "ui_act_inspmode" then
+      if gInspectorMode is "advanced" then set the label of button "ui_act_inspmode" to "Advanced"
+      else set the label of button "ui_act_inspmode" to "Simple"
+      set the tooltip of button "ui_act_inspmode" to "Inspector detail: " & gInspectorMode & ". Click to toggle; simple hides expert-only settings."
+   end if
+end refreshInspectorModeLabel
+
+-- =====================================================================
+-- Per-property help: tooltips on each settings row + the type-in affordance.
+-- =====================================================================
+-- True for keys whose label can be clicked to type an exact value.
+function propCanType pKey
+   set the itemDelimiter to comma
+   return pKey is among the items of kEntryKeys
+end propCanType
+
+-- Tooltip for a row's +/- button.
+function propButtonHelp pKey, pInc
+   local tWord
+   if pInc then put "Increase" into tWord
+   else put "Decrease" into tWord
+   set the itemDelimiter to comma
+   if pKey is among the items of "color,material,imgshape" then return "Cycle this setting with the +/- buttons."
+   if pKey is among the items of "fixedrot,bullet,active,sensor,lasercut,bombfuse,bombsoft,bombdemo,magpol,thrustaim,bodytype,facing" then return "Toggle or cycle this setting with the +/- buttons."
+   if propCanType(pKey) then return tWord & " this value. Click the label to type an exact number."
+   return tWord & " this setting."
+end propButtonHelp
+
+-- Tooltip for a settings row's label: what the property does, in plain language.
+function propHelp pKey
+   switch pKey
+      case "width"
+      case "height"
+      case "length"
+      case "thickness"
+      case "diameter"
+      case "size"
+      case "goalsize"
+      case "fansize"
+         return "Shape size in pixels. Click the label to type an exact value."
+      case "angle"
+      case "launchdir"
+      case "thrustdir"
+      case "fandir"
+         return "Direction in degrees. 0 points right, 90 is up; values wrap at 360."
+      case "facing"
+         return "Which way the part faces. Cycle with the +/- buttons."
+      case "color"
+         return "Cycle the part colour. Colour is visual only."
+      case "imgshape"
+         return "Collision shape used for this image: box, ball or capsule."
+      case "bounce"
+         return "Restitution: higher values bounce more after a collision."
+      case "density"
+         return "Density sets mass. Heavier parts are harder to push or blast."
+      case "friction"
+         return "Surface grip. Higher friction resists sliding."
+      case "gravity"
+         return "Gravity multiplier. 1 is normal, 0 is weightless, negative floats up."
+      case "fixedrot"
+         return "Locks rotation so the part cannot spin."
+      case "bodytype"
+         return "Dynamic moves with physics; static stays fixed; kinematic is script-moved."
+      case "lindamp"
+         return "Linear damping slows movement, like air resistance."
+      case "angdamp"
+         return "Angular damping slows spinning."
+      case "bullet"
+         return "Continuous collision for fast parts that could tunnel through thin shapes."
+      case "material"
+         return "Preset bundle of grip, weight and bounciness."
+      case "layer"
+         return "Parts on the same non-zero layer pass through each other; layer 0 collides normally."
+      case "sensor"
+         return "Makes this part a non-solid trigger zone."
+      case "filter"
+         return "Open the collision-channel filter for advanced rules."
+      case "active"
+         return "Disabled parts stay visible but are taken out of the simulation."
+      case "sleep"
+         return "Speed below which a resting body sleeps to save CPU."
+      case "launchspeed"
+         return "Initial speed applied when Run or Play starts."
+      case "spinrate"
+         return "Initial spin when Run or Play starts, in degrees per second."
+      case "toughness"
+         return "Seconds of continuous laser contact this part survives before being cut."
+      case "blastradius"
+         return "Bomb blast reach in pixels."
+      case "blastpower"
+         return "Bomb blast impulse strength."
+      case "bombfuse"
+         return "Arm the fuse automatically when Run starts. Toggle with the +/- buttons."
+      case "bombfuselen"
+         return "Fuse time in seconds after the bomb is armed."
+      case "bombsoft"
+         return "Soft blast shoves parts without destroying them."
+      case "bombdemo"
+         return "Demolition blast can destroy destructible parts."
+      case "fanforce"
+         return "How hard the fan pushes parts in its zone."
+      case "magpol"
+         return "Attract or repel. Toggle with the +/- buttons."
+      case "magforce"
+         return "How strongly the magnet pulls or pushes parts."
+      case "magrange"
+         return "How far the magnet's pull reaches, in pixels."
+      case "laserdir"
+         return "Laser aim, in 45-degree steps. Cycle with the +/- buttons."
+      case "lasercut"
+         return "Toggle between a harmless sightline and a cutting beam."
+      case "laserburn"
+         return "Seconds of contact a cutting laser needs before it destroys a part."
+      case "thrustpower"
+         return "How hard the thruster pushes."
+      case "thrustspin"
+         return "Spin the thruster adds while firing, in degrees per second."
+      case "thrustaim"
+         return "Aim relative to the world, or to the part's own facing."
+      default
+         return "Adjust this setting with the +/- buttons."
+   end switch
+end propHelp
 
 -- The ordered list of adjustable settings shown for each kind of part.
 function partProps pKind
@@ -6692,16 +6936,24 @@ on hidePropRow pRow
 end hidePropRow
 
 on showPropRow pRow, pLabel, pKey
+   local tShownLabel
+   -- Mark type-in rows with a pencil so users know the label is clickable, and
+   -- hang plain-language help off every control via its tooltip.
+   if propCanType(pKey) then put pLabel & "  ✎" into tShownLabel
+   else put pLabel into tShownLabel
    if there is a field ("ui_prop_lbl_" & pRow) then
-      put pLabel into field ("ui_prop_lbl_" & pRow)
+      put tShownLabel into field ("ui_prop_lbl_" & pRow)
+      set the tooltip of field ("ui_prop_lbl_" & pRow) to propHelp(pKey)
       set the uPropKey of field ("ui_prop_lbl_" & pRow) to pKey
       set the visible of field ("ui_prop_lbl_" & pRow) to true
    end if
    if there is a button ("ui_act_prop_dec_" & pRow) then
+      set the tooltip of button ("ui_act_prop_dec_" & pRow) to propButtonHelp(pKey, false)
       set the uPropKey of button ("ui_act_prop_dec_" & pRow) to pKey
       set the visible of button ("ui_act_prop_dec_" & pRow) to true
    end if
    if there is a button ("ui_act_prop_inc_" & pRow) then
+      set the tooltip of button ("ui_act_prop_inc_" & pRow) to propButtonHelp(pKey, true)
       set the uPropKey of button ("ui_act_prop_inc_" & pRow) to pKey
       set the visible of button ("ui_act_prop_inc_" & pRow) to true
    end if
