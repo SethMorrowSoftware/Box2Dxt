@@ -189,10 +189,22 @@ struct LcTaskGroup {
     LcTaskGroup *next;
 };
 
+/* Each background worker gets its own arg so its Box2D worker index is fixed at
+ * creation and passed by value. The previous code discovered the index by racing
+ * to find pthread_self() in pool->threads[], which the worker can read before the
+ * parent has finished writing the array (POSIX only guarantees the child sees
+ * writes made *before* pthread_create) -- two workers could then collide on the
+ * same index and stomp the same per-worker Box2D task storage. */
+typedef struct LcWorkerArg {
+    LcTaskPool *pool;
+    uint32_t workerIndex;       /* 1..threadCount (worker 0 is the calling thread) */
+} LcWorkerArg;
+
 struct LcTaskPool {
     int workerCount;            /* total Box2D workers, including caller */
     int threadCount;            /* background workers only */
     pthread_t *threads;
+    LcWorkerArg *workerArgs;    /* one per background worker; index fixed at create */
     pthread_mutex_t mutex;
     pthread_cond_t workCond;
     pthread_cond_t doneCond;
@@ -237,11 +249,9 @@ static void lc_task_complete_locked(LcTaskPool *pool, LcTaskGroup *group) {
 }
 
 static void *lc_task_worker(void *arg) {
-    LcTaskPool *pool = (LcTaskPool *)arg;
-    uintptr_t workerIndex = 1;
-    for (int i = 0; i < pool->threadCount; i++) {
-        if (pthread_equal(pool->threads[i], pthread_self())) { workerIndex = (uintptr_t)i + 1; break; }
-    }
+    LcWorkerArg *wa = (LcWorkerArg *)arg;
+    LcTaskPool *pool = wa->pool;
+    uint32_t workerIndex = wa->workerIndex;   /* fixed at create; no self-search race */
 
     for (;;) {
         pthread_mutex_lock(&pool->mutex);
@@ -253,7 +263,7 @@ static void *lc_task_worker(void *arg) {
         pthread_mutex_unlock(&pool->mutex);
 
         if (have) {
-            group->task(start, end, (uint32_t)workerIndex, group->taskContext);
+            group->task(start, end, workerIndex, group->taskContext);
             pthread_mutex_lock(&pool->mutex);
             lc_task_complete_locked(pool, group);
             pthread_mutex_unlock(&pool->mutex);
@@ -274,20 +284,23 @@ static LcTaskPool *lc_task_pool_create(int workerCount) {
     pool->workerCount = workerCount;
     pool->threadCount = workerCount - 1;
     pool->threads = (pthread_t *)calloc((size_t)pool->threadCount, sizeof(pthread_t));
-    if (!pool->threads) { free(pool); return NULL; }
-    if (pthread_mutex_init(&pool->mutex, NULL) != 0) { free(pool->threads); free(pool); return NULL; }
+    pool->workerArgs = (LcWorkerArg *)calloc((size_t)pool->threadCount, sizeof(LcWorkerArg));
+    if (!pool->threads || !pool->workerArgs) { free(pool->workerArgs); free(pool->threads); free(pool); return NULL; }
+    if (pthread_mutex_init(&pool->mutex, NULL) != 0) { free(pool->workerArgs); free(pool->threads); free(pool); return NULL; }
     if (pthread_cond_init(&pool->workCond, NULL) != 0 || pthread_cond_init(&pool->doneCond, NULL) != 0) {
-        pthread_mutex_destroy(&pool->mutex); free(pool->threads); free(pool); return NULL;
+        pthread_mutex_destroy(&pool->mutex); free(pool->workerArgs); free(pool->threads); free(pool); return NULL;
     }
     for (int i = 0; i < pool->threadCount; i++) {
-        if (pthread_create(&pool->threads[i], NULL, lc_task_worker, pool) != 0) {
+        pool->workerArgs[i].pool = pool;
+        pool->workerArgs[i].workerIndex = (uint32_t)(i + 1);   /* fixed before the thread starts */
+        if (pthread_create(&pool->threads[i], NULL, lc_task_worker, &pool->workerArgs[i]) != 0) {
             pthread_mutex_lock(&pool->mutex);
             pool->stopping = 1;
             pthread_cond_broadcast(&pool->workCond);
             pthread_mutex_unlock(&pool->mutex);
             for (int j = 0; j < i; j++) pthread_join(pool->threads[j], NULL);
             pthread_cond_destroy(&pool->doneCond); pthread_cond_destroy(&pool->workCond);
-            pthread_mutex_destroy(&pool->mutex); free(pool->threads); free(pool);
+            pthread_mutex_destroy(&pool->mutex); free(pool->workerArgs); free(pool->threads); free(pool);
             return NULL;
         }
     }
@@ -304,6 +317,7 @@ static void lc_task_pool_destroy(LcTaskPool *pool) {
     pthread_cond_destroy(&pool->doneCond);
     pthread_cond_destroy(&pool->workCond);
     pthread_mutex_destroy(&pool->mutex);
+    free(pool->workerArgs);
     free(pool->threads);
     free(pool);
 }

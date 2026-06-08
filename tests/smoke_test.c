@@ -85,10 +85,31 @@ int main(void) {
     printf("box2dxt ABI version = %d\n", b2lc_abi_version());
     check("ABI version is 4", b2lc_abi_version() == 4);
 
-    int threaded = b2lc_world_create_threaded(0.0, -10.0, 1, 1, 2);
-    check("threaded world creates", threaded > 0);
-    check("threaded world reports at least one worker", b2lc_world_thread_count(threaded) >= 1);
-    if (threaded > 0) b2lc_world_destroy(threaded);
+    /* Threaded world: exercise the optional native task pool end-to-end. Creating
+       it spawns worker threads; stepping a POPULATED world drives enqueueTask/
+       finishTask so the workers actually run solver tasks -- each on its own fixed,
+       collision-free worker index -- and finishTask must synchronise before the
+       getters below read back. A clean fall+settle (finite, no tunneling) means the
+       pool simulates like the single-threaded path and tears down without deadlock.
+       Worker count clamps to online CPUs, so a 1-core host just runs single-threaded;
+       the >= 1 assertion and the simulation both hold either way. */
+    int tw = b2lc_world_create_threaded(0.0, -10.0, 1, 1, 4);
+    check("threaded world creates", tw > 0);
+    check("threaded world reports at least one worker", b2lc_world_thread_count(tw) >= 1);
+    int tg = b2lc_body_create(tw, 0, 0.0, 0.0, 0.0, 0, 0);
+    b2lc_shape_add_segment(tg, -20.0, 0.0, 20.0, 0.0, 0.6, 0.0);
+    int tboxes[24];
+    for (int i = 0; i < 24; i++) {
+        tboxes[i] = b2lc_body_create(tw, 2, -6.0 + 0.5 * i, 5.0 + 0.2 * i, 0.0, 0, 0);
+        b2lc_shape_add_box(tboxes[i], 0.25, 0.25, 1.0, 0.6, 0.0);
+    }
+    double twy0 = b2lc_body_y(tboxes[0]);
+    for (int i = 0; i < 120; i++) b2lc_world_step(tw, 1.0 / 60.0, 4);
+    double twy1 = b2lc_body_y(tboxes[0]);
+    printf("threaded box fell from y=%.3f to y=%.3f\n", twy0, twy1);
+    check("threaded step simulates (bodies fell under gravity)", twy1 < twy0 - 1.0);
+    check("threaded bodies settled cleanly (no NaN/tunneling)", twy1 > 0.0 && twy1 < 5.0);
+    b2lc_world_destroy(tw);   /* joins worker threads; must not hang or crash */
 
     int w = b2lc_world_create(0.0, -10.0, 1, 1);   /* gravity, sleep + CCD on */
     check("world handle valid", w > 0);
