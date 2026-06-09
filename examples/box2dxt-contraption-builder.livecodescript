@@ -2032,6 +2032,7 @@ local gPendCtrl, gPendX, gPendY
 local gMotorOn, gMotorSpeed, gBouncy, gMotorsRunning
 local gDragCtrl, gDragMode, gDragMoved
 local gDrawPts, gDrawCtrl               -- freehand-terrain points + its preview graphic
+local gNewControls                      -- true when controls were created since the last compositor nudge
 local gParts
 local gJN
 local gJKind, gJHandle, gJCa, gJCb
@@ -2266,7 +2267,22 @@ on renderBuild
    updateLasers
    drawWires
    unlock screen
+   if gNewControls is true then nudgeCompositor
 end renderBuild
+
+-- Under acceleratedRendering, a control created while the screen sits idle can
+-- stay INVISIBLE until the compositor rebuilds its scene — the engine-level
+-- cause of "my placed part only appears when I press Run" (Run's continuous
+-- redraws force rebuilds; idle Build mode never does). Toggling
+-- acceleratedRendering forces that rebuild now. Called flag-guarded from
+-- renderBuild so it runs once per created-something gesture, never per frame.
+on nudgeCompositor
+   put false into gNewControls
+   if the acceleratedRendering of this stack then
+      set the acceleratedRendering of this stack to false
+      set the acceleratedRendering of this stack to true
+   end if
+end nudgeCompositor
 
 -- =====================================================================
 -- Arena (walls + a framed play field, mirrors the showcase demo)
@@ -2938,7 +2954,7 @@ on mouseMove pX, pY
       exit mouseMove
    end if
    if gDragMode is "build" and gDragCtrl is not empty then
-      local tCx, tCy, tOld, tDx, tDy, tGroup, tP
+      local tCx, tCy, tOld, tDx, tDy, tGroup, tP, tHw, tHh
       put max(gArenaL, min(gArenaR, pX)) into tCx
       put max(gArenaT, min(gArenaB, pY)) into tCy
       if the uKind of gDragCtrl is "laser" then       -- drag a laser by its emitter, not the beam midpoint
@@ -2947,6 +2963,12 @@ on mouseMove pX, pY
          put true into gDragMoved
          exit mouseMove
       end if
+      -- keep the whole rect on the stage, not just its centre, so a wide or
+      -- tall part can't be parked half-over the side panels or the ground bar
+      put min((the width of gDragCtrl) div 2, (gArenaR - gArenaL) div 2) into tHw
+      put min((the height of gDragCtrl) div 2, (gArenaB - gArenaT) div 2) into tHh
+      put max(gArenaL + tHw, min(gArenaR - tHw, tCx)) into tCx
+      put max(gArenaT + tHh, min(gArenaB - tHh, tCy)) into tCy
       put the loc of gDragCtrl into tOld
       put round(tCx) - item 1 of tOld into tDx       -- how far the grabbed part moved
       put round(tCy) - item 2 of tOld into tDy
@@ -3006,6 +3028,25 @@ on reseatDragged pCtrl
    b2kMoveTo pCtrl, item 1 of tLoc, item 2 of tLoc, b2kAngle(pCtrl)
 end reseatDragged
 
+-- Pull a part's whole RECT inside the arena (placement clamps only the click
+-- point, so a part dropped near an edge could overhang the palette, the
+-- inspector or the ground bar). Re-seats the body if the graphic moved. The
+-- laser is exempt: its graphic is the beam line, whose bbox is not its footprint.
+on clampPartToArena pCtrl
+   if pCtrl is empty then exit clampPartToArena
+   if the uKind of pCtrl is "laser" then exit clampPartToArena
+   local tLoc, tHw, tHh, tCx, tCy
+   set the itemDelimiter to comma
+   put the loc of pCtrl into tLoc
+   put min((the width of pCtrl) div 2, (gArenaR - gArenaL) div 2) into tHw
+   put min((the height of pCtrl) div 2, (gArenaB - gArenaT) div 2) into tHh
+   put max(gArenaL + tHw, min(gArenaR - tHw, item 1 of tLoc)) into tCx
+   put max(gArenaT + tHh, min(gArenaB - tHh, item 2 of tLoc)) into tCy
+   if (tCx & "," & tCy) is tLoc then exit clampPartToArena
+   set the loc of pCtrl to tCx & "," & tCy
+   reseatDragged pCtrl
+end clampPartToArena
+
 -- The engine sends mouseRelease (not mouseUp) when the pointer is let go over a
 -- different control than the one that got mouseDown — e.g. dragging a part toward
 -- the right edge and releasing over the inspector. Route it through the same
@@ -3013,6 +3054,115 @@ end reseatDragged
 on mouseRelease
    endDrag
 end mouseRelease
+
+-- =====================================================================
+-- Keyboard: Delete removes the selection, Escape cancels/closes, arrows
+-- nudge the selected part. These are stack-level messages, so they only
+-- arrive when no dialog or editable field has keyboard focus.
+-- =====================================================================
+on deleteKey
+   deleteSelection
+end deleteKey
+
+on backspaceKey
+   deleteSelection
+end backspaceKey
+
+on deleteSelection
+   if gMode is not "build" then
+      put "Switch back to Build before deleting parts." into gStatus
+      updateHud
+      exit deleteSelection
+   end if
+   if gSelJoint is not empty then
+      removeJointAt gSelJoint
+      renderBuild
+      put "Deleted the selected joint." into gStatus
+   else if gSelPart is not empty then
+      deletePart gSelPart
+      renderBuild
+   else
+      put "Nothing selected — click a part (or a joint marker) first." into gStatus
+   end if
+   updateHud
+end deleteSelection
+
+-- Escape walks outward: close an open overlay first, then cancel a half-made
+-- joint/wire, then clear the selection. One press per layer, like any editor.
+on escapeKey
+   if there is a graphic "ui_onb_scrim" then
+      dismissOnboarding
+   else if there is a graphic "ui_recipescrim" and the visible of graphic "ui_recipescrim" then
+      hideRecipesMenu
+   else if there is a graphic "ui_filterscrim" and the visible of graphic "ui_filterscrim" then
+      hideFilterPanel
+   else if there is a graphic "ui_worldscrim" and the visible of graphic "ui_worldscrim" then
+      hideWorldPanel
+   else if there is a graphic "ui_imgscrim" and the visible of graphic "ui_imgscrim" then
+      hideImagePanel
+   else if gWireSrc is not empty then
+      put empty into gWireSrc
+      put "Wire cancelled." into gStatus
+   else if gPendCtrl is not empty then
+      resetPend
+      put "Joint cancelled." into gStatus
+   else
+      deselectJoint
+      deselectPart
+      put "Selection cleared." into gStatus
+   end if
+   updateHud
+end escapeKey
+
+-- Arrow keys nudge the selected part 1 px (Shift: 10 px) in Build mode, with
+-- the same group-follow, clamping and body re-seat as a mouse drag.
+on arrowKey pKey
+   local tDx, tDy, tStep, tGroup, tP, tPt
+   if gMode is not "build" or gSelPart is empty then pass arrowKey
+   if gSelPart is not among the lines of gParts then pass arrowKey
+   put 1 into tStep
+   if the shiftKey is down then put 10 into tStep
+   put 0 into tDx
+   put 0 into tDy
+   switch pKey
+      case "left"
+         put - tStep into tDx
+         break
+      case "right"
+         put tStep into tDx
+         break
+      case "up"
+         put - tStep into tDy
+         break
+      case "down"
+         put tStep into tDy
+         break
+      default
+         pass arrowKey
+   end switch
+   set the itemDelimiter to comma
+   if the uKind of gSelPart is "laser" then        -- nudge the emitter, like a drag does
+      put line 1 of the points of gSelPart into tPt
+      set the points of gSelPart to ((item 1 of tPt) + tDx) & "," & ((item 2 of tPt) + tDy) \
+            & cr & (line 2 of the points of gSelPart)
+      drawLaserBeam gSelPart
+      exit arrowKey
+   end if
+   set the loc of gSelPart to ((item 1 of the loc of gSelPart) + tDx) & "," & ((item 2 of the loc of gSelPart) + tDy)
+   put the uGroup of gSelPart into tGroup
+   if tGroup is not empty then                     -- a grouped assembly moves as one
+      repeat for each line tP in gParts
+         if tP is empty or tP is gSelPart then next repeat
+         if the uGroup of tP is tGroup then
+            set the loc of tP to ((item 1 of the loc of tP) + tDx) & "," & ((item 2 of the loc of tP) + tDy)
+            reseatDragged tP
+         end if
+      end repeat
+   end if
+   clampPartToArena gSelPart
+   reseatDragged gSelPart
+   renderBuild
+end arrowKey
 
 -- Shift-click during Run kicks the dynamic body under the pointer: a sharp,
 -- mass-aware upward impulse with a little sideways scatter, plus a tumble. Shows
@@ -3402,6 +3552,7 @@ function placePart pX, pY
          return empty
    end switch
    if tCtrl is not empty then
+      clampPartToArena tCtrl        -- an edge click must not seed a part overlapping the chrome
       renderBuild                   -- draw the new part right away (no Run needed)
       put "Placed a " & friendlyKind(gTool) & ". Drag to move it; the inspector on the right explains it." into gStatus
       selectPart tCtrl
@@ -3642,10 +3793,13 @@ on beginDrawTerrain pX, pY
    put "cb_terrain_" & the milliseconds & "_" & random(99999) into gDrawCtrl
    create graphic gDrawCtrl
    put the long id of graphic gDrawCtrl into gDrawCtrl
+   set the layerMode of gDrawCtrl to "dynamic"   -- the live sketch grows every mouseMove
    set the style of gDrawCtrl to "line"
    set the lineSize of gDrawCtrl to kDrawLineSize
    set the foregroundColor of gDrawCtrl to "150,120,84"
    set the points of gDrawCtrl to gDrawPts
+   put true into gNewControls
+   nudgeCompositor                              -- mid-gesture: the sketch must appear NOW, before any renderBuild
    put "Draw the ground — release to set it." into gStatus
 end beginDrawTerrain
 
@@ -3811,6 +3965,13 @@ on tagPart pCtrl, pKind, pColor, pFile
    put pCtrl & cr after gParts
    put true into gDynDirty               -- the dynamic-part cache must be rebuilt
    registerKind pCtrl, pKind
+   -- EVERY part composites on its own GPU layer, not just the physics-dynamic
+   -- kinds: parts move regardless (a build-mode drag, the inspector's resize
+   -- steppers, the selection recolour), and — critically — a control born into
+   -- the compositor's cached static scene often stays invisible until a full
+   -- recomposite. A dynamic layer renders fresh, so new parts show immediately.
+   set the layerMode of pCtrl to "dynamic"
+   put true into gNewControls            -- renderBuild nudges the compositor once
    if gBouncy and kindIsDynamic(pKind) then
       b2kSetBounce pCtrl, kBounceOn
       set the uBounce of pCtrl to kBounceOn
@@ -3827,7 +3988,6 @@ on tagPart pCtrl, pKind, pColor, pFile
       set the uGravity of pCtrl to 1
       set the uToughness of pCtrl to kToughnessDefault
       set the uFixedRot of pCtrl to false
-      set the layerMode of pCtrl to "dynamic"   -- moving bodies composite on their own GPU layer (no smear/clip artifacts)
       b2kWake pCtrl                       -- so the first sync draws it
    end if
 end tagPart
@@ -4333,6 +4493,8 @@ on recordJoint pKind, pJoint, pA, pB, pX, pY, pVis
    put empty into gJEnd[gJN]
    put "cb_joint_" & gJN into tG
    create graphic tG
+   set the layerMode of graphic tG to "dynamic"   -- re-pointed every frame; also shows at once in idle Build mode
+   put true into gNewControls
    if pVis is "none" then
       set the visible of graphic tG to false      -- internal structural pin: no marker
    else if pVis is "dot" then
@@ -4563,6 +4725,7 @@ function copyPart pCtrl, pX, pY
    end if
    applyPartSpecial tNew, partSpecial(pCtrl)
    set the uGroup of tNew to empty
+   clampPartToArena tNew                 -- copies offset toward an edge stay on the stage
    return tNew
 end copyPart
 
@@ -5531,6 +5694,7 @@ on drawThrusterFlame pT, pRad, pPow
    put "cb_flame_" & (the uPartId of pT) into tName
    if there is no graphic tName then
       create graphic tName
+      set the layerMode of graphic tName to "dynamic"   -- follows its thruster every frame
       set the style of graphic tName to "oval"
       set the filled of graphic tName to true
       set the lineSize of graphic tName to 0
@@ -5960,6 +6124,7 @@ on spawnRing pX, pY
    put pY into gRingY[gRingN]
    put 0 into gRingF[gRingN]
    create graphic ("cb_ring_" & gRingN)
+   set the layerMode of graphic ("cb_ring_" & gRingN) to "dynamic"   -- expands every frame
    set the style of graphic ("cb_ring_" & gRingN) to "oval"
    set the filled of graphic ("cb_ring_" & gRingN) to false
    set the lineSize of graphic ("cb_ring_" & gRingN) to 3
@@ -6148,9 +6313,7 @@ end fireTarget
 
 -- Redraw the signal wires as amber connector lines between parts (build mode).
 on drawWires
-   deleteByPrefix "cb_wire_"
-   if gWires is empty then exit drawWires
-   local tEdge, tSrc, tTgt, tN, tName, tRef, tx0, ty0, tx1, ty1
+   local tEdge, tSrc, tTgt, tN, tName, tx0, ty0, tx1, ty1
    put 0 into tN
    repeat for each line tEdge in gWires
       set the itemDelimiter to tab
@@ -6165,12 +6328,23 @@ on drawWires
       put item 2 of the loc of tTgt into ty1
       add 1 to tN
       put "cb_wire_" & tN into tName
-      create graphic tName
-      put the long id of graphic tName into tRef
-      set the style of tRef to "line"
-      set the lineSize of tRef to 2
-      set the foregroundColor of tRef to "232,200,72"
-      set the points of tRef to round(tx0) & "," & round(ty0) & cr & round(tx1) & "," & round(ty1)
+      -- Reuse the marker if it already exists and only restyle on creation:
+      -- renderBuild calls this constantly, and recreating the graphics each
+      -- time both churns the compositor and would re-trigger its nudge.
+      if there is no graphic tName then
+         create graphic tName
+         set the layerMode of graphic tName to "dynamic"   -- shows at once in idle Build mode
+         set the style of graphic tName to "line"
+         set the lineSize of graphic tName to 2
+         set the foregroundColor of graphic tName to "232,200,72"
+         put true into gNewControls
+      end if
+      set the points of graphic tName to round(tx0) & "," & round(ty0) & cr & round(tx1) & "," & round(ty1)
+   end repeat
+   repeat forever                            -- drop leftover markers past the live count
+      add 1 to tN
+      if there is no graphic ("cb_wire_" & tN) then exit repeat
+      delete graphic ("cb_wire_" & tN)
    end repeat
 end drawWires
 
@@ -6441,6 +6615,8 @@ on refreshImagePanel
       set the uImgMenu of button ("ui_act_imgremove_" & tI) to true
    end repeat
    setImageVisible true
+   put true into gNewControls
+   nudgeCompositor      -- the rows are created while the panel opens; they must show now
 end refreshImagePanel
 
 -- Place an instance of a library image at the top of the stage, then select it.
@@ -9628,6 +9804,8 @@ on startOnboarding
    put 1 into gOnbStep
    buildOnboardingOverlay
    showOnboardingStep
+   put true into gNewControls
+   nudgeCompositor      -- the tour can be replayed mid-session; the fresh overlay must show now
 end startOnboarding
 
 on buildOnboardingOverlay

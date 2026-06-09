@@ -10,6 +10,12 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Keyboard support in the contraption builder.** **Delete**/**Backspace**
+  removes the selected part or joint (Build mode, with full joint/wire
+  cleanup); **Escape** walks outward — closes an open overlay, then cancels a
+  half-made joint or wire, then clears the selection; **arrow keys** nudge the
+  selected part 1 px (Shift: 10 px) with the same group-follow, arena clamping
+  and body re-seat as a mouse drag.
 - **Generation-tagged handles (C shim).** Every handle now packs an 11-bit
   generation above its 20-bit table slot, bumped each time the slot is freed.
   A stale handle therefore stays a harmless no-op even after its slot is
@@ -388,6 +394,26 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Placed parts now show up immediately, not "only after I press Run"
+  (contraption builder).** Under `acceleratedRendering`, a control created
+  while the screen sits idle can stay invisible until the compositor rebuilds
+  its scene — and idle Build mode never forced that rebuild (Run's continuous
+  redraws did, which is why parts "appeared" then). Every part now composites
+  on its own dynamic GPU layer the moment it is tagged (previously only the
+  physics-dynamic kinds did, so anchors, plates, sensors, fans, magnets,
+  lasers, goals and terrain were exactly the kinds that vanished), the same
+  applies to joint markers, signal wires, the freehand-terrain sketch line,
+  thruster flames and shock rings, and `renderBuild` gives the compositor a
+  one-shot nudge whenever something new was created — including the image
+  library's rows and a replayed onboarding tour.
+- **Parts can no longer be parked overlapping the chrome (contraption
+  builder).** Placement, duplicate/multiply copies, build-mode drags and arrow
+  nudges keep the part's whole rect inside the arena (previously only its
+  centre was clamped, so a wide platform could hang halfway over the palette
+  or under the ground bar). The laser keeps its emitter-based dragging.
+- **Signal wires no longer churn the renderer (contraption builder).**
+  `drawWires` reuses its marker graphics and re-points them instead of
+  deleting and recreating every wire on every build-mode redraw.
 - **Geometry getters no longer leak the previous shape's values.** The
   circle/capsule/segment read-back stash zeroes on a failed update (stale
   handle or wrong shape type), so `b2ShapeCircleRadius()` & co. report `0`
