@@ -146,7 +146,7 @@ scenes at runtime, so there's nothing to lay out.
 The demo is **self-contained**: it bundles a copy of the Kit, so it runs from a
 single paste — no separate setup.
 
-1. Make sure the extension is loaded and `put b2Version()` returns `3`.
+1. Make sure the extension is loaded and `put b2Version()` returns `4`.
 2. Paste the whole of
    [`examples/box2dxt-demo.livecodescript`](../examples/box2dxt-demo.livecodescript)
    into a stack's script (*Object → Stack Script*). If you previously pasted a

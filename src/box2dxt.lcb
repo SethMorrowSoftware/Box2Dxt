@@ -461,9 +461,24 @@ public handler b2Version() returns Integer
    return tR
 end handler
 
+-- This binding targets shim ABI 4. A mismatched libbox2dxt would otherwise
+-- surface as an opaque crash on whichever call hits the skew first; checking
+-- at world creation (the gateway every script goes through) turns it into a
+-- clear, catchable error instead.
+private handler checkABI()
+   variable tV as Integer
+   unsafe
+      put _abi_version() into tV
+   end unsafe
+   if tV is not 4 then
+      throw "box2dxt: incompatible native library (binding needs ABI 4) - update libbox2dxt / box2dxt.dll"
+   end if
+end handler
+
 -- ---- world ----------------------------------------------------------
 public handler b2NewWorld(in pGravityX as Number, in pGravityY as Number, in pAllowSleep as Boolean, in pContinuous as Boolean) returns Integer
    variable tR as Integer
+   checkABI()
    unsafe
       put _world_create(pGravityX, pGravityY, bi(pAllowSleep), bi(pContinuous)) into tR
    end unsafe
@@ -472,6 +487,7 @@ end handler
 
 public handler b2NewThreadedWorld(in pGravityX as Number, in pGravityY as Number, in pAllowSleep as Boolean, in pContinuous as Boolean, in pWorkers as Integer) returns Integer
    variable tR as Integer
+   checkABI()
    unsafe
       put _world_create_threaded(pGravityX, pGravityY, bi(pAllowSleep), bi(pContinuous), pWorkers) into tR
    end unsafe

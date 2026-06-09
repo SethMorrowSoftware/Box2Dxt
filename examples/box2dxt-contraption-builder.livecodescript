@@ -232,6 +232,7 @@ end b2kAddWalls
 
 command b2kEdge pWx1, pWy1, pWx2, pWy2
    local tBody
+   if sWorld is empty then exit b2kEdge   -- no world yet: a wall is a quiet no-op
    put b2NewStaticBody(sWorld, 0, 0) into tBody
    get b2AddSegment(tBody, pWx1, pWy1, pWx2, pWy2, 0.6, 0.1)
 end b2kEdge
@@ -239,6 +240,7 @@ end b2kEdge
 -- A wide invisible ground line at screen height pScreenY (default: near bottom).
 command b2kAddGround pScreenY
    local tBody, tWy
+   if sWorld is empty then exit b2kAddGround
    if pScreenY is empty then put (the height of this card) - 40 into pScreenY
    put b2kToWorldY(pScreenY) into tWy
    put b2NewStaticBody(sWorld, 0, tWy) into tBody
@@ -358,6 +360,7 @@ end b2kToWorldY
 -- =====================================================================
 command b2kAddBox pControl, pDynamic
    local tRef, tType, tFixed, tBody, tHw, tHh, tWx, tWy, tGraphic, tImage
+   if sWorld is empty then return 0   -- attach needs a world (b2kSetup first)
    put the long id of pControl into tRef
    put (pDynamic is not false) into pDynamic
    if pDynamic then put 2 into tType
@@ -393,6 +396,7 @@ end b2kAddBox
 
 command b2kAddBall pControl, pDynamic
    local tRef, tType, tBody, tRad, tWx, tWy
+   if sWorld is empty then return 0
    put the long id of pControl into tRef
    put (pDynamic is not false) into pDynamic
    if pDynamic then put 2 into tType
@@ -417,6 +421,7 @@ end b2kAddBall
 -- images rotate via `the angle`; other controls follow position upright.
 command b2kAddCapsule pControl, pDynamic
    local tRef, tType, tFixed, tBody, tWx, tWy, tWm, tHm, tR, tL, tHoriz, tGraphic, tImage
+   if sWorld is empty then return 0
    put the long id of pControl into tRef
    put (pDynamic is not false) into pDynamic
    if pDynamic then put 2 into tType
@@ -461,6 +466,7 @@ end b2kAddCapsule
 -- Build a body from a polygon graphic's own points (<= 8 vertices, convex).
 command b2kAddPolygon pControl, pDynamic
    local tRef, tType, tBody, tCx, tCy, tWx, tWy, tPoints, p, tLocal, lx, ly, tCount
+   if sWorld is empty then return 0
    put the long id of pControl into tRef
    put (pDynamic is not false) into pDynamic
    if pDynamic then put 2 into tType
@@ -509,6 +515,7 @@ end b2kRegister
 -- =====================================================================
 command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
    local tName, tRef
+   if sWorld is empty then return empty   -- spawn needs a world (b2kSetup first)
    if pW is empty then put 40 into pW
    put b2kClamp(pW, 1, 10000) into pW
    if pH is empty then put pW into pH
@@ -532,6 +539,7 @@ end b2kSpawnBox
 
 command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
    local tName, tRef
+   if sWorld is empty then return empty
    if pDiameter is empty then put 40 into pDiameter
    put b2kClamp(pDiameter, 1, 10000) into pDiameter
    put b2kNumberOr(pScreenX, sOriginX) into pScreenX
@@ -555,6 +563,7 @@ end b2kSpawnBall
 -- pill's long axis, pThickness across it; horizontal if pLength >= pThickness.
 command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
    local tName, tRef
+   if sWorld is empty then return empty
    if pLength is empty then put 80 into pLength
    if pThickness is empty then put 40 into pThickness
    put b2kClamp(pLength, 1, 10000) into pLength
@@ -626,6 +635,7 @@ command b2kReshape pControl, pShape
          put ((the width of pControl) / 2) / sScale into tR
          if tR <= 0 then
             put tOld into sShapeH[tRef]
+            b2ShapeDefReset   -- drop the pending one-shot flags set above
             exit b2kReshape
          end if
          put b2AddCircle(tBody, 0, 0, tR, 1.0, 0.4, 0.4) into sShapeH[tRef]
@@ -636,6 +646,7 @@ command b2kReshape pControl, pShape
          put (the height of pControl) / sScale into tHm
          if tWm <= 0 or tHm <= 0 then
             put tOld into sShapeH[tRef]
+            b2ShapeDefReset   -- drop the pending one-shot flags set above
             exit b2kReshape
          end if
          put (tWm >= tHm) into tHoriz
@@ -667,6 +678,7 @@ command b2kReshape pControl, pShape
          end repeat
          if tCount < 3 then           -- degenerate outline: keep the existing shape
             put tOld into sShapeH[tRef]
+            b2ShapeDefReset   -- drop the pending one-shot flags set above
             exit b2kReshape
          end if
          put b2AddPolygon(tBody, 1.0, 0.4, 0.2) into sShapeH[tRef]
@@ -677,6 +689,7 @@ command b2kReshape pControl, pShape
          put ((the height of pControl) / 2) / sScale into tHh
          if tHw <= 0 or tHh <= 0 then
             put tOld into sShapeH[tRef]
+            b2ShapeDefReset   -- drop the pending one-shot flags set above
             exit b2kReshape
          end if
          put b2AddBox(tBody, tHw, tHh, 1.0, 0.4, 0.2) into sShapeH[tRef]
@@ -700,62 +713,92 @@ command b2kReshape pControl, pShape
    unlock screen
 end b2kReshape
 
+-- Every body-targeting wrapper resolves the control's body first and quietly
+-- no-ops when there is none (unregistered, removed, or pre-setup): the kit's
+-- contract is that a missing body is never a script error.
 command b2kSetBullet pControl, pFlag
-   b2SetBullet sBody[the long id of pControl], (pFlag is true)
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSetBullet
+   b2SetBullet b, (pFlag is true)
 end b2kSetBullet
 
 command b2kSetFixedRotation pControl, pFlag
-   b2SetFixedRotation sBody[the long id of pControl], (pFlag is true)
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSetFixedRotation
+   b2SetFixedRotation b, (pFlag is true)
 end b2kSetFixedRotation
 
 command b2kSetGravityScale pControl, pScale
-   b2SetGravityScale sBody[the long id of pControl], pScale
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSetGravityScale
+   b2SetGravityScale b, pScale
 end b2kSetGravityScale
 
 command b2kSetDamping pControl, pLinear, pAngular
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSetDamping
    if pLinear is not empty then b2SetLinearDamping b, pLinear
    if pAngular is not empty then b2SetAngularDamping b, pAngular
 end b2kSetDamping
 
 command b2kWake pControl
-   b2SetAwake sBody[the long id of pControl], true
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kWake
+   b2SetAwake b, true
 end b2kWake
 
 -- Send a body to sleep (it stops simulating until something wakes it).
 command b2kSleep pControl
-   b2SetAwake sBody[the long id of pControl], false
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSleep
+   b2SetAwake b, false
 end b2kSleep
 
 -- Below this speed (pixels/sec) a body may fall asleep. Lower = stays awake
 -- longer; higher = sleeps sooner (saves CPU).
 command b2kSetSleepThreshold pControl, pPxPerSec
-   b2SetSleepThreshold sBody[the long id of pControl], pPxPerSec / sScale
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSetSleepThreshold
+   b2SetSleepThreshold b, pPxPerSec / sScale
 end b2kSetSleepThreshold
 
 -- =====================================================================
 -- Acting on bodies   (velocities/kicks are in PIXELS/sec, screen-oriented)
 -- =====================================================================
 command b2kSetVelocity pControl, pVxPx, pVyPx
-   b2SetVelocity sBody[the long id of pControl], pVxPx / sScale, - pVyPx / sScale
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSetVelocity
+   b2SetVelocity b, pVxPx / sScale, - pVyPx / sScale
 end b2kSetVelocity
 
 command b2kPush pControl, pDvxPx, pDvyPx
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then exit b2kPush
    b2SetVelocity b, b2BodyVX(b) + pDvxPx / sScale, b2BodyVY(b) - pDvyPx / sScale
    b2SetAwake b, true
 end b2kPush
 
 command b2kSpin pControl, pDegPerSec
-   b2SetAngularVelocity sBody[the long id of pControl], pDegPerSec * kPI / 180
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSpin
+   b2SetAngularVelocity b, pDegPerSec * kPI / 180
 end b2kSpin
 
 -- Add to the current spin (vs b2kSpin which sets it absolutely).
 command b2kSpinBy pControl, pDegPerSec
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSpinBy
    b2SetAngularVelocity b, b2BodyAngularVelocity(b) + pDegPerSec * kPI / 180
    b2SetAwake b, true
 end b2kSpinBy
@@ -763,32 +806,45 @@ end b2kSpinBy
 -- Continuous, screen-oriented force (thrusters, wind). Apply each frame for a
 -- sustained effect; b2kPush is the one-shot impulse equivalent.
 command b2kForce pControl, pFxPx, pFyPx
-   b2ApplyForce sBody[the long id of pControl], pFxPx / sScale, - pFyPx / sScale, true
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kForce
+   b2ApplyForce b, pFxPx / sScale, - pFyPx / sScale, true
 end b2kForce
 
 -- A one-shot impulse (a sharp kick), screen-oriented. Mass-aware: heavier bodies
 -- move less. b2kPush changes velocity directly; this is the impulse equivalent.
 command b2kImpulse pControl, pIxPx, pIyPx
-   b2ApplyImpulse sBody[the long id of pControl], pIxPx / sScale, - pIyPx / sScale, true
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kImpulse
+   b2ApplyImpulse b, pIxPx / sScale, - pIyPx / sScale, true
 end b2kImpulse
 
 -- A continuous turning force (same units as motor torque). Positive turns one way,
 -- negative the other. Apply each frame for a sustained twist; pairs with b2kForce.
 command b2kTorque pControl, pTorque
-   b2ApplyTorque sBody[the long id of pControl], pTorque, true
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kTorque
+   b2ApplyTorque b, pTorque, true
 end b2kTorque
 
 -- A one-shot twist (a sharp angular kick), mass-aware: bodies with more
 -- rotational inertia turn less. b2kSpinBy sets the spin directly; this is the
 -- impulse equivalent, and the angular partner of b2kImpulse.
 command b2kAngularImpulse pControl, pImpulse
-   b2ApplyAngularImpulse sBody[the long id of pControl], pImpulse, true
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kAngularImpulse
+   b2ApplyAngularImpulse b, pImpulse, true
 end b2kAngularImpulse
 
 -- Change a body's type at runtime: "static", "kinematic", or "dynamic".
 command b2kSetType pControl, pType
    local tRef, tCode
    put the long id of pControl into tRef
+   if sBody[tRef] is empty then exit b2kSetType
    switch pType
       case "static"
          put 0 into tCode
@@ -819,11 +875,17 @@ end b2kSetKinematic
 
 -- Temporarily take a body out of / put it back into the simulation.
 command b2kDisable pControl
-   b2DisableBody sBody[the long id of pControl]
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kDisable
+   b2DisableBody b
 end b2kDisable
 
 command b2kEnable pControl
-   b2EnableBody sBody[the long id of pControl]
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kEnable
+   b2EnableBody b
    put true into sNeedFullSync
 end b2kEnable
 
@@ -831,6 +893,7 @@ command b2kMoveTo pControl, pScreenX, pScreenY, pAngleDeg
    local tRef, tWx, tWy, tWa
    if pAngleDeg is empty then put 0 into pAngleDeg
    put the long id of pControl into tRef
+   if sBody[tRef] is empty then exit b2kMoveTo
    put b2kToWorldX(pScreenX) into tWx
    put b2kToWorldY(pScreenY) into tWy
    put pAngleDeg * kPI / 180 into tWa
@@ -913,6 +976,7 @@ end b2kBodyOf
 function b2kPosition pControl
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then return "0,0"
    return b2kToScreenX(b2BodyX(b)) & "," & b2kToScreenY(b2BodyY(b))
 end b2kPosition
 
@@ -921,62 +985,89 @@ end b2kPosition
 function b2kWorldCenter pControl
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then return "0,0"
    return b2kToScreenX(b2BodyWorldCenterX(b)) & "," & b2kToScreenY(b2BodyWorldCenterY(b))
 end b2kWorldCenter
 
 function b2kVelocity pControl
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then return "0,0"
    return (b2BodyVX(b) * sScale) & "," & (- b2BodyVY(b) * sScale)
 end b2kVelocity
 
 function b2kSpeed pControl
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then return 0
    return sqrt((b2BodyVX(b) * sScale) ^ 2 + (b2BodyVY(b) * sScale) ^ 2)
 end b2kSpeed
 
 function b2kAngle pControl
-   return b2BodyAngle(sBody[the long id of pControl]) * 180 / kPI
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then return 0
+   return b2BodyAngle(b) * 180 / kPI
 end b2kAngle
 
 function b2kIsAwake pControl
-   return b2BodyIsAwake(sBody[the long id of pControl])
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then return false
+   return b2BodyIsAwake(b)
 end b2kIsAwake
 
 -- Current rotation speed in DEGREES/sec (the getter for b2kSpin / b2kSpinBy).
 function b2kSpinRate pControl
-   return b2BodyAngularVelocity(sBody[the long id of pControl]) * 180 / kPI
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then return 0
+   return b2BodyAngularVelocity(b) * 180 / kPI
 end b2kSpinRate
 
 function b2kIsBullet pControl
-   return b2BodyIsBullet(sBody[the long id of pControl])
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then return false
+   return b2BodyIsBullet(b)
 end b2kIsBullet
 
 function b2kIsEnabled pControl
-   return b2BodyIsEnabled(sBody[the long id of pControl])
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then return false
+   return b2BodyIsEnabled(b)
 end b2kIsEnabled
 
 function b2kMass pControl
-   return b2BodyMass(sBody[the long id of pControl])
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then return 0
+   return b2BodyMass(b)
 end b2kMass
 
 -- The body's per-body gravity multiplier (the getter for b2kSetGravityScale).
 function b2kGravityScale pControl
-   return b2BodyGravityScale(sBody[the long id of pControl])
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then return 0
+   return b2BodyGravityScale(b)
 end b2kGravityScale
 
 -- The body's drag as "linear,angular" (the getter for b2kSetDamping).
 function b2kDamping pControl
    local b
    put sBody[the long id of pControl] into b
+   if b is empty then return "0,0"
    return b2BodyLinearDamping(b) & "," & b2BodyAngularDamping(b)
 end b2kDamping
 
 -- Body type as a word: "static", "kinematic", or "dynamic" (mirrors b2kSetType).
 function b2kBodyType pControl
-   local tCode
-   put b2BodyType(sBody[the long id of pControl]) into tCode
+   local b, tCode
+   put sBody[the long id of pControl] into b
+   if b is empty then return "static"
+   put b2BodyType(b) into tCode
    if tCode is 1 then return "kinematic"
    if tCode is 2 then return "dynamic"
    return "static"
@@ -999,6 +1090,7 @@ end b2kAwakeCount
 
 -- Which attached control sits at a screen point (empty if none).
 function b2kControlAt pScreenX, pScreenY
+   if sWorld is empty then return empty
    return sCtrl[b2BodyAtPoint(sWorld, b2kToWorldX(pScreenX), b2kToWorldY(pScreenY))]
 end b2kControlAt
 
@@ -1016,7 +1108,8 @@ end b2kControlContains
 -- Then b2kRayHitX() / b2kRayHitY() give the hit point in screen pixels.
 function b2kRayHit pX1, pY1, pX2, pY2
    local dx, dy
-   if b2CastRayClosest(sWorld, b2kToWorldX(pX1), b2kToWorldY(pY1), b2kToWorldX(pX2), b2kToWorldY(pY2)) then
+   if sWorld is not empty and \
+         b2CastRayClosest(sWorld, b2kToWorldX(pX1), b2kToWorldY(pY1), b2kToWorldX(pX2), b2kToWorldY(pY2)) then
       put round(b2kToScreenX(b2RayX())) into sRayX
       put round(b2kToScreenY(b2RayY())) into sRayY
       put b2RayNormalX() into sRayNX        -- surface normal, screen-oriented
@@ -1095,6 +1188,8 @@ end b2kEndContactB
 command b2kHinge pCtrlA, pCtrlB, pScreenX, pScreenY
    local bA, bB, wx, wy, aA, aB, j
    put sBody[the long id of pCtrlA] into bA
+   if bA is empty or sWorld is empty then return 0
+   if pCtrlB is not empty and sBody[the long id of pCtrlB] is empty then return 0
    put b2kToWorldX(pScreenX) into wx
    put b2kToWorldY(pScreenY) into wy
    put b2kLocalAnchor(bA, wx, wy) into aA
@@ -1113,6 +1208,7 @@ command b2kWeld pCtrlA, pCtrlB
    local bA, bB, wx, wy, aA, refA, j
    put sBody[the long id of pCtrlA] into bA
    put sBody[the long id of pCtrlB] into bB
+   if bA is empty or bB is empty or sWorld is empty then return 0
    put b2BodyX(bB) into wx
    put b2BodyY(bB) into wy
    put b2kLocalAnchor(bA, wx, wy) into aA
@@ -1126,6 +1222,7 @@ command b2kRope pCtrlA, pCtrlB, pLengthPx
    local bA, bB, tLen, dx, dy, j
    put sBody[the long id of pCtrlA] into bA
    put sBody[the long id of pCtrlB] into bB
+   if bA is empty or bB is empty or sWorld is empty then return 0
    if pLengthPx is empty then
       put b2BodyX(bB) - b2BodyX(bA) into dx
       put b2BodyY(bB) - b2BodyY(bA) into dy
@@ -1138,40 +1235,48 @@ command b2kRope pCtrlA, pCtrlB, pLengthPx
 end b2kRope
 
 command b2kMotor pJoint, pDegPerSec, pMaxTorque
+   if pJoint is empty or pJoint <= 0 then exit b2kMotor
    if pMaxTorque is empty then put 1000 into pMaxTorque
    b2RevoluteEnableMotor pJoint, true, pDegPerSec * kPI / 180, pMaxTorque
 end b2kMotor
 
 -- Optional revolute (hinge) limits/readout. Angles are in DEGREES.
 command b2kHingeLimit pJoint, pLowerDeg, pUpperDeg
+   if pJoint is empty or pJoint <= 0 then exit b2kHingeLimit
    b2RevoluteEnableLimit pJoint, true, pLowerDeg * kPI / 180, pUpperDeg * kPI / 180
 end b2kHingeLimit
 
 function b2kHingeAngle pJoint
+   if pJoint is empty or pJoint <= 0 then return 0
    return b2RevoluteAngle(pJoint) * 180 / kPI
 end b2kHingeAngle
 
 -- Rope (distance) extras: read length, set a min/max range, make it springy.
 function b2kRopeLength pJoint
+   if pJoint is empty or pJoint <= 0 then return 0
    return b2DistanceLength(pJoint) * sScale
 end b2kRopeLength
 
 -- Set a rope (distance) joint's exact rest length, in pixels.
 command b2kRopeSetLength pJoint, pLengthPx
+   if pJoint is empty or pJoint <= 0 then exit b2kRopeSetLength
    b2DistanceSetLength pJoint, pLengthPx / sScale
 end b2kRopeSetLength
 
 command b2kRopeRange pJoint, pMinPx, pMaxPx
+   if pJoint is empty or pJoint <= 0 then exit b2kRopeRange
    b2DistanceSetLengthRange pJoint, pMinPx / sScale, pMaxPx / sScale
 end b2kRopeRange
 
 command b2kSpring pJoint, pHertz, pDamping
+   if pJoint is empty or pJoint <= 0 then exit b2kSpring
    if pDamping is empty then put 0.5 into pDamping
    b2DistanceEnableSpring pJoint, true, pHertz, pDamping
 end b2kSpring
 
 -- Make a weld springy (0 hertz = rigid again).
 command b2kWeldSpring pJoint, pHertz, pDamping
+   if pJoint is empty or pJoint <= 0 then exit b2kWeldSpring
    if pDamping is empty then put 0.5 into pDamping
    b2WeldSetStiffness pJoint, pHertz, pDamping, pHertz, pDamping
 end b2kWeldSpring
@@ -1184,6 +1289,7 @@ command b2kSlider pCtrlA, pCtrlB, pAxisDeg
    put sBody[the long id of pCtrlA] into bMover
    if pCtrlB is empty then put sDragAnchor into bFixed
    else put sBody[the long id of pCtrlB] into bFixed
+   if bMover is empty or bFixed is empty or sWorld is empty then return 0
    if pAxisDeg is empty then put 90 into pAxisDeg
    put cos(pAxisDeg * kPI / 180) into wax
    put - sin(pAxisDeg * kPI / 180) into way
@@ -1203,15 +1309,18 @@ command b2kSlider pCtrlA, pCtrlB, pAxisDeg
 end b2kSlider
 
 command b2kSliderMotor pJoint, pPxPerSec, pMaxForce
+   if pJoint is empty or pJoint <= 0 then exit b2kSliderMotor
    if pMaxForce is empty then put 1000 into pMaxForce
    b2PrismaticEnableMotor pJoint, true, pPxPerSec / sScale, pMaxForce
 end b2kSliderMotor
 
 command b2kSliderLimit pJoint, pLowerPx, pUpperPx
+   if pJoint is empty or pJoint <= 0 then exit b2kSliderLimit
    b2PrismaticEnableLimit pJoint, true, pLowerPx / sScale, pUpperPx / sScale
 end b2kSliderLimit
 
 function b2kSliderPos pJoint
+   if pJoint is empty or pJoint <= 0 then return 0
    return b2PrismaticTranslation(pJoint) * sScale
 end b2kSliderPos
 
@@ -1222,6 +1331,7 @@ command b2kWheel pChassis, pWheel, pScreenX, pScreenY, pAxisDeg
    local bA, bB, anchX, anchY, aA, aB, wax, way, ca, sa, lax, lay, angA, j
    put sBody[the long id of pChassis] into bA
    put sBody[the long id of pWheel] into bB
+   if bA is empty or bB is empty or sWorld is empty then return 0
    if pScreenX is empty then
       put b2BodyX(bB) into anchX
       put b2BodyY(bB) into anchY
@@ -1249,11 +1359,13 @@ command b2kWheel pChassis, pWheel, pScreenX, pScreenY, pAxisDeg
 end b2kWheel
 
 command b2kWheelMotor pJoint, pDegPerSec, pMaxTorque
+   if pJoint is empty or pJoint <= 0 then exit b2kWheelMotor
    if pMaxTorque is empty then put 1000 into pMaxTorque
    b2WheelEnableMotor pJoint, true, pDegPerSec * kPI / 180, pMaxTorque
 end b2kWheelMotor
 
 command b2kWheelSpring pJoint, pHertz, pDamping
+   if pJoint is empty or pJoint <= 0 then exit b2kWheelSpring
    if pHertz is empty then put 4 into pHertz
    if pDamping is empty then put 0.7 into pDamping
    b2WheelEnableSpring pJoint, true, pHertz, pDamping
@@ -1307,6 +1419,7 @@ end b2kLocalAnchor
 -- kit enables sensor events on every body it creates, so sensors detect them.
 command b2kAddSensor pControl, pShape
    local tRef
+   if sWorld is empty then return 0
    put the long id of pControl into tRef
    b2ShapeDefSensor true
    b2ShapeDefEnableSensorEvents true
@@ -1320,6 +1433,12 @@ command b2kAddSensor pControl, pShape
       default
          b2kAddBox pControl, false
    end switch
+   if sBody[tRef] is empty then
+      -- the attach bailed (zero-sized control): clear the pending one-shot
+      -- sensor flags so they cannot leak onto the next shape someone creates
+      b2ShapeDefReset
+      return 0
+   end if
    put true into sSensor[tRef]
    return sBody[tRef]
 end b2kAddSensor
@@ -1362,6 +1481,9 @@ end b2kSensorExitVisitor
 command b2kDefineLayer pName
    if sLayers[pName] is not empty then return sLayers[pName]
    if sNextBit is empty or sNextBit < 1 then put 1 into sNextBit
+   -- xTalk's bitOr is 32-bit, so layer 33+ would wrap to a category of 0
+   -- (= collides with nothing). Refuse instead of corrupting filters.
+   if sNextBit > 2147483648 then return 0
    put sNextBit into sLayers[pName]
    put sNextBit * 2 into sNextBit
    return sLayers[pName]
@@ -1493,6 +1615,7 @@ command b2kMotorTo pMover, pRef, pOffsetXPx, pOffsetYPx, pAngleDeg, pMaxForce, p
    put sBody[the long id of pMover] into bMover
    if pRef is empty then put sDragAnchor into bRef
    else put sBody[the long id of pRef] into bRef
+   if bMover is empty or bRef is empty or sWorld is empty then return 0
    if pAngleDeg is empty then put 0 into pAngleDeg
    if pMaxForce is empty then put 1000 into pMaxForce
    if pMaxTorque is empty then put 1000 into pMaxTorque
@@ -1503,7 +1626,11 @@ end b2kMotorTo
 -- Stop two specific controls from colliding with each other (without changing how
 -- either collides with anything else). Returns a joint handle (b2kRemoveJoint).
 command b2kNoCollide pCtrlA, pCtrlB
-   return b2FilterJoint(sWorld, sBody[the long id of pCtrlA], sBody[the long id of pCtrlB])
+   local bA, bB
+   put sBody[the long id of pCtrlA] into bA
+   put sBody[the long id of pCtrlB] into bB
+   if bA is empty or bB is empty or sWorld is empty then return 0
+   return b2FilterJoint(sWorld, bA, bB)
 end b2kNoCollide
 
 -- =====================================================================
@@ -1550,6 +1677,7 @@ end b2kAwakeBodyCount
 -- =====================================================================
 function b2kGrab pScreenX, pScreenY
    local tWx, tWy, tBody
+   if sWorld is empty then return empty   -- grab before setup: nothing to hit
    put b2kToWorldX(pScreenX) into tWx
    put b2kToWorldY(pScreenY) into tWy
    put b2BodyAtPoint(sWorld, tWx, tWy) into tBody
@@ -1719,7 +1847,17 @@ command b2kPruneDeadRefs pDead
             b2DestroyBody tBody
             delete variable sCtrl[tBody]
          end if
+         -- drop every parallel entry, exactly like b2kRemove, so a vanished
+         -- control leaves no stale state behind
          delete variable sBody[d]
+         delete variable sShapeH[d]
+         delete variable sRender[d]
+         delete variable sVerts[d]
+         delete variable sRad[d]
+         delete variable sImgAngle[d]
+         delete variable sStatic[d]
+         delete variable sSpawned[d]
+         delete variable sSensor[d]
          delete variable sDrawKey[d]
       end if
    end repeat

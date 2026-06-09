@@ -24,6 +24,7 @@ extern void   b2lc_body_destroy(int);
 extern void   b2lc_shape_destroy(int);
 extern double b2lc_body_x(int);
 extern double b2lc_body_y(int);
+extern void   b2lc_body_set_transform(int, double, double, double);
 extern double b2lc_body_mass(int);
 extern int    b2lc_body_is_awake(int);
 extern int    b2lc_body_at_point(int, double, double);
@@ -126,6 +127,14 @@ int main(void) {
     check("destroyed body getter is harmless", fabs(b2lc_body_y(tmp)) < 0.0001);
     int tmp2 = b2lc_body_create(w, 2, -7.0, 2.0, 0.0, 0, 0);
     check("handle allocation still works after double destroy", tmp2 > 0);
+    /* generation check: tmp2 recycles tmp's table slot, but the stale handle
+       must stay dead instead of aliasing the new body (handles carry a
+       generation tag precisely so reuse cannot resurrect old references). */
+    check("recycled slot does not resurrect the stale handle",
+          tmp != tmp2 && fabs(b2lc_body_x(tmp)) < 0.0001 && fabs(b2lc_body_x(tmp2) - (-7.0)) < 0.0001);
+    b2lc_body_set_transform(tmp, 5.0, 5.0, 0.0);   /* must no-op, not move tmp2 */
+    check("setter on stale handle cannot touch the slot's new owner",
+          fabs(b2lc_body_x(tmp2) - (-7.0)) < 0.0001);
     b2lc_body_destroy(tmp2);
 
     /* ground: a flat segment at y=0 spanning x=[-10,10] (tests b2AddSegment) */

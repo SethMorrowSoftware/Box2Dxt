@@ -19,7 +19,8 @@ Box2D v3.1.0 (fetched by CMake)
 
 - **C shim** (`src/box2d_lc.c`): exposes Box2D v3 across the LCB foreign-function interface.
   Box2D ids are small by-value structs, so every id is stored in a shim-side handle table and
-  crosses the boundary as a **1-based 32-bit int handle (0 = null/invalid)**. Reals cross as
+  crosses the boundary as a **positive 32-bit int handle (0 = null/invalid; generation-tagged,
+  so a recycled slot can't resurrect a stale handle — treat handles as opaque)**. Reals cross as
   `double`, booleans as `int`. Every handle is validated with Box2D's `b2*_IsValid` before use,
   so a stale/0 handle is a **harmless no-op** (getters return 0), never a crash. Exported C ABI
   symbols keep the historical **`b2lc_` prefix** for binary stability — **never rename them**.
@@ -174,8 +175,8 @@ and `deselectPart` restores them, so highlighting never corrupts a part's real c
 
 ## Contributing conventions (from CONTRIBUTING.md)
 
-- **Units/types across the FFI:** reals `double`, booleans `int` (0/1), handles 1-based `int`
-  (0 invalid). `b2*` = metres/radians, `b2k*` = pixels/degrees.
+- **Units/types across the FFI:** reals `double`, booleans `int` (0/1), handles positive `int`
+  (0 invalid, opaque). `b2*` = metres/radians, `b2k*` = pixels/degrees.
 - **Safety first:** every handler tolerates stale/0 handles (validate with `b2*_IsValid` in C;
   getters return 0, actions no-op). Never let a bad handle reach Box2D.
 - **Adding a raw handler:** `b2lc_*` in `src/box2d_lc.c` (validate inputs) → `foreign handler` +

@@ -9,8 +9,10 @@
  *   - Box2D v3 identifiers (b2WorldId, b2BodyId, ...) are small structs passed
  *     BY VALUE. The LCB FFI is happiest with plain scalars and pointers, and
  *     there is no 64-bit integer foreign type. So every Box2D id is stored in a
- *     shim-side handle table and crosses the FFI boundary as a 1-based 32-bit
- *     int handle (0 means null / invalid).
+ *     shim-side handle table and crosses the FFI boundary as a positive 32-bit
+ *     int handle (0 means null / invalid). Handles are generation-tagged, so a
+ *     handle stays dead after its object is destroyed even once the table slot
+ *     is recycled; treat them as opaque.
  *   - Every real number crosses as `double` (xTalk numbers are doubles);
  *     internally we cast to/from Box2D's `float`.
  *   - Every boolean crosses as `int` (0 / 1).
@@ -54,13 +56,29 @@
 #define LC_ABI_VERSION 4
 
 /* ------------------------------------------------------------------ */
-/* Generic handle tables. Handles are 1-based; 0 == null/invalid.      */
+/* Generic handle tables. Handles are positive ints; 0 == null/invalid.*/
 /* Freed slots are recycled via a free list so create/destroy churn    */
 /* does not grow memory without bound.                                 */
+/*                                                                     */
+/* Each handle packs an 11-bit generation above a 20-bit slot number   */
+/* (low 20 bits = slot + 1, so a handle is never 0 and the first       */
+/* generation yields the familiar small values 1, 2, 3, ...). The slot */
+/* generation bumps every time the slot is freed, so a stale handle    */
+/* kept by script code stays DEAD after its slot is recycled instead   */
+/* of silently aliasing whatever object lives there next. Box2D's own  */
+/* ids are generation-checked for exactly this reason; the table must  */
+/* not undo that protection. A false match needs the same slot reused  */
+/* 2048 times while the stale handle is still around.                  */
 /* ------------------------------------------------------------------ */
+#define LC_H_SLOT_BITS 20
+#define LC_H_SLOT_MASK 0xFFFFF            /* low 20 bits: slot + 1     */
+#define LC_H_GEN_MASK  0x7FF              /* 11 bits of generation     */
+#define LC_H_MAX_SLOTS (LC_H_SLOT_MASK - 1)
+
 #define DEFINE_TABLE(NAME, TYPE)                                              \
     static TYPE *NAME##_arr = NULL;                                           \
-    static unsigned char *NAME##_used = NULL;                                 \
+    static unsigned char  *NAME##_used = NULL;                                \
+    static unsigned short *NAME##_gen = NULL;                                 \
     static int   NAME##_cap = 0;                                              \
     static int   NAME##_cnt = 0;                                              \
     static int  *NAME##_free = NULL;                                          \
@@ -69,12 +87,33 @@
     static int NAME##_grow_slots(int nc) {                                    \
         TYPE *na = (TYPE *)realloc(NAME##_arr, (size_t)nc * sizeof(TYPE));    \
         if (!na) return 0;                                                    \
+        NAME##_arr = na;                                                      \
         unsigned char *nu = (unsigned char *)realloc(NAME##_used,             \
                                                      (size_t)nc);             \
-        if (!nu) { NAME##_arr = na; return 0; }                               \
-        memset(nu + NAME##_cap, 0, (size_t)(nc - NAME##_cap));                \
-        NAME##_arr = na; NAME##_used = nu; NAME##_cap = nc;                   \
+        if (!nu) return 0;                                                    \
+        NAME##_used = nu;                                                     \
+        unsigned short *ng = (unsigned short *)realloc(NAME##_gen,            \
+                                            (size_t)nc * sizeof(short));      \
+        if (!ng) return 0;                                                    \
+        NAME##_gen = ng;                                                      \
+        memset(NAME##_used + NAME##_cap, 0, (size_t)(nc - NAME##_cap));       \
+        memset(NAME##_gen + NAME##_cap, 0,                                    \
+               (size_t)(nc - NAME##_cap) * sizeof(short));                    \
+        NAME##_cap = nc;                                                      \
         return 1;                                                             \
+    }                                                                         \
+    static int NAME##_encode(int idx) {                                       \
+        return (int)(((unsigned)NAME##_gen[idx] << LC_H_SLOT_BITS)            \
+                     | (unsigned)(idx + 1));                                  \
+    }                                                                         \
+    /* handle -> slot index, or -1 if stale / never created */               \
+    static int NAME##_slot_of(int h) {                                        \
+        if (h <= 0) return -1;                                                \
+        int idx = (h & LC_H_SLOT_MASK) - 1;                                   \
+        unsigned gen = ((unsigned)h >> LC_H_SLOT_BITS) & LC_H_GEN_MASK;       \
+        if (idx < 0 || idx >= NAME##_cnt) return -1;                          \
+        if (!NAME##_used[idx] || NAME##_gen[idx] != gen) return -1;           \
+        return idx;                                                           \
     }                                                                         \
     static int NAME##_add(TYPE v) {                                           \
         int idx;                                                              \
@@ -87,6 +126,7 @@
             idx = -1;                                                         \
         }                                                                     \
         if (idx < 0) {                                                        \
+            if (NAME##_cnt >= LC_H_MAX_SLOTS) return 0;                       \
             if (NAME##_cnt >= NAME##_cap) {                                   \
                 int nc = NAME##_cap ? NAME##_cap * 2 : 64;                    \
                 if (!NAME##_grow_slots(nc)) return 0;                         \
@@ -95,26 +135,30 @@
         }                                                                     \
         NAME##_arr[idx] = v;                                                  \
         NAME##_used[idx] = 1;                                                 \
-        return idx + 1;                                                       \
+        return NAME##_encode(idx);                                            \
     }                                                                         \
     static TYPE NAME##_get(int h) {                                           \
-        if (h <= 0 || h > NAME##_cnt || !NAME##_used[h - 1]) {                \
-            TYPE z; memset(&z, 0, sizeof z); return z;                        \
-        }                                                                     \
-        return NAME##_arr[h - 1];                                             \
+        int idx = NAME##_slot_of(h);                                          \
+        if (idx < 0) { TYPE z; memset(&z, 0, sizeof z); return z; }           \
+        return NAME##_arr[idx];                                               \
     }                                                                         \
-    static int NAME##_free_handle(int h) {                                    \
-        if (h <= 0 || h > NAME##_cnt || !NAME##_used[h - 1]) return 0;        \
+    static int NAME##_free_slot(int idx) {                                    \
+        if (idx < 0 || idx >= NAME##_cnt || !NAME##_used[idx]) return 0;      \
         if (NAME##_freeCnt >= NAME##_freeCap) {                               \
             int nc = NAME##_freeCap ? NAME##_freeCap * 2 : 64;                \
             int *nf = (int *)realloc(NAME##_free, (size_t)nc * sizeof(int));  \
             if (!nf) return 0;                                                \
             NAME##_free = nf; NAME##_freeCap = nc;                            \
         }                                                                     \
-        { TYPE z; memset(&z, 0, sizeof z); NAME##_arr[h - 1] = z; }           \
-        NAME##_used[h - 1] = 0;                                               \
-        NAME##_free[NAME##_freeCnt++] = h - 1;                                \
+        { TYPE z; memset(&z, 0, sizeof z); NAME##_arr[idx] = z; }             \
+        NAME##_used[idx] = 0;                                                 \
+        NAME##_gen[idx] = (unsigned short)((NAME##_gen[idx] + 1)              \
+                                           & LC_H_GEN_MASK);                  \
+        NAME##_free[NAME##_freeCnt++] = idx;                                  \
         return 1;                                                             \
+    }                                                                         \
+    static int NAME##_free_handle(int h) {                                    \
+        return NAME##_free_slot(NAME##_slot_of(h));                          \
     }
 
 DEFINE_TABLE(worlds, b2WorldId)
@@ -128,13 +172,13 @@ DEFINE_TABLE(chains, b2ChainId)
  * ids harmless while also letting future create calls reuse their table slots. */
 static void retire_invalid_child_handles(void) {
     for (int i = 0; i < bodies_cnt; i++)
-        if (bodies_used[i] && !b2Body_IsValid(bodies_arr[i])) bodies_free_handle(i + 1);
+        if (bodies_used[i] && !b2Body_IsValid(bodies_arr[i])) bodies_free_slot(i);
     for (int i = 0; i < shapes_cnt; i++)
-        if (shapes_used[i] && !b2Shape_IsValid(shapes_arr[i])) shapes_free_handle(i + 1);
+        if (shapes_used[i] && !b2Shape_IsValid(shapes_arr[i])) shapes_free_slot(i);
     for (int i = 0; i < joints_cnt; i++)
-        if (joints_used[i] && !b2Joint_IsValid(joints_arr[i])) joints_free_handle(i + 1);
+        if (joints_used[i] && !b2Joint_IsValid(joints_arr[i])) joints_free_slot(i);
     for (int i = 0; i < chains_cnt; i++)
-        if (chains_used[i] && !b2Chain_IsValid(chains_arr[i])) chains_free_handle(i + 1);
+        if (chains_used[i] && !b2Chain_IsValid(chains_arr[i])) chains_free_slot(i);
 }
 
 /* small helpers */
@@ -154,6 +198,12 @@ static int finite3(double a, double b, double c) { return isfinite(a) && isfinit
 static double nonneg_or(double v, double fallback) { return (isfinite(v) && v >= 0.0) ? v : fallback; }
 static int valid_body_type(int t) { return t >= 0 && t <= 2; }
 static int positive(double v) { return isfinite(v) && v > 0.0; }
+/* Filter bits arrive as doubles; converting a negative or out-of-range value
+ * straight to an unsigned type is undefined behaviour in C, so range-check
+ * first. Doubles carry integers exactly up to 2^53, so 53 of Box2D's 64
+ * category bits are usable from script. */
+#define LC_FILTER_BITS_MAX 9007199254740991.0   /* 2^53 - 1 */
+static int filter_bits_ok(double v) { return isfinite(v) && v >= 0.0 && v <= LC_FILTER_BITS_MAX; }
 
 /* integer handle <-> Box2D userData (void*) round-trip */
 static inline void *h2ud(int h)   { return (void *)(intptr_t)h; }
@@ -384,28 +434,30 @@ static LcTaskPool *lc_task_pool_create(int workerCount) { (void)workerCount; ret
 static void lc_task_pool_destroy(LcTaskPool *pool) { (void)pool; }
 #endif
 
+/* Per-world task pools, indexed by table SLOT (not by the encoded handle,
+ * which carries generation bits in its high part). */
 static LcTaskPool **s_worldPools = NULL;
 static int s_worldPoolsCap = 0;
 
-static int world_pool_set(int h, LcTaskPool *pool) {
-    if (h <= 0) return 0;
-    if (h > s_worldPoolsCap) {
+static int world_pool_set(int slot, LcTaskPool *pool) {
+    if (slot < 0) return 0;
+    if (slot >= s_worldPoolsCap) {
         int nc = s_worldPoolsCap ? s_worldPoolsCap : 64;
-        while (nc < h) nc *= 2;
+        while (nc <= slot) nc *= 2;
         LcTaskPool **p = (LcTaskPool **)realloc(s_worldPools, (size_t)nc * sizeof(LcTaskPool *));
         if (!p) return 0;
         memset(p + s_worldPoolsCap, 0, (size_t)(nc - s_worldPoolsCap) * sizeof(LcTaskPool *));
         s_worldPools = p;
         s_worldPoolsCap = nc;
     }
-    s_worldPools[h - 1] = pool;
+    s_worldPools[slot] = pool;
     return 1;
 }
 
-static LcTaskPool *world_pool_take(int h) {
-    if (h <= 0 || h > s_worldPoolsCap) return NULL;
-    LcTaskPool *pool = s_worldPools[h - 1];
-    s_worldPools[h - 1] = NULL;
+static LcTaskPool *world_pool_take(int slot) {
+    if (slot < 0 || slot >= s_worldPoolsCap) return NULL;
+    LcTaskPool *pool = s_worldPools[slot];
+    s_worldPools[slot] = NULL;
     return pool;
 }
 
@@ -457,7 +509,7 @@ static int b2lc_world_create_internal(double gx, double gy, int enableSleep, int
     int h = worlds_add(id);
     if (!h && b2World_IsValid(id)) b2DestroyWorld(id);
     if (!h) { lc_task_pool_destroy(pool); return 0; }
-    if (!world_pool_set(h, pool)) {
+    if (!world_pool_set(worlds_slot_of(h), pool)) {
         b2DestroyWorld(id);
         worlds_free_handle(h);
         lc_task_pool_destroy(pool);
@@ -475,16 +527,17 @@ LC_API int b2lc_world_create_threaded(double gx, double gy, int enableSleep, int
 }
 
 LC_API int b2lc_world_thread_count(int w) {
-    if (w <= 0 || w > s_worldPoolsCap || !s_worldPools[w - 1]) return 1;
+    int slot = worlds_slot_of(w);
+    if (slot < 0 || slot >= s_worldPoolsCap || !s_worldPools[slot]) return 1;
 #if !defined(_WIN32)
-    return s_worldPools[w - 1]->workerCount;
+    return s_worldPools[slot]->workerCount;
 #else
     return 1;
 #endif
 }
 
 LC_API void b2lc_world_destroy(int w) {
-    LcTaskPool *pool = world_pool_take(w);
+    LcTaskPool *pool = world_pool_take(worlds_slot_of(w));
     b2WorldId id = worlds_get(w);
     if (b2World_IsValid(id)) {
         b2DestroyWorld(id);
@@ -666,8 +719,8 @@ static void fill_shape_def(b2ShapeDef *sd, double density, double friction, doub
     if (s_sd.enableHitEv    >= 0) sd->enableHitEvents      = s_sd.enableHitEv ? true : false;
     if (s_sd.enablePreSolve >= 0) sd->enablePreSolveEvents = s_sd.enablePreSolve ? true : false;
     if (s_sd.haveFilter) {
-        sd->filter.categoryBits = (uint64_t)(uint32_t)s_sd.catBits;
-        sd->filter.maskBits     = (uint64_t)(uint32_t)s_sd.maskBits;
+        sd->filter.categoryBits = (uint64_t)s_sd.catBits;
+        sd->filter.maskBits     = (uint64_t)s_sd.maskBits;
         sd->filter.groupIndex   = s_sd.groupIndex;
     }
     if (s_sd.haveMaterialId) sd->material.userMaterialId = s_sd.materialId;
@@ -682,6 +735,7 @@ LC_API void b2lc_shapedef_set_enable_sensor_events(int f)  { s_sd.enableSensorEv
 LC_API void b2lc_shapedef_set_enable_hit_events(int f)     { s_sd.enableHitEv = f ? 1 : 0; }
 LC_API void b2lc_shapedef_set_enable_presolve_events(int f){ s_sd.enablePreSolve = f ? 1 : 0; }
 LC_API void b2lc_shapedef_set_filter(double cat, double mask, int group) {
+    if (!filter_bits_ok(cat) || !filter_bits_ok(mask)) return;
     s_sd.haveFilter = 1; s_sd.catBits = cat; s_sd.maskBits = mask; s_sd.groupIndex = group;
 }
 LC_API void b2lc_shapedef_set_material_id(int id)          { s_sd.haveMaterialId = 1; s_sd.materialId = id; }
@@ -724,6 +778,7 @@ LC_API int b2lc_shape_add_capsule(int b, double x1, double y1, double x2, double
                                   double radius, double density, double friction, double restitution) {
     b2BodyId body = bodies_get(b);
     if (!b2Body_IsValid(body) || !finite2(x1, y1) || !finite2(x2, y2) || !positive(radius)) return 0;
+    if (x1 == x2 && y1 == y2) return 0;   /* degenerate capsule: use a circle instead */
     b2ShapeDef sd; fill_shape_def(&sd, density, friction, restitution);
     b2Capsule cap; cap.center1 = v2(x1, y1); cap.center2 = v2(x2, y2); cap.radius = (float)radius;
     b2ShapeId id = b2CreateCapsuleShape(body, &sd, &cap);
@@ -803,6 +858,7 @@ LC_API int b2lc_joint_revolute(int w, int bA, int bB,
     b2WorldId wid = worlds_get(w);
     b2BodyId a = bodies_get(bA), b = bodies_get(bB);
     if (!b2World_IsValid(wid) || !b2Body_IsValid(a) || !b2Body_IsValid(b)) return 0;
+    if (!finite2(ax, ay) || !finite2(bx, by)) return 0;
     b2RevoluteJointDef jd = b2DefaultRevoluteJointDef();
     jd.bodyIdA = a;
     jd.bodyIdB = b;
@@ -813,13 +869,19 @@ LC_API int b2lc_joint_revolute(int w, int bA, int bB,
 }
 LC_API void b2lc_revolute_enable_limit(int j, int enable, double lowerRad, double upperRad) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(lowerRad, upperRad) || lowerRad > upperRad) return;
+    /* Box2D requires revolute limits inside +/-0.95*pi; clamp like the engine
+     * expects instead of letting an out-of-range request trip its asserts. */
+    const double maxAng = 0.95 * 3.14159265358979323846;
+    if (lowerRad < -maxAng) lowerRad = -maxAng;
+    if (upperRad >  maxAng) upperRad =  maxAng;
+    if (lowerRad > upperRad) lowerRad = upperRad;
     b2RevoluteJoint_EnableLimit(jj, enable ? true : false);
     b2RevoluteJoint_SetLimits(jj, (float)lowerRad, (float)upperRad);
 }
 LC_API void b2lc_revolute_enable_motor(int j, int enable, double speed, double maxTorque) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(speed, maxTorque)) return;
     b2RevoluteJoint_EnableMotor(jj, enable ? true : false);
     b2RevoluteJoint_SetMotorSpeed(jj, (float)speed);
     b2RevoluteJoint_SetMaxMotorTorque(jj, (float)maxTorque);
@@ -832,6 +894,9 @@ LC_API int b2lc_joint_distance(int w, int bA, int bB,
     b2WorldId wid = worlds_get(w);
     b2BodyId a = bodies_get(bA), b = bodies_get(bB);
     if (!b2World_IsValid(wid) || !b2Body_IsValid(a) || !b2Body_IsValid(b)) return 0;
+    if (!finite2(ax, ay) || !finite2(bx, by) || !finite1(length)) return 0;
+    /* Box2D requires length > 0 (its own SetLength clamps to linear slop). */
+    if (length < 0.005) length = 0.005;
     b2DistanceJointDef jd = b2DefaultDistanceJointDef();
     jd.bodyIdA = a;
     jd.bodyIdB = b;
@@ -843,17 +908,17 @@ LC_API int b2lc_joint_distance(int w, int bA, int bB,
 }
 LC_API void b2lc_distance_set_length(int j, double length) {
     b2JointId jj = joints_get(j);
-    if (b2Joint_IsValid(jj)) b2DistanceJoint_SetLength(jj, (float)length);
+    if (b2Joint_IsValid(jj) && finite1(length)) b2DistanceJoint_SetLength(jj, (float)length);
 }
 LC_API void b2lc_distance_set_length_range(int j, double minLen, double maxLen) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(minLen, maxLen) || minLen > maxLen) return;
     b2DistanceJoint_EnableLimit(jj, true);
     b2DistanceJoint_SetLengthRange(jj, (float)minLen, (float)maxLen);
 }
 LC_API void b2lc_distance_enable_spring(int j, int enable, double hertz, double dampingRatio) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(hertz, dampingRatio)) return;
     b2DistanceJoint_EnableSpring(jj, enable ? true : false);
     b2DistanceJoint_SetSpringHertz(jj, (float)hertz);
     b2DistanceJoint_SetSpringDampingRatio(jj, (float)dampingRatio);
@@ -867,6 +932,7 @@ LC_API int b2lc_joint_weld(int w, int bA, int bB,
     b2WorldId wid = worlds_get(w);
     b2BodyId a = bodies_get(bA), b = bodies_get(bB);
     if (!b2World_IsValid(wid) || !b2Body_IsValid(a) || !b2Body_IsValid(b)) return 0;
+    if (!finite2(ax, ay) || !finite2(bx, by) || !finite1(refAngle)) return 0;
     b2WeldJointDef jd = b2DefaultWeldJointDef();
     jd.bodyIdA = a;
     jd.bodyIdB = b;
@@ -878,7 +944,7 @@ LC_API int b2lc_joint_weld(int w, int bA, int bB,
 }
 LC_API void b2lc_weld_set_stiffness(int j, double linHertz, double linDamping, double angHertz, double angDamping) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(linHertz, linDamping) || !finite2(angHertz, angDamping)) return;
     b2WeldJoint_SetLinearHertz(jj, (float)linHertz);
     b2WeldJoint_SetLinearDampingRatio(jj, (float)linDamping);
     b2WeldJoint_SetAngularHertz(jj, (float)angHertz);
@@ -892,6 +958,8 @@ LC_API int b2lc_joint_prismatic(int w, int bA, int bB,
     b2WorldId wid = worlds_get(w);
     b2BodyId a = bodies_get(bA), b = bodies_get(bB);
     if (!b2World_IsValid(wid) || !b2Body_IsValid(a) || !b2Body_IsValid(b)) return 0;
+    if (!finite2(ax, ay) || !finite2(bx, by) || !finite1(refAngle)) return 0;
+    if (!finite2(axisX, axisY) || (axisX == 0.0 && axisY == 0.0)) return 0;  /* axis must normalize */
     b2PrismaticJointDef jd = b2DefaultPrismaticJointDef();
     jd.bodyIdA = a;
     jd.bodyIdB = b;
@@ -904,13 +972,13 @@ LC_API int b2lc_joint_prismatic(int w, int bA, int bB,
 }
 LC_API void b2lc_prismatic_enable_limit(int j, int enable, double lower, double upper) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(lower, upper) || lower > upper) return;
     b2PrismaticJoint_EnableLimit(jj, enable ? true : false);
     b2PrismaticJoint_SetLimits(jj, (float)lower, (float)upper);
 }
 LC_API void b2lc_prismatic_enable_motor(int j, int enable, double speed, double maxForce) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(speed, maxForce)) return;
     b2PrismaticJoint_EnableMotor(jj, enable ? true : false);
     b2PrismaticJoint_SetMotorSpeed(jj, (float)speed);
     b2PrismaticJoint_SetMaxMotorForce(jj, (float)maxForce);
@@ -924,6 +992,8 @@ LC_API int b2lc_joint_wheel(int w, int bA, int bB,
     b2WorldId wid = worlds_get(w);
     b2BodyId a = bodies_get(bA), b = bodies_get(bB);
     if (!b2World_IsValid(wid) || !b2Body_IsValid(a) || !b2Body_IsValid(b)) return 0;
+    if (!finite2(ax, ay) || !finite2(bx, by)) return 0;
+    if (!finite2(axisX, axisY) || (axisX == 0.0 && axisY == 0.0)) return 0;  /* axis must normalize */
     b2WheelJointDef jd = b2DefaultWheelJointDef();
     jd.bodyIdA = a;
     jd.bodyIdB = b;
@@ -935,14 +1005,14 @@ LC_API int b2lc_joint_wheel(int w, int bA, int bB,
 }
 LC_API void b2lc_wheel_enable_spring(int j, int enable, double hertz, double dampingRatio) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(hertz, dampingRatio)) return;
     b2WheelJoint_EnableSpring(jj, enable ? true : false);
     b2WheelJoint_SetSpringHertz(jj, (float)hertz);
     b2WheelJoint_SetSpringDampingRatio(jj, (float)dampingRatio);
 }
 LC_API void b2lc_wheel_enable_motor(int j, int enable, double speed, double maxTorque) {
     b2JointId jj = joints_get(j);
-    if (!b2Joint_IsValid(jj)) return;
+    if (!b2Joint_IsValid(jj) || !finite2(speed, maxTorque)) return;
     b2WheelJoint_EnableMotor(jj, enable ? true : false);
     b2WheelJoint_SetMotorSpeed(jj, (float)speed);
     b2WheelJoint_SetMaxMotorTorque(jj, (float)maxTorque);
@@ -955,6 +1025,7 @@ LC_API int b2lc_joint_mouse(int w, int bA, int bB,
     b2WorldId wid = worlds_get(w);
     b2BodyId a = bodies_get(bA), b = bodies_get(bB);
     if (!b2World_IsValid(wid) || !b2Body_IsValid(a) || !b2Body_IsValid(b)) return 0;
+    if (!finite2(tx, ty) || !finite3(hertz, dampingRatio, maxForce)) return 0;
     b2MouseJointDef jd = b2DefaultMouseJointDef();
     jd.bodyIdA = a;
     jd.bodyIdB = b;
@@ -966,7 +1037,7 @@ LC_API int b2lc_joint_mouse(int w, int bA, int bB,
 }
 LC_API void b2lc_mouse_set_target(int j, double tx, double ty) {
     b2JointId jj = joints_get(j);
-    if (b2Joint_IsValid(jj)) b2MouseJoint_SetTarget(jj, v2(tx, ty));
+    if (b2Joint_IsValid(jj) && finite2(tx, ty)) b2MouseJoint_SetTarget(jj, v2(tx, ty));
 }
 
 LC_API void b2lc_joint_destroy(int j) {
@@ -1190,13 +1261,13 @@ LC_API int    b2lc_body_move_asleep(int i)  { return (i >= 0 && i < s_moveCnt) ?
 /* ------------------------------------------------------------------ */
 LC_API double b2lc_world_gravity_x(int w) { b2WorldId id = worlds_get(w); return b2World_IsValid(id) ? (double)b2World_GetGravity(id).x : 0.0; }
 LC_API double b2lc_world_gravity_y(int w) { b2WorldId id = worlds_get(w); return b2World_IsValid(id) ? (double)b2World_GetGravity(id).y : 0.0; }
-LC_API void   b2lc_world_set_restitution_threshold(int w, double v) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id)) b2World_SetRestitutionThreshold(id, (float)v); }
+LC_API void   b2lc_world_set_restitution_threshold(int w, double v) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id) && finite1(v) && v >= 0.0) b2World_SetRestitutionThreshold(id, (float)v); }
 LC_API double b2lc_world_restitution_threshold(int w) { b2WorldId id = worlds_get(w); return b2World_IsValid(id) ? (double)b2World_GetRestitutionThreshold(id) : 0.0; }
-LC_API void   b2lc_world_set_hit_event_threshold(int w, double v) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id)) b2World_SetHitEventThreshold(id, (float)v); }
+LC_API void   b2lc_world_set_hit_event_threshold(int w, double v) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id) && finite1(v) && v >= 0.0) b2World_SetHitEventThreshold(id, (float)v); }
 LC_API double b2lc_world_hit_event_threshold(int w) { b2WorldId id = worlds_get(w); return b2World_IsValid(id) ? (double)b2World_GetHitEventThreshold(id) : 0.0; }
-LC_API void   b2lc_world_set_contact_tuning(int w, double hertz, double damping, double pushSpeed) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id)) b2World_SetContactTuning(id, (float)hertz, (float)damping, (float)pushSpeed); }
-LC_API void   b2lc_world_set_joint_tuning(int w, double hertz, double damping) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id)) b2World_SetJointTuning(id, (float)hertz, (float)damping); }
-LC_API void   b2lc_world_set_maximum_linear_speed(int w, double v) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id)) b2World_SetMaximumLinearSpeed(id, (float)v); }
+LC_API void   b2lc_world_set_contact_tuning(int w, double hertz, double damping, double pushSpeed) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id) && finite3(hertz, damping, pushSpeed) && hertz >= 0.0 && damping >= 0.0 && pushSpeed >= 0.0) b2World_SetContactTuning(id, (float)hertz, (float)damping, (float)pushSpeed); }
+LC_API void   b2lc_world_set_joint_tuning(int w, double hertz, double damping) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id) && finite2(hertz, damping) && hertz >= 0.0 && damping >= 0.0) b2World_SetJointTuning(id, (float)hertz, (float)damping); }
+LC_API void   b2lc_world_set_maximum_linear_speed(int w, double v) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id) && positive(v)) b2World_SetMaximumLinearSpeed(id, (float)v); }
 LC_API double b2lc_world_maximum_linear_speed(int w) { b2WorldId id = worlds_get(w); return b2World_IsValid(id) ? (double)b2World_GetMaximumLinearSpeed(id) : 0.0; }
 LC_API void   b2lc_world_enable_warm_starting(int w, int f) { b2WorldId id = worlds_get(w); if (b2World_IsValid(id)) b2World_EnableWarmStarting(id, f ? true : false); }
 LC_API int    b2lc_world_is_warm_starting(int w) { b2WorldId id = worlds_get(w); return (b2World_IsValid(id) && b2World_IsWarmStartingEnabled(id)) ? 1 : 0; }
@@ -1207,7 +1278,8 @@ LC_API int    b2lc_world_awake_body_count(int w) { b2WorldId id = worlds_get(w);
 
 LC_API void b2lc_world_explode(int w, double x, double y, double radius, double falloff, double impulsePerLength) {
     b2WorldId id = worlds_get(w);
-    if (!b2World_IsValid(id)) return;
+    if (!b2World_IsValid(id) || !finite2(x, y) || !finite3(radius, falloff, impulsePerLength)) return;
+    if (radius < 0.0 || falloff < 0.0) return;
     b2ExplosionDef ed = b2DefaultExplosionDef();
     ed.position = v2(x, y);
     ed.radius = (float)radius;
@@ -1265,7 +1337,8 @@ LC_API double b2lc_md_center_y(void) { return (double)s_md.center.y; }
 LC_API double b2lc_md_inertia(void)  { return (double)s_md.rotationalInertia; }
 LC_API void b2lc_body_set_mass_data(int b, double mass, double cx, double cy, double inertia) {
     b2BodyId id = bodies_get(b);
-    if (!b2Body_IsValid(id)) return;
+    if (!b2Body_IsValid(id) || !finite2(cx, cy) || !finite2(mass, inertia)) return;
+    if (mass < 0.0 || inertia < 0.0) return;
     b2MassData md; md.mass = (float)mass; md.center = v2(cx, cy); md.rotationalInertia = (float)inertia;
     b2Body_SetMassData(id, md);
 }
@@ -1273,7 +1346,7 @@ LC_API void b2lc_body_apply_mass_from_shapes(int b) { b2BodyId id = bodies_get(b
 
 LC_API void b2lc_body_set_target_transform(int b, double x, double y, double angle, double dt) {
     b2BodyId id = bodies_get(b);
-    if (!b2Body_IsValid(id)) return;
+    if (!b2Body_IsValid(id) || !finite3(x, y, angle) || !positive(dt)) return;
     b2Transform t; t.p = v2(x, y); t.q = rotOf(angle);
     b2Body_SetTargetTransform(id, t, (float)dt);
 }
@@ -1328,12 +1401,12 @@ LC_API void   b2lc_shape_set_material_id(int s, int m) { b2ShapeId id = shapes_g
 
 LC_API void b2lc_shape_set_filter(int s, double cat, double mask, int group) {
     b2ShapeId id = shapes_get(s);
-    if (!b2Shape_IsValid(id) || cat < 0.0 || mask < 0.0 || !finite2(cat, mask)) return;
-    b2Filter f; f.categoryBits = (uint64_t)(uint32_t)cat; f.maskBits = (uint64_t)(uint32_t)mask; f.groupIndex = group;
+    if (!b2Shape_IsValid(id) || !filter_bits_ok(cat) || !filter_bits_ok(mask)) return;
+    b2Filter f; f.categoryBits = (uint64_t)cat; f.maskBits = (uint64_t)mask; f.groupIndex = group;
     b2Shape_SetFilter(id, f);
 }
-LC_API double b2lc_shape_filter_category(int s) { b2ShapeId id = shapes_get(s); return b2Shape_IsValid(id) ? (double)(uint32_t)b2Shape_GetFilter(id).categoryBits : 0.0; }
-LC_API double b2lc_shape_filter_mask(int s)     { b2ShapeId id = shapes_get(s); return b2Shape_IsValid(id) ? (double)(uint32_t)b2Shape_GetFilter(id).maskBits : 0.0; }
+LC_API double b2lc_shape_filter_category(int s) { b2ShapeId id = shapes_get(s); return b2Shape_IsValid(id) ? (double)b2Shape_GetFilter(id).categoryBits : 0.0; }
+LC_API double b2lc_shape_filter_mask(int s)     { b2ShapeId id = shapes_get(s); return b2Shape_IsValid(id) ? (double)b2Shape_GetFilter(id).maskBits : 0.0; }
 LC_API int    b2lc_shape_filter_group(int s)    { b2ShapeId id = shapes_get(s); return b2Shape_IsValid(id) ? b2Shape_GetFilter(id).groupIndex : 0; }
 
 LC_API void b2lc_shape_enable_sensor_events(int s, int f)   { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id)) b2Shape_EnableSensorEvents(id, f ? true : false); }
@@ -1344,19 +1417,21 @@ LC_API void b2lc_shape_enable_hit_events(int s, int f)      { b2ShapeId id = sha
 LC_API int  b2lc_shape_are_hit_events_enabled(int s)        { b2ShapeId id = shapes_get(s); return (b2Shape_IsValid(id) && b2Shape_AreHitEventsEnabled(id)) ? 1 : 0; }
 LC_API void b2lc_shape_enable_presolve_events(int s, int f) { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id)) b2Shape_EnablePreSolveEvents(id, f ? true : false); }
 
-/* geometry getters: circle/capsule/segment share a small scalar stash */
+/* geometry getters: circle/capsule/segment share a small scalar stash.
+ * A failed update (stale handle / wrong type) zeroes the stash so the
+ * getters report 0 instead of leaking the previous shape's values. */
 static double s_geom[5];
-LC_API void   b2lc_shape_circle_update(int s)  { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id) && b2Shape_GetType(id) == b2_circleShape) { b2Circle c = b2Shape_GetCircle(id); s_geom[0] = c.center.x; s_geom[1] = c.center.y; s_geom[2] = c.radius; } }
+LC_API void   b2lc_shape_circle_update(int s)  { b2ShapeId id = shapes_get(s); memset(s_geom, 0, sizeof s_geom); if (b2Shape_IsValid(id) && b2Shape_GetType(id) == b2_circleShape) { b2Circle c = b2Shape_GetCircle(id); s_geom[0] = c.center.x; s_geom[1] = c.center.y; s_geom[2] = c.radius; } }
 LC_API double b2lc_shape_circle_x(void)        { return s_geom[0]; }
 LC_API double b2lc_shape_circle_y(void)        { return s_geom[1]; }
 LC_API double b2lc_shape_circle_radius(void)   { return s_geom[2]; }
-LC_API void   b2lc_shape_capsule_update(int s) { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id) && b2Shape_GetType(id) == b2_capsuleShape) { b2Capsule c = b2Shape_GetCapsule(id); s_geom[0] = c.center1.x; s_geom[1] = c.center1.y; s_geom[2] = c.center2.x; s_geom[3] = c.center2.y; s_geom[4] = c.radius; } }
+LC_API void   b2lc_shape_capsule_update(int s) { b2ShapeId id = shapes_get(s); memset(s_geom, 0, sizeof s_geom); if (b2Shape_IsValid(id) && b2Shape_GetType(id) == b2_capsuleShape) { b2Capsule c = b2Shape_GetCapsule(id); s_geom[0] = c.center1.x; s_geom[1] = c.center1.y; s_geom[2] = c.center2.x; s_geom[3] = c.center2.y; s_geom[4] = c.radius; } }
 LC_API double b2lc_shape_capsule_x1(void)      { return s_geom[0]; }
 LC_API double b2lc_shape_capsule_y1(void)      { return s_geom[1]; }
 LC_API double b2lc_shape_capsule_x2(void)      { return s_geom[2]; }
 LC_API double b2lc_shape_capsule_y2(void)      { return s_geom[3]; }
 LC_API double b2lc_shape_capsule_radius(void)  { return s_geom[4]; }
-LC_API void   b2lc_shape_segment_update(int s) { b2ShapeId id = shapes_get(s); if (b2Shape_IsValid(id) && b2Shape_GetType(id) == b2_segmentShape) { b2Segment g = b2Shape_GetSegment(id); s_geom[0] = g.point1.x; s_geom[1] = g.point1.y; s_geom[2] = g.point2.x; s_geom[3] = g.point2.y; } }
+LC_API void   b2lc_shape_segment_update(int s) { b2ShapeId id = shapes_get(s); memset(s_geom, 0, sizeof s_geom); if (b2Shape_IsValid(id) && b2Shape_GetType(id) == b2_segmentShape) { b2Segment g = b2Shape_GetSegment(id); s_geom[0] = g.point1.x; s_geom[1] = g.point1.y; s_geom[2] = g.point2.x; s_geom[3] = g.point2.y; } }
 LC_API double b2lc_shape_segment_x1(void)      { return s_geom[0]; }
 LC_API double b2lc_shape_segment_y1(void)      { return s_geom[1]; }
 LC_API double b2lc_shape_segment_x2(void)      { return s_geom[2]; }
@@ -1372,7 +1447,7 @@ LC_API double b2lc_shape_polygon_radius(void)  { return (double)s_polyRead.radiu
 
 /* geometry setters */
 LC_API void b2lc_shape_set_circle(int s, double cx, double cy, double r) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || !finite2(cx, cy) || !positive(r)) return; b2Circle c; c.center = v2(cx, cy); c.radius = (float)r; b2Shape_SetCircle(id, &c); }
-LC_API void b2lc_shape_set_capsule(int s, double x1, double y1, double x2, double y2, double r) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || !finite2(x1, y1) || !finite2(x2, y2) || !positive(r)) return; b2Capsule c; c.center1 = v2(x1, y1); c.center2 = v2(x2, y2); c.radius = (float)r; b2Shape_SetCapsule(id, &c); }
+LC_API void b2lc_shape_set_capsule(int s, double x1, double y1, double x2, double y2, double r) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || !finite2(x1, y1) || !finite2(x2, y2) || !positive(r) || (x1 == x2 && y1 == y2)) return; b2Capsule c; c.center1 = v2(x1, y1); c.center2 = v2(x2, y2); c.radius = (float)r; b2Shape_SetCapsule(id, &c); }
 LC_API void b2lc_shape_set_segment(int s, double x1, double y1, double x2, double y2) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || !finite2(x1, y1) || !finite2(x2, y2) || (x1 == x2 && y1 == y2)) return; b2Segment g; g.point1 = v2(x1, y1); g.point2 = v2(x2, y2); b2Shape_SetSegment(id, &g); }
 LC_API void b2lc_shape_set_polygon(int s) { b2ShapeId id = shapes_get(s); if (!b2Shape_IsValid(id) || s_polyCnt < 3) return; b2Hull hull = b2ComputeHull(s_poly, s_polyCnt); if (hull.count < 3) return; b2Polygon p = b2MakePolygon(&hull, 0.0f); b2Shape_SetPolygon(id, &p); }
 
@@ -1464,8 +1539,8 @@ LC_API int b2lc_chain_create(int b, int isLoop, double friction, double restitut
     cd.isLoop = isLoop ? true : false;
     cd.enableSensorEvents = true;   /* let sensors detect terrain */
     if (s_sd.haveFilter) {
-        cd.filter.categoryBits = (uint64_t)(uint32_t)s_sd.catBits;
-        cd.filter.maskBits     = (uint64_t)(uint32_t)s_sd.maskBits;
+        cd.filter.categoryBits = (uint64_t)s_sd.catBits;
+        cd.filter.maskBits     = (uint64_t)s_sd.maskBits;
         cd.filter.groupIndex   = s_sd.groupIndex;
     }
     b2ChainId id = b2CreateChain(body, &cd);
@@ -1521,6 +1596,7 @@ LC_API int b2lc_joint_motor(int w, int bA, int bB, double offX, double offY, dou
     b2WorldId wid = worlds_get(w);
     b2BodyId a = bodies_get(bA), b = bodies_get(bB);
     if (!b2World_IsValid(wid) || !b2Body_IsValid(a) || !b2Body_IsValid(b)) return 0;
+    if (!finite3(offX, offY, angOff) || !finite3(maxForce, maxTorque, corr)) return 0;
     b2MotorJointDef jd = b2DefaultMotorJointDef();
     jd.bodyIdA = a; jd.bodyIdB = b;
     jd.linearOffset = v2(offX, offY);
@@ -1531,16 +1607,16 @@ LC_API int b2lc_joint_motor(int w, int bA, int bB, double offX, double offY, dou
     jd.collideConnected = collide ? true : false;
     return register_joint(b2CreateMotorJoint(wid, &jd));
 }
-LC_API void   b2lc_motor_set_linear_offset(int j, double x, double y) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MotorJoint_SetLinearOffset(id, v2(x, y)); }
+LC_API void   b2lc_motor_set_linear_offset(int j, double x, double y) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite2(x, y)) b2MotorJoint_SetLinearOffset(id, v2(x, y)); }
 LC_API double b2lc_motor_linear_offset_x(int j) { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MotorJoint_GetLinearOffset(id).x : 0.0; }
 LC_API double b2lc_motor_linear_offset_y(int j) { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MotorJoint_GetLinearOffset(id).y : 0.0; }
-LC_API void   b2lc_motor_set_angular_offset(int j, double a) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MotorJoint_SetAngularOffset(id, (float)a); }
+LC_API void   b2lc_motor_set_angular_offset(int j, double a) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(a)) b2MotorJoint_SetAngularOffset(id, (float)a); }
 LC_API double b2lc_motor_angular_offset(int j) { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MotorJoint_GetAngularOffset(id) : 0.0; }
-LC_API void   b2lc_motor_set_max_force(int j, double f) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MotorJoint_SetMaxForce(id, (float)f); }
+LC_API void   b2lc_motor_set_max_force(int j, double f) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(f) && f >= 0.0) b2MotorJoint_SetMaxForce(id, (float)f); }
 LC_API double b2lc_motor_max_force(int j) { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MotorJoint_GetMaxForce(id) : 0.0; }
-LC_API void   b2lc_motor_set_max_torque(int j, double t) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MotorJoint_SetMaxTorque(id, (float)t); }
+LC_API void   b2lc_motor_set_max_torque(int j, double t) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(t) && t >= 0.0) b2MotorJoint_SetMaxTorque(id, (float)t); }
 LC_API double b2lc_motor_max_torque(int j) { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MotorJoint_GetMaxTorque(id) : 0.0; }
-LC_API void   b2lc_motor_set_correction_factor(int j, double c) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MotorJoint_SetCorrectionFactor(id, (float)c); }
+LC_API void   b2lc_motor_set_correction_factor(int j, double c) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(c)) b2MotorJoint_SetCorrectionFactor(id, (float)c); }
 LC_API double b2lc_motor_correction_factor(int j) { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MotorJoint_GetCorrectionFactor(id) : 0.0; }
 
 /* ---- Filter joint (disable collision between two specific bodies) -- */
@@ -1556,32 +1632,32 @@ LC_API int b2lc_joint_filter(int w, int bA, int bB) {
 /* ---- Revolute joint: granular spring/limit/motor get+set ----------- */
 LC_API void   b2lc_revolute_enable_spring(int j, int f)        { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2RevoluteJoint_EnableSpring(id, f ? true : false); }
 LC_API int    b2lc_revolute_is_spring_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2RevoluteJoint_IsSpringEnabled(id)) ? 1 : 0; }
-LC_API void   b2lc_revolute_set_spring_hertz(int j, double hz) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2RevoluteJoint_SetSpringHertz(id, (float)hz); }
+LC_API void   b2lc_revolute_set_spring_hertz(int j, double hz) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(hz) && hz >= 0.0) b2RevoluteJoint_SetSpringHertz(id, (float)hz); }
 LC_API double b2lc_revolute_spring_hertz(int j)               { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2RevoluteJoint_GetSpringHertz(id) : 0.0; }
-LC_API void   b2lc_revolute_set_spring_damping(int j, double d){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2RevoluteJoint_SetSpringDampingRatio(id, (float)d); }
+LC_API void   b2lc_revolute_set_spring_damping(int j, double d){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(d) && d >= 0.0) b2RevoluteJoint_SetSpringDampingRatio(id, (float)d); }
 LC_API double b2lc_revolute_spring_damping(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2RevoluteJoint_GetSpringDampingRatio(id) : 0.0; }
 LC_API int    b2lc_revolute_is_limit_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2RevoluteJoint_IsLimitEnabled(id)) ? 1 : 0; }
 LC_API double b2lc_revolute_lower_limit(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2RevoluteJoint_GetLowerLimit(id) : 0.0; }
 LC_API double b2lc_revolute_upper_limit(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2RevoluteJoint_GetUpperLimit(id) : 0.0; }
 LC_API int    b2lc_revolute_is_motor_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2RevoluteJoint_IsMotorEnabled(id)) ? 1 : 0; }
-LC_API void   b2lc_revolute_set_motor_speed(int j, double s)  { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2RevoluteJoint_SetMotorSpeed(id, (float)s); }
+LC_API void   b2lc_revolute_set_motor_speed(int j, double s)  { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(s)) b2RevoluteJoint_SetMotorSpeed(id, (float)s); }
 LC_API double b2lc_revolute_motor_speed(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2RevoluteJoint_GetMotorSpeed(id) : 0.0; }
 LC_API double b2lc_revolute_motor_torque(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2RevoluteJoint_GetMotorTorque(id) : 0.0; }
-LC_API void   b2lc_revolute_set_max_motor_torque(int j, double t){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2RevoluteJoint_SetMaxMotorTorque(id, (float)t); }
+LC_API void   b2lc_revolute_set_max_motor_torque(int j, double t){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(t) && t >= 0.0) b2RevoluteJoint_SetMaxMotorTorque(id, (float)t); }
 LC_API double b2lc_revolute_max_motor_torque(int j)        { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2RevoluteJoint_GetMaxMotorTorque(id) : 0.0; }
 
 /* ---- Prismatic joint: granular spring/limit/motor get+set ---------- */
 LC_API void   b2lc_prismatic_enable_spring(int j, int f)        { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2PrismaticJoint_EnableSpring(id, f ? true : false); }
 LC_API int    b2lc_prismatic_is_spring_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2PrismaticJoint_IsSpringEnabled(id)) ? 1 : 0; }
-LC_API void   b2lc_prismatic_set_spring_hertz(int j, double hz) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2PrismaticJoint_SetSpringHertz(id, (float)hz); }
+LC_API void   b2lc_prismatic_set_spring_hertz(int j, double hz) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(hz) && hz >= 0.0) b2PrismaticJoint_SetSpringHertz(id, (float)hz); }
 LC_API double b2lc_prismatic_spring_hertz(int j)               { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2PrismaticJoint_GetSpringHertz(id) : 0.0; }
-LC_API void   b2lc_prismatic_set_spring_damping(int j, double d){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2PrismaticJoint_SetSpringDampingRatio(id, (float)d); }
+LC_API void   b2lc_prismatic_set_spring_damping(int j, double d){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(d) && d >= 0.0) b2PrismaticJoint_SetSpringDampingRatio(id, (float)d); }
 LC_API double b2lc_prismatic_spring_damping(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2PrismaticJoint_GetSpringDampingRatio(id) : 0.0; }
 LC_API int    b2lc_prismatic_is_limit_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2PrismaticJoint_IsLimitEnabled(id)) ? 1 : 0; }
 LC_API double b2lc_prismatic_lower_limit(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2PrismaticJoint_GetLowerLimit(id) : 0.0; }
 LC_API double b2lc_prismatic_upper_limit(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2PrismaticJoint_GetUpperLimit(id) : 0.0; }
 LC_API int    b2lc_prismatic_is_motor_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2PrismaticJoint_IsMotorEnabled(id)) ? 1 : 0; }
-LC_API void   b2lc_prismatic_set_motor_speed(int j, double s)  { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2PrismaticJoint_SetMotorSpeed(id, (float)s); }
+LC_API void   b2lc_prismatic_set_motor_speed(int j, double s)  { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(s)) b2PrismaticJoint_SetMotorSpeed(id, (float)s); }
 LC_API double b2lc_prismatic_motor_speed(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2PrismaticJoint_GetMotorSpeed(id) : 0.0; }
 LC_API double b2lc_prismatic_motor_force(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2PrismaticJoint_GetMotorForce(id) : 0.0; }
 LC_API double b2lc_prismatic_max_motor_force(int j)        { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2PrismaticJoint_GetMaxMotorForce(id) : 0.0; }
@@ -1597,15 +1673,15 @@ LC_API double b2lc_distance_max_length(int j)              { b2JointId id = join
 LC_API double b2lc_distance_current_length(int j)          { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2DistanceJoint_GetCurrentLength(id) : 0.0; }
 LC_API void   b2lc_distance_enable_motor(int j, int f)       { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2DistanceJoint_EnableMotor(id, f ? true : false); }
 LC_API int    b2lc_distance_is_motor_enabled(int j)         { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2DistanceJoint_IsMotorEnabled(id)) ? 1 : 0; }
-LC_API void   b2lc_distance_set_motor_speed(int j, double s) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2DistanceJoint_SetMotorSpeed(id, (float)s); }
+LC_API void   b2lc_distance_set_motor_speed(int j, double s) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(s)) b2DistanceJoint_SetMotorSpeed(id, (float)s); }
 LC_API double b2lc_distance_motor_speed(int j)             { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2DistanceJoint_GetMotorSpeed(id) : 0.0; }
-LC_API void   b2lc_distance_set_max_motor_force(int j, double f){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2DistanceJoint_SetMaxMotorForce(id, (float)f); }
+LC_API void   b2lc_distance_set_max_motor_force(int j, double f){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(f) && f >= 0.0) b2DistanceJoint_SetMaxMotorForce(id, (float)f); }
 LC_API double b2lc_distance_max_motor_force(int j)        { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2DistanceJoint_GetMaxMotorForce(id) : 0.0; }
 LC_API double b2lc_distance_motor_force(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2DistanceJoint_GetMotorForce(id) : 0.0; }
 
 /* ---- Weld joint: reference angle + per-axis stiffness getters ------ */
 LC_API double b2lc_weld_reference_angle(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2WeldJoint_GetReferenceAngle(id) : 0.0; }
-LC_API void   b2lc_weld_set_reference_angle(int j, double a){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2WeldJoint_SetReferenceAngle(id, (float)a); }
+LC_API void   b2lc_weld_set_reference_angle(int j, double a){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(a)) b2WeldJoint_SetReferenceAngle(id, (float)a); }
 LC_API double b2lc_weld_linear_hertz(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2WeldJoint_GetLinearHertz(id) : 0.0; }
 LC_API double b2lc_weld_linear_damping(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2WeldJoint_GetLinearDampingRatio(id) : 0.0; }
 LC_API double b2lc_weld_angular_hertz(int j)             { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2WeldJoint_GetAngularHertz(id) : 0.0; }
@@ -1617,7 +1693,7 @@ LC_API double b2lc_wheel_spring_hertz(int j)              { b2JointId id = joint
 LC_API double b2lc_wheel_spring_damping(int j)            { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2WheelJoint_GetSpringDampingRatio(id) : 0.0; }
 LC_API void   b2lc_wheel_enable_limit(int j, int f)        { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2WheelJoint_EnableLimit(id, f ? true : false); }
 LC_API int    b2lc_wheel_is_limit_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2WheelJoint_IsLimitEnabled(id)) ? 1 : 0; }
-LC_API void   b2lc_wheel_set_limits(int j, double lo, double hi){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2WheelJoint_SetLimits(id, (float)lo, (float)hi); }
+LC_API void   b2lc_wheel_set_limits(int j, double lo, double hi){ b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite2(lo, hi) && lo <= hi) b2WheelJoint_SetLimits(id, (float)lo, (float)hi); }
 LC_API double b2lc_wheel_lower_limit(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2WheelJoint_GetLowerLimit(id) : 0.0; }
 LC_API double b2lc_wheel_upper_limit(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2WheelJoint_GetUpperLimit(id) : 0.0; }
 LC_API int    b2lc_wheel_is_motor_enabled(int j)          { b2JointId id = joints_get(j); return (b2Joint_IsValid(id) && b2WheelJoint_IsMotorEnabled(id)) ? 1 : 0; }
@@ -1628,11 +1704,11 @@ LC_API double b2lc_wheel_max_motor_torque(int j)        { b2JointId id = joints_
 /* ---- Mouse joint: target + spring getters/setters ------------------ */
 LC_API double b2lc_mouse_target_x(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MouseJoint_GetTarget(id).x : 0.0; }
 LC_API double b2lc_mouse_target_y(int j)              { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MouseJoint_GetTarget(id).y : 0.0; }
-LC_API void   b2lc_mouse_set_spring_hertz(int j, double hz)  { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MouseJoint_SetSpringHertz(id, (float)hz); }
+LC_API void   b2lc_mouse_set_spring_hertz(int j, double hz)  { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(hz) && hz >= 0.0) b2MouseJoint_SetSpringHertz(id, (float)hz); }
 LC_API double b2lc_mouse_spring_hertz(int j)          { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MouseJoint_GetSpringHertz(id) : 0.0; }
-LC_API void   b2lc_mouse_set_spring_damping(int j, double d) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MouseJoint_SetSpringDampingRatio(id, (float)d); }
+LC_API void   b2lc_mouse_set_spring_damping(int j, double d) { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(d) && d >= 0.0) b2MouseJoint_SetSpringDampingRatio(id, (float)d); }
 LC_API double b2lc_mouse_spring_damping(int j)        { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MouseJoint_GetSpringDampingRatio(id) : 0.0; }
-LC_API void   b2lc_mouse_set_max_force(int j, double f)      { b2JointId id = joints_get(j); if (b2Joint_IsValid(id)) b2MouseJoint_SetMaxForce(id, (float)f); }
+LC_API void   b2lc_mouse_set_max_force(int j, double f)      { b2JointId id = joints_get(j); if (b2Joint_IsValid(id) && finite1(f) && f >= 0.0) b2MouseJoint_SetMaxForce(id, (float)f); }
 LC_API double b2lc_mouse_max_force(int j)             { b2JointId id = joints_get(j); return b2Joint_IsValid(id) ? (double)b2MouseJoint_GetMaxForce(id) : 0.0; }
 
 /* ------------------------------------------------------------------ */
