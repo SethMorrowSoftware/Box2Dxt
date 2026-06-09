@@ -65,7 +65,8 @@ alongside the Kit change.
 ## Conventions
 
 - **Units & types.** Across the FFI boundary: reals are `double`, booleans are
-  `int` (0/1), handles are 1-based `int` (0 = invalid). The `b2…` API speaks
+  `int` (0/1), handles are positive `int` (0 = invalid; generation-tagged —
+  treat them as opaque). The `b2…` API speaks
   metres/radians; the `b2k…` Kit speaks pixels/degrees.
 - **Safety first.** Every handler must tolerate stale/`0` handles: validate ids
   with `b2*_IsValid` in C; getters return `0`, actions no-op. Never let a bad

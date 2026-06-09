@@ -3,7 +3,7 @@
 -- #                                                                   #
 -- #  HOW TO RUN                                                       #
 -- #   1. Load the box2dxt.lcb extension and put the box2dxt native    #
--- #      library where it can be found. Check: put b2Version()  -- 3  #
+-- #      library where it can be found. Check: put b2Version()  -- 4  #
 -- #   2. Paste THIS WHOLE FILE into a stack`s script                  #
 -- #      (Object > Stack Script).                                     #
 -- #   3. Open/close the card, or run  startBox2DDemo  in the          #

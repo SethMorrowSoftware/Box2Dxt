@@ -46,8 +46,8 @@ Box2D v3 is already C, so why not bind to it directly? Two reasons:
 1. **Identifiers are structs passed by value.** Box2D v3 ids (`b2WorldId`,
    `b2BodyId`, …) are small structs. The LCB FFI is happiest with plain scalars
    and pointers, and there is no 64-bit integer foreign type. The shim stores
-   every Box2D id in a handle table and hands the script a **1-based 32-bit int**
-   instead (`0` = null/invalid).
+   every Box2D id in a handle table and hands the script a **positive 32-bit int**
+   instead (`0` = null/invalid). Treat handles as opaque tokens.
 2. **Scalar conventions.** Every real number crosses the boundary as `double`
    (xTalk numbers are doubles); the shim casts to/from Box2D's `float`. Every
    boolean crosses as `int` (`0`/`1`).
@@ -67,9 +67,11 @@ actions do nothing — instead of crashing the engine.
 The integer handle of each body/shape is also stored in its Box2D `userData`, so
 queries, ray casts, and contact events can hand a handle *back* to the script.
 
-> Handles are **recycled**: after you destroy something, its integer can later be
-> reused by a new object. Drop your references when you destroy something so you
-> don't accidentally address the wrong object.
+> Handles are **generation-tagged**: each one packs a small generation counter
+> above its table slot, bumped every time the slot is freed. So even after the
+> slot is recycled by a new object, your stale handle stays dead (no-op) instead
+> of silently addressing the new occupant. Still drop references on destroy —
+> that's what keeps the tables small.
 
 ## Coordinate systems
 

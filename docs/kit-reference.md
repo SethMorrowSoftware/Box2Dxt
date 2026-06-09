@@ -8,7 +8,7 @@ demo's performance practices built in.
 
 **Setup:** paste the Kit into your card/stack script (or save it as a library
 stack and `start using` it). It requires the `box2dxt` extension loaded
-(`put b2Version()` should return `3`).
+(`put b2Version()` should return `4`).
 
 > **New here?** Read the [**Complete Guide**](kit-guide.md) first — it teaches
 > the Kit start-to-finish with runnable examples. This page is the quick-lookup

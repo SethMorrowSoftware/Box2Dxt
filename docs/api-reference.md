@@ -224,9 +224,10 @@ accumulates real elapsed time and steps in 1/60 s chunks). Variable steps make
 the solver jittery and non-deterministic.
 
 **Handle lifetime.** A handle is only valid until you destroy it. Reading a
-destroyed handle is safe (the shim validates ids and returns `0`), but handles
-are *recycled* — a new object can eventually reuse a freed handle's integer. Drop
-your references when you destroy something to avoid addressing the wrong object.
+destroyed handle is safe (the shim validates ids and returns `0`), and handles
+are *generation-tagged*: when a table slot is recycled by a new object, stale
+handles to its previous occupant stay dead rather than addressing the new one.
+Treat handles as opaque, and drop references when you destroy something.
 
 **Rendering at scale.** For **many hundreds of bodies** the physics keeps up
 easily, but updating that many individual OpenXTalk graphics each frame can become
