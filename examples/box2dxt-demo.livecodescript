@@ -381,6 +381,11 @@ command b2kAddBox pControl, pDynamic
    else
       put "loc" into sRender[tRef]
    end if
+   -- Draw the new body NOW. The style switch above left a "poly" graphic with
+   -- no points (invisible), and the move-event sync can't help: a world that
+   -- isn't stepping emits no move events, so a part spawned while the loop is
+   -- stopped would stay invisible until the first Run. Attach = visible.
+   b2kDrawBody tRef, tWx, tWy, 0
    return tBody
 end b2kAddBox
 
@@ -403,6 +408,7 @@ command b2kAddBall pControl, pDynamic
    else if word 1 of tRef is "image" then put "image" into sRender[tRef]
    else put "loc" into sRender[tRef]
    put tRad into sRad[tRef]
+   b2kDrawBody tRef, tWx, tWy, 0   -- visible at attach, even with the loop stopped
    return tBody
 end b2kAddBall
 
@@ -450,6 +456,9 @@ command b2kAddCapsule pControl, pDynamic
    else
       put "loc" into sRender[tRef]
    end if
+   -- Same as b2kAddBox: the freshly point-less "poly" graphic must be drawn
+   -- here, because a stopped world never emits the move event that would.
+   b2kDrawBody tRef, tWx, tWy, 0
    return tBody
 end b2kAddCapsule
 
@@ -487,6 +496,7 @@ command b2kAddPolygon pControl, pDynamic
    b2kRegister tRef, tBody, (not pDynamic)
    put "poly" into sRender[tRef]
    put tLocal into sVerts[tRef]
+   b2kDrawBody tRef, tWx, tWy, 0   -- visible at attach, even with the loop stopped
    return tBody
 end b2kAddPolygon
 
@@ -1744,12 +1754,16 @@ command b2kStepOnce
 end b2kStepOnce
 
 -- Public, standalone-safe sync: locks the screen and always unlocks, even if a
--- draw throws. The loop instead holds one lock across the whole frame and calls
--- the lock-free b2kSyncBodies directly, so sync + events are a single redraw.
+-- draw throws. This is the "the loop is stopped, redraw by hand" entry point
+-- (editors and build modes call it after spawning or moving things), so it must
+-- FULL-SCAN: the move-event fast path only reports bodies a b2Step moved, and a
+-- stopped world steps never — relying on it here would draw nothing at all.
+-- The running loop instead holds one lock across the whole frame and calls the
+-- lock-free, move-event-driven b2kSyncBodies directly.
 command b2kSync
    lock screen
    try
-      b2kSyncBodies
+      b2kSyncAllBodies
    catch tErr
    end try
    unlock screen

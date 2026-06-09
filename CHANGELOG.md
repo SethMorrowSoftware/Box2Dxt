@@ -394,18 +394,30 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
-- **Placed parts now show up immediately, not "only after I press Run"
-  (contraption builder).** Under `acceleratedRendering`, a control created
-  while the screen sits idle can stay invisible until the compositor rebuilds
-  its scene — and idle Build mode never forced that rebuild (Run's continuous
-  redraws did, which is why parts "appeared" then). Every part now composites
-  on its own dynamic GPU layer the moment it is tagged (previously only the
-  physics-dynamic kinds did, so anchors, plates, sensors, fans, magnets,
-  lasers, goals and terrain were exactly the kinds that vanished), the same
-  applies to joint markers, signal wires, the freehand-terrain sketch line,
-  thruster flames and shock rings, and `renderBuild` gives the compositor a
-  one-shot nudge whenever something new was created — including the image
-  library's rows and a replayed onboarding tour.
+- **Placed parts now show up immediately, not "only after I press Run".** Two
+  independent causes, the first one the engine-room bug (Kit-level, so the
+  demo and user code are healed too):
+  - **The Kit never drew a freshly attached body while the loop was stopped.**
+    `b2kAddBox`/`b2kAddCapsule` switch a spawned graphic's style to `polygon`
+    and leave its points empty until the first body sync — but the sync fast
+    path draws only bodies reported by Box2D **move events**, and a world that
+    isn't stepping emits none. So a box, capsule or thruster placed in Build
+    mode stayed a point-less (invisible) polygon until Run produced the first
+    step. The attach handlers now draw the body the moment it's created, and
+    the public `b2kSync` (the "loop is stopped, redraw by hand" entry point)
+    full-scans instead of relying on move events; the running loop keeps the
+    fast path. Balls, polygons and terrain were never affected — their
+    graphics are complete at creation — which is why the bug hit "often"
+    rather than always.
+  - **Compositor staleness (contraption builder).** Under
+    `acceleratedRendering`, a control created while the screen sits idle can
+    stay invisible until the compositor rebuilds its scene. Every part now
+    composites on its own dynamic GPU layer the moment it is tagged
+    (previously only the physics-dynamic kinds did), the same applies to
+    joint markers, signal wires, the freehand sketch line, thruster flames
+    and shock rings, and `renderBuild` gives the compositor a one-shot nudge
+    whenever something new was created — including the image library's rows
+    and a replayed onboarding tour.
 - **Parts can no longer be parked overlapping the chrome (contraption
   builder).** Placement, duplicate/multiply copies, build-mode drags and arrow
   nudges keep the part's whole rect inside the arena (previously only its
