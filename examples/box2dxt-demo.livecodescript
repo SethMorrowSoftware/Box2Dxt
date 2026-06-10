@@ -168,6 +168,7 @@ local sCamB1X, sCamB1Y, sCamB2X, sCamB2Y -- world bounds (sCamB1X empty = none)
 local sCamX, sCamY   -- current view centre (world px)
 local sCamShakeAmp, sCamShakeEnd
 local sCamLastH, sCamLastV -- last written scroll (skip redundant sets)
+local sCamNote       -- empty = healthy; else why the camera is degraded
 
 constant kPI = 3.14159265358979
 
@@ -2730,22 +2731,33 @@ end b2kSpritesTick
 command b2kCamOn pRect
    local tG
    if sCamGroup is not empty then exit b2kCamOn
+   put empty into sCamNote
    if pRect is empty then put the rect of this card into pRect
    try
       create group "b2kcam_view"
    catch tErr
+      put "create group failed: " & tErr into sCamNote
       exit b2kCamOn
    end try
    put the long id of group "b2kcam_view" into tG
-   set the margins of tG to 0
-   set the showBorder of tG to false
-   set the hScrollbar of tG to false
-   set the vScrollbar of tG to false
-   create graphic "b2kcam_anchor" in group "b2kcam_view"
-   set the rect of it to 0, 0, 1, 1
-   set the visible of it to false
-   set the lockLoc of tG to true
-   set the rect of tG to pRect
+   try
+      set the margins of tG to 0
+      set the showBorder of tG to false
+      set the hScrollbar of tG to false
+      set the vScrollbar of tG to false
+      create graphic "b2kcam_anchor" in group "b2kcam_view"
+      set the rect of it to 0, 0, 1, 1
+      set the visible of it to false
+      set the lockLoc of tG to true
+      set the rect of tG to pRect
+   catch tErr
+      put "viewport setup failed: " & tErr into sCamNote
+      try
+         delete group "b2kcam_view"
+      catch tErr
+      end try
+      exit b2kCamOn
+   end try
    try
       set the unboundedHScroll of tG to true
       set the unboundedVScroll of tG to true
@@ -2767,6 +2779,21 @@ command b2kCamOn pRect
    put 0 into sCamShakeAmp
    put empty into sCamLastH
    put empty into sCamLastV
+   -- self-test: prove the scroll property actually pans this group. The
+   -- anchor is stretched first so content exceeds the view (engines clamp
+   -- scroll to content bounds), then restored; failure is reported via
+   -- b2kCamStatus instead of letting the player walk out of a frozen view.
+   try
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 4000, 2000
+      set the hScroll of sCamGroup to 7
+      if the hScroll of sCamGroup is not 7 then
+         put "group scroll is ineffective on this engine" into sCamNote
+      end if
+      set the hScroll of sCamGroup to 0
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 1, 1
+   catch tErr
+      put "setting the group scroll failed: " & tErr into sCamNote
+   end try
    b2kCamApply
 end b2kCamOn
 
@@ -2822,6 +2849,15 @@ command b2kCamBounds pX1, pY1, pX2, pY2
    put pY1 into sCamB1Y
    put pX2 into sCamB2X
    put pY2 into sCamB2Y
+   -- stretch the invisible anchor across the whole level: the group's
+   -- scrollable content then always spans the bounds, so the engine can
+   -- never clamp the scroll short (works with or without unbounded scroll)
+   if sCamGroup is not empty then
+      try
+         set the rect of graphic "b2kcam_anchor" to pX1, pY1, pX2, pY2
+      catch tErr
+      end try
+   end if
 end b2kCamBounds
 
 command b2kCamGoto pX, pY
@@ -2854,9 +2890,18 @@ function b2kCamMouseY
    return the mouseV - (item 2 of the rect of sCamGroup) + the vScroll of sCamGroup
 end b2kCamMouseY
 
--- Internal, called by the loop each frame: chase the followed control.
+-- Health: empty = camera fine (or simply off); otherwise the reason the
+-- camera could not run properly (create-group/scroll failures). Check it
+-- after b2kCamOn and degrade your level gracefully.
+function b2kCamStatus
+   return sCamNote
+end b2kCamStatus
+
+-- Internal, called by the loop each frame: chase the followed control. The
+-- follow eases, but the target is GUARANTEED on screen: if it would leave
+-- the view (fast falls, teleports, lerp lag), the camera snaps to it.
 command b2kCamTick
-   local tLoc, tTX, tTY
+   local tLoc, tTX, tTY, tHalfW, tHalfH
    if sCamGroup is empty then exit b2kCamTick
    if sCamFollow is not empty then
       try
@@ -2870,6 +2915,11 @@ command b2kCamTick
          if abs(tTY - sCamY) > sCamDZH / 2 then
             put sCamY + sCamLerp * (tTY - sCamY) into sCamY
          end if
+         -- the never-offscreen guarantee (32 px inside the view edges)
+         put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) / 2 into tHalfW
+         put ((item 4 of the rect of sCamGroup) - (item 2 of the rect of sCamGroup)) / 2 into tHalfH
+         if abs(tTX - sCamX) > tHalfW - 32 then put tTX into sCamX
+         if abs(tTY - sCamY) > tHalfH - 32 then put tTY into sCamY
       catch tErr
          put empty into sCamFollow   -- target vanished
       end try

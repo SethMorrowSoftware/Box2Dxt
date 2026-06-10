@@ -40,7 +40,7 @@
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote, gWon
-local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook
+local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
 local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt
 
 constant kMoveSpeed = 280
@@ -209,8 +209,10 @@ command pfStartGame
    end if
    -- ===== the camera: everything Kit-made from here lives in the view ====
    b2kCamOn
+   put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
    b2kCamBounds 0, 0, kLevelW, 640
-   b2kCamDeadzone 140, 600
+   b2kCamDeadzone 90, 600
+   b2kCamGoto 120, 480   -- open on the spawn point, no startup slide
    -- level bounds (invisible)
    b2kWall 0, 0, 0, 640
    b2kWall kLevelW, 0, kLevelW, 640
@@ -253,7 +255,7 @@ command pfStartGame
    end if
    create graphic "pf_spikesens"
    set the style of it to "rectangle"
-   set the rect of it to 1408, 612, 1600, 644
+   set the rect of it to 1408, 592, 1600, 644
    set the visible of it to false
    put the long id of graphic "pf_spikesens" into tRef
    set the uPfHazardFlag of tRef to true
@@ -337,7 +339,7 @@ command pfStartGame
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   b2kCamFollow gHero, 0.18
+   b2kCamFollow gHero, 0.2
    -- ===== pickups ====
    pfMakeCoin 380, 384
    pfMakeCoin 688, 470
@@ -393,6 +395,31 @@ command pfStartGame
       set the uPfGoalFlag of tRef to true
       b2kCamAdopt tRef
       b2kAddSensor tRef, "box"
+   end if
+   -- ===== camera-dead fallback: clamp play to the visible screen ====
+   if gCamOK is not true then
+      b2kWall 1010, 0, 1010, 640
+      put empty into tRef
+      if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
+         b2kSpriteNew "tiles", "flag_blue_a", 950, 544
+         put the result into tRef
+         if tRef is not empty then
+            set the uPfGoalFlag of tRef to true
+            b2kSpritePlay tRef, "wave"
+            b2kAddSensor tRef, "ball"
+         end if
+      end if
+      if tRef is empty then
+         create graphic "pf_flagnear"
+         set the style of it to "rectangle"
+         set the rect of it to 934, 512, 966, 576
+         set the filled of it to true
+         set the backgroundColor of it to "70,110,230"
+         put the long id of graphic "pf_flagnear" into tRef
+         set the uPfGoalFlag of tRef to true
+         b2kAddSensor tRef, "box"
+      end if
+      set the text of field "pfHelp" to "CAMERA UNAVAILABLE on this engine (" & b2kCamStatus() & ") - the level is clamped" & cr & "to this screen and the flag moved here so it stays completable. Everything else works." & cr & "Please report the quoted reason."
    end if
    -- ===== input + events ====
    b2kInputOn
@@ -513,6 +540,11 @@ end pfWipeStage
 on b2kFrame
    local tHud
    if gHero is empty then exit b2kFrame
+   -- kill plane: anything that slips every other check still respawns
+   if gHurtLock is not true then
+      set the itemDelimiter to comma
+      if (item 2 of b2kPosition(gHero)) > 780 then pfHurt
+   end if
    pfTickHero
    pfTickGate
    pfTickSlime
@@ -520,6 +552,7 @@ on b2kFrame
       set the loc of gBeeSpr to round(820 + 90 * sin(the milliseconds / 900)), round(300 + 26 * sin(the milliseconds / 430))
    end if
    put "coins " & gCoins & "/" & gCoinsTotal & "   |   anim " & b2kSpriteAnim(gHeroSpr) & "   |   held " & b2kKeysHeld() & "   |   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   if gCamOK is true then put "   |   cam " & item 1 of b2kCamPos() after tHud
    if gCoins >= gCoinsTotal then put "   ALL COINS!" after tHud
    if gWon is true then put "LEVEL COMPLETE!   " before tHud
    if tHud is not gHudLast then
@@ -895,6 +928,7 @@ local sCamB1X, sCamB1Y, sCamB2X, sCamB2Y -- world bounds (sCamB1X empty = none)
 local sCamX, sCamY   -- current view centre (world px)
 local sCamShakeAmp, sCamShakeEnd
 local sCamLastH, sCamLastV -- last written scroll (skip redundant sets)
+local sCamNote       -- empty = healthy; else why the camera is degraded
 
 constant kPI = 3.14159265358979
 
@@ -3457,22 +3491,33 @@ end b2kSpritesTick
 command b2kCamOn pRect
    local tG
    if sCamGroup is not empty then exit b2kCamOn
+   put empty into sCamNote
    if pRect is empty then put the rect of this card into pRect
    try
       create group "b2kcam_view"
    catch tErr
+      put "create group failed: " & tErr into sCamNote
       exit b2kCamOn
    end try
    put the long id of group "b2kcam_view" into tG
-   set the margins of tG to 0
-   set the showBorder of tG to false
-   set the hScrollbar of tG to false
-   set the vScrollbar of tG to false
-   create graphic "b2kcam_anchor" in group "b2kcam_view"
-   set the rect of it to 0, 0, 1, 1
-   set the visible of it to false
-   set the lockLoc of tG to true
-   set the rect of tG to pRect
+   try
+      set the margins of tG to 0
+      set the showBorder of tG to false
+      set the hScrollbar of tG to false
+      set the vScrollbar of tG to false
+      create graphic "b2kcam_anchor" in group "b2kcam_view"
+      set the rect of it to 0, 0, 1, 1
+      set the visible of it to false
+      set the lockLoc of tG to true
+      set the rect of tG to pRect
+   catch tErr
+      put "viewport setup failed: " & tErr into sCamNote
+      try
+         delete group "b2kcam_view"
+      catch tErr
+      end try
+      exit b2kCamOn
+   end try
    try
       set the unboundedHScroll of tG to true
       set the unboundedVScroll of tG to true
@@ -3494,6 +3539,21 @@ command b2kCamOn pRect
    put 0 into sCamShakeAmp
    put empty into sCamLastH
    put empty into sCamLastV
+   -- self-test: prove the scroll property actually pans this group. The
+   -- anchor is stretched first so content exceeds the view (engines clamp
+   -- scroll to content bounds), then restored; failure is reported via
+   -- b2kCamStatus instead of letting the player walk out of a frozen view.
+   try
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 4000, 2000
+      set the hScroll of sCamGroup to 7
+      if the hScroll of sCamGroup is not 7 then
+         put "group scroll is ineffective on this engine" into sCamNote
+      end if
+      set the hScroll of sCamGroup to 0
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 1, 1
+   catch tErr
+      put "setting the group scroll failed: " & tErr into sCamNote
+   end try
    b2kCamApply
 end b2kCamOn
 
@@ -3549,6 +3609,15 @@ command b2kCamBounds pX1, pY1, pX2, pY2
    put pY1 into sCamB1Y
    put pX2 into sCamB2X
    put pY2 into sCamB2Y
+   -- stretch the invisible anchor across the whole level: the group's
+   -- scrollable content then always spans the bounds, so the engine can
+   -- never clamp the scroll short (works with or without unbounded scroll)
+   if sCamGroup is not empty then
+      try
+         set the rect of graphic "b2kcam_anchor" to pX1, pY1, pX2, pY2
+      catch tErr
+      end try
+   end if
 end b2kCamBounds
 
 command b2kCamGoto pX, pY
@@ -3581,9 +3650,18 @@ function b2kCamMouseY
    return the mouseV - (item 2 of the rect of sCamGroup) + the vScroll of sCamGroup
 end b2kCamMouseY
 
--- Internal, called by the loop each frame: chase the followed control.
+-- Health: empty = camera fine (or simply off); otherwise the reason the
+-- camera could not run properly (create-group/scroll failures). Check it
+-- after b2kCamOn and degrade your level gracefully.
+function b2kCamStatus
+   return sCamNote
+end b2kCamStatus
+
+-- Internal, called by the loop each frame: chase the followed control. The
+-- follow eases, but the target is GUARANTEED on screen: if it would leave
+-- the view (fast falls, teleports, lerp lag), the camera snaps to it.
 command b2kCamTick
-   local tLoc, tTX, tTY
+   local tLoc, tTX, tTY, tHalfW, tHalfH
    if sCamGroup is empty then exit b2kCamTick
    if sCamFollow is not empty then
       try
@@ -3597,6 +3675,11 @@ command b2kCamTick
          if abs(tTY - sCamY) > sCamDZH / 2 then
             put sCamY + sCamLerp * (tTY - sCamY) into sCamY
          end if
+         -- the never-offscreen guarantee (32 px inside the view edges)
+         put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) / 2 into tHalfW
+         put ((item 4 of the rect of sCamGroup) - (item 2 of the rect of sCamGroup)) / 2 into tHalfH
+         if abs(tTX - sCamX) > tHalfW - 32 then put tTX into sCamX
+         if abs(tTY - sCamY) > tHalfH - 32 then put tTY into sCamY
       catch tErr
          put empty into sCamFollow   -- target vanished
       end try
