@@ -211,7 +211,10 @@ command pfStartGame
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
    b2kCamBounds 0, 0, kLevelW, 640
-   b2kCamDeadzone 90, 600
+   -- regular-platformer camera: the hero is LOCKED to screen centre and the
+   -- world scrolls 1:1 (he only approaches the edges where the bounds stop
+   -- the view, at the very start and end of the level)
+   b2kCamDeadzone 0, 0
    b2kCamGoto 120, 480   -- open on the spawn point, no startup slide
    -- level bounds (invisible)
    b2kWall 0, 0, 0, 640
@@ -339,7 +342,7 @@ command pfStartGame
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   b2kCamFollow gHero, 0.2
+   b2kCamFollow gHero, 1
    -- ===== pickups ====
    pfMakeCoin 380, 384
    pfMakeCoin 688, 470
@@ -3704,6 +3707,11 @@ command b2kCamApply
       if tY > sCamB2Y - tHalfH then put sCamB2Y - tHalfH into tY
       if tY < sCamB1Y + tHalfH then put sCamB1Y + tHalfH into tY
    end if
+   -- write the clamped centre back: the follow math must ease against the
+   -- view that is actually shown, or the camera lags invisibly at the
+   -- bounds and the player outruns a scroll that has not started yet
+   put tX into sCamX
+   put tY into sCamY
    if sCamShakeAmp > 0 then
       put the milliseconds into tNow
       if tNow >= sCamShakeEnd then

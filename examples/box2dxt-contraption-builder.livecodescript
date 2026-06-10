@@ -2954,6 +2954,11 @@ command b2kCamApply
       if tY > sCamB2Y - tHalfH then put sCamB2Y - tHalfH into tY
       if tY < sCamB1Y + tHalfH then put sCamB1Y + tHalfH into tY
    end if
+   -- write the clamped centre back: the follow math must ease against the
+   -- view that is actually shown, or the camera lags invisibly at the
+   -- bounds and the player outruns a scroll that has not started yet
+   put tX into sCamX
+   put tY into sCamY
    if sCamShakeAmp > 0 then
       put the milliseconds into tNow
       if tNow >= sCamShakeEnd then
