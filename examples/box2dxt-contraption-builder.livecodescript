@@ -2706,11 +2706,27 @@ on refreshSpeedLabel
    if there is a field "ui_lbl_speed" then put "Motor speed: " & gMotorSpeed & "°/s" into field "ui_lbl_speed"
 end refreshSpeedLabel
 
-on setSettingsHint pText
-   if there is a field "ui_settings_hint" then
-      put pText into field "ui_settings_hint"
-      set the visible of field "ui_settings_hint" to (pText is not empty)
-   end if
+-- Show (or hide) the hint/preview line of the settings block. The field shares
+-- space with the settings rows (both start at the block's top), so when rows
+-- are visible the caller passes their count and the field is re-parked just
+-- BELOW the last row — never drawn over the rows, which is exactly how the
+-- "Simple mode hides..." notice and the special-part previews used to end up
+-- overlapping the settings. If the rows leave no room, the text is dropped.
+on setSettingsHint pText, pBelowRows
+   if there is not a field "ui_settings_hint" then exit setSettingsHint
+   local tL, tTop, tY0, tRows, tHintTop, tHintBottom, tLimit
+   put (the width of this card) - kInspectorW into tL
+   put kTopBarH + kAccentH into tTop
+   put tTop + 186 into tY0                        -- first settings row (mirrors makeInspector)
+   put numOr(pBelowRows, 0) into tRows
+   put tY0 + tRows * 28 into tHintTop
+   if tRows > 0 then add 4 to tHintTop
+   put tY0 + kPropRows * 28 + 2 into tLimit       -- stay clear of BUILD OPTIONS below
+   if tHintTop + 18 > tLimit then put empty into pText   -- a full tab of rows wins
+   put min(tHintTop + 64, tLimit) into tHintBottom
+   set the rect of field "ui_settings_hint" to tL + 12, tHintTop, (the width of this card) - 12, tHintBottom
+   put pText into field "ui_settings_hint"
+   set the visible of field "ui_settings_hint" to (pText is not empty)
 end setSettingsHint
 
 on makeStatusBar
@@ -6813,10 +6829,13 @@ on showPartInspector pCtrl
    if pCtrl is empty then exit showPartInspector
    local tKind, tKey, tRow, tAvail
    put the uKind of pCtrl into tKind
-   local tNm
+   local tNm, tTitle
    put the uPartName of pCtrl into tNm
    if tNm is empty then put niceName(tKind) into tNm
-   setInspector ("Selected: " & tNm), (line 2 of toolHelp(tKind))
+   put "Selected: " & tNm into tTitle
+   -- the title line fits ~18 bold chars; for long names the name matters more
+   if the number of chars of tTitle > 18 then put tNm into tTitle
+   setInspector tTitle, (line 2 of toolHelp(tKind))
    clearPropRows
    put partTabsForInspector(tKind) into tAvail   -- mode-aware: simple hides expert-only tabs
    if tAvail is empty then
@@ -6835,19 +6854,19 @@ on showPartInspector pCtrl
    end repeat
    if tRow > 0 then
       if gInspectorMode is "simple" and advancedPropCount(tKind, gInspTab) > 0 then
-         setSettingsHint "Simple mode hides some expert settings on this tab — switch to Advanced (top of this block) to show them all."
+         setSettingsHint "Simple mode hides some expert settings on this tab — switch to Advanced (top of this block) to show them all.", tRow
       else
          setSettingsHint empty           -- rows are showing; hide the prompt
       end if
    else
       setSettingsHint "Nothing to adjust on this tab."
    end if
-   -- A live, plain-language preview for the special kinds (overrides the hint above).
-   if tKind is "bomb" then setSettingsHint blastPreviewText(pCtrl)
-   else if tKind is "laser" then setSettingsHint laserPreviewText(pCtrl)
-   else if tKind is "fan" then setSettingsHint fanPreviewText(pCtrl)
-   else if tKind is "magnet" then setSettingsHint magnetPreviewText(pCtrl)
-   else if tKind is "goal" then setSettingsHint goalPreviewText(pCtrl)
+   -- A live, plain-language preview for the special kinds (parked below the rows).
+   if tKind is "bomb" then setSettingsHint blastPreviewText(pCtrl), tRow
+   else if tKind is "laser" then setSettingsHint laserPreviewText(pCtrl), tRow
+   else if tKind is "fan" then setSettingsHint fanPreviewText(pCtrl), tRow
+   else if tKind is "magnet" then setSettingsHint magnetPreviewText(pCtrl), tRow
+   else if tKind is "goal" then setSettingsHint goalPreviewText(pCtrl), tRow
 end showPartInspector
 
 -- A live preview of a bomb's reach: how many parts currently sit inside its blast
@@ -9033,7 +9052,7 @@ function toolHelp pId
       case "multiply"
          return "Make many copies of a part at once." & cr & "Multiply tool. Click any part and choose how many copies to make; they drop into a tidy grid, each identical to the original. Great for crates, dominoes and bricks."
       case "link"
-         return "Wire a trigger to a bomb." & cr & "Link tool. Click a pressure plate or sensor, then click a bomb — an amber wire connects them and that trigger now sets off only that bomb. An unwired trigger still sets off everything. Wires show while building."
+         return "Wire a trigger to a bomb." & cr & "Link tool. Click a plate or sensor, then click a bomb — an amber wire ties that trigger to that bomb. An unwired trigger still sets off everything."
       case "balloon"
          return "A helium balloon that floats upward." & cr & "A balloon rises on its own. Tie it to a part with a Rope joint to lift that part. A nearby bomb blast pops it."
       case "bomb"
@@ -9041,33 +9060,33 @@ function toolHelp pId
       case "plate"
          return "A switch that triggers when weighed down." & cr & "A pressure plate. When a part rests on it, it fires a signal: any bombs go off and all motors switch on or off. Build chain reactions with it!"
       case "sensor"
-         return "A trigger zone that fires when entered." & cr & "A sensor is a non-solid zone — parts pass right through it, but the moment one enters, it fires the same signal as a pressure plate: bombs go off and all motors switch. Great for tripwires and gates."
+         return "A trigger zone that fires when entered." & cr & "A sensor is a non-solid zone. The moment a part enters, it fires like a pressure plate: bombs go off and motors switch. Great for tripwires and gates."
       case "fan"
          return "A wind zone that blows parts along." & cr & "A fan pushes any part inside its zone in the arrow's direction. Set the direction and strength in the inspector. No body — parts pass through it."
       case "magnet"
          return "A magnet that pulls parts toward it." & cr & "A magnet attracts nearby parts (or repels them). Set attract/repel, strength and reach in the inspector. No body — parts pass through it."
       case "laser"
-         return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray from its emitter and draws the beam to the first thing it strikes (a wall counts). Set the beam angle in the inspector; while running, select it to read the live hit distance. Shows off the Kit's ray-casting."
+         return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray and draws its beam to the first thing it strikes — walls count. Set the angle in the inspector; select it while running to read the hit distance."
       case "thruster"
-         return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: on Run it pops off with an ignition kick, then pushes steadily in a fixed direction — flying straight by default. Set thrust angle and power in the inspector; switch Aim to 'steers with the body' (and add spin) for a rocket you can rotate. A wired trigger can switch it on/off. Shows off b2kForce / b2kTorque / b2kPush."
+         return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: an ignition kick on Run, then a steady push. Set angle and power in the inspector; Aim makes it steer with the body. A wire can switch it."
       case "goal"
-         return "A target zone — reach it to win." & cr & "A goal zone is the finish line for a puzzle. Press Play: get a movable part inside every goal zone at once and you have solved it. Resize the zone in the inspector. No body — parts pass through it."
+         return "A target zone — reach it to win." & cr & "The finish line for a puzzle. Press Play: get a movable part inside every goal at once to solve it. Resize it in the inspector; parts pass through it."
       case "platform"
-         return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery — a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf. Set its size, angle and grip in the inspector."
+         return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery — a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf."
       case "ramp"
          return "Place a fixed slope for rolling and sliding." & cr & "A ramp is a fixed wedge. Balls roll down it and parts slide along it. Rotate it for any incline and raise its grip to slow the slide — great for launches and runs."
       case "hill"
-         return "Place a smooth rolling mound." & cr & "A hill is fixed scenery built as a smooth chain, so parts roll over it without catching. Make it narrow for a single dome or wide for rolling hills; size and rotate it to shape your landscape."
+         return "Place a smooth rolling mound." & cr & "A hill is a smooth chain mound — parts roll over it without catching. Narrow makes one dome, wide makes rolling hills; size and rotate it to shape the land."
       case "draw"
-         return "Draw your own ground line." & cr & "Press and drag across the play field to sketch a smooth ground contour — bumps, valleys, ramps, anything. On release it becomes solid terrain parts roll along. Drag it to reposition; delete and redraw to change its shape."
+         return "Draw your own ground line." & cr & "Press and drag to sketch a ground contour — bumps, valleys, ramps. On release it becomes solid terrain. Drag to move it; delete and redraw to reshape."
       case "car"
-         return "Drop a ready-made motor car." & cr & "A complete car: a chassis on two sprung, motorised wheels. Drop it in, press Run and it drives off. Drag the body and the whole car moves with it; tune or reverse each wheel's motor in the joint inspector."
+         return "Drop a ready-made motor car." & cr & "A complete car: a chassis on two sprung, motorised wheels — press Run and it drives. Drag the body to move it all; tune each wheel in the joint inspector."
       case "hinge"
          return "Pin two parts so they rotate." & cr & "A hinge is a pin two parts spin around — like an axle or a pendulum. Pin to an Anchor or empty space, switch Motor on, and it drives itself."
       case "weld"
          return "Glue two parts rigidly together." & cr & "A weld locks two parts as one solid piece — they keep their relative position and angle."
       case "servo"
-         return "A powered hold between two parts." & cr & "A servo drives one part to keep its position and angle relative to another. Unlike a rigid weld it gives under load and springs back — good for self-righting parts, soft platforms and return-to-home arms. Click part A, then part B."
+         return "A powered hold between two parts." & cr & "A servo holds one part at a position and angle relative to another, giving under load and springing back — a soft weld. Click part A, then part B."
       case "rope"
          return "Link two parts with a rope." & cr & "A rope keeps two parts from drifting further apart than its length. They can still swing and fall closer together."
       case "slider"
@@ -9077,7 +9096,7 @@ function toolHelp pId
       case "bridge"
          return "Span a plank bridge between two points." & cr & "Bridge tool. Click a part (or empty space), then a second point: a row of hinged planks spans the gap and sags under weight. Anchor the ends to Anchors or the world."
       case "chain"
-         return "Hang a flexible segmented rope." & cr & "Chain tool. Click two points and a rope of small hinged links drapes between them. Unlike the rigid Rope joint, it bends, coils and swings — great for swings and tethers."
+         return "Hang a flexible segmented rope." & cr & "Click two points and a rope of small hinged links drapes between them. It bends, coils and swings — great for swings and tethers."
    end switch
    return niceName(pId) & cr & "Select this tool, then click the stage."
 end toolHelp
