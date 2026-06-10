@@ -26,13 +26,18 @@
 --   5. The bee buzzes along its path (a sprite with no body).
 --   6. Touching the saw plays the HIT pose once, then respawns the hero
 --      (that is b2kSpriteOnFinish firing).
---   7. Jumping up through the green ledge still works with the sprite hero.
---   8. Reset rebuilds (sheets reload from the remembered folder).
---   9. All Phase 1 keyboard checks still hold; ms/frame stays near 16.
+--   7. Jumping up through the BRIDGE planks still works (one-way chain).
+--   8. The hills backdrop fills the card; grass tiles cover the ground and
+--      platforms; everything sits behind the hero but over the backdrop.
+--   9. The hero renders at 96px (the 128px art engine-scaled by 0.75).
+--  10. Touch the FLAG on the tower -> LEVEL COMPLETE! in the HUD.
+--  11. Reset rebuilds cleanly; closing and REOPENING the stack leaves no
+--      ghost sprites behind (the orphan sweep).
+--  12. All Phase 1 keyboard checks still hold; ms/frame stays near 16.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
-local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote
+local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote, gWon
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -132,6 +137,10 @@ function pfLoadSheets
    b2kSheetLoadAtlas "tiles", tFolder & "/spritesheet-tiles-default.png"
    put the result into tN
    if tN < 1 then put "tiles atlas gave 0 frames. " after gLoadNote
+   b2kSheetLoadAtlas "bg", tFolder & "/spritesheet-backgrounds-default.png"
+   put the result into tN
+   if tN < 1 then put "backgrounds atlas gave 0 frames. " after gLoadNote
+   b2kSheetScale "bg", 2.5   -- 256px panels -> 640px (full card height)
    -- the hero's animations (the beige character; swap the colour word to
    -- re-skin: green / pink / purple / yellow)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -141,6 +150,7 @@ function pfLoadSheets
    b2kAnimDef "foes", "buzz", "bee_a,bee_b", 8, true
    b2kAnimDef "foes", "sawspin", "saw_a,saw_b", 10, true
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
+   b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
    return true
 end pfLoadSheets
 
@@ -162,59 +172,88 @@ end pfEmbedPlaceholder
 -- World build / reset
 -- =====================================================================
 command pfStartGame
-   local tRef, tW, tH, tDY
+   local tRef, tW, tH, tDY, tX
    if the shiftKey is down then set the uSpriteSheetFolderPath of this stack to empty
-   b2kTeardown                  -- also wipes sheets; they reload below
+   b2kTeardown                  -- wipes sheets AND sweeps sprite orphans
    pfWipeStage
    put false into gHurtLock
+   put false into gWon
    put 0 into gCoins
    b2kSetup
-   b2kSetScale 60               -- 128px Kenney character ~= 2.1 m
+   b2kSetScale 60               -- Kenney character ~= 2 m at display scale
    b2kAddWalls
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows or A/D run; SPACE / UP / W jumps (tap = hop, hold = full). Collect the coins; avoid the saw." & cr & "The GREEN ledge is one-way: jump up through it from below. Drag bodies with the mouse." & cr & "Shift+Reset re-asks for the Spritesheets folder. Banner comments carry the verify checklist."
+      set the text of field "pfHelp" to "Arrows or A/D run; SPACE / UP / W jumps (tap = hop, hold = full). Collect the coins, avoid the saw," & cr & "and reach the FLAG. The bridge is one-way: jump up through it from below. Drag bodies with the mouse." & cr & "Shift+Reset re-asks for the Spritesheets folder. Banner comments carry the verify checklist."
    else
       if gAssetsOK is true then
-         set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Coins/enemies fall back to plain shapes where their atlas is missing." & cr & "Shift+Reset re-asks for the Spritesheets folder."
+         set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
       else
          set the text of field "pfHelp" to "PLACEHOLDER ART - the atlas load failed: " & gLoadNote & cr & "Press Shift+Reset to pick the Spritesheets folder again (it must contain the" & cr & "spritesheet-*-default.png and .xml files)."
       end if
    end if
-   -- the floor
+   lock screen                  -- one repaint for the whole build
+   -- ===== backdrop: two hill panels, engine-scaled 256 -> 640 =====
+   if gAssetsOK is true and b2kSheetHasFrame("bg", "background_color_hills") then
+      b2kSpriteNew "bg", "background_color_hills", 320, 320
+      put the result into tRef
+      if tRef is not empty then set the layer of tRef to 1
+      b2kSpriteNew "bg", "background_color_hills", 960, 320
+      put the result into tRef
+      if tRef is not empty then set the layer of tRef to 2
+   end if
+   -- ===== terrain: invisible physics slabs + tile art over them =====
    create graphic "pf_ground"
    set the style of it to "rectangle"
-   set the rect of it to 40, 576, 984, 612
+   set the rect of it to 0, 576, 1024, 640
    set the filled of it to true
    set the backgroundColor of it to "90,95,105"
    b2kAddStatic the long id of graphic "pf_ground"
-   -- two steps on the right
-   create graphic "pf_step1"
+   create graphic "pf_plat1"
    set the style of it to "rectangle"
-   set the rect of it to 760, 512, 870, 576
+   set the rect of it to 768, 512, 960, 576
    set the filled of it to true
    set the backgroundColor of it to "110,115,128"
-   b2kAddStatic the long id of graphic "pf_step1"
-   create graphic "pf_step2"
+   b2kAddStatic the long id of graphic "pf_plat1"
+   create graphic "pf_plat2"
    set the style of it to "rectangle"
-   set the rect of it to 870, 448, 984, 576
+   set the rect of it to 960, 448, 1024, 576
    set the filled of it to true
    set the backgroundColor of it to "110,115,128"
-   b2kAddStatic the long id of graphic "pf_step2"
-   -- the one-way ledge (chain, top surface right-to-left = solid side up)
-   b2kSmoothGround "620,440" & cr & "560,440" & cr & "300,440" & cr & "240,440"
-   create graphic "pf_ledge"
-   set the style of it to "line"
-   set the points of it to "300,440" & cr & "560,440"
-   set the lineSize of it to 4
-   set the foregroundColor of it to "70,190,110"
-   -- the hero: an INVISIBLE capsule owns the physics; the sprite is bound
-   -- to it (art bigger than the collision shape - the standard pattern)
+   b2kAddStatic the long id of graphic "pf_plat2"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
+      set the visible of graphic "pf_ground" to false
+      set the visible of graphic "pf_plat1" to false
+      set the visible of graphic "pf_plat2" to false
+      repeat with tX = 0 to 960 step 64
+         pfTile "terrain_grass_block_top", tX, 576
+      end repeat
+      pfTile "terrain_grass_block_top_left", 768, 512
+      pfTile "terrain_grass_block_top", 832, 512
+      pfTile "terrain_grass_block_top_right", 896, 512
+      pfTile "terrain_grass_block_top", 960, 448
+      pfTile "terrain_grass_block_center", 960, 512
+   end if
+   -- the one-way ledge (chain, solid side up); bridge planks when available
+   b2kSmoothGround "624,440" & cr & "560,440" & cr & "304,440" & cr & "240,440"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bridge") then
+      repeat with tX = 304 to 496 step 64
+         pfTile "bridge", tX, 424
+      end repeat
+   else
+      create graphic "pf_ledge"
+      set the style of it to "line"
+      set the points of it to "304,440" & cr & "560,440"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+   end if
+   -- ===== the hero: invisible capsule owns the physics, art is bound =====
    if gAssetsOK is true then
-      put 56 into tW
-      put 104 into tH
-      put -10 into tDY
+      b2kSheetScale "chars", 0.75   -- 128px art -> 96px on screen
+      put 48 into tW
+      put 88 into tH
+      put -4 into tDY
    else
       put 36 into tW
       put 60 into tH
@@ -222,55 +261,88 @@ command pfStartGame
    end if
    create graphic "pf_heroBody"
    set the style of it to "rectangle"
-   set the rect of it to 140 - tW div 2, 470 - tH div 2, 140 + tW div 2, 470 + tH div 2
+   set the rect of it to 120 - tW div 2, 480 - tH div 2, 120 + tW div 2, 480 + tH div 2
    set the visible of it to false
    put the long id of graphic "pf_heroBody" into gHero
    b2kAddCapsule gHero
    b2kSetFixedRotation gHero, true
    b2kSetFriction gHero, 0.08
-   b2kSpriteNew "chars", empty, 140, 470
+   if gAssetsOK is true then
+      b2kSpriteNew "chars", "character_beige_idle", 120, 480
+   else
+      b2kSpriteNew "chars", 1, 120, 480
+   end if
    put the result into gHeroSpr
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   -- pickups and hazards
-   pfMakeCoin 430, 380
-   pfMakeCoin 560, 300
-   pfMakeCoin 922, 400
+   -- ===== pickups, hazards, the goal =====
+   pfMakeCoin 380, 384
+   pfMakeCoin 688, 470
+   pfMakeCoin 864, 448
    put 3 into gCoinsTotal
    put empty into tRef
    put empty into gBeeSpr
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
-      b2kSpriteNew "foes", "saw_a", 700, 546
+      b2kSpriteNew "foes", "saw_a", 640, 544
       put the result into tRef
       if tRef is not empty then
          set the uPfHazardFlag of tRef to true
          b2kSpritePlay tRef, "sawspin"
          b2kAddSensor tRef, "ball"
       end if
-      b2kSpriteNew "foes", "bee_a", 860, 200
+      b2kSpriteNew "foes", "bee_a", 520, 260
       put the result into gBeeSpr
       if gBeeSpr is not empty then b2kSpritePlay gBeeSpr, "buzz"
    end if
    if tRef is empty then
       create graphic "pf_saw"
       set the style of it to "oval"
-      set the rect of it to 676, 522, 724, 570
+      set the rect of it to 616, 520, 664, 568
       set the filled of it to true
       set the backgroundColor of it to "210,60,60"
       put the long id of graphic "pf_saw" into tRef
       set the uPfHazardFlag of tRef to true
       b2kAddSensor tRef, "ball"
    end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
+      b2kSpriteNew "tiles", "flag_blue_a", 992, 416
+      put the result into tRef
+      if tRef is not empty then
+         set the uPfGoalFlag of tRef to true
+         b2kSpritePlay tRef, "wave"
+         b2kAddSensor tRef, "ball"
+      end if
+   end if
    -- input + events
    b2kInputOn
    b2kBindAction "jump", "space,up,w"
    b2kFrameTarget the long id of me
    b2kContactTarget the long id of me
+   pfChromeFront
+   unlock screen
    put empty into gHudLast
    put true into gStarted
    b2kStart
 end pfStartGame
+
+-- One 64px tile sprite by its top-left corner (sprites centre on x,y).
+command pfTile pFrame, pX, pY
+   b2kSpriteNew "tiles", pFrame, pX + 32, pY + 32
+end pfTile
+
+-- The chrome was built before the stage, so raise it above the sprites.
+command pfChromeFront
+   local tN, tC
+   put the number of controls of this card into tN
+   set the itemDelimiter to comma
+   repeat for each item tC in "pfTitle,pfHelp,pfHud"
+      if there is a field tC then set the layer of field tC to tN
+   end repeat
+   repeat for each item tC in "pfbtn_pause,pfbtn_reset"
+      if there is a button tC then set the layer of button tC to tN
+   end repeat
+end pfChromeFront
 
 command pfMakeCoin pX, pY
    local tRef
@@ -346,10 +418,11 @@ on b2kFrame
    end if
    -- the bee patrols on pure math (a sprite is just a control)
    if gBeeSpr is not empty then
-      set the loc of gBeeSpr to round(860 + 60 * sin(the milliseconds / 900)), round(190 + 22 * sin(the milliseconds / 430))
+      set the loc of gBeeSpr to round(520 + 80 * sin(the milliseconds / 900)), round(260 + 26 * sin(the milliseconds / 430))
    end if
    put "coins " & gCoins & "/" & gCoinsTotal & "   |   anim " & b2kSpriteAnim(gHeroSpr) & "   |   held " & b2kKeysHeld() & "   |   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
-   if gCoins >= gCoinsTotal then put "   ALL COINS - nice!" after tHud
+   if gCoins >= gCoinsTotal then put "   ALL COINS!" after tHud
+   if gWon is true then put "LEVEL COMPLETE!   " before tHud
    if tHud is not gHudLast then
       put tHud into gHudLast
       set the text of field "pfHud" to tHud
@@ -370,6 +443,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       exit b2kSensorEnter
    end if
    if the uPfHazardFlag of pSensorCtrl is true then pfHurt
+   if the uPfGoalFlag of pSensorCtrl is true then put true into gWon
 end b2kSensorEnter
 
 command pfHurt
@@ -395,11 +469,11 @@ function pfOnGround
    put item 1 of tPos into tX
    put item 2 of tPos into tY
    if gAssetsOK is true then
-      put 62 into tReach
+      put 54 into tReach
    else
       put 40 into tReach
    end if
-   repeat for each item tOff in "-14,14"
+   repeat for each item tOff in "-12,12"
       get b2kRayHit(tX + tOff, tY, tX + tOff, tY + tReach)
       if b2kRayDist() is not empty and b2kRayHitNormalY() <= -0.6 then
          return true
@@ -508,6 +582,7 @@ end mouseRelease
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
 -- SPRITE  b2kSheetLoad name,path,fw,fh[,n] · b2kSheetLoadAtlas name,png[,xml] ·
 --         b2kSheetFromImage name,img,fw,fh · b2kSheetFrames(name) ·
+--         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
 --         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
 --         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
 --         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
@@ -571,6 +646,7 @@ local sSheetIcon     -- sheet -> frame key -> sliced frame image id (lazy)
 local sSheetFlip     -- sheet -> frame key -> mirrored image id (lazy)
 local sSheetData     -- sheet -> cached source imageData (freed on teardown)
 local sSheetAlpha    -- sheet -> cached source alphaData
+local sSheetScale    -- sheet -> display scale factor (default 1; engine-resampled at slice time)
 local sAnimList      -- "sheet|anim" -> CR list of frame keys
 local sAnimFPS       -- "sheet|anim" -> frames per second
 local sAnimLoop      -- "sheet|anim" -> true/false
@@ -2480,6 +2556,49 @@ function b2kSheetHasFrame pName, pFrame
    return (sSheetRegion[pName][pFrame] is not empty)
 end b2kSheetHasFrame
 
+-- Display scale for a sheet's frames (default 1). Frames slice lazily, so
+-- set this right after loading the sheet, BEFORE creating sprites or anims:
+-- already-sliced frames are dropped and re-bake at the new scale, but live
+-- sprites keep their button rects. The engine does the resampling, so any
+-- frame size displays at any sprite size.
+command b2kSheetScale pName, pScale
+   local tKey, tId
+   put b2kClamp(pScale, 0.05, 8) into pScale
+   if b2kNumberOr(sSheetScale[pName], 1) is pScale then exit b2kSheetScale
+   put pScale into sSheetScale[pName]
+   repeat for each key tKey in sSheetIcon[pName]
+      put sSheetIcon[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   repeat for each key tKey in sSheetFlip[pName]
+      put sSheetFlip[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   delete variable sSheetIcon[pName]
+   delete variable sSheetFlip[pName]
+end b2kSheetScale
+
+-- A frame's DISPLAY size as "w,h" (its region size times the sheet scale) --
+-- lay out tiles and platforms from this instead of hard-coding pixels.
+function b2kSheetFrameSize pName, pFrame
+   local tRegion, tScale
+   put sSheetRegion[pName][pFrame] into tRegion
+   if tRegion is empty then return empty
+   set the itemDelimiter to comma
+   put b2kNumberOr(sSheetScale[pName], 1) into tScale
+   return max(1, round((item 3 of tRegion) * tScale)) & comma & max(1, round((item 4 of tRegion) * tScale))
+end b2kSheetFrameSize
+
 -- Define a named animation: pFrames is a comma list of frame names and/or
 -- 1-based indices, with numeric ranges ("1-8") expanded. pLoop defaults true.
 command b2kAnimDef pSheet, pAnim, pFrames, pFPS, pLoop
@@ -2519,11 +2638,11 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
    if sSheetKeys[pSheet] is empty then return empty
    put pFrame into tKey
    if tKey is empty then put line 1 of sSheetKeys[pSheet] into tKey
-   put sSheetRegion[pSheet][tKey] into tRegion
+   put b2kSheetFrameSize(pSheet, tKey) into tRegion   -- "w,h" at display scale
    if tRegion is empty then return empty
    set the itemDelimiter to comma
-   put item 3 of tRegion into tW
-   put item 4 of tRegion into tH
+   put item 1 of tRegion into tW
+   put item 2 of tRegion into tH
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
@@ -2780,6 +2899,7 @@ command b2kSheetForget pName
    delete variable sSheetFlip[pName]
    delete variable sSheetData[pName]
    delete variable sSheetAlpha[pName]
+   delete variable sSheetScale[pName]
    repeat for each key tKey in sAnimList
       if char 1 to (the number of chars of pName) + 1 of tKey is pName & "|" then
          delete variable sAnimList[tKey]
@@ -2803,10 +2923,38 @@ command b2kSheetsWipe
    put empty into sSheetFlip
    put empty into sSheetData
    put empty into sSheetAlpha
+   put empty into sSheetScale
    put empty into sAnimList
    put empty into sAnimFPS
    put empty into sAnimLoop
+   b2kSpriteSweepOrphans
 end b2kSheetsWipe
+
+-- Internal: delete Kit-generated sprite/sheet controls left over from a
+-- PREVIOUS session. Script-locals reset when a stack reopens (or a new
+-- script is pasted in), but the controls persist -- registry cleanup can't
+-- see them, so a reopened stack would show ghost sprites frozen on their
+-- last frame. Swept by name prefix on every teardown.
+command b2kSpriteSweepOrphans
+   local tAgain, i, tName, tHit
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         put false into tHit
+         if char 1 to 7 of tName is "b2kspr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfl_" then put true into tHit
+         if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         if tHit then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end b2kSpriteSweepOrphans
 
 -- ---- sprite internals ------------------------------------------------
 
@@ -2876,7 +3024,7 @@ end b2kXmlAttr
 -- Internal: make sure a frame's sliced image exists (lazy, cached). The
 -- source pixels are fetched once per sheet and kept until teardown.
 command b2kSheetEnsureIcon pSheet, pKey
-   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName
+   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName, tScale, tW2, tH2
    if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
    put sSheetRegion[pSheet][pKey] into tRegion
    if tRegion is empty then exit b2kSheetEnsureIcon
@@ -2913,6 +3061,19 @@ command b2kSheetEnsureIcon pSheet, pKey
    set the height of it to tH
    set the imageData of image tName to tFD
    if tFA is not empty then set the alphaData of image tName to tFA
+   -- sheet scale: resize the control (the engine resamples the render),
+   -- then bake that render back in as the frame's real pixels
+   put b2kNumberOr(sSheetScale[pSheet], 1) into tScale
+   if tScale is not 1 then
+      put max(1, round(tW * tScale)) into tW2
+      put max(1, round(tH * tScale)) into tH2
+      set the width of image tName to tW2
+      set the height of image tName to tH2
+      put the imageData of image tName into tFD
+      put the alphaData of image tName into tFA
+      set the imageData of image tName to tFD
+      if tFA is not empty then set the alphaData of image tName to tFA
+   end if
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 

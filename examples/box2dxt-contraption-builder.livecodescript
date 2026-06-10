@@ -94,6 +94,7 @@
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
 -- SPRITE  b2kSheetLoad name,path,fw,fh[,n] · b2kSheetLoadAtlas name,png[,xml] ·
 --         b2kSheetFromImage name,img,fw,fh · b2kSheetFrames(name) ·
+--         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
 --         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
 --         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
 --         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
@@ -157,6 +158,7 @@ local sSheetIcon     -- sheet -> frame key -> sliced frame image id (lazy)
 local sSheetFlip     -- sheet -> frame key -> mirrored image id (lazy)
 local sSheetData     -- sheet -> cached source imageData (freed on teardown)
 local sSheetAlpha    -- sheet -> cached source alphaData
+local sSheetScale    -- sheet -> display scale factor (default 1; engine-resampled at slice time)
 local sAnimList      -- "sheet|anim" -> CR list of frame keys
 local sAnimFPS       -- "sheet|anim" -> frames per second
 local sAnimLoop      -- "sheet|anim" -> true/false
@@ -2066,6 +2068,49 @@ function b2kSheetHasFrame pName, pFrame
    return (sSheetRegion[pName][pFrame] is not empty)
 end b2kSheetHasFrame
 
+-- Display scale for a sheet's frames (default 1). Frames slice lazily, so
+-- set this right after loading the sheet, BEFORE creating sprites or anims:
+-- already-sliced frames are dropped and re-bake at the new scale, but live
+-- sprites keep their button rects. The engine does the resampling, so any
+-- frame size displays at any sprite size.
+command b2kSheetScale pName, pScale
+   local tKey, tId
+   put b2kClamp(pScale, 0.05, 8) into pScale
+   if b2kNumberOr(sSheetScale[pName], 1) is pScale then exit b2kSheetScale
+   put pScale into sSheetScale[pName]
+   repeat for each key tKey in sSheetIcon[pName]
+      put sSheetIcon[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   repeat for each key tKey in sSheetFlip[pName]
+      put sSheetFlip[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   delete variable sSheetIcon[pName]
+   delete variable sSheetFlip[pName]
+end b2kSheetScale
+
+-- A frame's DISPLAY size as "w,h" (its region size times the sheet scale) --
+-- lay out tiles and platforms from this instead of hard-coding pixels.
+function b2kSheetFrameSize pName, pFrame
+   local tRegion, tScale
+   put sSheetRegion[pName][pFrame] into tRegion
+   if tRegion is empty then return empty
+   set the itemDelimiter to comma
+   put b2kNumberOr(sSheetScale[pName], 1) into tScale
+   return max(1, round((item 3 of tRegion) * tScale)) & comma & max(1, round((item 4 of tRegion) * tScale))
+end b2kSheetFrameSize
+
 -- Define a named animation: pFrames is a comma list of frame names and/or
 -- 1-based indices, with numeric ranges ("1-8") expanded. pLoop defaults true.
 command b2kAnimDef pSheet, pAnim, pFrames, pFPS, pLoop
@@ -2105,11 +2150,11 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
    if sSheetKeys[pSheet] is empty then return empty
    put pFrame into tKey
    if tKey is empty then put line 1 of sSheetKeys[pSheet] into tKey
-   put sSheetRegion[pSheet][tKey] into tRegion
+   put b2kSheetFrameSize(pSheet, tKey) into tRegion   -- "w,h" at display scale
    if tRegion is empty then return empty
    set the itemDelimiter to comma
-   put item 3 of tRegion into tW
-   put item 4 of tRegion into tH
+   put item 1 of tRegion into tW
+   put item 2 of tRegion into tH
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
@@ -2366,6 +2411,7 @@ command b2kSheetForget pName
    delete variable sSheetFlip[pName]
    delete variable sSheetData[pName]
    delete variable sSheetAlpha[pName]
+   delete variable sSheetScale[pName]
    repeat for each key tKey in sAnimList
       if char 1 to (the number of chars of pName) + 1 of tKey is pName & "|" then
          delete variable sAnimList[tKey]
@@ -2389,10 +2435,38 @@ command b2kSheetsWipe
    put empty into sSheetFlip
    put empty into sSheetData
    put empty into sSheetAlpha
+   put empty into sSheetScale
    put empty into sAnimList
    put empty into sAnimFPS
    put empty into sAnimLoop
+   b2kSpriteSweepOrphans
 end b2kSheetsWipe
+
+-- Internal: delete Kit-generated sprite/sheet controls left over from a
+-- PREVIOUS session. Script-locals reset when a stack reopens (or a new
+-- script is pasted in), but the controls persist -- registry cleanup can't
+-- see them, so a reopened stack would show ghost sprites frozen on their
+-- last frame. Swept by name prefix on every teardown.
+command b2kSpriteSweepOrphans
+   local tAgain, i, tName, tHit
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         put false into tHit
+         if char 1 to 7 of tName is "b2kspr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfl_" then put true into tHit
+         if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         if tHit then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end b2kSpriteSweepOrphans
 
 -- ---- sprite internals ------------------------------------------------
 
@@ -2462,7 +2536,7 @@ end b2kXmlAttr
 -- Internal: make sure a frame's sliced image exists (lazy, cached). The
 -- source pixels are fetched once per sheet and kept until teardown.
 command b2kSheetEnsureIcon pSheet, pKey
-   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName
+   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName, tScale, tW2, tH2
    if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
    put sSheetRegion[pSheet][pKey] into tRegion
    if tRegion is empty then exit b2kSheetEnsureIcon
@@ -2499,6 +2573,19 @@ command b2kSheetEnsureIcon pSheet, pKey
    set the height of it to tH
    set the imageData of image tName to tFD
    if tFA is not empty then set the alphaData of image tName to tFA
+   -- sheet scale: resize the control (the engine resamples the render),
+   -- then bake that render back in as the frame's real pixels
+   put b2kNumberOr(sSheetScale[pSheet], 1) into tScale
+   if tScale is not 1 then
+      put max(1, round(tW * tScale)) into tW2
+      put max(1, round(tH * tScale)) into tH2
+      set the width of image tName to tW2
+      set the height of image tName to tH2
+      put the imageData of image tName into tFD
+      put the alphaData of image tName into tFA
+      set the imageData of image tName to tFD
+      if tFA is not empty then set the alphaData of image tName to tFA
+   end if
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 

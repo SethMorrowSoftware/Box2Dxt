@@ -55,7 +55,16 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   removes sprites, `b2kTeardown` also frees sheets). The platformer
   example now plays an atlas-driven animated hero with spinning coin
   pickups, a patrolling bee, and a saw hazard that chains
-  hit-pose-then-respawn through `b2kSpriteOnFinish`.
+  hit-pose-then-respawn through `b2kSpriteOnFinish`. **Per-sheet display
+  scaling** (`b2kSheetScale` — engine-resampled at slice time, any frame
+  size at any sprite size; `b2kSheetFrameSize` for layout math), and an
+  **orphan sweep** on every teardown (script state resets when a stack
+  reopens but controls persist — previously a ghost sprite could linger
+  frozen on its last frame). The platformer example is now a polished
+  scene: hills backdrop panels (256px art engine-scaled to 640), grass
+  tile terrain over invisible physics slabs, bridge-plank one-way ledge,
+  a 0.75-scaled hero, and a waving goal flag with a LEVEL COMPLETE
+  state.
 - **Kit Input module (Game Kit Phase 1).** Poll-based keyboard input for
   games: `b2kInputOn` arms a once-per-frame `keysDown` sample (taken inside
   the loop's screen lock, so `on b2kFrame` always sees the current frame's
