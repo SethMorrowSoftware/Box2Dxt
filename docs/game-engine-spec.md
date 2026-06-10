@@ -202,12 +202,12 @@ Consequences the design accepts and documents:
 - **Pacing, not throughput, is the first failure mode.** `send … in 16 ms` is
   not vsync-locked and the loop schedules the next step *after* the frame's
   work, so a loaded frame drifts the real rate down. **Measured (Phase 0,
-  Win32): 18 ms average idle cadence — a ~55 fps ceiling before any work**
-  (Windows timer granularity ≈ 15.6 ms plus scheduling slop); the spike's
-  camera scene saturated at exactly that ceiling (55.2 fps steady). The
-  fixed-step accumulator means none of this can corrupt the simulation — the
-  cost is render rate, not physics jitter. Phase 1 therefore **must** include
-  the pacing fix: schedule the next step `in max(1, 16 − elapsed)` ms.
+  Win32): 16.5 ms average idle cadence, max 17–18 ms** once settling ticks are
+  discarded — an idle ceiling of ~58–60 fps that every millisecond of frame
+  work erodes (the v1 camera scene held ~55 steady). The fixed-step
+  accumulator means none of this can corrupt the simulation — the cost is
+  render rate, not physics jitter. Phase 1 therefore **must** include the
+  pacing fix: schedule the next step `in max(1, 16 − elapsed)` ms.
 - **One budget, shared with user code.** There is no other thread: a blocking
   call anywhere (`answer`, `wait`, synchronous file I/O) stalls the world.
   Game code must defer blocking work to pause states — a documented constraint
@@ -455,20 +455,22 @@ keeps sheets, bindings, and camera config.
 | # | Risk | Likelihood | Mitigation |
 |---|---|---|---|
 | R1 | `the keysDown` unreliable on some OXT platform | **Resolved on Win32** (works); other platforms pending | Fallback frontscript backend (§4) behind the same API stays specced |
-| R2 | Group-scroll frame-switch or camera scroll fights `acceleratedRendering` (artifacts/cost) | Medium — S9 ran with `layerMode "scrolling"` and held the machine's loop ceiling (55.2 fps steady); S3/S4 visual verdicts pending | Plan B for sprites = icon-flip backend (§2.2-3); builder precedent shows the popup workaround pattern |
+| R2 | Group-scroll sprite cost under `acceleratedRendering` | **Now the top open risk.** S9 camera alone: ~47–55 fps. S10 (25 sprite groups + 25 bodies): warm avg 33.6 on modest hardware, plus a long first-frame stall and ~250 ms *build* per sprite via script `imageData` | v3 spike isolates cost by mode-cycling (orbit / anim / bodies-only), tests engine `copy…to group` builds, and logs first-frame latency; plan B remains the icon-flip backend (§2.2-3); spawn-time pooling regardless |
 | R3 | `flip image` missing/odd in OXT | **Resolved** (works on Win32, byte-verified) | Script-side `imageData` row-mirror fallback no longer needed |
 | R4 | Ray-from-inside-shape self-hit behaviour differs | **Resolved** (self-skip confirmed; ray-all also skips; normal and distance exact) | — |
-| R5 | One-way platforms: segment/chain one-sidedness vs a jumping capsule | **Half-resolved**: segments are two-sided on both windings (one-way via `b2kWall` is out); chain verdict pending S8 v2 | If chains also fail: brief upward `b2kSetMask` window during the jump |
-| R9 | Calling Kit *commands* with function syntax (`get b2kSpawnBall(...)`, as Kit docs show) may not work at all — v1 spike's two silent failures were exactly its two such call sites | High (suspected) | Spike v2 uses statement + `the result` everywhere; **S11** probes the syntax directly; Kit docs/examples corrected per its verdict |
+| R5 | One-way platforms: segment/chain one-sidedness vs a jumping capsule | **Half-resolved**: segments are two-sided on both windings (one-way via `b2kWall` is out); the v2 chain test was blocked by the `b2kSmoothGround` bug (now fixed) — verdict pending the S8 re-run | If chains also fail: brief upward `b2kSetMask` window during the jump |
+| R9 | Calling Kit *commands* with function syntax (`get b2kSpawnBall(...)`) | **Resolved — confirmed broken** (S11: throws at the call line without entering the handler). Statement + `the result` is the only calling convention | Fixed everywhere: Kit internals (`b2kSmoothGround`, `b2kLayerBits` named layers), the builder's servo joint, the 60-second starts and ~25 kit-guide snippets; CHANGELOG records it |
 | R6 | Perf: 25+ animated sprites + camera at 60 fps on mid hardware | Medium | Redundancy-suppressed ticks; dynamic layers; spike has a numbered scene; degrade by lowering anim fps, never sim rate |
 | R7 | Kit growth (~25 KB) bloats embedded examples | Certain, accepted | By design; sync tool unchanged; ticks early-exit when unused |
 | R8 | OXT compile strictness on new code | Certain | Existing static gates run on every edit; naming rules in §3.2 |
 
 **Open questions** (decided during implementation, recorded in plan.md's
-decision log): sprite inner-image sharing strategy (filename-reference vs data
-copy — R2 spike informs); whether `b2kPlayerMake` with no sheet draws a capsule
-graphic or stays invisible; camera + `b2kAddWalls` interaction (walls should
-bound the *level*, not the card, when the camera is on).
+decision log): sprite instancing strategy — the script `imageData` copy
+measured ~250 ms per sprite on modest hardware, so v3 tests engine
+`copy … to group` and Phase 2 likely pools sprites at scene load either way;
+whether `b2kPlayerMake` with no sheet draws a capsule graphic or stays
+invisible; camera + `b2kAddWalls` interaction (walls should bound the *level*,
+not the card, when the camera is on).
 
 ## 11. Out of scope (for now)
 

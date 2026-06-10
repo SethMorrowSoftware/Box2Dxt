@@ -26,7 +26,7 @@ local gS3Frame, gS3Tick, gS4Motion, gS4On, gS4Ang
 local gS5Made
 local gS8Phase, gS8T0, gS8MinY, gS8Tail, gS8Ball
 local gS9Hero, gS9Logged
-local gS10T0, gS10Logged, gSpFrame, gSpNext, gSpAng, gSpCX, gSpCY
+local gS10T0, gS10Logged, gS10Mode, gS10First, gSpFrame, gSpNext, gSpAng, gSpCX, gSpCY
 local gFpsN, gFpsT0, gFpsLast, gFpsMin, gFpsSum, gFpsSamples
 local gFpsWarmMin, gFpsWarmSum, gFpsWarmN
 
@@ -136,7 +136,11 @@ on mouseUp
             runS9
             break
          case "skbtn_S10"
-            runS10
+            if gSpikeTest is "S10" then
+               s10NextMode
+            else
+               runS10
+            end if
             break
          case "skbtn_S11"
             runS11
@@ -832,7 +836,7 @@ command runS9
    end try
    put false into gS9Logged
    b2kStart
-   spikeStatus "S9 CAMERA - a 600x400 window onto a 2000px level; the yellow ball runs right" & cr & "and the view follows (teleports back at the end, forever). PASS if: scroll is smooth," & cr & "nothing draws outside the window, boxes tumble normally. CLICK a box to test the" & cr & "scroll-corrected grab. ~15 s logs an fps line; STOP logs the summary."
+   spikeStatus "S9 CAMERA - a 600x400 window onto a 2000px level; the yellow ball runs right" & cr & "and the view follows (teleports back at the end, forever). PASS if: scroll is smooth," & cr & "nothing draws outside the window, boxes tumble normally. CLICK a box to test the" & cr & "scroll-corrected grab. LET IT RUN ~20 s (steady state); STOP logs the summary."
 end runS9
 
 command s9Frame
@@ -921,30 +925,76 @@ command runS10
    spikeLog "S10 built: 25 sprites + 25 bodies in " & (the milliseconds - gS10T0) & " ms"
    put the milliseconds into gS10T0
    put false into gS10Logged
+   put 1 into gS10Mode
+   put false into gS10First
    b2kStart
-   spikeStatus "S10 PERF - 25 animated orbiting sprites + 25 tumbling bodies + key polling." & cr & "Let it run ~12 s for the auto fps line; drag bodies around meanwhile (mouse grab)." & cr & "PASS if warm avg fps reaches the S0 ceiling (~55 on this machine) and motion stays" & cr & "smooth. STOP logs the final summary."
+   spikeStatus "S10 PERF mode 1/3 (anim + orbit + bodies) - 25 sprites + 25 bodies + key polling." & cr & "Give each mode ~10 s, then CLICK S10 AGAIN to cycle: 1 full -> 2 no orbit -> 3 bodies" & cr & "only. Each switch logs the mode's warm fps, isolating what the sprites cost." & cr & "STOP logs the final summary."
 end runS10
+
+-- Re-clicking S10 cycles the load mode so the report attributes cost:
+-- mode 1 = anim + orbit + bodies, 2 = anim + bodies, 3 = bodies only.
+command s10NextMode
+   s10LogModeStats
+   add 1 to gS10Mode
+   if gS10Mode > 3 then put 1 into gS10Mode
+   spikeFpsReset
+   put the milliseconds into gS10T0
+   put false into gS10Logged
+   put false into gS10First
+   spikeLog "S10 switched to mode " & gS10Mode & " (" & s10ModeName(gS10Mode) & ")"
+   spikeStatus "S10 PERF mode " & gS10Mode & "/3 (" & s10ModeName(gS10Mode) & ")." & cr & "Give it ~10 s, then click S10 again for the next mode; STOP for the final summary."
+end s10NextMode
+
+command s10LogModeStats
+   if gFpsWarmN > 0 then
+      spikeLog "S10 mode " & gS10Mode & " (" & s10ModeName(gS10Mode) & "): warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / gFpsWarmN * 10) / 10
+   else
+      if gFpsSamples > 0 then
+         spikeLog "S10 mode " & gS10Mode & " (" & s10ModeName(gS10Mode) & "): avg " & round(gFpsSum / gFpsSamples * 10) / 10 & " (short run)"
+      end if
+   end if
+end s10LogModeStats
+
+function s10ModeName pMode
+   switch pMode
+      case 1
+         return "anim + orbit + bodies"
+      case 2
+         return "anim + bodies, no orbit"
+      case 3
+         return "bodies only, no sprite work"
+   end switch
+   return pMode
+end s10ModeName
 
 command s10Frame
    local i, tNow, tJunk
    put the milliseconds into tNow
+   if gS10First is not true then
+      put true into gS10First
+      spikeLog "S10 first frame " & (tNow - gS10T0) & " ms after start (compositor/scene warm-up)"
+   end if
    try
       put the keysDown into tJunk   -- include the input module's per-frame cost
-      repeat with i = 1 to 25
-         add 3 to gSpAng[i]
-         set the loc of group ("sk_sp" & i) to round(gSpCX[i] + 24 * cos(gSpAng[i] * kSpikeDeg)), round(gSpCY[i] + 24 * sin(gSpAng[i] * kSpikeDeg))
-         if tNow >= gSpNext[i] then
-            put (gSpFrame[i] mod 4) + 1 into gSpFrame[i]
-            set the hScroll of group ("sk_sp" & i) to (gSpFrame[i] - 1) * 64
-            put tNow + 100 into gSpNext[i]
-         end if
-      end repeat
+      if gS10Mode <= 2 then
+         repeat with i = 1 to 25
+            if gS10Mode = 1 then
+               add 3 to gSpAng[i]
+               set the loc of group ("sk_sp" & i) to round(gSpCX[i] + 24 * cos(gSpAng[i] * kSpikeDeg)), round(gSpCY[i] + 24 * sin(gSpAng[i] * kSpikeDeg))
+            end if
+            if tNow >= gSpNext[i] then
+               put (gSpFrame[i] mod 4) + 1 into gSpFrame[i]
+               set the hScroll of group ("sk_sp" & i) to (gSpFrame[i] - 1) * 64
+               put tNow + 100 into gSpNext[i]
+            end if
+         end repeat
+      end if
    catch tErr
       spikeLogOnce "err_s10f", "S10 ERROR in frame logic: " & tErr
    end try
    if gS10Logged is not true and tNow - gS10T0 > 12000 then
       put true into gS10Logged
-      spikeLog "S10 after 12 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10 & " (PASS if warm avg ~= the S0 ceiling)"
+      spikeLog "S10 mode " & gS10Mode & " after 12 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10
    end if
 end s10Frame
 
@@ -958,9 +1008,11 @@ command runS11
    local tRef
    if spikeBeginTest("S11", true) is false then exit runS11
    b2kSetup
-   -- form 1: statement call + the result (the documented-safe form)
+   -- form 1: statement call + the result (the documented-safe form).
+   -- X11-safe colour names only: CSS-only names like "teal" throw in LC,
+   -- which is what v2 accidentally proved here.
    try
-      b2kSpawnBall 320, 220, 44, "teal"
+      b2kSpawnBall 320, 220, 44, "orange"
       put the result into tRef
       if tRef is empty then
          spikeLog "S11 statement + the result: ran but result EMPTY (unexpected)"
@@ -972,7 +1024,7 @@ command runS11
    end try
    -- form 2: function syntax on the same command (the kit header's pattern)
    try
-      get b2kSpawnBall(400, 220, 44, "lime")
+      get b2kSpawnBall(400, 220, 44, "yellow")
       if it is empty then
          spikeLog "S11 get-command syntax: ran but returned EMPTY"
       else
@@ -1065,19 +1117,40 @@ end spikeOpaque
 
 -- A sprite: a frame-sized clipped group holding its own copy of the sheet.
 -- Frame N shows via: set the hScroll of the group to (N-1) * frameW.
+-- v2 measured the script-side imageData copy at ~250 ms per sprite on a
+-- modest machine, so v3 tries an engine-side `copy ... to group` first and
+-- falls back to the imageData path; the report logs which path ran and the
+-- first sprite's build cost (Phase 2 needs this to pick the instancing
+-- strategy).
 function spikeMakeSprite pName, pX, pY
-   local tG
+   local tG, tT0, tCopied
    spikeEnsureSheet
+   put the milliseconds into tT0
    put spikeNewGroup(pName, pX, pY) into tG
    if tG is empty then return empty
-   create image (pName & "_img") in group pName
-   set the lockLoc of it to true
-   set the rect of it to pX, pY, pX + 256, pY + 64
-   set the imageData of image (pName & "_img") to gSheetData
-   set the alphaData of image (pName & "_img") to gSheetAlpha
+   put false into tCopied
+   try
+      copy image "sk_sheet" of this card to group pName
+      set the name of image "sk_sheet" of group pName to (pName & "_img")
+      set the lockLoc of image (pName & "_img") to true
+      set the rect of image (pName & "_img") to pX, pY, pX + 256, pY + 64
+      put true into tCopied
+      spikeLogOnce "sprcopy", "sprite build path: engine copy-to-group works"
+   catch tErr
+      put false into tCopied
+   end try
+   if not tCopied then
+      create image (pName & "_img") in group pName
+      set the lockLoc of it to true
+      set the rect of it to pX, pY, pX + 256, pY + 64
+      set the imageData of image (pName & "_img") to gSheetData
+      set the alphaData of image (pName & "_img") to gSheetAlpha
+      spikeLogOnce "sprdata", "sprite build path: script imageData copy (copy-to-group failed)"
+   end if
    set the lockLoc of group pName to true
    set the rect of group pName to pX, pY, pX + 64, pY + 64
    set the hScroll of group pName to 0
+   spikeLogOnce "sprms", "sprite build cost: " & (the milliseconds - tT0) & " ms (first sprite)"
    return tG
 end spikeMakeSprite
 
@@ -1143,8 +1216,8 @@ end spikeNewGroup
 -- =====================  60-SECOND START  =============================
 --   on openCard
 --      b2kQuickStart            -- world + gravity + walls around the card + go
---      get b2kSpawnBall(200,80, 50)          -- create + drop a ball
---      get b2kSpawnBox(260,80, 60,40, "orange")
+--      b2kSpawnBall 200,80, 50               -- create + drop a ball
+--      b2kSpawnBox 260,80, 60,40, "orange"   -- (read `the result` for the ref)
 --      b2kContactTarget the long id of me    -- (optional) collision messages
 --   end openCard
 --   on mouseDown ; get b2kGrab(the mouseH,the mouseV) ; end mouseDown
@@ -1635,7 +1708,14 @@ command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
    set the style of tRef to "rectangle"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
-   if pColor is not empty then set the backgroundColor of tRef to pColor
+   if pColor is not empty then
+      try
+         set the backgroundColor of tRef to pColor
+      catch tErr
+         -- an unknown colour name (CSS names like "teal" are not LC/X11
+         -- names) must not abort the spawn and orphan the control
+      end try
+   end if
    set the width of tRef to pW
    set the height of tRef to pH
    set the loc of tRef to round(pScreenX) & "," & round(pScreenY)
@@ -1657,7 +1737,14 @@ command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
    set the style of tRef to "oval"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
-   if pColor is not empty then set the backgroundColor of tRef to pColor
+   if pColor is not empty then
+      try
+         set the backgroundColor of tRef to pColor
+      catch tErr
+         -- an unknown colour name (CSS names like "teal" are not LC/X11
+         -- names) must not abort the spawn and orphan the control
+      end try
+   end if
    set the width of tRef to pDiameter
    set the height of tRef to pDiameter
    set the loc of tRef to round(pScreenX) & "," & round(pScreenY)
@@ -1683,7 +1770,14 @@ command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
    set the style of tRef to "polygon"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
-   if pColor is not empty then set the backgroundColor of tRef to pColor
+   if pColor is not empty then
+      try
+         set the backgroundColor of tRef to pColor
+      catch tErr
+         -- an unknown colour name (CSS names like "teal" are not LC/X11
+         -- names) must not abort the spawn and orphan the control
+      end try
+   end if
    if pLength >= pThickness then
       set the width of tRef to pLength
       set the height of tRef to pThickness
@@ -2602,8 +2696,14 @@ function b2kLayerBits pLayerList
    replace comma with space in pLayerList
    repeat for each word tL in pLayerList
       if tL is empty then next repeat
-      if tL is a number then put tBits bitOr (tL) into tBits
-      else put tBits bitOr b2kDefineLayer(tL) into tBits
+      if tL is a number then
+         put tBits bitOr (tL) into tBits
+      else
+         -- b2kDefineLayer is a COMMAND: OXT cannot call commands with
+         -- function syntax, so invoke it as a statement and read the result
+         b2kDefineLayer tL
+         put tBits bitOr (the result) into tBits
+      end if
    end repeat
    return tBits
 end b2kLayerBits
@@ -2651,7 +2751,9 @@ command b2kChain pPoints, pLoop
 end b2kChain
 
 command b2kSmoothGround pPoints
-   return b2kChain(pPoints, false)
+   -- statement call + the result: OXT cannot call commands function-style
+   b2kChain pPoints, false
+   return the result
 end b2kSmoothGround
 
 -- Attach a smooth static chain to a CONTROL, from a list of SCREEN points

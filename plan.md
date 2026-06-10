@@ -33,16 +33,19 @@ why*. Effort scale: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day.
 
 ## Phase 0 — OXT runtime spike (S/M) ★ gate for everything else
 
-**Status: first Win32 pass done (2026-06-10); spike v2 awaiting re-run.**
-v1 results are recorded in the decision log below (keyboard, rays, flip,
-group creation, camera all good; segments two-sided; timer ceiling ~55 fps).
-v2 adds report-logged error capture everywhere (v1's two failures were
-swallowed silently — one by the Kit loop's protective try/catch), replaces
-every `get <command>(...)` call with statement + `the result`, runs the S8
-chain phase first, splits warm-up from steady-state fps, and adds **S11**, a
-calling-syntax probe. **To re-run:** paste the new file over the old stack
-script and reopen (the UI rebuilds itself); then run **S3, S4, S5, S8, S9,
-S10, S11** and paste the report (S1 step 3 — Shift+w — optional).
+**Status: two Win32 passes done (2026-06-10); spike v3 awaiting re-run.**
+All v1/v2 results are in the decision log below. v2's S11 **confirmed** that
+OXT cannot call commands with function syntax — which exposed and fixed two
+latent Kit bugs (`b2kSmoothGround`, named layers via `b2kLayerBits`), the
+builder's servo joint, and ~30 doc snippets teaching the broken pattern (see
+CHANGELOG). v3 re-arms the remaining unknowns: **S8** (the chain one-way
+verdict, previously blocked by the Kit bug), **S9** (run ~20 s for steady
+state), **S10** (re-click cycles orbit/anim/bodies-only modes to attribute
+the sprite cost; logs first-frame stall and the engine-copy build path),
+**S11** (now with valid colour names). **To re-run:** paste the new file over
+the stack script, reopen, run **S8, S9, S10 (cycling its 3 modes), S11** —
+and report one line of eyes-on verdict for **S3/S4** (single clean cell? no
+trails while orbiting?).
 
 One throwaway stack script that answers the spec's *(verify in OXT)* items
 with on-screen instructions and an accumulating PASS/FAIL report. It **embeds
@@ -190,6 +193,9 @@ user-confirmed in OXT before the next begins.
 | 2026-06-10 | **Win32 `send in 16` cadence ≈ 18 ms ⇒ ~55 fps ceiling**; S9 saturated it (55.2 steady; min 25.8 was warm-up/build). Phase 1 pacing fix (`in max(1, 16 − elapsed)`) promoted from optional to **required**. | Spike S0/S9 |
 | 2026-06-10 | **`b2kWall`/`b2AddSegment` segments are two-sided** (both windings "blocked from below") — one-way platforms cannot use plain segments. Chains pending S8 v2; fallback = brief upward mask window. api-reference.md + kit-reference.md corrected. | Spike S8 v1 |
 | 2026-06-10 | **Suspected: function syntax on commands (`get b2kSpawnBall(...)`) throws.** v1's two silent failures (S8 chain phase, S10) were exactly its two `get <command>(...)` sites — the S8 one swallowed by the Kit loop's protective try/catch. Spike v2: statement + `the result` everywhere, error capture logged to the report, S11 probes the syntax directly. Kit header/docs fix pending S11. | Failure-pattern analysis |
-| *(Phase 0 v2)* | *Sprite inner-image sharing: filename vs data copy* | *pending spike* |
-| *(Phase 0 v2)* | *One-way platforms in v1 (chains) or deferred (mask window)* | *pending S8 v2* |
-| *(Phase 0 v2)* | *S3/S4 clip+scroll visuals, S5 GIF, S9 grab — verdicts not yet reported* | *pending re-run* |
+| 2026-06-10 | **Spike v2 (Win32) results.** S0 re-measured clean: 16.5 ms avg / 17–18 max ⇒ idle ceiling ~58–60 fps (v1's 18/3268 was settling noise). S2 case-shift CONFIRMED (w=119 and W=87 — the Kit binds both). S5 GIF full PASS (frameCount 4; stop; manual stepping wraps in order) — GIF sprite backend viable. S6/S7 re-passed. | Spike report v2 |
+| 2026-06-10 | **`get <command>(...)` CONFIRMED broken in OXT** (S11 throws at the call line; never enters the handler). Statement + `the result` is the project-wide calling convention. Found+fixed: Kit `b2kSmoothGround` (always threw), Kit `b2kLayerBits` (named collision layers always threw), builder servo joint (never created), README/kit-reference/getting-started/kit-guide/Kit-header snippets (~30). Spawn handlers also made tolerant of invalid colour names (S11's form-1 throw was CSS "teal", not the convention). | Spike v2 S11 + traces; CHANGELOG |
+| 2026-06-10 | **S10 sprite-perf flag.** Build 6377 ms (~250 ms/sprite, script imageData path); long first-frame stall before sampling began; warm avg 33.6 / min 27.4 with 25 sprites + 25 bodies — well under the ceiling. v3 instruments: mode cycling (orbit/anim/bodies-only), first-frame latency log, engine `copy…to group` build path. Phase 2's instancing strategy hangs on this. | Spike v2 S10 |
+| *(Phase 0 v3)* | *One-way platforms in v1 (chains) or deferred (mask window)* | *pending S8 re-run (unblocked by the b2kSmoothGround fix)* |
+| *(Phase 0 v3)* | *Sprite cost attribution + instancing path* | *pending S10 mode cycling + copy-to-group log* |
+| *(Phase 0 v3)* | *S3/S4 clip+scroll visual verdict, S9 steady-state fps + grab* | *pending re-run* |

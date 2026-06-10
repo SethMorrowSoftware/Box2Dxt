@@ -8,6 +8,35 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Kit: commands called with function syntax never worked in OXT.** OXT
+  cannot invoke a *command* handler with function syntax (`get b2kChain(...)`
+  throws "can't find function"), which the Game Kit Phase 0 spike caught on
+  real hardware. Repaired everywhere:
+  - `b2kSmoothGround` (returned `b2kChain(...)`) — the alias **always threw**;
+    it now calls `b2kChain` as a statement and returns `the result`.
+  - `b2kLayerBits` (used `b2kDefineLayer(...)`) — **named** collision layers
+    via `b2kSetCategory`/`b2kSetMask` always threw; numeric layer lists were
+    unaffected.
+  - Contraption builder: the **servo** joint (`put b2kMotorTo(...) into tJ`)
+    never created its motor joint; it now uses statement + `the result` like
+    the neighbouring joint cases.
+  - Docs taught the broken pattern: the 60-second starts (README,
+    kit-reference, getting-started, Kit header comment) and ~25 snippets in
+    the kit guide now use `b2kSpawnBox ...` / `put the result into tRef`.
+- **Kit: an invalid colour name no longer aborts a spawn.** `b2kSpawnBox` /
+  `b2kSpawnBall` / `b2kSpawnCapsule` ignored-or-threw inconsistently on bad
+  colours (CSS-only names like `teal` are not LC/X11 colour names and threw
+  mid-spawn, leaving an orphaned control with no body). The colour set is now
+  tolerated like every other bad input: the spawn proceeds with the default
+  colour.
+- **Docs: `b2AddSegment` / `b2kWall` segments are two-sided.** The references
+  claimed segments were one-sided; the Phase 0 spike disproved it (a body is
+  blocked from below on either winding). Both docs now say so and point
+  one-way platform builders at chains (chain segments are the one-sided
+  primitive).
+
 ### Added
 
 - **Keyboard support in the contraption builder.** **Delete**/**Backspace**
