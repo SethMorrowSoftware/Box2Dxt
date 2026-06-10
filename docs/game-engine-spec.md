@@ -109,26 +109,29 @@ map must match both.
 
 Four viable mechanisms, in order of usefulness:
 
-1. **Group-clip + scroll** *(the chosen spritesheet mechanism)*. An unadorned
-   group with `lockLoc` true **clips its contents to its rect**, and setting
-   `the hScroll` / `the vScroll` of the group pans which part of the content
-   shows. Put the sheet image inside a frame-sized group; showing cell
-   `(row, col)` is just `set the hScroll to col * frameW` /
-   `vScroll to row * frameH`. Zero pixel copying, engine-rendered, full PNG
-   alpha. Confidence: high (documented scrolling-group behaviour) — *(verify
-   in OXT: scroll with no scrollbars shown, interaction with
-   acceleratedRendering)*.
+1. **Group-clip + scroll** *(secondary backend — outperformed by item 3 in
+   the spike)*. An unadorned group with `lockLoc` true **clips its contents
+   to its rect**, and setting `the hScroll` / `the vScroll` of the group pans
+   which part of the content shows. Put the sheet image inside a frame-sized
+   group; showing cell `(row, col)` is just `set the hScroll to col * frameW`
+   / `vScroll to row * frameH`. Zero pixel copying at frame-switch time,
+   engine-rendered, full PNG alpha. Spike verdict: works and renders
+   correctly, but each sprite carries its own sheet copy (~220–285 ms to
+   build) and 25 moving instances ran ~31% slower than icon-flip (S10 vs
+   S12). Kept for sheet-direct cases (huge sheets, live sheet edits).
 2. **Animated GIF**: an image displays an animated GIF natively;
    `the frameCount`, settable `the currentFrame`, `the repeatCount` (-1 loop,
    0 stop) give free playback *or* manual frame control. Limitations: 256
    colours, 1-bit alpha. Confidence: high. Supported as a **secondary sprite
    backend** (cheapest possible asset path).
-3. **Pre-sliced frames + icon flip**: slice the sheet once at load into N
-   hidden images (`imageData`/`alphaData` byte chunking — one-time cost), then
+3. **Pre-sliced frames + icon flip** *(PRIMARY — promoted by spike S12)*:
+   slice the sheet once at load into N hidden images (one per frame), then
    `set the icon of a transparent button` per frame. The classic LC game
-   technique. Kept as **plan B** if group-scroll disappoints, and as the basis
-   for *rotating* sprites later (image `angle` resamples from the original, as
-   `b2kDrawImage` already exploits).
+   technique, and the spike's winner on the identical 25-sprite scene: warm
+   40.2 fps vs 30.7 for group-scroll, build 3.8 s vs 6.6 s, first-frame stall
+   halved — and all sprites **share** the frame images instead of carrying
+   sheet copies. Also the basis for *rotating* sprites later (image `angle`
+   resamples from the original, as `b2kDrawImage` already exploits).
 4. **`flip image`** horizontal — for generating left-facing copies of a sheet
    at load time. *(verify in OXT; fallback: reverse each `imageData` row in
    script, one-time)*.
@@ -294,16 +297,20 @@ Implementation notes:
 
 ## 5. Module: Sprites
 
-**Model:** a *sheet* is a hidden image registered once with a frame grid; a
-*sprite* is a frame-sized, lockLoc'd, unadorned **group** containing its own
-image instance of the sheet. Frame selection = set the group's scroll.
-Animations are named frame sequences on the sheet, ticked centrally by the
-loop on wall-clock time.
+**Model** *(updated per spike S12)*: a *sheet* is registered once and
+**sliced into one hidden image per frame** (engine-side copy; mirrored copies
+made lazily the first time a sprite faces left). A *sprite* is a
+**transparent button** whose `icon` is the current frame's image — a frame
+switch is one property set, and every sprite of a sheet **shares** the same
+frame images (no per-sprite pixel copies). Animations are named frame
+sequences on the sheet, ticked centrally by the loop on wall-clock time. The
+group-clip + scroll mechanism (§2.2-1) remains the documented secondary
+backend for sheet-direct cases.
 
-A sprite group is an ordinary Kit control: pass it to `b2kAddCapsule`/
+A sprite button is an ordinary Kit control: pass it to `b2kAddCapsule`/
 `b2kAddBox` and it gets a body with **fixed rotation and `"loc"` rendering
-automatically** (groups are neither graphics nor images — see §1.1). That one
-existing behaviour is what makes sprites compose with physics for free.
+automatically** (buttons are neither graphics nor images — see §1.1). That
+one existing behaviour is what makes sprites compose with physics for free.
 
 | Handler | Purpose |
 |---|---|
@@ -328,10 +335,12 @@ Implementation notes:
   ms-accumulator, fps, flip, finish-message. The tick walks one array of live
   sprites; a sprite whose frame did not change this tick touches **no**
   properties (the `sDrawKey` redundancy-suppression pattern, reused).
-- Each sprite owns its inner image (content copied or filename-referenced from
-  the sheet; the spike decides which the engine shares more efficiently).
-  Memory scales sheet-bytes × sprites either way at worst — fine at the
-  "dozens of sprites" scale this targets.
+- Sprites share their sheet's frame images; building a sprite is creating one
+  transparent button. (The spike measured per-sprite group+sheet-copy builds
+  at ~220–285 ms on modest hardware — buttons avoid that entirely.) Phase 2
+  still pools sprites at scene load and creates them **before** enabling
+  `acceleratedRendering`, because the spike's one-time first-frame stall
+  followed bulk control creation under the compositor.
 - Sprites default to `layerMode "dynamic"` and mouse-transparent
   (the group never traps clicks aimed at the playfield).
 - `b2kClear`/`b2kTeardown` remove Kit-spawned sprites with everything else;
@@ -457,7 +466,7 @@ keeps sheets, bindings, and camera config.
 | # | Risk | Likelihood | Mitigation |
 |---|---|---|---|
 | R1 | `the keysDown` unreliable on some OXT platform | **Resolved on Win32** (works); other platforms pending | Fallback frontscript backend (§4) behind the same API stays specced |
-| R2 | Group-scroll sprite cost under `acceleratedRendering` | **Quantified (Win32, modest hw):** bodies-only ≈ 54 fps (ceiling-ish); + 25 sprite anims ≈ 40; + 25 *moving* sprites ≈ 30. One-time ~15 s first-frame stall after bulk dynamic-layer creation (36 ms once warm). Build ≈ 220–285 ms/sprite on either copy path | **S12** benchmarks the icon-button backend on the identical scene — that number picks Phase 2's primary mechanism. Regardless: pool sprites at scene load, build before enabling acceleration, document a per-scene sprite budget |
+| R2 | Sprite rendering cost under `acceleratedRendering` | **Resolved — backend decided.** S12 vs S10, identical scene: icon-buttons warm 40.2 fps vs scroll-groups 30.7, build 3.8 s vs 6.6 s, first-frame stall 6.6 s vs 13.5 s → **icon-button backend is Phase 2's primary** (§5). Neither reaches the ~58 fps ceiling at 25 *moving* sprites on modest hardware | Phase 2: pool sprites at load, create before enabling acceleration, document the per-scene budget (a player + ~10 sprites sits near the ceiling); scroll-groups stay as the secondary backend |
 | R3 | `flip image` missing/odd in OXT | **Resolved** (works on Win32, byte-verified) | Script-side `imageData` row-mirror fallback no longer needed |
 | R4 | Ray-from-inside-shape self-hit behaviour differs | **Resolved** (self-skip confirmed; ray-all also skips; normal and distance exact) | — |
 | R5 | One-way platforms: segment/chain one-sidedness vs a jumping capsule | **Resolved** — chains are one-sided exactly as platformers need (S8: rose through from below, landed on top); plain segments are two-sided and out | One-way ledges = `b2kChain`/`b2kSmoothGround`, top surface right-to-left; player drop-through stays deferred (mask-window technique) |

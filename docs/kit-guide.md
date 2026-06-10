@@ -550,6 +550,46 @@ on b2kFrame
 end b2kFrame
 ```
 
+### Keyboard input (`b2kInputOn`)
+
+Games need *held* keys (run while the arrow is down), *chords* (run + jump),
+and clean *edges* (jump on the frame the key goes down) — none of which the
+classic `arrowKey`/`keyDown` messages give you, because they arrive at the OS
+auto-repeat rate and stop the moment a field steals focus. The Kit's input
+module polls instead: while armed, it samples `the keysDown` once per frame
+and diffs it against the previous frame, so state and edges are exact and
+nothing depends on focus or the message path.
+
+```livecode
+on openCard
+   b2kQuickStart
+   b2kSpawnCapsule 200, 100, 64, 30, "gold"
+   put the result into gHero
+   b2kSetFixedRotation gHero, true     -- a character stays upright
+   b2kInputOn                          -- arm the sampler (installs defaults)
+   b2kBindAction "jump", "space,up,w"  -- any of these counts as "jump"
+   b2kFrameTarget the long id of me
+end openCard
+
+on b2kFrame
+   -- axis: -1 / 0 / +1 from left,a vs right,d (a default binding)
+   b2kSetVelocity gHero, b2kAxis("moveX") * 240, item 2 of b2kVelocity(gHero)
+   -- edge: true only on the frame the action went down
+   if b2kActionPressed("jump") then b2kPush gHero, 0, -420
+end b2kFrame
+```
+
+Key names are friendly (`"left"`, `"space"`, `"a"`; raw keycodes also work),
+and letters match both their shifted and unshifted codes. Read anything per
+frame: `b2kKeyIsDown`/`Pressed`/`Released` for single keys,
+`b2kActionIsDown`/`Pressed`/`Released` for named sets, `b2kAxis` for paired
+directions (both held = 0), `b2kKeysHeld()` for a debug HUD, and
+`b2kFrameMS()` for the frame's real elapsed milliseconds (drive animations
+from that, never the step count). The
+`examples/box2dxt-platformer.livecodescript` stack is this section turned
+into a playable scene — grounded checks, variable-height jumps, and a
+jump-through ledge included.
+
 ---
 
 ## 13. Sensors (trigger zones)

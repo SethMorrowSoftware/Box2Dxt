@@ -215,6 +215,48 @@ helpers or to `b2kRemoveJoint`.
 | `b2kSliderLimitOff joint` | Remove a slider's travel limits. |
 | `b2kWheelMotorOff joint` | Turn a wheel motor off. |
 
+## Input (keyboard)
+
+Poll-based held-key input for games: arm it once, then read state from
+`on b2kFrame`. The Kit samples `the keysDown` once per frame and diffs against
+the previous frame, so held keys are smooth (no OS auto-repeat artifacts), no
+focus or message-path setup is needed, and pressed/released edges are exact.
+Key names: `left right up down space return escape tab shift control alt
+backspace delete`, single characters (`"a"`…`"z"`, digits — letters match both
+shifted and unshifted), or raw keycodes.
+
+| Handler | Purpose |
+|---------|---------|
+| `b2kInputOn` / `b2kInputOff` | Arm / disarm the per-frame keyboard sample. `b2kInputOn` installs starter bindings: axis `moveX` (left,a / right,d), axis `moveY` (up,w / down,s), action `jump` (space). |
+| `b2kKeyIsDown(key)` | Key currently held. |
+| `b2kKeyPressed(key)` / `b2kKeyReleased(key)` | True only on the frame the key went down / came up. |
+| `b2kKeysHeld()` | Everything held now, as friendly names (debug HUDs). |
+| `b2kBindAction name, keyList` | Name a key set: `b2kBindAction "jump", "space,up,w"`. |
+| `b2kActionIsDown(name)` / `b2kActionPressed(name)` / `b2kActionReleased(name)` | Action-level queries — any bound key counts; edges treat the set as one logical key. |
+| `b2kBindAxis name, negKeys, posKeys` | Define a -1/0/+1 axis. |
+| `b2kAxis(name)` | Read an axis; both directions held = 0. |
+| `b2kKeyCodes(key)` / `b2kKeyName(code)` | The name↔keycode maps the module uses (handy for debugging). |
+| `b2kFrameMS()` | Real elapsed ms folded into the last frame — drive animations and timers from this, not the step count. |
+
+```
+on openCard
+   b2kQuickStart
+   b2kSpawnCapsule 200, 100, 64, 30, "gold"
+   put the result into gHero
+   b2kSetFixedRotation gHero, true
+   b2kInputOn
+   b2kFrameTarget the long id of me
+end openCard
+
+on b2kFrame
+   b2kSetVelocity gHero, b2kAxis("moveX") * 240, item 2 of b2kVelocity(gHero)
+   if b2kActionPressed("jump") then b2kPush gHero, 0, -420
+end b2kFrame
+```
+
+See `examples/box2dxt-platformer.livecodescript` for the full pattern
+(grounded check, jump-cut, one-way ledge).
+
 ## Drag & events
 
 | Handler | Purpose |

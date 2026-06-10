@@ -33,19 +33,18 @@ why*. Effort scale: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day.
 
 ## Phase 0 — OXT runtime spike (S/M) ★ gate for everything else
 
-**Status: three Win32 passes done (2026-06-10); spike v4 awaiting the last
-numbers.** v3's verdicts: **chains ARE one-way** (R5 resolved — jump-through
-ledges are in for the platformer), the camera runs at the loop ceiling, the
-sprite cost is fully attributed (decision log), and the calling convention is
-settled. v4 fixes the stage geometry that overlapped the chrome (user report:
-the S9 viewport sat under the button column, the S10 arena's top wall under
-the status bar) and adds **S12** — the icon-button sprite backend on the
-identical S10 scene; its warm fps against mode 1's 29.8 picks Phase 2's
-primary sprite mechanism. **To re-run (closes Phase 0):** paste v4 over the
-stack script, reopen, then: **S10** (let mode 1's 12 s line log, then STOP),
-**S12** (~13 s, STOP), **S9** (visual check after the shift + grab a box),
-and the one-line eyes verdict on **S3/S4** (single clean cell? no trails
-while orbiting?).
+**Status: CLOSED (2026-06-10, four Win32 passes).** Every S-question is
+answered by data; all verdicts live in the decision log below. The headline
+results: `keysDown` polling is the input backend; chains are one-sided
+(jump-through platforms are in); the camera viewport scrolls at the loop
+ceiling; **icon-button sprites beat scroll-group sprites on every axis**
+(S12 warm 40.2 fps vs 30.7, build 3.8 s vs 6.6 s, first-frame stall halved)
+and are Phase 2's primary mechanism; commands must be called as statements +
+`the result` (three latent shipping bugs found and fixed by that discovery);
+and the idle loop ceiling is ~58–60 fps with the Phase 1 pacing fix landed.
+The spike file stays in `examples/` as the hardware-acceptance harness;
+re-run it on new platforms (macOS/Linux verdicts are still open, tracked as
+risk R1).
 
 One throwaway stack script that answers the spec's *(verify in OXT)* items
 with on-screen instructions and an accumulating PASS/FAIL report. It **embeds
@@ -80,6 +79,11 @@ user's platform, which script-side group-creation method OXT accepts (Phase 4
 needs one), and scroll-corrected `b2kGrab` mapping (the `b2kCamMouse…` math).
 
 ## Phase 1 — Input module (M)
+
+**Status: built (2026-06-10) — awaiting the OXT pass.** The Kit gained the
+full input surface below plus the pacing fix; the platformer example is the
+test vehicle (its banner lists the 8-point verify checklist). Run it in OXT
+and report; Phase 2 (sprites, icon-button backend) starts on the green light.
 
 - **Build:** `b2kInputOn/Off`, `b2kInputTick` (keysDown sample + diff),
   key-name map, `b2kKeyIsDown/Pressed/Released`, `b2kKeysHeld`,
@@ -201,5 +205,6 @@ user-confirmed in OXT before the next begins.
 | 2026-06-10 | **S9 camera PASS at the loop ceiling** (warm avg 50.6, last 57.3 and climbing toward the ~58–60 idle ceiling). S11 re-run clean: statement + `the result` works; get-command definitively broken. R9 closed. | Spike v3 |
 | 2026-06-10 | **Sprite cost attributed (S10 mode cycling):** bodies-only warm 54.2 ≈ ceiling-ish; + 25 scroll-anims ≈ 39–44; + 25 orbit moves 29.8. One-time **14.6 s first-frame stall** in mode 1 (bulk dynamic-layer creation under acceleratedRendering; 36 ms once warm). Engine `copy…to group` works but builds no faster (~220–285 ms/sprite either path). v4 adds **S12** (icon-button backend, identical scene) — its warm avg picks Phase 2's primary mechanism; pooling + build-before-accel land in Phase 2 regardless. | Spike v3 S10 |
 | 2026-06-10 | Spike stage geometry overlapped the chrome (S9 viewport under the button column; S10 arena top wall under the status bar) — user report; v4 shifts the geometry clear. | User report |
-| *(Phase 0 v4)* | *Phase 2 primary sprite backend: scroll-group vs icon-button* | *pending S12 vs S10 mode 1* |
-| *(Phase 0 v4)* | *S3/S4 clip+scroll visual verdict; S9 visual after the geometry shift* | *pending re-run* |
+| 2026-06-10 | **Spike v4: icon-button sprites WIN — Phase 2's primary backend.** Identical scene: S12 warm avg 40.2 fps vs S10 mode 1's 30.7 (+31%), build 3785 ms vs 6579 ms, first-frame stall 6.6 s vs 13.5 s. Shared frame images also beat per-sprite sheet copies on memory. Scroll-groups stay documented as the secondary mechanism (sheet-direct cases); neither hits the ceiling at 25 *moving* sprites on this hardware, so Phase 2 also pools at load, builds before enabling acceleration, and documents a per-scene budget. | Spike v4 S12 vs S10 |
+| 2026-06-10 | **Phase 0 CLOSED.** S3/S4 visuals: no artifact/trail reports across four runs (and the icon backend doesn't clip at all); final eyes-on confirmation rides the Phase 2 example rather than a fifth spike pass. The spike stays in `examples/` as the acceptance harness for new platforms (macOS/Linux open, risk R1). | All spike passes |
+| 2026-06-10 | **Phase 1 built:** Kit Input module (18 handlers), paced loop (`in max(1, 16 − elapsed)`), `b2kFrameMS`, and `examples/box2dxt-platformer.livecodescript` (axis run, edge jump + release-cut, ray grounded check, one-way ledge). Statically verified; awaiting the OXT pass. | This commit |

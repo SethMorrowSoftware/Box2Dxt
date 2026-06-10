@@ -88,6 +88,10 @@
 --         b2kSliderPos(j) · b2kRopeRange j,minPx,maxPx · b2kRopeLength(j) ·
 --         b2kSpring j,hz[,damp] · b2kWeldSpring j,hz[,damp] · b2kWheelSpring j,hz[,damp]
 -- DRAG    b2kGrab(x,y) -> control · b2kRelease
+-- INPUT   b2kInputOn/Off · b2kKeyIsDown(k) · b2kKeyPressed/Released(k) ·
+--         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
+--         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
+--         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
 -- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
 --         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
 --         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
@@ -131,6 +135,13 @@ local sRayNX, sRayNY -- last b2kRayHit surface normal (screen-oriented)
 local sRayDist       -- last b2kRayHit distance from the ray start (pixels)
 local sNeedFullSync  -- true when a script-side transform/type edit bypassed move events
 local sDrawKey       -- ctrlRef -> last rendered pixel/angle key; avoids redundant redraws
+local sInputOn       -- true while the per-frame keyboard sample is armed
+local sKeysNow       -- comma-wrapped keycode set held this frame (",65361,32,")
+local sKeysPrev      -- last frame's set; pressed/released edges are the diff
+local sKeyActions    -- action name -> bound key list ("jump" -> "space,up,w")
+local sAxisNeg       -- axis name -> negative-direction key list
+local sAxisPos       -- axis name -> positive-direction key list
+local sFrameMS       -- real elapsed ms folded into the last frame (b2kFrameMS)
 
 constant kPI = 3.14159265358979
 
@@ -1736,6 +1747,227 @@ command b2kRelease
 end b2kRelease
 
 -- =====================================================================
+-- Input (keyboard): poll-and-diff held keys, once per frame
+-- =====================================================================
+-- Model: one `the keysDown` sample per frame (taken inside the loop, just
+-- before b2kFrame dispatches), diffed against the previous frame's sample.
+-- Held = in the current set; pressed/released = the diff. This sidesteps
+-- every event-path problem at once: OS auto-repeat (Win32 re-sends
+-- rawKeyDown with no paired ups), focus stealing by fields/buttons, and
+-- frontscript plumbing. Letter keys bind BOTH keysym cases ("w" = 119 and
+-- 87) because the reported code shifts with the Shift key.
+command b2kInputOn
+   put true into sInputOn
+   put comma into sKeysNow
+   put comma into sKeysPrev
+   -- starter bindings; rebind freely (these only fill empty slots)
+   if sKeyActions["jump"] is empty then b2kBindAction "jump", "space"
+   if sAxisNeg["moveX"] is empty then b2kBindAxis "moveX", "left,a", "right,d"
+   if sAxisNeg["moveY"] is empty then b2kBindAxis "moveY", "up,w", "down,s"
+end b2kInputOn
+
+command b2kInputOff
+   put false into sInputOn
+   put comma into sKeysNow
+   put comma into sKeysPrev
+end b2kInputOff
+
+function b2kInputIsOn
+   return (sInputOn is true)
+end b2kInputIsOn
+
+-- Internal, called by the loop each frame while armed. The sets are stored
+-- comma-wrapped (",65361,32,") so membership is one `contains` test.
+command b2kInputTick
+   if sInputOn is not true then exit b2kInputTick
+   put sKeysNow into sKeysPrev
+   put comma & the keysDown & comma into sKeysNow
+end b2kInputTick
+
+-- A friendly key name (or raw keycode) -> the keycode candidates it matches,
+-- comma-separated. Numbers >= 32 pass through as raw keycodes; single
+-- characters resolve to their code (letters to both cases, per the
+-- Shift-keysym behaviour the Phase 0 spike confirmed).
+function b2kKeyCodes pKey
+   local tLower, tUpper
+   if pKey is a number and pKey >= 32 then return pKey
+   switch pKey
+      case "left"
+         return 65361
+      case "up"
+         return 65362
+      case "right"
+         return 65363
+      case "down"
+         return 65364
+      case "space"
+         return 32
+      case "return"
+      case "enter"
+         return "65293,65421"
+      case "escape"
+      case "esc"
+         return 65307
+      case "tab"
+         return 65289
+      case "shift"
+         return "65505,65506"
+      case "control"
+      case "ctrl"
+         return "65507,65508"
+      case "alt"
+      case "option"
+         return "65513,65514"
+      case "backspace"
+         return 65288
+      case "delete"
+         return 65535
+   end switch
+   if the number of chars of pKey is 1 then
+      put charToNum(toLower(pKey)) into tLower
+      put charToNum(toUpper(pKey)) into tUpper
+      if tLower >= 97 and tLower <= 122 then return tLower & comma & tUpper
+      return charToNum(pKey)
+   end if
+   return 0
+end b2kKeyCodes
+
+-- The reverse map, for readouts: a keycode -> its friendly name (or itself).
+function b2kKeyName pCode
+   switch pCode
+      case 65361
+         return "left"
+      case 65362
+         return "up"
+      case 65363
+         return "right"
+      case 65364
+         return "down"
+      case 32
+         return "space"
+      case 65293
+      case 65421
+         return "return"
+      case 65307
+         return "escape"
+      case 65289
+         return "tab"
+      case 65505
+      case 65506
+         return "shift"
+      case 65507
+      case 65508
+         return "control"
+      case 65513
+      case 65514
+         return "alt"
+      case 65288
+         return "backspace"
+      case 65535
+         return "delete"
+   end switch
+   if pCode >= 97 and pCode <= 122 then return numToChar(pCode)
+   if pCode >= 65 and pCode <= 90 then return numToChar(pCode + 32)
+   if pCode >= 48 and pCode <= 57 then return numToChar(pCode)
+   return pCode
+end b2kKeyName
+
+-- True when any of pKey's candidate codes is in the given set.
+function b2kKeyInSet pSet, pKey
+   local tC
+   if pSet is empty or pSet is comma then return false
+   repeat for each item tC in b2kKeyCodes(pKey)
+      if pSet contains (comma & tC & comma) then return true
+   end repeat
+   return false
+end b2kKeyInSet
+
+function b2kKeyIsDown pKey
+   return b2kKeyInSet(sKeysNow, pKey)
+end b2kKeyIsDown
+
+-- Edge queries: true only on the single frame the state changed.
+function b2kKeyPressed pKey
+   return b2kKeyInSet(sKeysNow, pKey) and not b2kKeyInSet(sKeysPrev, pKey)
+end b2kKeyPressed
+
+function b2kKeyReleased pKey
+   return b2kKeyInSet(sKeysPrev, pKey) and not b2kKeyInSet(sKeysNow, pKey)
+end b2kKeyReleased
+
+-- Everything held right now, as friendly names (debug HUDs).
+function b2kKeysHeld
+   local tOut, tC
+   put empty into tOut
+   repeat for each item tC in char 2 to -2 of sKeysNow
+      put b2kKeyName(tC) & space after tOut
+   end repeat
+   return word 1 to -1 of tOut
+end b2kKeysHeld
+
+-- Actions: a named set of keys ("jump" = "space,up,w"). Any bound key
+-- counts; the action's edges treat the whole set as one logical key.
+command b2kBindAction pName, pKeyList
+   put pKeyList into sKeyActions[pName]
+end b2kBindAction
+
+function b2kActionIsDown pName
+   local tK
+   repeat for each item tK in sKeyActions[pName]
+      if b2kKeyIsDown(word 1 of tK) then return true
+   end repeat
+   return false
+end b2kActionIsDown
+
+function b2kActionPressed pName
+   local tK
+   if not b2kActionIsDown(pName) then return false
+   repeat for each item tK in sKeyActions[pName]
+      if b2kKeyInSet(sKeysPrev, word 1 of tK) then return false
+   end repeat
+   return true
+end b2kActionPressed
+
+function b2kActionReleased pName
+   local tK, tWasDown
+   put false into tWasDown
+   repeat for each item tK in sKeyActions[pName]
+      if b2kKeyInSet(sKeysPrev, word 1 of tK) then put true into tWasDown
+   end repeat
+   if not tWasDown then return false
+   return not b2kActionIsDown(pName)
+end b2kActionReleased
+
+-- Axes: -1 / 0 / +1 from two key sets ("moveX" defaults to left,a / right,d).
+-- Both directions held = 0, which is what character movement wants.
+command b2kBindAxis pName, pNegKeys, pPosKeys
+   put pNegKeys into sAxisNeg[pName]
+   put pPosKeys into sAxisPos[pName]
+end b2kBindAxis
+
+function b2kAxis pName
+   local tK, tNeg, tPos
+   put false into tNeg
+   put false into tPos
+   repeat for each item tK in sAxisNeg[pName]
+      if b2kKeyIsDown(word 1 of tK) then put true into tNeg
+   end repeat
+   repeat for each item tK in sAxisPos[pName]
+      if b2kKeyIsDown(word 1 of tK) then put true into tPos
+   end repeat
+   if tPos and not tNeg then return 1
+   if tNeg and not tPos then return -1
+   return 0
+end b2kAxis
+
+-- Real elapsed ms folded into the last frame -- drive animations and user
+-- timers from this, not the step count (a frame may run 0..n fixed steps).
+function b2kFrameMS
+   if sFrameMS is empty then return 0
+   return sFrameMS
+end b2kFrameMS
+
+-- =====================================================================
 -- The loop  (fixed timestep, generation-guarded; one screen lock per frame)
 -- =====================================================================
 -- The whole frame -- body sync, contact/sensor dispatch and the app's own
@@ -1744,15 +1976,16 @@ end b2kRelease
 -- draws on top). The try/catch guarantees the unlock even if a user handler
 -- throws, so a faulty event handler can never leave the screen frozen.
 on b2kStep pGen
+   local tNow, tElapsed, tFixed, tNext
    if not sRunning then exit b2kStep
    if pGen is not sGen then exit b2kStep
    if sPaused is not true then
-      local tNow, tElapsed, tFixed
       put the milliseconds into tNow
       put (tNow - sLast) / 1000 into tElapsed
       put tNow into sLast
       add tElapsed to sAccum
       if sAccum > 0.20 then put 0.20 into sAccum
+      put tElapsed * 1000 into sFrameMS
       put 1 / 60 into tFixed
       repeat while sAccum >= tFixed
          b2Step sWorld, tFixed, sSub
@@ -1764,6 +1997,7 @@ on b2kStep pGen
       lock screen
       try
          b2kSyncBodies         -- lock-free; this frame's single lock is held here
+         b2kInputTick          -- keyboard sample, so b2kFrame sees this frame's edges
          b2kDispatchContacts
          b2kDispatchSensors
          if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
@@ -1771,19 +2005,33 @@ on b2kStep pGen
       end try
       unlock screen
    end if
-   send ("b2kStep " & sGen) to me in 16 milliseconds
+   -- Pace the next step against what this frame consumed instead of a flat
+   -- 16 ms scheduled AFTER the work: the flat delay made the real rate
+   -- "timer cadence (~16.5 ms) plus frame cost", measured at ~50 fps under
+   -- load in the Phase 0 spike. Clamp to 1..16 so a heavy frame reschedules
+   -- immediately and an idle one never busy-loops.
+   if sPaused is true then
+      send ("b2kStep " & sGen) to me in 16 milliseconds
+   else
+      put 16 - (the milliseconds - tNow) into tNext
+      if tNext < 1 then put 1 into tNext
+      if tNext > 16 then put 16 into tNext
+      send ("b2kStep " & sGen) to me in tNext milliseconds
+   end if
 end b2kStep
 
 -- Advance exactly one fixed step, even while paused (drives a Step button).
 command b2kStepOnce
    if not sRunning then exit b2kStepOnce
    b2Step sWorld, (1 / 60), sSub
+   put 1000 / 60 into sFrameMS   -- a hand-stepped frame is one fixed step long
    if sDragging then
       b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
    end if
    lock screen
    try
       b2kSyncBodies
+      b2kInputTick
       b2kDispatchContacts
       b2kDispatchSensors
       if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
