@@ -4100,10 +4100,11 @@ command b2kCamOn pRect
       set the unboundedVScroll of tG to true
    catch tErr
    end try
-   try
-      set the layerMode of tG to "scrolling"   -- compositor scroll mode
-   catch tErr
-   end try
+   -- NOTE: deliberately NOT layerMode "scrolling". The compositor caches
+   -- that mode's content as one surface; past common GPU surface limits
+   -- (~2048px) the cached world freezes while dynamic-layer sprites keep
+   -- moving -- the player "runs off" a stopped picture. Plain rendering
+   -- pans correctly at any level size.
    put tG into sCamGroup
    set the itemDelimiter to comma
    put ((item 1 of pRect) + (item 3 of pRect)) / 2 into sCamX
@@ -4262,6 +4263,23 @@ command b2kCamTick
       end try
    end if
    b2kCamApply
+   -- reality check: prove the target is inside the view using the ACTUAL
+   -- scroll properties (not internal state). If anything desynced them --
+   -- an engine quirk, a missed write -- force the scroll directly.
+   if sCamFollow is not empty then
+      try
+         set the itemDelimiter to comma
+         put the loc of sCamFollow into tLoc
+         put (item 1 of tLoc) - (the hScroll of sCamGroup) into tTX
+         put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) into tHalfW
+         if tTX < 48 or tTX > tHalfW - 48 then
+            set the hScroll of sCamGroup to round((item 1 of tLoc) - tHalfW / 2)
+            put the hScroll of sCamGroup into sCamLastH
+            put item 1 of tLoc into sCamX
+         end if
+      catch tErr
+      end try
+   end if
 end b2kCamTick
 
 -- Internal: clamp to bounds, add shake, write the scroll (skip when same).
