@@ -299,7 +299,9 @@ command pfStartGame
       if gGateSprA is not empty then b2kSpriteBind gGateSprA, gGate, 0, -32
       b2kSpriteNew "tiles", "block_red", 1952, 544
       put the result into gGateSprB
-      if gGateSprB is not empty then b2kSpriteBind gGateSprB, gGate, 0, 32
+      if gGateSprB is not empty then
+         b2kSpriteBind gGateSprB, gGate, 0, 32
+      end if
    else
       b2kCamAdopt gGate
    end if
