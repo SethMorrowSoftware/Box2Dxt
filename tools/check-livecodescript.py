@@ -157,6 +157,32 @@ def check_structure(text):
     return errors
 
 
+def check_dangling_else(text):
+    """A single-line ``if … then <stmt>`` directly followed by a BARE ``else``
+    line. LiveCode/OXT binds that else to the single-line if (the dangling-else
+    rule), so the bare else opens a block belonging to the *inner* if — its
+    ``end if`` then closes the wrong frame and the *outer* block-if is left
+    open, surfacing as a baffling "missing end if" at the handler's end. Legal
+    neighbours are ``else <statement>`` (single-line chain) or a bare ``else``
+    under a block ``if … then``; this exact pairing is the only broken one,
+    and the purely structural pass above cannot see it."""
+    errors = []
+    lines = logical_lines(text)
+    for (ln, code), (ln2, nxt) in zip(lines, lines[1:]):
+        low = code.strip().lower()
+        nlow = nxt.strip().lower()
+        if (
+            re.match(r"^if\b.+\bthen\s+\S", low)
+            and not re.search(r"\bthen$", low)
+            and nlow == "else"
+        ):
+            errors.append(
+                f"  L{ln2}: bare 'else' after single-line 'if … then <stmt>' (L{ln}) — "
+                "OXT binds the else to the inner if; make that if block-form"
+            )
+    return errors
+
+
 def main():
     failures = 0
     for path in TARGETS:
@@ -165,6 +191,7 @@ def main():
         problems = []
         problems += check_smart_quotes(text)
         problems += check_structure(text)
+        problems += check_dangling_else(text)
         if problems:
             failures += 1
             print(f"FAIL  {rel}")

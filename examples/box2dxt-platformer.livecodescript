@@ -1,48 +1,59 @@
 -- =====================================================================
--- box2dxt-platformer.livecodescript   ·   Game Kit Phase 1+2: INPUT + SPRITES
+-- box2dxt-platformer.livecodescript  ·  Game Kit Phases 1+2+4 showcase
 --
--- A playable mini-platformer: an animated Kenney character you drive with
--- the keyboard - axis run, edge-triggered jump with release-cut height,
--- ray grounded-check, a jump-through one-way ledge, spinning coins to
--- collect (sensors), a buzzing bee (pure sprite), and a saw hazard that
--- plays the hero's HIT animation (b2kSpriteOnFinish) before respawning.
--- The real player controller (coyote time, jump buffering) is Phase 3.
+-- A short, polished SCROLLING platformer level (3072px world in a 1024px
+-- viewport) that exercises most of the engine: keyboard input with edge
+-- detection, atlas spritesheets with named animations and scaling, the
+-- camera (follow + deadzone + bounds + shake), one-way bridge chains, a
+-- spike pit, a pressure plate + crate puzzle driving a kinematic gate, a
+-- patrolling stompable slime, a saw hazard with a hit-pose respawn chain,
+-- spinning coins, and a goal flag. Anything without sheet art falls back
+-- to plain graphics, so the level runs even with no asset folder.
 --
 -- HOW TO RUN
 --   1. In OXT, make a new stack. Put this whole file into the STACK script.
---   2. Make sure the box2dxt extension is loaded. Close and reopen the stack.
---   3. First run asks you to LOCATE the repo's Spritesheets folder (it is
---      remembered in a stack property). Cancel = built-in placeholder art,
---      so everything still runs without the files.
+--   2. Make sure the box2dxt extension is loaded. Close and reopen.
+--   3. First run asks for the repo's Spritesheets folder (remembered in a
+--      stack property; Shift+Reset re-asks; Cancel = placeholder shapes).
 --
 -- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
---           full) · drag bodies with the mouse
+--           full) · drag bodies with the mouse (the crate!)
 --
--- WHAT TO VERIFY (the Phase 2 OXT pass; report anything that fails)
---   1. The hero ANIMATES: idle / walk / jump frames follow your movement.
---   2. Facing flips cleanly left/right (mirrored art, no smearing).
---   3. The walk cycle runs ~6 fps regardless of the sim's frame rate.
---   4. Coins spin; running into one removes it and bumps the counter.
---   5. The bee buzzes along its path (a sprite with no body).
---   6. Touching the saw plays the HIT pose once, then respawns the hero
---      (that is b2kSpriteOnFinish firing).
---   7. Jumping up through the green ledge still works with the sprite hero.
---   8. Reset rebuilds (sheets reload from the remembered folder).
---   9. All Phase 1 keyboard checks still hold; ms/frame stays near 16.
+-- THE ROUTE  jump up through the bridge planks; clear the SPIKE PIT; drag
+--           or push the CRATE onto the gold PRESSURE PLATE so the red
+--           gate stays open; slip past the saw; stomp (or avoid) the
+--           slime; climb the platforms and touch the FLAG.
+--
+-- WHAT TO VERIFY (the scrolling-level OXT pass)
+--   1. The view scrolls smoothly after the hero, easing to a stop; it
+--      never shows past the level's left/right ends.
+--   2. The hills backdrop does NOT scroll (far parallax); tiles do.
+--   3. Mouse-dragging works mid-level (grab is camera-corrected).
+--   4. The pit spikes hurt; the camera SHAKES on every hurt.
+--   5. Standing on the plate opens the gate, leaving closes it; the
+--      crate parked on the plate holds it open for good.
+--   6. The slime patrols and turns; landing on top squashes it flat
+--      (and bounces you); touching its side hurts.
+--   7. Coins, saw, bridge, flag and hit-respawn all behave as before.
+--   8. Reset and stack-reopen leave no ghosts; ms/frame stays ~16-18.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
-local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr
+local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote, gWon
+local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
+local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt, gIntroPan
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
+constant kPfUIVersion = "3"
+constant kLevelW = 3072
 constant kHeroSheetB64 = "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"
 
 -- =====================================================================
 -- Lifecycle
 -- =====================================================================
 on openCard
-   if there is no field "pfHud" then buildPfUI
+   if the uPfUIVersionTag of this stack is not kPfUIVersion then buildPfUI
    if gStarted is true then
       b2kStart
    else
@@ -57,9 +68,14 @@ on closeCard
 end closeCard
 
 -- =====================================================================
--- Chrome (built once)
+-- Chrome (version-tagged; rebuilds when a newer example is pasted in)
 -- =====================================================================
 command buildPfUI
+   if there is a field "pfTitle" then delete field "pfTitle"
+   if there is a field "pfHelp" then delete field "pfHelp"
+   if there is a field "pfHud" then delete field "pfHud"
+   if there is a button "pfbtn_pause" then delete button "pfbtn_pause"
+   if there is a button "pfbtn_reset" then delete button "pfbtn_reset"
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -68,13 +84,12 @@ command buildPfUI
    set the lockText of it to true
    set the traversalOn of it to false
    set the textSize of it to 14
-   set the text of it to "Box2Dxt platformer - Phase 2: spritesheets and animation"
+   set the text of it to "Box2Dxt platformer - a scrolling Game Kit showcase (input + sprites + camera)"
    create field "pfHelp"
    set the rect of it to 20, 34, 1004, 92
    set the lockText of it to true
    set the traversalOn of it to false
    set the textSize of it to 11
-   set the text of it to "Arrows or A/D run; SPACE / UP / W jumps (tap = hop, hold = full). Collect the coins; avoid the saw." & cr & "The GREEN ledge is one-way: jump up through it from below. Drag bodies with the mouse." & cr & "The banner comments carry the full verify checklist."
    create field "pfHud"
    set the rect of it to 20, 584, 760, 612
    set the lockText of it to true
@@ -88,36 +103,55 @@ command buildPfUI
    set the rect of it to 900, 582, 984, 610
    set the label of it to "Reset"
    set the traversalOn of it to false
+   set the uPfUIVersionTag of this stack to kPfUIVersion
 end buildPfUI
 
 -- =====================================================================
--- Assets: the Kenney atlases from the repo's Spritesheets folder, or the
--- embedded placeholder grid sheet when the folder is not available.
+-- Assets: the Kenney atlases, or the embedded placeholder when missing
 -- =====================================================================
 function pfLoadSheets
    local tFolder, tN
+   put empty into gLoadNote
    put the uSpriteSheetFolderPath of this stack into tFolder
    if tFolder is empty or there is no file (tFolder & "/spritesheet-characters-default.png") then
       answer folder "Locate the repo's Spritesheets folder (Cancel = built-in placeholder art):"
       put it into tFolder
-      if tFolder is empty or the result is "cancel" then return false
-      if there is no file (tFolder & "/spritesheet-characters-default.png") then return false
+      if tFolder is empty or the result is "cancel" then
+         put "no folder chosen" into gLoadNote
+         return false
+      end if
+      if there is no file (tFolder & "/spritesheet-characters-default.png") then
+         put "spritesheet-characters-default.png is not inside: " & tFolder into gLoadNote
+         return false
+      end if
       set the uSpriteSheetFolderPath of this stack to tFolder
    end if
    b2kSheetLoadAtlas "chars", tFolder & "/spritesheet-characters-default.png"
    put the result into tN
-   if tN < 1 then return false
+   if tN < 1 then
+      put "characters atlas gave 0 frames (png or xml unreadable) in: " & tFolder into gLoadNote
+      return false
+   end if
    b2kSheetLoadAtlas "foes", tFolder & "/spritesheet-enemies-default.png"
+   put the result into tN
+   if tN < 1 then put "enemies atlas gave 0 frames. " after gLoadNote
    b2kSheetLoadAtlas "tiles", tFolder & "/spritesheet-tiles-default.png"
-   -- the hero's animations (the beige character; swap the colour word to
-   -- re-skin: green / pink / purple / yellow)
+   put the result into tN
+   if tN < 1 then put "tiles atlas gave 0 frames. " after gLoadNote
+   b2kSheetLoadAtlas "bg", tFolder & "/spritesheet-backgrounds-default.png"
+   put the result into tN
+   if tN < 1 then put "backgrounds atlas gave 0 frames. " after gLoadNote
+   b2kSheetScale "bg", 2.5   -- 256px panels -> 640px (full card height)
+   -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
    b2kAnimDef "chars", "walk", "character_beige_walk_a,character_beige_walk_b", 6, true
    b2kAnimDef "chars", "jump", "character_beige_jump", 1, true
    b2kAnimDef "chars", "hit", "character_beige_hit", 2, false
    b2kAnimDef "foes", "buzz", "bee_a,bee_b", 8, true
    b2kAnimDef "foes", "sawspin", "saw_a,saw_b", 10, true
+   b2kAnimDef "foes", "slimewalk", "slime_normal_walk_a,slime_normal_walk_b", 4, true
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
+   b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
    return true
 end pfLoadSheets
 
@@ -125,8 +159,8 @@ command pfEmbedPlaceholder
    if there is no image "pf_sheetsrc" then
       create image "pf_sheetsrc"
       set the visible of it to false
-      set the lockLoc of it to true
       set the text of image "pf_sheetsrc" to base64Decode(kHeroSheetB64)
+      set the lockLoc of it to true   -- AFTER the content, so it auto-sized
    end if
    b2kSheetFromImage "chars", the long id of image "pf_sheetsrc", 48, 64
    b2kAnimDef "chars", "idle", "1-4", 4, true
@@ -139,49 +173,153 @@ end pfEmbedPlaceholder
 -- World build / reset
 -- =====================================================================
 command pfStartGame
-   local tRef, tW, tH, tDY
-   b2kTeardown                  -- also wipes sheets; they reload below
+   local tRef, tW, tH, tDY, tX, tS
+   if the shiftKey is down then set the uSpriteSheetFolderPath of this stack to empty
+   b2kTeardown                  -- wipes sheets, closes the camera, sweeps orphans
    pfWipeStage
    put false into gHurtLock
+   put false into gWon
    put 0 into gCoins
+   put 0 into gPlateCount
+   put empty into gPlateLook
+   put empty into gSlimeGoneAt
+   put 60 into gSlimeDir
    b2kSetup
-   b2kSetScale 60               -- 128px Kenney character ~= 2.1 m
-   b2kAddWalls
+   b2kSetScale 60
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
-   -- the floor
-   create graphic "pf_ground"
+   if gAssetsOK is true and gLoadNote is empty then
+      set the text of field "pfHelp" to "Run with arrows or A/D; SPACE / UP / W jumps. Route: up through the bridge, over the SPIKE PIT, drag the" & cr & "CRATE onto the gold PLATE to hold the red gate open, past the saw, stomp the slime, climb to the FLAG." & cr & "Drag bodies with the mouse. Shift+Reset re-asks for the Spritesheets folder."
+   else
+      if gAssetsOK is true then
+         set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
+      else
+         set the text of field "pfHelp" to "PLACEHOLDER ART - the atlas load failed: " & gLoadNote & cr & "Press Shift+Reset to pick the Spritesheets folder again (it must contain the" & cr & "spritesheet-*-default.png and .xml files)."
+      end if
+   end if
+   lock screen
+   -- ===== far backdrop: static panels on the CARD (they do not scroll) ====
+   if gAssetsOK is true and b2kSheetHasFrame("bg", "background_color_hills") then
+      b2kSpriteNew "bg", "background_color_hills", 320, 320
+      put the result into tRef
+      if tRef is not empty then set the layer of tRef to 1
+      b2kSpriteNew "bg", "background_color_hills", 960, 320
+      put the result into tRef
+      if tRef is not empty then set the layer of tRef to 2
+   end if
+   -- ===== the camera: everything Kit-made from here lives in the view ====
+   b2kCamOn
+   put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
+   b2kCamBounds 0, 0, kLevelW, 640
+   -- regular-platformer camera: the hero is LOCKED to screen centre and the
+   -- world scrolls 1:1 (he only approaches the edges where the bounds stop
+   -- the view, at the very start and end of the level)
+   b2kCamDeadzone 0, 0
+   b2kCamGoto 120, 480   -- open on the spawn point, no startup slide
+   -- level bounds (invisible)
+   b2kWall 0, 0, 0, 640
+   b2kWall kLevelW, 0, kLevelW, 640
+   b2kWall 0, 0, kLevelW, 0
+   -- ===== terrain: invisible physics slabs + tile art (pit at 1408-1600) ==
+   pfSlab "pf_ground1", 0, 576, 1408, 640
+   pfSlab "pf_ground2", 1600, 576, kLevelW, 640
+   pfSlab "pf_plat1", 2688, 512, 2880, 576
+   pfSlab "pf_plat2", 2880, 448, 3008, 576
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
+      repeat with tX = 0 to 1344 step 64
+         pfTile "terrain_grass_block_top", tX, 576
+      end repeat
+      repeat with tX = 1600 to 3008 step 64
+         pfTile "terrain_grass_block_top", tX, 576
+      end repeat
+      pfTile "terrain_grass_block_top_left", 2688, 512
+      pfTile "terrain_grass_block_top", 2752, 512
+      pfTile "terrain_grass_block_top_right", 2816, 512
+      pfTile "terrain_grass_block_top", 2880, 448
+      pfTile "terrain_grass_block_top", 2944, 448
+      pfTile "terrain_grass_block_center", 2880, 512
+      pfTile "terrain_grass_block_center", 2944, 512
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   -- ===== the spike pit ====
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_spikes") then
+      pfTile "block_spikes", 1408, 600
+      pfTile "block_spikes", 1472, 600
+      pfTile "block_spikes", 1536, 600
+   else
+      create graphic "pf_spikes"
+      set the style of it to "rectangle"
+      set the rect of it to 1408, 600, 1600, 640
+      set the filled of it to true
+      set the backgroundColor of it to "200,60,60"
+      b2kCamAdopt the long id of graphic "pf_spikes"
+   end if
+   create graphic "pf_spikesens"
    set the style of it to "rectangle"
-   set the rect of it to 40, 576, 984, 612
-   set the filled of it to true
-   set the backgroundColor of it to "90,95,105"
-   b2kAddStatic the long id of graphic "pf_ground"
-   -- two steps on the right
-   create graphic "pf_step1"
+   set the rect of it to 1408, 592, 1600, 644
+   set the visible of it to false
+   put the long id of graphic "pf_spikesens" into tRef
+   set the uPfHazardFlag of tRef to true
+   b2kAddSensor tRef, "box"
+   -- ===== the one-way bridge (chain, solid side up) ====
+   b2kSmoothGround "624,440" & cr & "560,440" & cr & "304,440" & cr & "240,440"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bridge") then
+      repeat with tX = 304 to 496 step 64
+         pfTile "bridge", tX, 424
+      end repeat
+   else
+      create graphic "pf_ledge"
+      set the style of it to "line"
+      set the points of it to "304,440" & cr & "560,440"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_ledge"
+   end if
+   -- ===== plate + gate puzzle ====
+   create graphic "pf_plate"
    set the style of it to "rectangle"
-   set the rect of it to 760, 512, 870, 576
+   set the rect of it to 1772, 560, 1828, 576
    set the filled of it to true
-   set the backgroundColor of it to "110,115,128"
-   b2kAddStatic the long id of graphic "pf_step1"
-   create graphic "pf_step2"
+   set the backgroundColor of it to "220,180,60"
+   put the long id of graphic "pf_plate" into tRef
+   set the uPfPlateFlag of tRef to true
+   b2kCamAdopt tRef
+   b2kAddSensor tRef, "box"
+   create graphic "pf_gate"
    set the style of it to "rectangle"
-   set the rect of it to 870, 448, 984, 576
+   set the rect of it to 1920, 448, 1984, 576
    set the filled of it to true
-   set the backgroundColor of it to "110,115,128"
-   b2kAddStatic the long id of graphic "pf_step2"
-   -- the one-way ledge (chain, top surface right-to-left = solid side up)
-   b2kSmoothGround "620,440" & cr & "560,440" & cr & "300,440" & cr & "240,440"
-   create graphic "pf_ledge"
-   set the style of it to "line"
-   set the points of it to "300,440" & cr & "560,440"
-   set the lineSize of it to 4
-   set the foregroundColor of it to "70,190,110"
-   -- the hero: an INVISIBLE capsule owns the physics; the sprite is bound
-   -- to it (art bigger than the collision shape - the standard pattern)
+   set the backgroundColor of it to "190,70,70"
+   put the long id of graphic "pf_gate" into gGate
+   b2kAddBox gGate
+   b2kSetKinematic gGate
+   put empty into gGateSprA
+   put empty into gGateSprB
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_red") then
+      set the visible of graphic "pf_gate" to false
+      b2kSpriteNew "tiles", "block_red", 1952, 480
+      put the result into gGateSprA
+      if gGateSprA is not empty then b2kSpriteBind gGateSprA, gGate, 0, -32
+      b2kSpriteNew "tiles", "block_red", 1952, 544
+      put the result into gGateSprB
+      if gGateSprB is not empty then
+         b2kSpriteBind gGateSprB, gGate, 0, 32
+      end if
+   else
+      b2kCamAdopt gGate
+   end if
+   -- the crate that holds the plate down (drag or push it)
+   b2kSpawnBox 1700, 520, 56, 56, "orange"
+   put the result into tRef
+   if tRef is not empty then b2kSetFriction tRef, 0.6
+   -- ===== the hero ====
    if gAssetsOK is true then
-      put 56 into tW
-      put 104 into tH
-      put -10 into tDY
+      b2kSheetScale "chars", 0.75
+      put 48 into tW
+      put 88 into tH
+      put -4 into tDY
    else
       put 36 into tW
       put 60 into tH
@@ -189,69 +327,207 @@ command pfStartGame
    end if
    create graphic "pf_heroBody"
    set the style of it to "rectangle"
-   set the rect of it to 140 - tW div 2, 470 - tH div 2, 140 + tW div 2, 470 + tH div 2
+   set the rect of it to 120 - tW div 2, 480 - tH div 2, 120 + tW div 2, 480 + tH div 2
    set the visible of it to false
    put the long id of graphic "pf_heroBody" into gHero
    b2kAddCapsule gHero
    b2kSetFixedRotation gHero, true
    b2kSetFriction gHero, 0.08
-   b2kSpriteNew "chars", empty, 140, 470
+   if gAssetsOK is true then
+      b2kSpriteNew "chars", "character_beige_idle", 120, 480
+   else
+      b2kSpriteNew "chars", 1, 120, 480
+   end if
    put the result into gHeroSpr
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   -- pickups and hazards
-   pfMakeCoin 430, 380
-   pfMakeCoin 560, 300
-   pfMakeCoin 922, 400
-   put 3 into gCoinsTotal
-   if gAssetsOK is true then
-      b2kSpriteNew "foes", "saw_a", 700, 546
+   put 90 into gIntroPan   -- ~1.5 s diagnostic sweep, then the follow engages
+   -- ===== pickups ====
+   pfMakeCoin 380, 384
+   pfMakeCoin 688, 470
+   pfMakeCoin 1504, 470
+   pfMakeCoin 2400, 480
+   pfMakeCoin 2820, 448
+   put 5 into gCoinsTotal
+   -- ===== hazards + critters ====
+   put empty into tRef
+   put empty into gBeeSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
+      b2kSpriteNew "foes", "saw_a", 2100, 544
       put the result into tRef
-      set the uPfHazardFlag of tRef to true
-      b2kSpritePlay tRef, "sawspin"
-      b2kAddSensor tRef, "ball"
-      b2kSpriteNew "foes", "bee_a", 860, 200
+      if tRef is not empty then
+         set the uPfHazardFlag of tRef to true
+         b2kSpritePlay tRef, "sawspin"
+         b2kAddSensor tRef, "ball"
+      end if
+      b2kSpriteNew "foes", "bee_a", 820, 300
       put the result into gBeeSpr
-      b2kSpritePlay gBeeSpr, "buzz"
-   else
+      if gBeeSpr is not empty then b2kSpritePlay gBeeSpr, "buzz"
+   end if
+   if tRef is empty then
       create graphic "pf_saw"
       set the style of it to "oval"
-      set the rect of it to 676, 522, 724, 570
+      set the rect of it to 2076, 520, 2124, 568
       set the filled of it to true
       set the backgroundColor of it to "210,60,60"
       put the long id of graphic "pf_saw" into tRef
       set the uPfHazardFlag of tRef to true
+      b2kCamAdopt tRef
       b2kAddSensor tRef, "ball"
-      put empty into gBeeSpr
    end if
-   -- input + events
+   pfMakeSlime
+   -- ===== the goal flag ====
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
+      b2kSpriteNew "tiles", "flag_blue_a", 2944, 416
+      put the result into tRef
+      if tRef is not empty then
+         set the uPfGoalFlag of tRef to true
+         b2kSpritePlay tRef, "wave"
+         b2kAddSensor tRef, "ball"
+      end if
+   end if
+   if tRef is empty then
+      create graphic "pf_flag"
+      set the style of it to "rectangle"
+      set the rect of it to 2928, 384, 2960, 448
+      set the filled of it to true
+      set the backgroundColor of it to "70,110,230"
+      put the long id of graphic "pf_flag" into tRef
+      set the uPfGoalFlag of tRef to true
+      b2kCamAdopt tRef
+      b2kAddSensor tRef, "box"
+   end if
+   -- ===== camera-dead fallback: clamp play to the visible screen ====
+   if gCamOK is not true then
+      b2kWall 1010, 0, 1010, 640
+      put empty into tRef
+      if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
+         b2kSpriteNew "tiles", "flag_blue_a", 950, 544
+         put the result into tRef
+         if tRef is not empty then
+            set the uPfGoalFlag of tRef to true
+            b2kSpritePlay tRef, "wave"
+            b2kAddSensor tRef, "ball"
+         end if
+      end if
+      if tRef is empty then
+         create graphic "pf_flagnear"
+         set the style of it to "rectangle"
+         set the rect of it to 934, 512, 966, 576
+         set the filled of it to true
+         set the backgroundColor of it to "70,110,230"
+         put the long id of graphic "pf_flagnear" into tRef
+         set the uPfGoalFlag of tRef to true
+         b2kAddSensor tRef, "box"
+      end if
+      set the text of field "pfHelp" to "CAMERA UNAVAILABLE on this engine (" & b2kCamStatus() & ") - the level is clamped" & cr & "to this screen and the flag moved here so it stays completable. Everything else works." & cr & "Please report the quoted reason."
+   end if
+   -- diagnostics: prove world membership at a glance (line 3 of the help)
+   if gCamOK is true and gHeroSpr is not empty then
+      put "diag: hero-sprite in [" & the short name of the owner of gHeroSpr & "]" into tS
+      if gGateSprA is not empty then
+         put "   gate-tile in [" & the short name of the owner of gGateSprA & "]" after tS
+      end if
+      put tS & "   (both should say b2kcam_view)" into line 3 of field "pfHelp"
+   end if
+   -- ===== input + events ====
    b2kInputOn
    b2kBindAction "jump", "space,up,w"
    b2kFrameTarget the long id of me
    b2kContactTarget the long id of me
+   pfChromeFront
+   unlock screen
    put empty into gHudLast
    put true into gStarted
    b2kStart
 end pfStartGame
 
+-- An invisible static physics slab (shown grey only in fallback mode).
+command pfSlab pName, pL, pT, pR, pB
+   create graphic pName
+   set the style of it to "rectangle"
+   set the rect of it to pL, pT, pR, pB
+   set the filled of it to true
+   set the backgroundColor of it to "100,105,115"
+   set the visible of it to false
+   b2kAddStatic the long id of graphic pName
+end pfSlab
+
+command pfShowSlabs pFlag
+   local tC
+   set the itemDelimiter to comma
+   repeat for each item tC in "pf_ground1,pf_ground2,pf_plat1,pf_plat2"
+      if there is a graphic tC then
+         set the visible of graphic tC to pFlag
+         if pFlag is true then b2kCamAdopt the long id of graphic tC
+      end if
+   end repeat
+end pfShowSlabs
+
+-- One 64px tile sprite by its top-left corner (sprites centre on x,y).
+command pfTile pFrame, pX, pY
+   b2kSpriteNew "tiles", pFrame, pX + 32, pY + 32
+end pfTile
+
 command pfMakeCoin pX, pY
    local tRef
-   if gAssetsOK is true then
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "coin_gold") then
       b2kSpriteNew "tiles", "coin_gold", pX, pY
       put the result into tRef
-      b2kSpritePlay tRef, "spin"
-   else
+      if tRef is not empty then b2kSpritePlay tRef, "spin"
+   end if
+   if tRef is empty then
       create graphic ("pf_coin" & pX)
       set the style of it to "oval"
       set the rect of it to pX - 16, pY - 16, pX + 16, pY + 16
       set the filled of it to true
       set the backgroundColor of it to "240,200,70"
       put the long id of it into tRef
+      b2kCamAdopt tRef
    end if
    set the uPfCoinFlag of tRef to true
    b2kAddSensor tRef, "ball"
 end pfMakeCoin
+
+-- The patrolling slime: an invisible dynamic body, art bound on top.
+command pfMakeSlime
+   create graphic "pf_slimeBody"
+   set the style of it to "rectangle"
+   set the rect of it to 2376, 540, 2424, 576
+   set the filled of it to true
+   set the backgroundColor of it to "110,190,90"
+   set the visible of it to false
+   put the long id of graphic "pf_slimeBody" into gSlime
+   b2kAddBox gSlime
+   b2kSetFixedRotation gSlime, true
+   b2kSetFriction gSlime, 0.1
+   put empty into gSlimeSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "slime_normal_walk_a") then
+      b2kSpriteNew "foes", "slime_normal_walk_a", 2400, 544
+      put the result into gSlimeSpr
+      if gSlimeSpr is not empty then
+         b2kSpriteBind gSlimeSpr, gSlime, 0, -6
+         b2kSpritePlay gSlimeSpr, "slimewalk"
+      end if
+   end if
+   if gSlimeSpr is empty then set the visible of graphic "pf_slimeBody" to true
+   if the visible of graphic "pf_slimeBody" is true then b2kCamAdopt gSlime
+end pfMakeSlime
+
+command pfChromeFront
+   local tN, tC
+   put the number of controls of this card into tN
+   set the itemDelimiter to comma
+   repeat for each item tC in "pfTitle,pfHelp,pfHud"
+      if there is a field tC then set the layer of field tC to tN
+   end repeat
+   repeat for each item tC in "pfbtn_pause,pfbtn_reset"
+      if there is a button tC then set the layer of button tC to tN
+   end repeat
+end pfChromeFront
 
 command pfWipeStage
    local tAgain, i, tName
@@ -270,15 +546,45 @@ command pfWipeStage
 end pfWipeStage
 
 -- =====================================================================
--- The game tick: input drives the body; the body's state picks the
--- animation; the Kit's sprite tick does the rest (bind-follow, frames).
+-- The game tick
 -- =====================================================================
 on b2kFrame
-   local tAxis, tVel, tVy, tAnim, tHud
+   local tHud
    if gHero is empty then exit b2kFrame
+   if gIntroPan > 0 then
+      subtract 1 from gIntroPan
+      b2kCamGoto 512 + 220 * sin((90 - gIntroPan) / 14), 320
+      if gIntroPan is 0 then b2kCamFollow gHero, 1
+   end if
+   -- kill plane: anything that slips every other check still respawns
+   if gHurtLock is not true then
+      set the itemDelimiter to comma
+      if (item 2 of b2kPosition(gHero)) > 780 then pfHurt
+   end if
+   pfTickHero
+   pfTickGate
+   pfTickSlime
+   if gBeeSpr is not empty then
+      set the loc of gBeeSpr to round(820 + 90 * sin(the milliseconds / 900)), round(300 + 26 * sin(the milliseconds / 430))
+   end if
+   put "coins " & gCoins & "/" & gCoinsTotal & "   |   anim " & b2kSpriteAnim(gHeroSpr) & "   |   held " & b2kKeysHeld() & "   |   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   if gCamOK is true then
+      put "   |   hero " & round(item 1 of b2kPosition(gHero)) & "  view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
+   end if
+   if gIntroPan > 0 then put "INTRO PAN - the whole world should slide right then back.   " before tHud
+   if gCoins >= gCoinsTotal then put "   ALL COINS!" after tHud
+   if gWon is true then put "LEVEL COMPLETE!   " before tHud
+   if tHud is not gHudLast then
+      put tHud into gHudLast
+      set the text of field "pfHud" to tHud
+   end if
+end b2kFrame
+
+command pfTickHero
+   local tAxis, tVel, tVy, tAnim
    set the itemDelimiter to comma
    put b2kAxis("moveX") into tAxis
-   if gHurtLock is true then put 0 into tAxis   -- no control while hurt
+   if gHurtLock is true then put 0 into tAxis
    put b2kVelocity(gHero) into tVel
    put item 2 of tVel into tVy
    b2kSetVelocity gHero, tAxis * kMoveSpeed, tVy
@@ -292,7 +598,6 @@ on b2kFrame
             b2kSetVelocity gHero, item 1 of tVel, (item 2 of tVel) * 0.45
          end if
       end if
-      -- state -> animation; b2kSpritePlay is a no-op when unchanged
       if pfOnGround() then
          if tAxis is 0 then
             put "idle" into tAnim
@@ -305,49 +610,138 @@ on b2kFrame
       b2kSpritePlay gHeroSpr, tAnim
       if tAxis is not 0 then b2kSpriteFlipH gHeroSpr, (tAxis < 0)
    end if
-   -- the bee patrols on pure math (a sprite is just a control)
-   if gBeeSpr is not empty then
-      set the loc of gBeeSpr to round(860 + 60 * sin(the milliseconds / 900)), round(190 + 22 * sin(the milliseconds / 430))
-   end if
-   put "coins " & gCoins & "/" & gCoinsTotal & "   |   anim " & b2kSpriteAnim(gHeroSpr) & "   |   held " & b2kKeysHeld() & "   |   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
-   if gCoins >= gCoinsTotal then put "   ALL COINS - nice!" after tHud
-   if tHud is not gHudLast then
-      put tHud into gHudLast
-      set the text of field "pfHud" to tHud
-   end if
-end b2kFrame
+end pfTickHero
 
--- Coins and the saw are sensors; the Kit reports who entered them.
+-- The kinematic gate chases its open/closed height; the plate's colour
+-- tracks its state. Anything on the plate (the hero OR the crate) holds it.
+command pfTickGate
+   local tTarget, tY, tLook
+   if gGate is empty then exit pfTickGate
+   set the itemDelimiter to comma
+   if gPlateCount > 0 then
+      put 342 into tTarget
+      put "down" into tLook
+   else
+      put 512 into tTarget
+      put "up" into tLook
+   end if
+   if tLook is not gPlateLook then
+      put tLook into gPlateLook
+      if there is a graphic "pf_plate" then
+         if tLook is "down" then
+            set the backgroundColor of graphic "pf_plate" to "140,110,30"
+         else
+            set the backgroundColor of graphic "pf_plate" to "220,180,60"
+         end if
+      end if
+   end if
+   put item 2 of b2kPosition(gGate) into tY
+   if abs(tY - tTarget) <= 6 then
+      b2kSetVelocity gGate, 0, 0
+   else
+      if tTarget < tY then
+         b2kSetVelocity gGate, 0, -160
+      else
+         b2kSetVelocity gGate, 0, 160
+      end if
+   end if
+end pfTickGate
+
+command pfTickSlime
+   local tX
+   if gSlimeGoneAt is not empty then
+      if the milliseconds > gSlimeGoneAt then
+         if gSlimeSpr is not empty then b2kSpriteRemove gSlimeSpr
+         put empty into gSlimeSpr
+         if there is a graphic "pf_slimeBody" then delete graphic "pf_slimeBody"
+         put empty into gSlimeGoneAt
+      end if
+      exit pfTickSlime
+   end if
+   if gSlime is empty then exit pfTickSlime
+   set the itemDelimiter to comma
+   put item 1 of b2kPosition(gSlime) into tX
+   if tX is empty then exit pfTickSlime
+   if tX <= 2300 then put 60 into gSlimeDir
+   if tX >= 2600 then put -60 into gSlimeDir
+   b2kSetVelocity gSlime, gSlimeDir, item 2 of b2kVelocity(gSlime)
+   if gSlimeSpr is not empty then b2kSpriteFlipH gSlimeSpr, (gSlimeDir < 0)
+end pfTickSlime
+
+-- =====================================================================
+-- Events: sensors (coins, hazards, plate, goal) and contacts (the slime)
+-- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
-   if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if pSensorCtrl is empty then exit b2kSensorEnter
+   if the uPfPlateFlag of pSensorCtrl is true then
+      add 1 to gPlateCount
+      exit b2kSensorEnter
+   end if
+   if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfCoinFlag of pSensorCtrl is true then
       add 1 to gCoins
-      b2kSpriteRemove pSensorCtrl   -- sprite coin: body + button + registry
+      b2kSpriteRemove pSensorCtrl
       try
-         delete pSensorCtrl         -- fallback oval is not Kit-spawned
+         delete pSensorCtrl
       catch tErr
       end try
       exit b2kSensorEnter
    end if
    if the uPfHazardFlag of pSensorCtrl is true then pfHurt
+   if the uPfGoalFlag of pSensorCtrl is true then put true into gWon
 end b2kSensorEnter
+
+on b2kSensorExit pSensorCtrl, pVisitorCtrl
+   if pSensorCtrl is empty then exit b2kSensorExit
+   if the uPfPlateFlag of pSensorCtrl is true then
+      subtract 1 from gPlateCount
+      if gPlateCount < 0 then put 0 into gPlateCount
+   end if
+end b2kSensorExit
+
+-- Hero vs slime: falling onto it squashes; anything else hurts.
+on b2kContact pA, pB
+   local tHit
+   if gSlime is empty or gHurtLock is true then exit b2kContact
+   put false into tHit
+   if pA is gHero and pB is gSlime then put true into tHit
+   if pB is gHero and pA is gSlime then put true into tHit
+   if not tHit then exit b2kContact
+   set the itemDelimiter to comma
+   if (item 2 of b2kVelocity(gHero)) > 40 and (item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(gSlime)) - 16 then
+      pfSquashSlime
+      b2kSetVelocity gHero, item 1 of b2kVelocity(gHero), -260
+   else
+      pfHurt
+   end if
+end b2kContact
+
+command pfSquashSlime
+   if gSlime is empty then exit pfSquashSlime
+   if gSlimeSpr is not empty and b2kSheetHasFrame("foes", "slime_normal_flat") then
+      b2kSpriteSetFrame gSlimeSpr, "slime_normal_flat"
+      b2kSpriteUnbind gSlimeSpr
+   end if
+   b2kRemove gSlime               -- body gone; the flat art lingers a moment
+   put empty into gSlime
+   put the milliseconds + 700 into gSlimeGoneAt
+end pfSquashSlime
 
 command pfHurt
    if gHurtLock is true then exit pfHurt
    put true into gHurtLock
+   b2kCamShake 7, 280
    b2kSpritePlay gHeroSpr, "hit", true   -- non-loop; OnFinish respawns
 end pfHurt
 
 on pfHurtDone pSprite, pAnim
-   b2kMoveTo gHero, 140, 470
+   b2kMoveTo gHero, 120, 480
    b2kSetVelocity gHero, 0, 0
    put false into gHurtLock
    b2kSpritePlay gHeroSpr, "idle"
 end pfHurtDone
 
 -- Grounded = short rays from each foot hit an upward-facing surface.
--- "Did it hit" reads b2kRayDist() (the chain ledge has no control).
 function pfOnGround
    local tPos, tX, tY, tOff, tReach
    if gHero is empty then return false
@@ -356,11 +750,11 @@ function pfOnGround
    put item 1 of tPos into tX
    put item 2 of tPos into tY
    if gAssetsOK is true then
-      put 62 into tReach
+      put 54 into tReach
    else
       put 40 into tReach
    end if
-   repeat for each item tOff in "-14,14"
+   repeat for each item tOff in "-12,12"
       get b2kRayHit(tX + tOff, tY, tX + tOff, tY + tReach)
       if b2kRayDist() is not empty and b2kRayHitNormalY() <= -0.6 then
          return true
@@ -370,13 +764,13 @@ function pfOnGround
 end pfOnGround
 
 -- =====================================================================
--- Mouse: buttons by name, anything else is the Kit's grab-drag
+-- Mouse: buttons by name; everything else is a camera-corrected grab
 -- =====================================================================
 on mouseDown
    local tName
    put the short name of the target into tName
    if char 1 to 6 of tName is "pfbtn_" then exit mouseDown
-   get b2kGrab(the mouseH, the mouseV)
+   get b2kGrab(b2kCamMouseX(), b2kCamMouseY())
 end mouseDown
 
 on mouseUp
@@ -469,11 +863,16 @@ end mouseRelease
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
 -- SPRITE  b2kSheetLoad name,path,fw,fh[,n] · b2kSheetLoadAtlas name,png[,xml] ·
 --         b2kSheetFromImage name,img,fw,fh · b2kSheetFrames(name) ·
+--         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
 --         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
 --         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
 --         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
 --         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
 --         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
+-- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
+--         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
+--         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
+--         b2kCamAdopt ctrl   (world px == control locs; spawns auto-join the view)
 -- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
 --         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
 --         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
@@ -532,6 +931,7 @@ local sSheetIcon     -- sheet -> frame key -> sliced frame image id (lazy)
 local sSheetFlip     -- sheet -> frame key -> mirrored image id (lazy)
 local sSheetData     -- sheet -> cached source imageData (freed on teardown)
 local sSheetAlpha    -- sheet -> cached source alphaData
+local sSheetScale    -- sheet -> display scale factor (default 1; engine-resampled at slice time)
 local sAnimList      -- "sheet|anim" -> CR list of frame keys
 local sAnimFPS       -- "sheet|anim" -> frames per second
 local sAnimLoop      -- "sheet|anim" -> true/false
@@ -539,6 +939,15 @@ local sSprRefs       -- CR list of live sprite controls (the tick iterates)
 local sSprSheet, sSprKind, sSprAnim, sSprStep, sSprNextMS
 local sSprFPS, sSprFPSOver, sSprFlip, sSprMsg, sSprFrameKey, sSprIconNow
 local sSprBind, sSprBindDX, sSprBindDY, sSprLastLoc
+local sCamGroup      -- viewport group long id while the camera is on
+local sCamFollow     -- control the camera tracks (empty = manual)
+local sCamLerp       -- follow smoothing 0..1 (1 = snap)
+local sCamDZW, sCamDZH -- deadzone box in px (0 = always centre)
+local sCamB1X, sCamB1Y, sCamB2X, sCamB2Y -- world bounds (sCamB1X empty = none)
+local sCamX, sCamY   -- current view centre (world px)
+local sCamShakeAmp, sCamShakeEnd
+local sCamLastH, sCamLastV -- last written scroll (skip redundant sets)
+local sCamNote       -- empty = healthy; else why the camera is degraded
 
 constant kPI = 3.14159265358979
 
@@ -585,6 +994,7 @@ command b2kTeardown
    put the milliseconds & random(9999) into sGen
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
+   b2kCamOff       -- dissolve the viewport; its children return to the card
    b2kSheetsWipe   -- sprites, sliced frames, sources: all module state goes
    b2kResetTables
    put 0 into sDragJoint
@@ -944,7 +1354,11 @@ command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
    put b2kNumberOr(pScreenX, sOriginX) into pScreenX
    put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
-   create graphic (tName)
+   if sCamGroup is empty then
+      create graphic (tName)
+   else
+      create graphic (tName) in group "b2kcam_view"
+   end if
    put the long id of graphic (tName) into tRef
    set the style of tRef to "rectangle"
    set the filled of tRef to true
@@ -973,7 +1387,11 @@ command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
    put b2kNumberOr(pScreenX, sOriginX) into pScreenX
    put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
-   create graphic (tName)
+   if sCamGroup is empty then
+      create graphic (tName)
+   else
+      create graphic (tName) in group "b2kcam_view"
+   end if
    put the long id of graphic (tName) into tRef
    set the style of tRef to "oval"
    set the filled of tRef to true
@@ -1006,7 +1424,11 @@ command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
    put b2kNumberOr(pScreenX, sOriginX) into pScreenX
    put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
-   create graphic (tName)
+   if sCamGroup is empty then
+      create graphic (tName)
+   else
+      create graphic (tName) in group "b2kcam_view"
+   end if
    put the long id of graphic (tName) into tRef
    set the style of tRef to "polygon"
    set the filled of tRef to true
@@ -2411,6 +2833,7 @@ command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
       put "xml" into item -1 of pXmlPath
    end if
    put URL ("file:" & pXmlPath) into tXml
+   if tXml is empty then put URL ("binfile:" & pXmlPath) into tXml
    if tXml is empty then return 0
    put b2kSheetSourceFromFile(pName, pPngPath) into tRef
    if tRef is empty then return 0
@@ -2439,6 +2862,49 @@ end b2kSheetFrames
 function b2kSheetHasFrame pName, pFrame
    return (sSheetRegion[pName][pFrame] is not empty)
 end b2kSheetHasFrame
+
+-- Display scale for a sheet's frames (default 1). Frames slice lazily, so
+-- set this right after loading the sheet, BEFORE creating sprites or anims:
+-- already-sliced frames are dropped and re-bake at the new scale, but live
+-- sprites keep their button rects. The engine does the resampling, so any
+-- frame size displays at any sprite size.
+command b2kSheetScale pName, pScale
+   local tKey, tId
+   put b2kClamp(pScale, 0.05, 8) into pScale
+   if b2kNumberOr(sSheetScale[pName], 1) is pScale then exit b2kSheetScale
+   put pScale into sSheetScale[pName]
+   repeat for each key tKey in sSheetIcon[pName]
+      put sSheetIcon[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   repeat for each key tKey in sSheetFlip[pName]
+      put sSheetFlip[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   delete variable sSheetIcon[pName]
+   delete variable sSheetFlip[pName]
+end b2kSheetScale
+
+-- A frame's DISPLAY size as "w,h" (its region size times the sheet scale) --
+-- lay out tiles and platforms from this instead of hard-coding pixels.
+function b2kSheetFrameSize pName, pFrame
+   local tRegion, tScale
+   put sSheetRegion[pName][pFrame] into tRegion
+   if tRegion is empty then return empty
+   set the itemDelimiter to comma
+   put b2kNumberOr(sSheetScale[pName], 1) into tScale
+   return max(1, round((item 3 of tRegion) * tScale)) & comma & max(1, round((item 4 of tRegion) * tScale))
+end b2kSheetFrameSize
 
 -- Define a named animation: pFrames is a comma list of frame names and/or
 -- 1-based indices, with numeric ranges ("1-8") expanded. pLoop defaults true.
@@ -2479,25 +2945,34 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
    if sSheetKeys[pSheet] is empty then return empty
    put pFrame into tKey
    if tKey is empty then put line 1 of sSheetKeys[pSheet] into tKey
-   put sSheetRegion[pSheet][tKey] into tRegion
+   put b2kSheetFrameSize(pSheet, tKey) into tRegion   -- "w,h" at display scale
    if tRegion is empty then return empty
    set the itemDelimiter to comma
-   put item 3 of tRegion into tW
-   put item 4 of tRegion into tH
+   put item 1 of tRegion into tW
+   put item 2 of tRegion into tH
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
-   create button tName
+   if sCamGroup is empty then
+      create button tName
+   else
+      create button tName in group "b2kcam_view"
+   end if
    put the long id of button tName into tRef
    set the style of tRef to "transparent"
    set the showName of tRef to false
    set the traversalOn of tRef to false
    set the autoHilite of tRef to false
    set the rect of tRef to round(pX - tW / 2), round(pY - tH / 2), round(pX + tW / 2), round(pY + tH / 2)
-   try
-      set the layerMode of tRef to "dynamic"   -- its own compositor layer
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      -- dynamic layers composite in STACK coordinates: inside a scrolled
+      -- viewport they ignore the group scroll and draw unscrolled, so a
+      -- camera sprite must stay a plain group child
+      try
+         set the layerMode of tRef to "dynamic"
+      catch tErr
+      end try
+   end if
    put pSheet into sSprSheet[tRef]
    put "sheet" into sSprKind[tRef]
    put false into sSprFlip[tRef]
@@ -2510,15 +2985,21 @@ end b2kSpriteNew
 -- A sprite backed by an animated GIF file: the engine plays it; the Kit's
 -- play/stop/frame calls drive repeatCount/currentFrame instead of icons.
 command b2kSpriteFromGIF pPath, pX, pY
-   local tName, tRef
+   local tName, tRef, tData
+   put URL ("binfile:" & pPath) into tData   -- content-load, like the sheets
+   if tData is empty then return empty
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
-   create image tName
+   if sCamGroup is empty then
+      create image tName
+   else
+      create image tName in group "b2kcam_view"
+   end if
    put the long id of image tName into tRef
-   set the lockLoc of tRef to true
    try
-      set the filename of tRef to pPath
+      set the text of tRef to tData
    catch tErr
    end try
+   set the lockLoc of tRef to true
    if the width of tRef < 1 then
       try
          delete tRef
@@ -2529,10 +3010,12 @@ command b2kSpriteFromGIF pPath, pX, pY
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    set the loc of tRef to round(pX) & comma & round(pY)
-   try
-      set the layerMode of tRef to "dynamic"
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      try
+         set the layerMode of tRef to "dynamic"   -- see b2kSpriteNew note
+      catch tErr
+      end try
+   end if
    try
       set the repeatCount of tRef to -1
    catch tErr
@@ -2738,6 +3221,7 @@ command b2kSheetForget pName
    delete variable sSheetFlip[pName]
    delete variable sSheetData[pName]
    delete variable sSheetAlpha[pName]
+   delete variable sSheetScale[pName]
    repeat for each key tKey in sAnimList
       if char 1 to (the number of chars of pName) + 1 of tKey is pName & "|" then
          delete variable sAnimList[tKey]
@@ -2761,30 +3245,79 @@ command b2kSheetsWipe
    put empty into sSheetFlip
    put empty into sSheetData
    put empty into sSheetAlpha
+   put empty into sSheetScale
    put empty into sAnimList
    put empty into sAnimFPS
    put empty into sAnimLoop
+   b2kSpriteSweepOrphans
 end b2kSheetsWipe
+
+-- Internal: delete Kit-generated sprite/sheet controls left over from a
+-- PREVIOUS session. Script-locals reset when a stack reopens (or a new
+-- script is pasted in), but the controls persist -- registry cleanup can't
+-- see them, so a reopened stack would show ghost sprites frozen on their
+-- last frame. Swept by name prefix on every teardown.
+command b2kSpriteSweepOrphans
+   local tAgain, i, tName, tHit
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         if char 1 to 7 of tName is "b2kcam_" then
+            -- a dead session's viewport: free the children, then the shell
+            try
+               ungroup control i of this card
+            catch tErr
+               delete control i of this card
+            end try
+            put true into tAgain
+            exit repeat
+         end if
+         put false into tHit
+         if char 1 to 7 of tName is "b2kspr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfl_" then put true into tHit
+         if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         if tHit then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end b2kSpriteSweepOrphans
 
 -- ---- sprite internals ------------------------------------------------
 
 -- Internal: load an image file into a hidden, Kit-owned source image.
+-- The bytes are loaded as CONTENT (binfile -> set the text), not as a
+-- filename reference: referenced images size and load lazily for hidden
+-- controls, which broke the slicer's stride; content images adopt their
+-- pixel size immediately -- the exact path b2kSheetFromImage users (and
+-- the platformer's embedded placeholder) already exercise successfully.
+-- lockLoc only AFTER the content, so the control has auto-sized first.
 function b2kSheetSourceFromFile pName, pPath
-   local tImg
+   local tImg, tData
    b2kSheetForget pName
+   if there is no file pPath then return empty
+   put URL ("binfile:" & pPath) into tData
+   if tData is empty then return empty
    put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
-   set the lockLoc of it to true
    try
-      set the filename of image tImg to pPath
+      set the text of image tImg to tData
    catch tErr
+      delete image tImg
+      return empty
    end try
-   if the width of image tImg < 1 then
+   if the width of image tImg < 2 then
       delete image tImg
       return empty
    end if
+   set the lockLoc of image tImg to true
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]
@@ -2823,7 +3356,7 @@ end b2kXmlAttr
 -- Internal: make sure a frame's sliced image exists (lazy, cached). The
 -- source pixels are fetched once per sheet and kept until teardown.
 command b2kSheetEnsureIcon pSheet, pKey
-   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName
+   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName, tScale, tW2, tH2
    if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
    put sSheetRegion[pSheet][pKey] into tRegion
    if tRegion is empty then exit b2kSheetEnsureIcon
@@ -2837,6 +3370,10 @@ command b2kSheetEnsureIcon pSheet, pKey
    put item 3 of tRegion into tW
    put item 4 of tRegion into tH
    put the width of sSheetSrc[pSheet] into tSW
+   -- refuse to slice from inconsistent pixels: a stride mismatch must yield
+   -- an empty (invisible) frame, never garbage on screen
+   if the number of bytes in sSheetData[pSheet] is not tSW * (the height of sSheetSrc[pSheet]) * 4 then exit b2kSheetEnsureIcon
+   if tX + tW > tSW then exit b2kSheetEnsureIcon
    put empty into tFD
    put empty into tFA
    repeat with y = 0 to tH - 1
@@ -2844,6 +3381,10 @@ command b2kSheetEnsureIcon pSheet, pKey
       put byte (tRowPx * 4 + 1) to (tRowPx * 4 + tW * 4) of sSheetData[pSheet] after tFD
       put byte (tRowPx + 1) to (tRowPx + tW) of sSheetAlpha[pSheet] after tFA
    end repeat
+   if the number of bytes in tFD is not tW * tH * 4 then exit b2kSheetEnsureIcon
+   if the number of bytes in tFA is not tW * tH then
+      put empty into tFA   -- no usable alpha: ship the frame fully opaque
+   end if
    put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    set the visible of it to false
@@ -2851,7 +3392,20 @@ command b2kSheetEnsureIcon pSheet, pKey
    set the width of it to tW
    set the height of it to tH
    set the imageData of image tName to tFD
-   set the alphaData of image tName to tFA
+   if tFA is not empty then set the alphaData of image tName to tFA
+   -- sheet scale: resize the control (the engine resamples the render),
+   -- then bake that render back in as the frame's real pixels
+   put b2kNumberOr(sSheetScale[pSheet], 1) into tScale
+   if tScale is not 1 then
+      put max(1, round(tW * tScale)) into tW2
+      put max(1, round(tH * tScale)) into tH2
+      set the width of image tName to tW2
+      set the height of image tName to tH2
+      put the imageData of image tName into tFD
+      put the alphaData of image tName into tFA
+      set the imageData of image tName to tFD
+      if tFA is not empty then set the alphaData of image tName to tFA
+   end if
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 
@@ -2950,6 +3504,277 @@ command b2kSpritesTick
 end b2kSpritesTick
 
 -- =====================================================================
+-- Camera: a clipped viewport group the loop scrolls (proven in spike S9)
+-- =====================================================================
+-- While the camera is on, Kit-created controls (spawns and sprites) are
+-- placed INSIDE the viewport group; their locs stay WORLD pixels, because
+-- contents of a scrolled group keep their coordinates -- the body sync and
+-- all physics math are untouched, the scroll is pure presentation. Chrome
+-- stays on the card; anything behind the (transparent) group reads as an
+-- infinite-distance parallax backdrop. Map mouse points with
+-- b2kCamMouseX/Y. Level coordinates should start at 0,0: an invisible
+-- anchor pins the group's content origin there, so scroll == view corner.
+command b2kCamOn pRect
+   local tG
+   if sCamGroup is not empty then exit b2kCamOn
+   put empty into sCamNote
+   if pRect is empty then put the rect of this card into pRect
+   try
+      create group "b2kcam_view"
+   catch tErr
+      put "create group failed: " & tErr into sCamNote
+      exit b2kCamOn
+   end try
+   put the long id of group "b2kcam_view" into tG
+   try
+      set the margins of tG to 0
+      set the showBorder of tG to false
+      set the hScrollbar of tG to false
+      set the vScrollbar of tG to false
+      create graphic "b2kcam_anchor" in group "b2kcam_view"
+      set the rect of it to 0, 0, 1, 1
+      set the visible of it to false
+      set the lockLoc of tG to true
+      set the rect of tG to pRect
+   catch tErr
+      put "viewport setup failed: " & tErr into sCamNote
+      try
+         delete group "b2kcam_view"
+      catch tErr
+      end try
+      exit b2kCamOn
+   end try
+   try
+      set the unboundedHScroll of tG to true
+      set the unboundedVScroll of tG to true
+   catch tErr
+   end try
+   -- NOTE: deliberately NOT layerMode "scrolling". The compositor caches
+   -- that mode's content as one surface; past common GPU surface limits
+   -- (~2048px) the cached world freezes while dynamic-layer sprites keep
+   -- moving -- the player "runs off" a stopped picture. Plain rendering
+   -- pans correctly at any level size.
+   put tG into sCamGroup
+   set the itemDelimiter to comma
+   put ((item 1 of pRect) + (item 3 of pRect)) / 2 into sCamX
+   put ((item 2 of pRect) + (item 4 of pRect)) / 2 into sCamY
+   put 0.15 into sCamLerp
+   put 0 into sCamDZW
+   put 0 into sCamDZH
+   put empty into sCamFollow
+   put empty into sCamB1X
+   put 0 into sCamShakeAmp
+   put empty into sCamLastH
+   put empty into sCamLastV
+   -- self-test: prove the scroll property actually pans this group. The
+   -- anchor is stretched first so content exceeds the view (engines clamp
+   -- scroll to content bounds), then restored; failure is reported via
+   -- b2kCamStatus instead of letting the player walk out of a frozen view.
+   try
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 4000, 2000
+      set the hScroll of sCamGroup to 7
+      if the hScroll of sCamGroup is not 7 then
+         put "group scroll is ineffective on this engine" into sCamNote
+      end if
+      set the hScroll of sCamGroup to 0
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 1, 1
+   catch tErr
+      put "setting the group scroll failed: " & tErr into sCamNote
+   end try
+   b2kCamApply
+end b2kCamOn
+
+-- Dissolve the viewport: children return to the card with their world locs.
+command b2kCamOff
+   if sCamGroup is empty then exit b2kCamOff
+   try
+      ungroup group "b2kcam_view"
+   catch tErr
+   end try
+   if there is a graphic "b2kcam_anchor" then delete graphic "b2kcam_anchor"
+   put empty into sCamGroup
+end b2kCamOff
+
+function b2kCamIsOn
+   return (sCamGroup is not empty)
+end b2kCamIsOn
+
+-- The viewport group's reference (empty when the camera is off) -- create
+-- your own level controls inside it: create graphic "x" in b2kCamGroup().
+function b2kCamGroup
+   return sCamGroup
+end b2kCamGroup
+
+-- Move an existing control (IDE-designed levels) into the viewport.
+command b2kCamAdopt pCtrl
+   if sCamGroup is empty then exit b2kCamAdopt
+   try
+      relayer pCtrl to front of group "b2kcam_view"
+   catch tErr
+      -- no script relayer on this engine: the control stays on the card.
+      -- Physics is unaffected; only its drawing will not scroll.
+   end try
+end b2kCamAdopt
+
+command b2kCamFollow pCtrl, pLerp
+   put the long id of pCtrl into sCamFollow
+   if pLerp is a number then put b2kClamp(pLerp, 0.01, 1) into sCamLerp
+end b2kCamFollow
+
+command b2kCamUnfollow
+   put empty into sCamFollow
+end b2kCamUnfollow
+
+-- Follow only once the target leaves a centre box (0 = always centre).
+command b2kCamDeadzone pW, pH
+   put b2kNumberOr(pW, 0) into sCamDZW
+   put b2kNumberOr(pH, 0) into sCamDZH
+end b2kCamDeadzone
+
+command b2kCamBounds pX1, pY1, pX2, pY2
+   put pX1 into sCamB1X
+   put pY1 into sCamB1Y
+   put pX2 into sCamB2X
+   put pY2 into sCamB2Y
+   -- stretch the invisible anchor across the whole level: the group's
+   -- scrollable content then always spans the bounds, so the engine can
+   -- never clamp the scroll short (works with or without unbounded scroll)
+   if sCamGroup is not empty then
+      try
+         set the rect of graphic "b2kcam_anchor" to pX1, pY1, pX2, pY2
+      catch tErr
+      end try
+   end if
+end b2kCamBounds
+
+command b2kCamGoto pX, pY
+   put b2kNumberOr(pX, sCamX) into sCamX
+   put b2kNumberOr(pY, sCamY) into sCamY
+   b2kCamApply
+end b2kCamGoto
+
+function b2kCamPos
+   return round(sCamX) & comma & round(sCamY)
+end b2kCamPos
+
+-- A decaying random view offset on top of the follow (impacts, blasts).
+command b2kCamShake pAmpPx, pMs
+   put b2kClamp(pAmpPx, 0, 200) into sCamShakeAmp
+   put the milliseconds + b2kClamp(pMs, 0, 5000) into sCamShakeEnd
+end b2kCamShake
+
+-- The mouse in WORLD pixels (camera-aware) -- use these for b2kGrab,
+-- spawning at the pointer, click-picking, instead of the mouseH/V.
+function b2kCamMouseX
+   if sCamGroup is empty then return the mouseH
+   set the itemDelimiter to comma
+   return the mouseH - (item 1 of the rect of sCamGroup) + the hScroll of sCamGroup
+end b2kCamMouseX
+
+function b2kCamMouseY
+   if sCamGroup is empty then return the mouseV
+   set the itemDelimiter to comma
+   return the mouseV - (item 2 of the rect of sCamGroup) + the vScroll of sCamGroup
+end b2kCamMouseY
+
+-- Health: empty = camera fine (or simply off); otherwise the reason the
+-- camera could not run properly (create-group/scroll failures). Check it
+-- after b2kCamOn and degrade your level gracefully.
+function b2kCamStatus
+   return sCamNote
+end b2kCamStatus
+
+-- Internal, called by the loop each frame: chase the followed control. The
+-- follow eases, but the target is GUARANTEED on screen: if it would leave
+-- the view (fast falls, teleports, lerp lag), the camera snaps to it.
+command b2kCamTick
+   local tLoc, tTX, tTY, tHalfW, tHalfH
+   if sCamGroup is empty then exit b2kCamTick
+   if sCamFollow is not empty then
+      try
+         set the itemDelimiter to comma
+         put the loc of sCamFollow into tLoc
+         put item 1 of tLoc into tTX
+         put item 2 of tLoc into tTY
+         if abs(tTX - sCamX) > sCamDZW / 2 then
+            put sCamX + sCamLerp * (tTX - sCamX) into sCamX
+         end if
+         if abs(tTY - sCamY) > sCamDZH / 2 then
+            put sCamY + sCamLerp * (tTY - sCamY) into sCamY
+         end if
+         -- the never-offscreen guarantee (32 px inside the view edges)
+         put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) / 2 into tHalfW
+         put ((item 4 of the rect of sCamGroup) - (item 2 of the rect of sCamGroup)) / 2 into tHalfH
+         if abs(tTX - sCamX) > tHalfW - 32 then put tTX into sCamX
+         if abs(tTY - sCamY) > tHalfH - 32 then put tTY into sCamY
+      catch tErr
+         put empty into sCamFollow   -- target vanished
+      end try
+   end if
+   b2kCamApply
+   -- reality check: prove the target is inside the view using the ACTUAL
+   -- scroll properties (not internal state). If anything desynced them --
+   -- an engine quirk, a missed write -- force the scroll directly.
+   if sCamFollow is not empty then
+      try
+         set the itemDelimiter to comma
+         put the loc of sCamFollow into tLoc
+         put (item 1 of tLoc) - (the hScroll of sCamGroup) into tTX
+         put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) into tHalfW
+         if tTX < 48 or tTX > tHalfW - 48 then
+            set the hScroll of sCamGroup to round((item 1 of tLoc) - tHalfW / 2)
+            put the hScroll of sCamGroup into sCamLastH
+            put item 1 of tLoc into sCamX
+         end if
+      catch tErr
+      end try
+   end if
+end b2kCamTick
+
+-- Internal: clamp to bounds, add shake, write the scroll (skip when same).
+command b2kCamApply
+   local tVW, tVH, tHalfW, tHalfH, tX, tY, tH, tV, tNow
+   if sCamGroup is empty then exit b2kCamApply
+   set the itemDelimiter to comma
+   put (item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup) into tVW
+   put (item 4 of the rect of sCamGroup) - (item 2 of the rect of sCamGroup) into tVH
+   put tVW / 2 into tHalfW
+   put tVH / 2 into tHalfH
+   put sCamX into tX
+   put sCamY into tY
+   if sCamB1X is not empty then
+      if tX > sCamB2X - tHalfW then put sCamB2X - tHalfW into tX
+      if tX < sCamB1X + tHalfW then put sCamB1X + tHalfW into tX
+      if tY > sCamB2Y - tHalfH then put sCamB2Y - tHalfH into tY
+      if tY < sCamB1Y + tHalfH then put sCamB1Y + tHalfH into tY
+   end if
+   -- write the clamped centre back: the follow math must ease against the
+   -- view that is actually shown, or the camera lags invisibly at the
+   -- bounds and the player outruns a scroll that has not started yet
+   put tX into sCamX
+   put tY into sCamY
+   if sCamShakeAmp > 0 then
+      put the milliseconds into tNow
+      if tNow >= sCamShakeEnd then
+         put 0 into sCamShakeAmp
+      else
+         put tX + (random(sCamShakeAmp * 2 + 1) - sCamShakeAmp - 1) into tX
+         put tY + (random(sCamShakeAmp * 2 + 1) - sCamShakeAmp - 1) into tY
+      end if
+   end if
+   put round(tX - tHalfW) into tH   -- content origin pinned at 0,0
+   put round(tY - tHalfH) into tV
+   if tH is not sCamLastH then
+      set the hScroll of sCamGroup to tH
+      put tH into sCamLastH
+   end if
+   if tV is not sCamLastV then
+      set the vScroll of sCamGroup to tV
+      put tV into sCamLastV
+   end if
+end b2kCamApply
+
+-- =====================================================================
 -- The loop  (fixed timestep, generation-guarded; one screen lock per frame)
 -- =====================================================================
 -- The whole frame -- body sync, contact/sensor dispatch and the app's own
@@ -2974,13 +3799,15 @@ on b2kStep pGen
          subtract tFixed from sAccum
       end repeat
       if sDragging then
-         b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
+         -- camera-aware: b2kCamMouseX/Y fall back to the raw mouse when off
+         b2MouseSetTarget sDragJoint, b2kToWorldX(b2kCamMouseX()), b2kToWorldY(b2kCamMouseY())
       end if
       lock screen
       try
          b2kSyncBodies         -- lock-free; this frame's single lock is held here
          b2kInputTick          -- keyboard sample, so b2kFrame sees this frame's edges
          b2kSpritesTick        -- bound sprites follow bodies; animations advance
+         b2kCamTick            -- viewport chases its target over the fresh locs
          b2kDispatchContacts
          b2kDispatchSensors
          if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
@@ -3009,13 +3836,14 @@ command b2kStepOnce
    b2Step sWorld, (1 / 60), sSub
    put 1000 / 60 into sFrameMS   -- a hand-stepped frame is one fixed step long
    if sDragging then
-      b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
+      b2MouseSetTarget sDragJoint, b2kToWorldX(b2kCamMouseX()), b2kToWorldY(b2kCamMouseY())
    end if
    lock screen
    try
       b2kSyncBodies
       b2kInputTick
       b2kSpritesTick
+      b2kCamTick
       b2kDispatchContacts
       b2kDispatchSensors
       if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj

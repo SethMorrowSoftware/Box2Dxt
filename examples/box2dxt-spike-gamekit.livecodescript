@@ -1421,11 +1421,16 @@ end spikeNewGroup
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
 -- SPRITE  b2kSheetLoad name,path,fw,fh[,n] · b2kSheetLoadAtlas name,png[,xml] ·
 --         b2kSheetFromImage name,img,fw,fh · b2kSheetFrames(name) ·
+--         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
 --         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
 --         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
 --         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
 --         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
 --         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
+-- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
+--         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
+--         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
+--         b2kCamAdopt ctrl   (world px == control locs; spawns auto-join the view)
 -- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
 --         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
 --         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
@@ -1484,6 +1489,7 @@ local sSheetIcon     -- sheet -> frame key -> sliced frame image id (lazy)
 local sSheetFlip     -- sheet -> frame key -> mirrored image id (lazy)
 local sSheetData     -- sheet -> cached source imageData (freed on teardown)
 local sSheetAlpha    -- sheet -> cached source alphaData
+local sSheetScale    -- sheet -> display scale factor (default 1; engine-resampled at slice time)
 local sAnimList      -- "sheet|anim" -> CR list of frame keys
 local sAnimFPS       -- "sheet|anim" -> frames per second
 local sAnimLoop      -- "sheet|anim" -> true/false
@@ -1491,6 +1497,15 @@ local sSprRefs       -- CR list of live sprite controls (the tick iterates)
 local sSprSheet, sSprKind, sSprAnim, sSprStep, sSprNextMS
 local sSprFPS, sSprFPSOver, sSprFlip, sSprMsg, sSprFrameKey, sSprIconNow
 local sSprBind, sSprBindDX, sSprBindDY, sSprLastLoc
+local sCamGroup      -- viewport group long id while the camera is on
+local sCamFollow     -- control the camera tracks (empty = manual)
+local sCamLerp       -- follow smoothing 0..1 (1 = snap)
+local sCamDZW, sCamDZH -- deadzone box in px (0 = always centre)
+local sCamB1X, sCamB1Y, sCamB2X, sCamB2Y -- world bounds (sCamB1X empty = none)
+local sCamX, sCamY   -- current view centre (world px)
+local sCamShakeAmp, sCamShakeEnd
+local sCamLastH, sCamLastV -- last written scroll (skip redundant sets)
+local sCamNote       -- empty = healthy; else why the camera is degraded
 
 constant kPI = 3.14159265358979
 
@@ -1537,6 +1552,7 @@ command b2kTeardown
    put the milliseconds & random(9999) into sGen
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
+   b2kCamOff       -- dissolve the viewport; its children return to the card
    b2kSheetsWipe   -- sprites, sliced frames, sources: all module state goes
    b2kResetTables
    put 0 into sDragJoint
@@ -1896,7 +1912,11 @@ command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
    put b2kNumberOr(pScreenX, sOriginX) into pScreenX
    put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
-   create graphic (tName)
+   if sCamGroup is empty then
+      create graphic (tName)
+   else
+      create graphic (tName) in group "b2kcam_view"
+   end if
    put the long id of graphic (tName) into tRef
    set the style of tRef to "rectangle"
    set the filled of tRef to true
@@ -1925,7 +1945,11 @@ command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
    put b2kNumberOr(pScreenX, sOriginX) into pScreenX
    put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
-   create graphic (tName)
+   if sCamGroup is empty then
+      create graphic (tName)
+   else
+      create graphic (tName) in group "b2kcam_view"
+   end if
    put the long id of graphic (tName) into tRef
    set the style of tRef to "oval"
    set the filled of tRef to true
@@ -1958,7 +1982,11 @@ command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
    put b2kNumberOr(pScreenX, sOriginX) into pScreenX
    put b2kNumberOr(pScreenY, sOriginY) into pScreenY
    put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
-   create graphic (tName)
+   if sCamGroup is empty then
+      create graphic (tName)
+   else
+      create graphic (tName) in group "b2kcam_view"
+   end if
    put the long id of graphic (tName) into tRef
    set the style of tRef to "polygon"
    set the filled of tRef to true
@@ -3363,6 +3391,7 @@ command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
       put "xml" into item -1 of pXmlPath
    end if
    put URL ("file:" & pXmlPath) into tXml
+   if tXml is empty then put URL ("binfile:" & pXmlPath) into tXml
    if tXml is empty then return 0
    put b2kSheetSourceFromFile(pName, pPngPath) into tRef
    if tRef is empty then return 0
@@ -3391,6 +3420,49 @@ end b2kSheetFrames
 function b2kSheetHasFrame pName, pFrame
    return (sSheetRegion[pName][pFrame] is not empty)
 end b2kSheetHasFrame
+
+-- Display scale for a sheet's frames (default 1). Frames slice lazily, so
+-- set this right after loading the sheet, BEFORE creating sprites or anims:
+-- already-sliced frames are dropped and re-bake at the new scale, but live
+-- sprites keep their button rects. The engine does the resampling, so any
+-- frame size displays at any sprite size.
+command b2kSheetScale pName, pScale
+   local tKey, tId
+   put b2kClamp(pScale, 0.05, 8) into pScale
+   if b2kNumberOr(sSheetScale[pName], 1) is pScale then exit b2kSheetScale
+   put pScale into sSheetScale[pName]
+   repeat for each key tKey in sSheetIcon[pName]
+      put sSheetIcon[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   repeat for each key tKey in sSheetFlip[pName]
+      put sSheetFlip[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   delete variable sSheetIcon[pName]
+   delete variable sSheetFlip[pName]
+end b2kSheetScale
+
+-- A frame's DISPLAY size as "w,h" (its region size times the sheet scale) --
+-- lay out tiles and platforms from this instead of hard-coding pixels.
+function b2kSheetFrameSize pName, pFrame
+   local tRegion, tScale
+   put sSheetRegion[pName][pFrame] into tRegion
+   if tRegion is empty then return empty
+   set the itemDelimiter to comma
+   put b2kNumberOr(sSheetScale[pName], 1) into tScale
+   return max(1, round((item 3 of tRegion) * tScale)) & comma & max(1, round((item 4 of tRegion) * tScale))
+end b2kSheetFrameSize
 
 -- Define a named animation: pFrames is a comma list of frame names and/or
 -- 1-based indices, with numeric ranges ("1-8") expanded. pLoop defaults true.
@@ -3431,25 +3503,34 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
    if sSheetKeys[pSheet] is empty then return empty
    put pFrame into tKey
    if tKey is empty then put line 1 of sSheetKeys[pSheet] into tKey
-   put sSheetRegion[pSheet][tKey] into tRegion
+   put b2kSheetFrameSize(pSheet, tKey) into tRegion   -- "w,h" at display scale
    if tRegion is empty then return empty
    set the itemDelimiter to comma
-   put item 3 of tRegion into tW
-   put item 4 of tRegion into tH
+   put item 1 of tRegion into tW
+   put item 2 of tRegion into tH
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
-   create button tName
+   if sCamGroup is empty then
+      create button tName
+   else
+      create button tName in group "b2kcam_view"
+   end if
    put the long id of button tName into tRef
    set the style of tRef to "transparent"
    set the showName of tRef to false
    set the traversalOn of tRef to false
    set the autoHilite of tRef to false
    set the rect of tRef to round(pX - tW / 2), round(pY - tH / 2), round(pX + tW / 2), round(pY + tH / 2)
-   try
-      set the layerMode of tRef to "dynamic"   -- its own compositor layer
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      -- dynamic layers composite in STACK coordinates: inside a scrolled
+      -- viewport they ignore the group scroll and draw unscrolled, so a
+      -- camera sprite must stay a plain group child
+      try
+         set the layerMode of tRef to "dynamic"
+      catch tErr
+      end try
+   end if
    put pSheet into sSprSheet[tRef]
    put "sheet" into sSprKind[tRef]
    put false into sSprFlip[tRef]
@@ -3462,15 +3543,21 @@ end b2kSpriteNew
 -- A sprite backed by an animated GIF file: the engine plays it; the Kit's
 -- play/stop/frame calls drive repeatCount/currentFrame instead of icons.
 command b2kSpriteFromGIF pPath, pX, pY
-   local tName, tRef
+   local tName, tRef, tData
+   put URL ("binfile:" & pPath) into tData   -- content-load, like the sheets
+   if tData is empty then return empty
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
-   create image tName
+   if sCamGroup is empty then
+      create image tName
+   else
+      create image tName in group "b2kcam_view"
+   end if
    put the long id of image tName into tRef
-   set the lockLoc of tRef to true
    try
-      set the filename of tRef to pPath
+      set the text of tRef to tData
    catch tErr
    end try
+   set the lockLoc of tRef to true
    if the width of tRef < 1 then
       try
          delete tRef
@@ -3481,10 +3568,12 @@ command b2kSpriteFromGIF pPath, pX, pY
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    set the loc of tRef to round(pX) & comma & round(pY)
-   try
-      set the layerMode of tRef to "dynamic"
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      try
+         set the layerMode of tRef to "dynamic"   -- see b2kSpriteNew note
+      catch tErr
+      end try
+   end if
    try
       set the repeatCount of tRef to -1
    catch tErr
@@ -3690,6 +3779,7 @@ command b2kSheetForget pName
    delete variable sSheetFlip[pName]
    delete variable sSheetData[pName]
    delete variable sSheetAlpha[pName]
+   delete variable sSheetScale[pName]
    repeat for each key tKey in sAnimList
       if char 1 to (the number of chars of pName) + 1 of tKey is pName & "|" then
          delete variable sAnimList[tKey]
@@ -3713,30 +3803,79 @@ command b2kSheetsWipe
    put empty into sSheetFlip
    put empty into sSheetData
    put empty into sSheetAlpha
+   put empty into sSheetScale
    put empty into sAnimList
    put empty into sAnimFPS
    put empty into sAnimLoop
+   b2kSpriteSweepOrphans
 end b2kSheetsWipe
+
+-- Internal: delete Kit-generated sprite/sheet controls left over from a
+-- PREVIOUS session. Script-locals reset when a stack reopens (or a new
+-- script is pasted in), but the controls persist -- registry cleanup can't
+-- see them, so a reopened stack would show ghost sprites frozen on their
+-- last frame. Swept by name prefix on every teardown.
+command b2kSpriteSweepOrphans
+   local tAgain, i, tName, tHit
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         if char 1 to 7 of tName is "b2kcam_" then
+            -- a dead session's viewport: free the children, then the shell
+            try
+               ungroup control i of this card
+            catch tErr
+               delete control i of this card
+            end try
+            put true into tAgain
+            exit repeat
+         end if
+         put false into tHit
+         if char 1 to 7 of tName is "b2kspr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfr_" then put true into tHit
+         if char 1 to 6 of tName is "b2kfl_" then put true into tHit
+         if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         if tHit then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end b2kSpriteSweepOrphans
 
 -- ---- sprite internals ------------------------------------------------
 
 -- Internal: load an image file into a hidden, Kit-owned source image.
+-- The bytes are loaded as CONTENT (binfile -> set the text), not as a
+-- filename reference: referenced images size and load lazily for hidden
+-- controls, which broke the slicer's stride; content images adopt their
+-- pixel size immediately -- the exact path b2kSheetFromImage users (and
+-- the platformer's embedded placeholder) already exercise successfully.
+-- lockLoc only AFTER the content, so the control has auto-sized first.
 function b2kSheetSourceFromFile pName, pPath
-   local tImg
+   local tImg, tData
    b2kSheetForget pName
+   if there is no file pPath then return empty
+   put URL ("binfile:" & pPath) into tData
+   if tData is empty then return empty
    put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
-   set the lockLoc of it to true
    try
-      set the filename of image tImg to pPath
+      set the text of image tImg to tData
    catch tErr
+      delete image tImg
+      return empty
    end try
-   if the width of image tImg < 1 then
+   if the width of image tImg < 2 then
       delete image tImg
       return empty
    end if
+   set the lockLoc of image tImg to true
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]
@@ -3775,7 +3914,7 @@ end b2kXmlAttr
 -- Internal: make sure a frame's sliced image exists (lazy, cached). The
 -- source pixels are fetched once per sheet and kept until teardown.
 command b2kSheetEnsureIcon pSheet, pKey
-   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName
+   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName, tScale, tW2, tH2
    if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
    put sSheetRegion[pSheet][pKey] into tRegion
    if tRegion is empty then exit b2kSheetEnsureIcon
@@ -3789,6 +3928,10 @@ command b2kSheetEnsureIcon pSheet, pKey
    put item 3 of tRegion into tW
    put item 4 of tRegion into tH
    put the width of sSheetSrc[pSheet] into tSW
+   -- refuse to slice from inconsistent pixels: a stride mismatch must yield
+   -- an empty (invisible) frame, never garbage on screen
+   if the number of bytes in sSheetData[pSheet] is not tSW * (the height of sSheetSrc[pSheet]) * 4 then exit b2kSheetEnsureIcon
+   if tX + tW > tSW then exit b2kSheetEnsureIcon
    put empty into tFD
    put empty into tFA
    repeat with y = 0 to tH - 1
@@ -3796,6 +3939,10 @@ command b2kSheetEnsureIcon pSheet, pKey
       put byte (tRowPx * 4 + 1) to (tRowPx * 4 + tW * 4) of sSheetData[pSheet] after tFD
       put byte (tRowPx + 1) to (tRowPx + tW) of sSheetAlpha[pSheet] after tFA
    end repeat
+   if the number of bytes in tFD is not tW * tH * 4 then exit b2kSheetEnsureIcon
+   if the number of bytes in tFA is not tW * tH then
+      put empty into tFA   -- no usable alpha: ship the frame fully opaque
+   end if
    put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    set the visible of it to false
@@ -3803,7 +3950,20 @@ command b2kSheetEnsureIcon pSheet, pKey
    set the width of it to tW
    set the height of it to tH
    set the imageData of image tName to tFD
-   set the alphaData of image tName to tFA
+   if tFA is not empty then set the alphaData of image tName to tFA
+   -- sheet scale: resize the control (the engine resamples the render),
+   -- then bake that render back in as the frame's real pixels
+   put b2kNumberOr(sSheetScale[pSheet], 1) into tScale
+   if tScale is not 1 then
+      put max(1, round(tW * tScale)) into tW2
+      put max(1, round(tH * tScale)) into tH2
+      set the width of image tName to tW2
+      set the height of image tName to tH2
+      put the imageData of image tName into tFD
+      put the alphaData of image tName into tFA
+      set the imageData of image tName to tFD
+      if tFA is not empty then set the alphaData of image tName to tFA
+   end if
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 
@@ -3902,6 +4062,277 @@ command b2kSpritesTick
 end b2kSpritesTick
 
 -- =====================================================================
+-- Camera: a clipped viewport group the loop scrolls (proven in spike S9)
+-- =====================================================================
+-- While the camera is on, Kit-created controls (spawns and sprites) are
+-- placed INSIDE the viewport group; their locs stay WORLD pixels, because
+-- contents of a scrolled group keep their coordinates -- the body sync and
+-- all physics math are untouched, the scroll is pure presentation. Chrome
+-- stays on the card; anything behind the (transparent) group reads as an
+-- infinite-distance parallax backdrop. Map mouse points with
+-- b2kCamMouseX/Y. Level coordinates should start at 0,0: an invisible
+-- anchor pins the group's content origin there, so scroll == view corner.
+command b2kCamOn pRect
+   local tG
+   if sCamGroup is not empty then exit b2kCamOn
+   put empty into sCamNote
+   if pRect is empty then put the rect of this card into pRect
+   try
+      create group "b2kcam_view"
+   catch tErr
+      put "create group failed: " & tErr into sCamNote
+      exit b2kCamOn
+   end try
+   put the long id of group "b2kcam_view" into tG
+   try
+      set the margins of tG to 0
+      set the showBorder of tG to false
+      set the hScrollbar of tG to false
+      set the vScrollbar of tG to false
+      create graphic "b2kcam_anchor" in group "b2kcam_view"
+      set the rect of it to 0, 0, 1, 1
+      set the visible of it to false
+      set the lockLoc of tG to true
+      set the rect of tG to pRect
+   catch tErr
+      put "viewport setup failed: " & tErr into sCamNote
+      try
+         delete group "b2kcam_view"
+      catch tErr
+      end try
+      exit b2kCamOn
+   end try
+   try
+      set the unboundedHScroll of tG to true
+      set the unboundedVScroll of tG to true
+   catch tErr
+   end try
+   -- NOTE: deliberately NOT layerMode "scrolling". The compositor caches
+   -- that mode's content as one surface; past common GPU surface limits
+   -- (~2048px) the cached world freezes while dynamic-layer sprites keep
+   -- moving -- the player "runs off" a stopped picture. Plain rendering
+   -- pans correctly at any level size.
+   put tG into sCamGroup
+   set the itemDelimiter to comma
+   put ((item 1 of pRect) + (item 3 of pRect)) / 2 into sCamX
+   put ((item 2 of pRect) + (item 4 of pRect)) / 2 into sCamY
+   put 0.15 into sCamLerp
+   put 0 into sCamDZW
+   put 0 into sCamDZH
+   put empty into sCamFollow
+   put empty into sCamB1X
+   put 0 into sCamShakeAmp
+   put empty into sCamLastH
+   put empty into sCamLastV
+   -- self-test: prove the scroll property actually pans this group. The
+   -- anchor is stretched first so content exceeds the view (engines clamp
+   -- scroll to content bounds), then restored; failure is reported via
+   -- b2kCamStatus instead of letting the player walk out of a frozen view.
+   try
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 4000, 2000
+      set the hScroll of sCamGroup to 7
+      if the hScroll of sCamGroup is not 7 then
+         put "group scroll is ineffective on this engine" into sCamNote
+      end if
+      set the hScroll of sCamGroup to 0
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 1, 1
+   catch tErr
+      put "setting the group scroll failed: " & tErr into sCamNote
+   end try
+   b2kCamApply
+end b2kCamOn
+
+-- Dissolve the viewport: children return to the card with their world locs.
+command b2kCamOff
+   if sCamGroup is empty then exit b2kCamOff
+   try
+      ungroup group "b2kcam_view"
+   catch tErr
+   end try
+   if there is a graphic "b2kcam_anchor" then delete graphic "b2kcam_anchor"
+   put empty into sCamGroup
+end b2kCamOff
+
+function b2kCamIsOn
+   return (sCamGroup is not empty)
+end b2kCamIsOn
+
+-- The viewport group's reference (empty when the camera is off) -- create
+-- your own level controls inside it: create graphic "x" in b2kCamGroup().
+function b2kCamGroup
+   return sCamGroup
+end b2kCamGroup
+
+-- Move an existing control (IDE-designed levels) into the viewport.
+command b2kCamAdopt pCtrl
+   if sCamGroup is empty then exit b2kCamAdopt
+   try
+      relayer pCtrl to front of group "b2kcam_view"
+   catch tErr
+      -- no script relayer on this engine: the control stays on the card.
+      -- Physics is unaffected; only its drawing will not scroll.
+   end try
+end b2kCamAdopt
+
+command b2kCamFollow pCtrl, pLerp
+   put the long id of pCtrl into sCamFollow
+   if pLerp is a number then put b2kClamp(pLerp, 0.01, 1) into sCamLerp
+end b2kCamFollow
+
+command b2kCamUnfollow
+   put empty into sCamFollow
+end b2kCamUnfollow
+
+-- Follow only once the target leaves a centre box (0 = always centre).
+command b2kCamDeadzone pW, pH
+   put b2kNumberOr(pW, 0) into sCamDZW
+   put b2kNumberOr(pH, 0) into sCamDZH
+end b2kCamDeadzone
+
+command b2kCamBounds pX1, pY1, pX2, pY2
+   put pX1 into sCamB1X
+   put pY1 into sCamB1Y
+   put pX2 into sCamB2X
+   put pY2 into sCamB2Y
+   -- stretch the invisible anchor across the whole level: the group's
+   -- scrollable content then always spans the bounds, so the engine can
+   -- never clamp the scroll short (works with or without unbounded scroll)
+   if sCamGroup is not empty then
+      try
+         set the rect of graphic "b2kcam_anchor" to pX1, pY1, pX2, pY2
+      catch tErr
+      end try
+   end if
+end b2kCamBounds
+
+command b2kCamGoto pX, pY
+   put b2kNumberOr(pX, sCamX) into sCamX
+   put b2kNumberOr(pY, sCamY) into sCamY
+   b2kCamApply
+end b2kCamGoto
+
+function b2kCamPos
+   return round(sCamX) & comma & round(sCamY)
+end b2kCamPos
+
+-- A decaying random view offset on top of the follow (impacts, blasts).
+command b2kCamShake pAmpPx, pMs
+   put b2kClamp(pAmpPx, 0, 200) into sCamShakeAmp
+   put the milliseconds + b2kClamp(pMs, 0, 5000) into sCamShakeEnd
+end b2kCamShake
+
+-- The mouse in WORLD pixels (camera-aware) -- use these for b2kGrab,
+-- spawning at the pointer, click-picking, instead of the mouseH/V.
+function b2kCamMouseX
+   if sCamGroup is empty then return the mouseH
+   set the itemDelimiter to comma
+   return the mouseH - (item 1 of the rect of sCamGroup) + the hScroll of sCamGroup
+end b2kCamMouseX
+
+function b2kCamMouseY
+   if sCamGroup is empty then return the mouseV
+   set the itemDelimiter to comma
+   return the mouseV - (item 2 of the rect of sCamGroup) + the vScroll of sCamGroup
+end b2kCamMouseY
+
+-- Health: empty = camera fine (or simply off); otherwise the reason the
+-- camera could not run properly (create-group/scroll failures). Check it
+-- after b2kCamOn and degrade your level gracefully.
+function b2kCamStatus
+   return sCamNote
+end b2kCamStatus
+
+-- Internal, called by the loop each frame: chase the followed control. The
+-- follow eases, but the target is GUARANTEED on screen: if it would leave
+-- the view (fast falls, teleports, lerp lag), the camera snaps to it.
+command b2kCamTick
+   local tLoc, tTX, tTY, tHalfW, tHalfH
+   if sCamGroup is empty then exit b2kCamTick
+   if sCamFollow is not empty then
+      try
+         set the itemDelimiter to comma
+         put the loc of sCamFollow into tLoc
+         put item 1 of tLoc into tTX
+         put item 2 of tLoc into tTY
+         if abs(tTX - sCamX) > sCamDZW / 2 then
+            put sCamX + sCamLerp * (tTX - sCamX) into sCamX
+         end if
+         if abs(tTY - sCamY) > sCamDZH / 2 then
+            put sCamY + sCamLerp * (tTY - sCamY) into sCamY
+         end if
+         -- the never-offscreen guarantee (32 px inside the view edges)
+         put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) / 2 into tHalfW
+         put ((item 4 of the rect of sCamGroup) - (item 2 of the rect of sCamGroup)) / 2 into tHalfH
+         if abs(tTX - sCamX) > tHalfW - 32 then put tTX into sCamX
+         if abs(tTY - sCamY) > tHalfH - 32 then put tTY into sCamY
+      catch tErr
+         put empty into sCamFollow   -- target vanished
+      end try
+   end if
+   b2kCamApply
+   -- reality check: prove the target is inside the view using the ACTUAL
+   -- scroll properties (not internal state). If anything desynced them --
+   -- an engine quirk, a missed write -- force the scroll directly.
+   if sCamFollow is not empty then
+      try
+         set the itemDelimiter to comma
+         put the loc of sCamFollow into tLoc
+         put (item 1 of tLoc) - (the hScroll of sCamGroup) into tTX
+         put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) into tHalfW
+         if tTX < 48 or tTX > tHalfW - 48 then
+            set the hScroll of sCamGroup to round((item 1 of tLoc) - tHalfW / 2)
+            put the hScroll of sCamGroup into sCamLastH
+            put item 1 of tLoc into sCamX
+         end if
+      catch tErr
+      end try
+   end if
+end b2kCamTick
+
+-- Internal: clamp to bounds, add shake, write the scroll (skip when same).
+command b2kCamApply
+   local tVW, tVH, tHalfW, tHalfH, tX, tY, tH, tV, tNow
+   if sCamGroup is empty then exit b2kCamApply
+   set the itemDelimiter to comma
+   put (item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup) into tVW
+   put (item 4 of the rect of sCamGroup) - (item 2 of the rect of sCamGroup) into tVH
+   put tVW / 2 into tHalfW
+   put tVH / 2 into tHalfH
+   put sCamX into tX
+   put sCamY into tY
+   if sCamB1X is not empty then
+      if tX > sCamB2X - tHalfW then put sCamB2X - tHalfW into tX
+      if tX < sCamB1X + tHalfW then put sCamB1X + tHalfW into tX
+      if tY > sCamB2Y - tHalfH then put sCamB2Y - tHalfH into tY
+      if tY < sCamB1Y + tHalfH then put sCamB1Y + tHalfH into tY
+   end if
+   -- write the clamped centre back: the follow math must ease against the
+   -- view that is actually shown, or the camera lags invisibly at the
+   -- bounds and the player outruns a scroll that has not started yet
+   put tX into sCamX
+   put tY into sCamY
+   if sCamShakeAmp > 0 then
+      put the milliseconds into tNow
+      if tNow >= sCamShakeEnd then
+         put 0 into sCamShakeAmp
+      else
+         put tX + (random(sCamShakeAmp * 2 + 1) - sCamShakeAmp - 1) into tX
+         put tY + (random(sCamShakeAmp * 2 + 1) - sCamShakeAmp - 1) into tY
+      end if
+   end if
+   put round(tX - tHalfW) into tH   -- content origin pinned at 0,0
+   put round(tY - tHalfH) into tV
+   if tH is not sCamLastH then
+      set the hScroll of sCamGroup to tH
+      put tH into sCamLastH
+   end if
+   if tV is not sCamLastV then
+      set the vScroll of sCamGroup to tV
+      put tV into sCamLastV
+   end if
+end b2kCamApply
+
+-- =====================================================================
 -- The loop  (fixed timestep, generation-guarded; one screen lock per frame)
 -- =====================================================================
 -- The whole frame -- body sync, contact/sensor dispatch and the app's own
@@ -3926,13 +4357,15 @@ on b2kStep pGen
          subtract tFixed from sAccum
       end repeat
       if sDragging then
-         b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
+         -- camera-aware: b2kCamMouseX/Y fall back to the raw mouse when off
+         b2MouseSetTarget sDragJoint, b2kToWorldX(b2kCamMouseX()), b2kToWorldY(b2kCamMouseY())
       end if
       lock screen
       try
          b2kSyncBodies         -- lock-free; this frame's single lock is held here
          b2kInputTick          -- keyboard sample, so b2kFrame sees this frame's edges
          b2kSpritesTick        -- bound sprites follow bodies; animations advance
+         b2kCamTick            -- viewport chases its target over the fresh locs
          b2kDispatchContacts
          b2kDispatchSensors
          if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
@@ -3961,13 +4394,14 @@ command b2kStepOnce
    b2Step sWorld, (1 / 60), sSub
    put 1000 / 60 into sFrameMS   -- a hand-stepped frame is one fixed step long
    if sDragging then
-      b2MouseSetTarget sDragJoint, b2kToWorldX(the mouseH), b2kToWorldY(the mouseV)
+      b2MouseSetTarget sDragJoint, b2kToWorldX(b2kCamMouseX()), b2kToWorldY(b2kCamMouseY())
    end if
    lock screen
    try
       b2kSyncBodies
       b2kInputTick
       b2kSpritesTick
+      b2kCamTick
       b2kDispatchContacts
       b2kDispatchSensors
       if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj

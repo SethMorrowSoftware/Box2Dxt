@@ -265,7 +265,10 @@ hidden source image; each region is sliced into its own hidden image lazily,
 on first use; a **sprite is a transparent button** whose `icon` is the
 current frame — all sprites of a sheet share the same frame images. Sheets
 persist until `b2kTeardown`; sprites are Kit-created controls, so `b2kClear`
-removes them with everything else.
+removes them with everything else, and every teardown also **sweeps orphaned
+sprite controls** left over from a previous session (script state resets when
+a stack reopens; the controls don't — without the sweep they'd linger as
+ghost sprites frozen on their last frame).
 
 | Handler | Purpose |
 |---------|---------|
@@ -273,6 +276,8 @@ removes them with everything else.
 | `b2kSheetLoadAtlas name, pngPath [,xmlPath]` → count | Register a packed atlas: PNG + `TextureAtlas` XML naming its regions (the Kenney format — see `Spritesheets/` in this repo). Frames are addressed **by name** (`"coin_gold"`). XML path defaults to the PNG path with `.xml`. |
 | `b2kSheetFromImage name, imgRef, fw, fh [,count]` → count | Register an image already in the stack (e.g. base64-embedded art) as a grid sheet. |
 | `b2kSheetFrames(name)` / `b2kSheetHasFrame(name, frame)` | Frame count / existence checks. |
+| `b2kSheetScale name, factor` | Display scale for the sheet's frames (default 1, range 0.05–8) — the engine resamples at slice time, so **any frame size displays at any sprite size**. Set it right after loading, before creating sprites or anims. |
+| `b2kSheetFrameSize(name, frame)` → "w,h" | A frame's display size (region × scale) — lay out tiles and platforms from this instead of hard-coding pixels. |
 | `b2kAnimDef sheet, anim, frames, fps [,loop]` | Name an animation: `frames` is a comma list of names and/or indices, numeric ranges (`"1-8"`) expand. `loop` defaults true. |
 | `b2kSpriteNew sheet [,frame, x, y]` → control | Create a sprite showing `frame` (default: the sheet's first), sized to the frame. An ordinary Kit control: give it a body (`b2kAddCapsule …`) or bind it to one. |
 | `b2kSpriteFromGIF path [,x, y]` → control | An animated-GIF sprite (the engine plays it; play/stop/frame map to `repeatCount`/`currentFrame`). |
@@ -299,6 +304,39 @@ switch is one icon set; ~25 *moving* animated sprites ≈ 40 fps, a player plus
 a handful sits at the loop ceiling. Create sprites at scene load (not
 mid-play) and **before** enabling `acceleratedRendering` where possible — bulk
 control creation under the compositor caused the spike's one-time stall.
+
+## Camera (scrolling levels)
+
+A clipped **viewport group** the loop scrolls (the mechanism the Phase 0
+spike benchmarked). While the camera is on, Kit-created controls — spawns and
+sprites — are placed *inside* the viewport, and their locs stay **world
+pixels**: contents of a scrolled group keep their coordinates, so physics and
+the body sync are untouched and the scroll is pure presentation. Chrome stays
+on the card; anything layered *behind* the (transparent) group reads as an
+infinite-distance parallax backdrop. Level coordinates should start at 0,0.
+
+| Handler | Purpose |
+|---------|---------|
+| `b2kCamOn [rect]` | Create the viewport (default: the card rect). Do this *before* building the level, after any static backdrop. |
+| `b2kCamOff` | Dissolve the viewport — children return to the card with their world locs. Called automatically by `b2kTeardown`. |
+| `b2kCamIsOn()` / `b2kCamGroup()` | State / the group's ref — build your own level controls inside it: `create graphic "x" in b2kCamGroup()`. |
+| `b2kCamAdopt ctrl` | Move an existing control (IDE-designed levels, fallback shapes) into the viewport. |
+| `b2kCamFollow ctrl [,lerp]` / `b2kCamUnfollow` | Track a control; `lerp` 0.01–1 smooths (default 0.15). |
+| `b2kCamDeadzone w, h` | Chase only once the target leaves a centre box (0 = always centre). |
+| `b2kCamBounds x1, y1, x2, y2` | Clamp the view to the level. |
+| `b2kCamGoto x, y` / `b2kCamPos()` | Cut to a world point / read the view centre. |
+| `b2kCamShake ampPx, ms` | A decaying random view offset (impacts, blasts). |
+| `b2kCamMouseX()` / `b2kCamMouseY()` | The mouse in **world** pixels — use for `b2kGrab`, click-picking, spawning at the pointer. (The Kit's own drag already uses them.) |
+
+```
+b2kCamOn
+b2kCamBounds 0, 0, 3072, 640
+b2kCamDeadzone 140, 600
+b2kCamFollow gHero, 0.18
+-- in mouseDown:  get b2kGrab(b2kCamMouseX(), b2kCamMouseY())
+```
+
+The platformer example is a complete scrolling level on this module.
 
 ## Drag & events
 
