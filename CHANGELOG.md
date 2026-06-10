@@ -10,6 +10,12 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Keyboard support in the contraption builder.** **Delete**/**Backspace**
+  removes the selected part or joint (Build mode, with full joint/wire
+  cleanup); **Escape** walks outward — closes an open overlay, then cancels a
+  half-made joint or wire, then clears the selection; **arrow keys** nudge the
+  selected part 1 px (Shift: 10 px) with the same group-follow, arena clamping
+  and body re-seat as a mouse drag.
 - **Generation-tagged handles (C shim).** Every handle now packs an 11-bit
   generation above its 20-bit table slot, bumped each time the slot is freed.
   A stale handle therefore stays a harmless no-op even after its slot is
@@ -388,6 +394,42 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Placed parts now show up immediately, not "only after I press Run".** Two
+  independent causes, the first one the engine-room bug (Kit-level, so the
+  demo and user code are healed too):
+  - **The Kit never drew a freshly attached body while the loop was stopped.**
+    `b2kAddBox`/`b2kAddCapsule` switch a spawned graphic's style to `polygon`
+    and leave its points empty until the first body sync — but the sync fast
+    path draws only bodies reported by Box2D **move events**, and a world that
+    isn't stepping emits none. So a box, capsule or thruster placed in Build
+    mode stayed a point-less (invisible) polygon until Run produced the first
+    step. The attach handlers now draw the body the moment it's created, and
+    the public `b2kSync` (the "loop is stopped, redraw by hand" entry point)
+    full-scans instead of relying on move events; the running loop keeps the
+    fast path. Balls, polygons and terrain were never affected — their
+    graphics are complete at creation — which is why the bug hit "often"
+    rather than always.
+  - **Per-frame overlays now composite on their own GPU layer (contraption
+    builder).** Joint markers, signal wires, the freehand sketch line,
+    thruster flames and shock rings are re-pointed constantly while running,
+    but lived in the compositor's cached static scene; they're now dynamic
+    layers like the moving bodies they follow.
+- **Popups no longer glitch over a running sim (contraption builder).**
+  Opening Recipes / Filter / World / Images while running left dozens of
+  GPU-layered parts repainting underneath the popup — parts and joint markers
+  bled through patchy chrome. A popup now freezes the view beneath it: the
+  sim pauses (only if it was running) and the stack composites the classic,
+  cache-free way while the popup is up; both are restored exactly as found on
+  close. This also means a contraption can't change while the user is reading
+  a menu.
+- **Parts can no longer be parked overlapping the chrome (contraption
+  builder).** Placement, duplicate/multiply copies, build-mode drags and arrow
+  nudges keep the part's whole rect inside the arena (previously only its
+  centre was clamped, so a wide platform could hang halfway over the palette
+  or under the ground bar). The laser keeps its emitter-based dragging.
+- **Signal wires no longer churn the renderer (contraption builder).**
+  `drawWires` reuses its marker graphics and re-points them instead of
+  deleting and recreating every wire on every build-mode redraw.
 - **Geometry getters no longer leak the previous shape's values.** The
   circle/capsule/segment read-back stash zeroes on a failed update (stale
   handle or wrong shape type), so `b2ShapeCircleRadius()` & co. report `0`
