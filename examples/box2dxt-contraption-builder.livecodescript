@@ -2139,11 +2139,11 @@ command b2kSpriteFromGIF pPath, pX, pY
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    put the long id of image tName into tRef
-   set the lockLoc of tRef to true
    try
-      set the filename of tRef to pPath
+      set the filename of tRef to pPath   -- before lockLoc: let it auto-size
    catch tErr
    end try
+   set the lockLoc of tRef to true
    if the width of tRef < 1 then
       try
          delete tRef
@@ -2394,22 +2394,27 @@ end b2kSheetsWipe
 -- ---- sprite internals ------------------------------------------------
 
 -- Internal: load an image file into a hidden, Kit-owned source image.
+-- ORDER MATTERS: the filename must be set while lockLoc is still false so
+-- the control auto-sizes to the source pixels -- the slicer trusts the
+-- control's width as the row stride, and `the imageData` renders at the
+-- control's size (a locked tiny control would yield garbage frames).
 function b2kSheetSourceFromFile pName, pPath
    local tImg
    b2kSheetForget pName
+   if there is no file pPath then return empty
    put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
-   set the lockLoc of it to true
    try
       set the filename of image tImg to pPath
    catch tErr
    end try
-   if the width of image tImg < 1 then
+   if the width of image tImg < 2 then
       delete image tImg
       return empty
    end if
+   set the lockLoc of it to true   -- freeze at source size, now that it has it
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]
@@ -2462,6 +2467,10 @@ command b2kSheetEnsureIcon pSheet, pKey
    put item 3 of tRegion into tW
    put item 4 of tRegion into tH
    put the width of sSheetSrc[pSheet] into tSW
+   -- refuse to slice from inconsistent pixels: a stride mismatch must yield
+   -- an empty (invisible) frame, never garbage on screen
+   if the number of bytes in sSheetData[pSheet] is not tSW * (the height of sSheetSrc[pSheet]) * 4 then exit b2kSheetEnsureIcon
+   if tX + tW > tSW then exit b2kSheetEnsureIcon
    put empty into tFD
    put empty into tFA
    repeat with y = 0 to tH - 1
@@ -2469,6 +2478,10 @@ command b2kSheetEnsureIcon pSheet, pKey
       put byte (tRowPx * 4 + 1) to (tRowPx * 4 + tW * 4) of sSheetData[pSheet] after tFD
       put byte (tRowPx + 1) to (tRowPx + tW) of sSheetAlpha[pSheet] after tFA
    end repeat
+   if the number of bytes in tFD is not tW * tH * 4 then exit b2kSheetEnsureIcon
+   if the number of bytes in tFA is not tW * tH then
+      put empty into tFA   -- no usable alpha: ship the frame fully opaque
+   end if
    put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    set the visible of it to false
@@ -2476,7 +2489,7 @@ command b2kSheetEnsureIcon pSheet, pKey
    set the width of it to tW
    set the height of it to tH
    set the imageData of image tName to tFD
-   set the alphaData of image tName to tFA
+   if tFA is not empty then set the alphaData of image tName to tFA
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 

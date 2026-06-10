@@ -36,13 +36,16 @@ local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
+constant kPfUIVersion = "2"
 constant kHeroSheetB64 = "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"
 
 -- =====================================================================
 -- Lifecycle
 -- =====================================================================
 on openCard
-   if there is no field "pfHud" then buildPfUI
+   -- version-tagged chrome: pasting a newer example over an old stack
+   -- rebuilds the UI (and stack size) on the next open
+   if the uPfUIVersionTag of this stack is not kPfUIVersion then buildPfUI
    if gStarted is true then
       b2kStart
    else
@@ -60,6 +63,11 @@ end closeCard
 -- Chrome (built once)
 -- =====================================================================
 command buildPfUI
+   if there is a field "pfTitle" then delete field "pfTitle"
+   if there is a field "pfHelp" then delete field "pfHelp"
+   if there is a field "pfHud" then delete field "pfHud"
+   if there is a button "pfbtn_pause" then delete button "pfbtn_pause"
+   if there is a button "pfbtn_reset" then delete button "pfbtn_reset"
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -88,6 +96,7 @@ command buildPfUI
    set the rect of it to 900, 582, 984, 610
    set the label of it to "Reset"
    set the traversalOn of it to false
+   set the uPfUIVersionTag of this stack to kPfUIVersion
 end buildPfUI
 
 -- =====================================================================
@@ -125,8 +134,8 @@ command pfEmbedPlaceholder
    if there is no image "pf_sheetsrc" then
       create image "pf_sheetsrc"
       set the visible of it to false
-      set the lockLoc of it to true
       set the text of image "pf_sheetsrc" to base64Decode(kHeroSheetB64)
+      set the lockLoc of it to true   -- AFTER the content, so it auto-sized
    end if
    b2kSheetFromImage "chars", the long id of image "pf_sheetsrc", 48, 64
    b2kAnimDef "chars", "idle", "1-4", 4, true
@@ -2514,11 +2523,11 @@ command b2kSpriteFromGIF pPath, pX, pY
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    put the long id of image tName into tRef
-   set the lockLoc of tRef to true
    try
-      set the filename of tRef to pPath
+      set the filename of tRef to pPath   -- before lockLoc: let it auto-size
    catch tErr
    end try
+   set the lockLoc of tRef to true
    if the width of tRef < 1 then
       try
          delete tRef
@@ -2769,22 +2778,27 @@ end b2kSheetsWipe
 -- ---- sprite internals ------------------------------------------------
 
 -- Internal: load an image file into a hidden, Kit-owned source image.
+-- ORDER MATTERS: the filename must be set while lockLoc is still false so
+-- the control auto-sizes to the source pixels -- the slicer trusts the
+-- control's width as the row stride, and `the imageData` renders at the
+-- control's size (a locked tiny control would yield garbage frames).
 function b2kSheetSourceFromFile pName, pPath
    local tImg
    b2kSheetForget pName
+   if there is no file pPath then return empty
    put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
-   set the lockLoc of it to true
    try
       set the filename of image tImg to pPath
    catch tErr
    end try
-   if the width of image tImg < 1 then
+   if the width of image tImg < 2 then
       delete image tImg
       return empty
    end if
+   set the lockLoc of it to true   -- freeze at source size, now that it has it
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]
@@ -2837,6 +2851,10 @@ command b2kSheetEnsureIcon pSheet, pKey
    put item 3 of tRegion into tW
    put item 4 of tRegion into tH
    put the width of sSheetSrc[pSheet] into tSW
+   -- refuse to slice from inconsistent pixels: a stride mismatch must yield
+   -- an empty (invisible) frame, never garbage on screen
+   if the number of bytes in sSheetData[pSheet] is not tSW * (the height of sSheetSrc[pSheet]) * 4 then exit b2kSheetEnsureIcon
+   if tX + tW > tSW then exit b2kSheetEnsureIcon
    put empty into tFD
    put empty into tFA
    repeat with y = 0 to tH - 1
@@ -2844,6 +2862,10 @@ command b2kSheetEnsureIcon pSheet, pKey
       put byte (tRowPx * 4 + 1) to (tRowPx * 4 + tW * 4) of sSheetData[pSheet] after tFD
       put byte (tRowPx + 1) to (tRowPx + tW) of sSheetAlpha[pSheet] after tFA
    end repeat
+   if the number of bytes in tFD is not tW * tH * 4 then exit b2kSheetEnsureIcon
+   if the number of bytes in tFA is not tW * tH then
+      put empty into tFA   -- no usable alpha: ship the frame fully opaque
+   end if
    put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    set the visible of it to false
@@ -2851,7 +2873,7 @@ command b2kSheetEnsureIcon pSheet, pKey
    set the width of it to tW
    set the height of it to tH
    set the imageData of image tName to tFD
-   set the alphaData of image tName to tFA
+   if tFA is not empty then set the alphaData of image tName to tFA
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 
