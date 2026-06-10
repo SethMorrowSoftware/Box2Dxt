@@ -39,6 +39,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Kit Input module (Game Kit Phase 1).** Poll-based keyboard input for
+  games: `b2kInputOn` arms a once-per-frame `keysDown` sample (taken inside
+  the loop's screen lock, so `on b2kFrame` always sees the current frame's
+  state), diffed against the previous frame for exact pressed/released
+  edges with zero auto-repeat or focus-path artifacts. Friendly key names
+  (letters match both shifted/unshifted keysyms), named **actions**
+  (`b2kBindAction "jump", "space,up,w"` + `b2kActionIsDown/Pressed/
+  Released`), **axes** (`b2kAxis("moveX")` → -1/0/+1, both directions held
+  = 0), `b2kKeyIsDown/Pressed/Released`, `b2kKeysHeld()`, and
+  `b2kFrameMS()` (the frame's real elapsed ms, for animation timing).
+- **Paced simulation loop.** `b2kStep` now schedules the next tick
+  `in max(1, 16 − elapsed)` ms instead of a flat 16 ms after the frame's
+  work — the flat delay made the real rate "timer cadence plus frame
+  cost" (~50 fps under load in the Phase 0 spike measurements).
+- **`examples/box2dxt-platformer.livecodescript`** — Game Kit Phase 1's
+  playable example: a fixed-rotation capsule driven by the Input module
+  (axis run, edge-triggered jump with release-cut variable height, ray
+  grounded-check) on flat ground, steps, and a jump-through one-way chain
+  ledge. Registered in `tools/sync-embedded-kit.py`.
 - **Keyboard support in the contraption builder.** **Delete**/**Backspace**
   removes the selected part or joint (Build mode, with full joint/wire
   cleanup); **Escape** walks outward — closes an open overlay, then cancels a

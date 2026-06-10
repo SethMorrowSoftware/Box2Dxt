@@ -1,4 +1,258 @@
 -- =====================================================================
+-- box2dxt-platformer.livecodescript   ·   Game Kit Phase 1: INPUT
+--
+-- The first playable: a fixed-rotation capsule you drive with the
+-- keyboard, on flat ground with two steps and a jump-through ledge.
+-- This example exists to prove the Kit's new Input module (b2kInputOn,
+-- axes, actions, pressed/released edges) and the paced loop; the real
+-- player controller (coyote time, jump buffering, animations) arrives
+-- in Phase 3 and will REPLACE most of the hand-rolled movement below.
+--
+-- HOW TO RUN
+--   1. In OXT, make a new stack. Put this whole file into the STACK script.
+--   2. Make sure the box2dxt extension is loaded. Close and reopen the stack.
+--
+-- CONTROLS  arrows or A/D run · SPACE, UP or W jumps (tap = low hop,
+--           hold = full jump) · drag anything with the mouse
+--
+-- WHAT TO VERIFY (the Phase 1 OXT pass; report anything that fails)
+--   1. Held arrows move the capsule smoothly - no auto-repeat stutter.
+--   2. Chords work: keep holding RIGHT and tap jump mid-run.
+--   3. Hold LEFT and RIGHT together -> it stands still (axis cancels).
+--   4. Tap jump vs hold jump -> clearly different jump heights.
+--   5. Jump up THROUGH the green ledge from below, land on top of it.
+--   6. Hold a key, alt-tab away, come back -> nothing sticks.
+--   7. Pause freezes mid-air; Resume continues; Reset rebuilds.
+--   8. The HUD's frame ms hovers near 16 and the motion feels 60-ish.
+-- =====================================================================
+
+local gStarted, gHero, gHudLast
+
+constant kMoveSpeed = 240
+constant kJumpSpeed = 460
+
+-- =====================================================================
+-- Lifecycle
+-- =====================================================================
+on openCard
+   if there is no field "pfHud" then buildPfUI
+   if gStarted is true then
+      b2kStart
+   else
+      pfStartGame
+   end if
+   pass openCard
+end openCard
+
+on closeCard
+   b2kStop
+   pass closeCard
+end closeCard
+
+-- =====================================================================
+-- Chrome (built once)
+-- =====================================================================
+command buildPfUI
+   set the width of this stack to 800
+   set the height of this stack to 620
+   set the loc of this stack to the screenLoc
+   create field "pfTitle"
+   set the rect of it to 20, 8, 780, 30
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 14
+   set the text of it to "Box2Dxt platformer - Phase 1: keyboard input"
+   create field "pfHelp"
+   set the rect of it to 20, 34, 780, 96
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 11
+   set the text of it to "Arrows or A/D run; SPACE / UP / W jumps (tap = hop, hold = full)." & cr & "Jump up through the GREEN ledge from below - you land on top (one-sided chain)." & cr & "Drag anything with the mouse. Banner comments list the full verify checklist."
+   create field "pfHud"
+   set the rect of it to 20, 584, 620, 612
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 11
+   create button "pfbtn_pause"
+   set the rect of it to 640, 582, 704, 610
+   set the label of it to "Pause"
+   set the traversalOn of it to false
+   create button "pfbtn_reset"
+   set the rect of it to 712, 582, 776, 610
+   set the label of it to "Reset"
+   set the traversalOn of it to false
+end buildPfUI
+
+-- =====================================================================
+-- World build / reset
+-- =====================================================================
+command pfStartGame
+   local tRef
+   b2kTeardown
+   pfWipeStage
+   b2kSetup
+   b2kAddWalls
+   -- the floor: one visible static slab
+   create graphic "pf_ground"
+   set the style of it to "rectangle"
+   set the rect of it to 40, 520, 760, 556
+   set the filled of it to true
+   set the backgroundColor of it to "90,95,105"
+   b2kAddStatic the long id of graphic "pf_ground"
+   -- two steps to climb on the right
+   create graphic "pf_step1"
+   set the style of it to "rectangle"
+   set the rect of it to 540, 472, 640, 520
+   set the filled of it to true
+   set the backgroundColor of it to "110,115,128"
+   b2kAddStatic the long id of graphic "pf_step1"
+   create graphic "pf_step2"
+   set the style of it to "rectangle"
+   set the rect of it to 640, 428, 740, 520
+   set the filled of it to true
+   set the backgroundColor of it to "110,115,128"
+   b2kAddStatic the long id of graphic "pf_step2"
+   -- the one-way ledge: a chain, top surface listed RIGHT-TO-LEFT so the
+   -- solid side faces up; the outer points are ghost vertices. Jump through
+   -- it from below, stand on it from above (Phase 0 spike, S8).
+   b2kSmoothGround "510,430" & cr & "450,430" & cr & "250,430" & cr & "190,430"
+   create graphic "pf_ledge"   -- the chain is invisible; draw it
+   set the style of it to "line"
+   set the points of it to "250,430" & cr & "450,430"
+   set the lineSize of it to 4
+   set the foregroundColor of it to "70,190,110"
+   -- the hero: a vertical capsule that never rotates; low friction so the
+   -- velocity-driven run never sticks to walls
+   create graphic "pf_hero"
+   set the style of it to "rectangle"
+   set the rect of it to 105, 438, 135, 502
+   set the filled of it to true
+   set the backgroundColor of it to "245,205,80"
+   put the long id of graphic "pf_hero" into gHero
+   b2kAddCapsule gHero
+   b2kSetFixedRotation gHero, true
+   b2kSetFriction gHero, 0.08
+   -- input: arm the sampler; moveX (left,a / right,d) is a default binding
+   b2kInputOn
+   b2kBindAction "jump", "space,up,w"
+   b2kFrameTarget the long id of me
+   put empty into gHudLast
+   put true into gStarted
+   b2kStart
+end pfStartGame
+
+command pfWipeStage
+   local tAgain, i, tName
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         if char 1 to 3 of tName is "pf_" then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end pfWipeStage
+
+-- =====================================================================
+-- The game tick: read input, drive the body. This is the pattern the
+-- Phase 3 player controller packages up (plus coyote time, buffering,
+-- slopes and animation) - here it stays visible and hackable.
+-- =====================================================================
+on b2kFrame
+   local tAxis, tVel, tVy, tHud
+   if gHero is empty then exit b2kFrame
+   set the itemDelimiter to comma
+   put b2kAxis("moveX") into tAxis
+   put b2kVelocity(gHero) into tVel
+   put item 2 of tVel into tVy
+   -- horizontal: velocity-driven (instant, predictable); vertical: leave
+   -- gravity alone
+   b2kSetVelocity gHero, tAxis * kMoveSpeed, tVy
+   -- jump on the PRESSED edge, only from the ground
+   if b2kActionPressed("jump") and pfOnGround() then
+      b2kSetVelocity gHero, tAxis * kMoveSpeed, 0 - kJumpSpeed
+   end if
+   -- variable height: releasing jump while still rising cuts the climb -
+   -- a one-line taste of the Phase 3 controller's jump-cut
+   if b2kActionReleased("jump") then
+      put b2kVelocity(gHero) into tVel
+      if item 2 of tVel < 0 then
+         b2kSetVelocity gHero, item 1 of tVel, (item 2 of tVel) * 0.45
+      end if
+   end if
+   -- HUD (write the field only when the text actually changes)
+   put "held: " & b2kKeysHeld() & "   |   moveX " & tAxis & "   |   grounded " & pfOnGround() & "   |   " & round(b2kFrameMS() * 10) / 10 & " ms/frame" into tHud
+   if tHud is not gHudLast then
+      put tHud into gHudLast
+      set the text of field "pfHud" to tHud
+   end if
+end b2kFrame
+
+-- Grounded = a short ray from each foot finds an upward-facing surface.
+-- b2kRayHit returns a CONTROL (empty for the chain ledge, which has none),
+-- so "did it hit" reads b2kRayDist(), which is set on any hit. The normal
+-- test keeps steep walls from counting as floor.
+function pfOnGround
+   local tPos, tX, tY, tOff
+   if gHero is empty then return false
+   set the itemDelimiter to comma
+   put b2kPosition(gHero) into tPos
+   put item 1 of tPos into tX
+   put item 2 of tPos into tY
+   repeat for each item tOff in "-9,9"
+      get b2kRayHit(tX + tOff, tY, tX + tOff, tY + 40)
+      if b2kRayDist() is not empty and b2kRayHitNormalY() <= -0.6 then
+         return true
+      end if
+   end repeat
+   return false
+end pfOnGround
+
+-- =====================================================================
+-- Mouse: buttons by name, anything else is the Kit's grab-drag
+-- =====================================================================
+on mouseDown
+   local tName
+   put the short name of the target into tName
+   if char 1 to 6 of tName is "pfbtn_" then exit mouseDown
+   get b2kGrab(the mouseH, the mouseV)
+end mouseDown
+
+on mouseUp
+   local tName
+   put the short name of the target into tName
+   switch tName
+      case "pfbtn_reset"
+         pfStartGame
+         break
+      case "pfbtn_pause"
+         if b2kIsRunning() then
+            b2kPause
+            set the label of button "pfbtn_pause" to "Resume"
+         else
+            b2kResume
+            set the label of button "pfbtn_pause" to "Pause"
+         end if
+         break
+      default
+         b2kRelease
+   end switch
+end mouseUp
+
+on mouseRelease
+   b2kRelease
+end mouseRelease
+
+-- =====================================================================
+-- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py -
+-- do not edit between the sentinels)
+-- =====================================================================
+-- >>> BEGIN EMBEDDED KIT >>>
+-- =====================================================================
 -- box2dxt-kit.livecodescript   ·   "Box2Dxt Kit"  (b2k...)
 --
 -- A friendly, pure-xTalk toolkit over the box2dxt extension. You work in
@@ -2257,3 +2511,4 @@ command b2kDispatchSensors
       dispatch "b2kSensorExit" to sContactObj with tS, tV
    end repeat
 end b2kDispatchSensors
+-- <<< END EMBEDDED KIT <<<
