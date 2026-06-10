@@ -76,13 +76,13 @@ be flung with the mouse:
 ```livecode
 on openCard
    b2kQuickStart                         -- world + gravity + walls around the card + go
-   get b2kSpawnBall(200, 80, 50)         -- create and drop a 50px ball
-   get b2kSpawnBox(260, 80, 60, 40, "orange")
+   b2kSpawnBall 200, 80, 50         -- create and drop a 50px ball
+   b2kSpawnBox 260, 80, 60, 40, "orange"
    b2kContactTarget the long id of me    -- (optional) collision messages to this card
 end openCard
 
 on mouseDown
-   get b2kGrab(the mouseH, the mouseV)   -- grab whatever body is under the pointer
+   b2kGrab the mouseH, the mouseV   -- grab whatever body is under the pointer
 end mouseDown
 
 on mouseUp
@@ -203,9 +203,11 @@ the new control's long id.
 
 ```livecode
 local tBall, tBox
-put b2kSpawnBall(200, 80, 50) into tBall              -- x, y, diameter [, color]
-put b2kSpawnBox(260, 80, 60, 40, "orange") into tBox  -- x, y, w, h     [, color]
-get b2kSpawnCapsule(320, 80, 80, 30, "120,200,232")   -- x, y, len, thick [, color]
+b2kSpawnBall 200, 80, 50              -- x, y, diameter [, color]
+put the result into tBall
+b2kSpawnBox 260, 80, 60, 40, "orange"  -- x, y, w, h     [, color]
+put the result into tBox
+b2kSpawnCapsule 320, 80, 80, 30, "120,200,232"   -- x, y, len, thick [, color]
 ```
 
 The optional colour is a LiveCode colour name (`"orange"`) or an `"r,g,b"` triple
@@ -393,8 +395,9 @@ first body to a fixed point in space.
 
 ```livecode
 local tArm, tPivot
-put b2kHinge(tArm, empty, 200, 100) into tPivot     -- pin tArm to the world at (200,100): it swings freely
--- or join two parts: b2kHinge(tArmA, tArmB, x, y)
+b2kHinge tArm, empty, 200, 100     -- pin tArm to the world at (200,100): it swings freely
+put the result into tPivot
+-- or join two parts: b2kHinge tArmA, tArmB, x, y
 b2kMotor      tPivot, 180, 1500                     -- drive it: 180 deg/s, max torque 1500 (default 1000)
 b2kHingeLimit tPivot, -45, 45                       -- clamp the angle to a range (degrees)
 put b2kHingeAngle(tPivot)                            -- read the current angle
@@ -406,7 +409,8 @@ b2kHingeLimitOff tPivot                              -- remove the limits
 
 ```livecode
 local tJoint
-put b2kWeld(tA, tB) into tJoint
+b2kWeld tA, tB
+put the result into tJoint
 b2kWeldSpring tJoint, 4, 0.7      -- make the weld springy (hertz, damping); 0 hertz = rock-rigid
 ```
 
@@ -414,8 +418,9 @@ b2kWeldSpring tJoint, 4, 0.7      -- make the weld springy (hertz, damping); 0 h
 
 ```livecode
 local tRope
-put b2kRope(tBall, tAnchor) into tRope        -- length defaults to the current gap between centres
-get b2kRope(tBall, tAnchor, 150)              -- ...or set the length in pixels
+b2kRope tBall, tAnchor        -- length defaults to the current gap between centres
+put the result into tRope
+b2kRope tBall, tAnchor, 150              -- ...or set the length in pixels
 b2kRopeRange     tRope, 40, 200               -- allow the length to vary between min/max (px)
 b2kRopeSetLength tRope, 120                    -- set the exact rest length (px)
 put b2kRopeLength(tRope)                        -- read the current length (px)
@@ -426,7 +431,8 @@ b2kSpring        tRope, 3, 0.6                 -- make it springy (hertz, dampin
 
 ```livecode
 local tSlide
-put b2kSlider(tDoor, empty, 0) into tSlide     -- slide along a 0° (horizontal) axis vs. the world (90 = vertical)
+b2kSlider tDoor, empty, 0     -- slide along a 0° (horizontal) axis vs. the world (90 = vertical)
+put the result into tSlide
 b2kSliderMotor tSlide, 80, 600                 -- drive it: 80 px/s, max force 600
 b2kSliderLimit tSlide, 0, 160                  -- clamp the travel (px)
 put b2kSliderPos(tSlide)                         -- read the current translation (px)
@@ -438,7 +444,8 @@ b2kSliderLimitOff tSlide
 
 ```livecode
 local tAxle
-put b2kWheel(tChassis, tWheel, the mouseH, the mouseV) into tAxle  -- pivot at a point; axis defaults to vertical
+b2kWheel tChassis, tWheel, the mouseH, the mouseV  -- pivot at a point; axis defaults to vertical
+put the result into tAxle
 b2kWheelMotor  tAxle, 600, 800       -- drive the wheel: 600 deg/s, max torque 800
 b2kWheelSpring tAxle, 5, 0.7         -- suspension stiffness: hertz, damping
 b2kWheelMotorOff tAxle
@@ -453,13 +460,14 @@ return-to-home arms, soft platforms, and self-righting parts.
 ```livecode
 -- hold tMover 0px across / 60px below tRef, upright, with limited force/torque:
 local tServo
-put b2kMotorTo(tMover, tRef, 0, 60, 0, 800, 800) into tServo   -- ref empty = relative to the world
+b2kMotorTo tMover, tRef, 0, 60, 0, 800, 800   -- ref empty = relative to the world
+put the result into tServo
 ```
 
 ### Stop two parts colliding without a visible joint
 
 ```livecode
-get b2kNoCollide(tA, tB)     -- a filter joint: tA and tB simply pass through each other
+b2kNoCollide tA, tB     -- a filter joint: tA and tB simply pass through each other
 ```
 
 > **Tip:** a motor with no `maxTorque`/`maxForce` defaults to a strong value
@@ -553,7 +561,7 @@ automatically.
 
 ```livecode
 b2kAddSensor the long id of graphic "Goal"          -- a static box sensor (shape: "box" | "ball" | "capsule")
-get b2kAddSensor(the long id of graphic "Ring", "ball")
+b2kAddSensor the long id of graphic "Ring", "ball"
 ```
 
 You can also flip an **existing solid body** into a sensor and back — the Kit
@@ -603,7 +611,7 @@ The flexible system: a body **is** on one or more layers (its *category*), and i
 one's category is in the other's mask. Up to 32 layers; name them or use numbers.
 
 ```livecode
-get b2kDefineLayer("enemies")     -- define/fetch a named layer (returns its bit) — optional; names auto-define
+b2kDefineLayer "enemies"     -- define/fetch a named layer (returns its bit) — optional; names auto-define
 b2kSetCategory tGhost, "enemies"             -- tGhost IS an "enemy"
 b2kSetMask     tGhost, "walls,player"        -- ...and only collides with walls and the player
 ```
@@ -624,7 +632,7 @@ b2kSetCollisionGroup tWheelB, -1
 ### Just these two
 
 ```livecode
-get b2kNoCollide(tArm, tBody)    -- exempt one specific pair (a filter joint)
+b2kNoCollide tArm, tBody)    -- exempt one specific pair (a filter joint
 ```
 
 ---
@@ -638,9 +646,9 @@ corners to snag. Chains are invisible; draw a matching graphic over them.
 ```livecode
 local tPts
 put "40,400" & cr & "200,360" & cr & "360,420" & cr & "560,380" into tPts
-get b2kChain(tPts)               -- an open smooth ground line
-get b2kChain(tPts, true)         -- pass true to close it into a loop
-get b2kSmoothGround(tPts)        -- alias for an open chain
+b2kChain tPts               -- an open smooth ground line
+b2kChain tPts, true         -- pass true to close it into a loop
+b2kSmoothGround tPts        -- alias for an open chain
 ```
 
 To make a chain that **tracks a control** (so you can move/draw the terrain as one
@@ -769,20 +777,25 @@ on buildGround
    local tPts
    -- top surface listed right-to-left so the solid side faces up
    put "620,360" & cr & "420,330" & cr & "220,370" & cr & "20,340" into tPts
-   get b2kChain(tPts)                         -- invisible smooth ground
+   b2kChain tPts                         -- invisible smooth ground
    -- (draw a matching graphic over it if you want it visible)
 end buildGround
 
 on buildCar
-   put b2kSpawnBox(200, 120, 90, 30, "70,130,210") into sCar
+   b2kSpawnBox 200, 120, 90, 30, "70,130,210"
+   put the result into sCar
    b2kSetDensity sCar, 1.0
-   put b2kSpawnBall(168, 150, 36, "30,30,36") into sWheelL
-   put b2kSpawnBall(232, 150, 36, "30,30,36") into sWheelR
+   b2kSpawnBall 168, 150, 36, "30,30,36"
+   put the result into sWheelL
+   b2kSpawnBall 232, 150, 36, "30,30,36"
+   put the result into sWheelR
    b2kSetFriction sWheelL, 1.0
    b2kSetFriction sWheelR, 1.0
    -- sprung axles that can also be driven
-   put b2kWheel(sCar, sWheelL, 168, 150) into sAxleL
-   put b2kWheel(sCar, sWheelR, 232, 150) into sAxleR
+   b2kWheel sCar, sWheelL, 168, 150
+   put the result into sAxleL
+   b2kWheel sCar, sWheelR, 232, 150
+   put the result into sAxleR
    b2kWheelSpring sAxleL, 6, 0.7
    b2kWheelSpring sAxleR, 6, 0.7
 end buildCar

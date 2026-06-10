@@ -10,8 +10,8 @@ You write plain xTalk; your controls fall, roll, bounce, hinge, and collide.
 ```livecodescript
 on openCard
    b2kQuickStart                          -- world + gravity + walls + go
-   get b2kSpawnBall(200, 80, 50)          -- create + drop a ball
-   get b2kSpawnBox(260, 80, 60, 40, "orange")
+   b2kSpawnBall 200, 80, 50               -- create + drop a ball
+   b2kSpawnBox 260, 80, 60, 40, "orange"  -- (read `the result` for the ref)
 end openCard
 on mouseDown ; get b2kGrab(the mouseH, the mouseV) ; end mouseDown
 on mouseUp   ; b2kRelease ; end mouseUp

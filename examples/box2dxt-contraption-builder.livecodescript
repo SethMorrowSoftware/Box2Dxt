@@ -46,8 +46,8 @@
 -- =====================  60-SECOND START  =============================
 --   on openCard
 --      b2kQuickStart            -- world + gravity + walls around the card + go
---      get b2kSpawnBall(200,80, 50)          -- create + drop a ball
---      get b2kSpawnBox(260,80, 60,40, "orange")
+--      b2kSpawnBall 200,80, 50               -- create + drop a ball
+--      b2kSpawnBox 260,80, 60,40, "orange"   -- (read `the result` for the ref)
 --      b2kContactTarget the long id of me    -- (optional) collision messages
 --   end openCard
 --   on mouseDown ; get b2kGrab(the mouseH,the mouseV) ; end mouseDown
@@ -538,7 +538,14 @@ command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
    set the style of tRef to "rectangle"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
-   if pColor is not empty then set the backgroundColor of tRef to pColor
+   if pColor is not empty then
+      try
+         set the backgroundColor of tRef to pColor
+      catch tErr
+         -- an unknown colour name (CSS names like "teal" are not LC/X11
+         -- names) must not abort the spawn and orphan the control
+      end try
+   end if
    set the width of tRef to pW
    set the height of tRef to pH
    set the loc of tRef to round(pScreenX) & "," & round(pScreenY)
@@ -560,7 +567,14 @@ command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
    set the style of tRef to "oval"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
-   if pColor is not empty then set the backgroundColor of tRef to pColor
+   if pColor is not empty then
+      try
+         set the backgroundColor of tRef to pColor
+      catch tErr
+         -- an unknown colour name (CSS names like "teal" are not LC/X11
+         -- names) must not abort the spawn and orphan the control
+      end try
+   end if
    set the width of tRef to pDiameter
    set the height of tRef to pDiameter
    set the loc of tRef to round(pScreenX) & "," & round(pScreenY)
@@ -586,7 +600,14 @@ command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
    set the style of tRef to "polygon"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
-   if pColor is not empty then set the backgroundColor of tRef to pColor
+   if pColor is not empty then
+      try
+         set the backgroundColor of tRef to pColor
+      catch tErr
+         -- an unknown colour name (CSS names like "teal" are not LC/X11
+         -- names) must not abort the spawn and orphan the control
+      end try
+   end if
    if pLength >= pThickness then
       set the width of tRef to pLength
       set the height of tRef to pThickness
@@ -1505,8 +1526,14 @@ function b2kLayerBits pLayerList
    replace comma with space in pLayerList
    repeat for each word tL in pLayerList
       if tL is empty then next repeat
-      if tL is a number then put tBits bitOr (tL) into tBits
-      else put tBits bitOr b2kDefineLayer(tL) into tBits
+      if tL is a number then
+         put tBits bitOr (tL) into tBits
+      else
+         -- b2kDefineLayer is a COMMAND: OXT cannot call commands with
+         -- function syntax, so invoke it as a statement and read the result
+         b2kDefineLayer tL
+         put tBits bitOr (the result) into tBits
+      end if
    end repeat
    return tBits
 end b2kLayerBits
@@ -1554,7 +1581,9 @@ command b2kChain pPoints, pLoop
 end b2kChain
 
 command b2kSmoothGround pPoints
-   return b2kChain(pPoints, false)
+   -- statement call + the result: OXT cannot call commands function-style
+   b2kChain pPoints, false
+   return the result
 end b2kSmoothGround
 
 -- Attach a smooth static chain to a CONTROL, from a list of SCREEN points
@@ -4457,7 +4486,10 @@ function connectJoint pKind, pA, pB, pX, pY, pMotorSpeed
          put (item 1 of the loc of pA) - (item 1 of the loc of pB) into tdx
          put (item 2 of the loc of pA) - (item 2 of the loc of pB) into tdy
          put round(b2kAngle(pA) - b2kAngle(pB)) into tda
-         put b2kMotorTo(pA, pB, tdx, tdy, tda, kServoForce, kServoTorque) into tJ
+         -- b2kMotorTo is a command: statement call + the result (function
+         -- syntax on a command throws in OXT - it never created a joint)
+         b2kMotorTo pA, pB, tdx, tdy, tda, kServoForce, kServoTorque
+         put the result into tJ
          put "line" into tVis
          break
       case "rope"
