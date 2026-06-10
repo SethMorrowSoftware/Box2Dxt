@@ -590,6 +590,44 @@ from that, never the step count). The
 into a playable scene — grounded checks, variable-height jumps, and a
 jump-through ledge included.
 
+### Sprites and spritesheets (`b2kSheetLoadAtlas`, `b2kSpriteNew`)
+
+A *sheet* registers the frames inside one image — either a uniform grid
+(`b2kSheetLoad name, path, frameW, frameH`) or a packed **atlas** whose XML
+names each region (`b2kSheetLoadAtlas`; the `Spritesheets/` folder in this
+repo is that format). A *sprite* is a transparent button the Kit drives:
+name animations once, then play them by name — `b2kSpritePlay` is free to
+call every frame, so a state machine stays one line per state.
+
+```livecode
+b2kSheetLoadAtlas "chars", tFolder & "/spritesheet-characters-default.png"
+b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
+b2kAnimDef "chars", "walk", "character_beige_walk_a,character_beige_walk_b", 6, true
+
+b2kSpriteNew "chars", "character_beige_idle", 200, 100
+put the result into gHeroSpr
+
+on b2kFrame
+   -- the body's state picks the animation; flipping mirrors the art
+   if b2kAxis("moveX") is 0 then
+      b2kSpritePlay gHeroSpr, "idle"
+   else
+      b2kSpritePlay gHeroSpr, "walk"
+      b2kSpriteFlipH gHeroSpr, (b2kAxis("moveX") < 0)
+   end if
+end b2kFrame
+```
+
+A sprite is an ordinary control: give it a body directly
+(`b2kAddCapsule the long id of …`), or — the better pattern for characters,
+whose art is bigger than their collision shape — give an **invisible**
+control the body and `b2kSpriteBind` the sprite to it. Non-looping
+animations can announce themselves: `b2kSpriteOnFinish gHeroSpr, "heroHitDone"`
+sends your handler a message when the hit/attack/death pose finishes. The
+platformer example wires all of it together: an atlas-driven hero, spinning
+coin pickups, a bee on a flight path, and a saw hazard that triggers the
+hit-then-respawn chain.
+
 ---
 
 ## 13. Sensors (trigger zones)

@@ -1419,6 +1419,13 @@ end spikeNewGroup
 --         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
 --         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
+-- SPRITE  b2kSheetLoad name,path,fw,fh[,n] · b2kSheetLoadAtlas name,png[,xml] ·
+--         b2kSheetFromImage name,img,fw,fh · b2kSheetFrames(name) ·
+--         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
+--         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
+--         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
+--         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
+--         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
 -- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
 --         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
 --         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
@@ -1469,6 +1476,21 @@ local sKeyActions    -- action name -> bound key list ("jump" -> "space,up,w")
 local sAxisNeg       -- axis name -> negative-direction key list
 local sAxisPos       -- axis name -> positive-direction key list
 local sFrameMS       -- real elapsed ms folded into the last frame (b2kFrameMS)
+local sSheetSrc      -- sheet -> long id of its hidden source image
+local sSheetOwned    -- sheet -> true when the Kit created the source image
+local sSheetRegion   -- sheet -> frame key -> "x,y,w,h" region (source px)
+local sSheetKeys     -- sheet -> CR list of frame keys, definition order
+local sSheetIcon     -- sheet -> frame key -> sliced frame image id (lazy)
+local sSheetFlip     -- sheet -> frame key -> mirrored image id (lazy)
+local sSheetData     -- sheet -> cached source imageData (freed on teardown)
+local sSheetAlpha    -- sheet -> cached source alphaData
+local sAnimList      -- "sheet|anim" -> CR list of frame keys
+local sAnimFPS       -- "sheet|anim" -> frames per second
+local sAnimLoop      -- "sheet|anim" -> true/false
+local sSprRefs       -- CR list of live sprite controls (the tick iterates)
+local sSprSheet, sSprKind, sSprAnim, sSprStep, sSprNextMS
+local sSprFPS, sSprFPSOver, sSprFlip, sSprMsg, sSprFrameKey, sSprIconNow
+local sSprBind, sSprBindDX, sSprBindDY, sSprLastLoc
 
 constant kPI = 3.14159265358979
 
@@ -1515,6 +1537,7 @@ command b2kTeardown
    put the milliseconds & random(9999) into sGen
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
+   b2kSheetsWipe   -- sprites, sliced frames, sources: all module state goes
    b2kResetTables
    put 0 into sDragJoint
    put false into sDragging
@@ -1594,9 +1617,11 @@ command b2kWall pX1, pY1, pX2, pY2
 end b2kWall
 
 -- Remove every dynamic body (b2kRemove deletes kit-spawned controls; attached
--- controls are just detached).
+-- controls are just detached). Sprites are Kit-created controls, so they go
+-- too; loaded sheets stay (they are assets, not world state).
 command b2kClear
    local tRef, tList, d
+   b2kSpritesClear
    put empty into tList
    repeat for each key tRef in sBody
       if sStatic[tRef] is not true then put tRef & cr after tList
@@ -3295,6 +3320,588 @@ function b2kFrameMS
 end b2kFrameMS
 
 -- =====================================================================
+-- Sprites: sheets, atlases, named animations (icon-button backend)
+-- =====================================================================
+-- Model (decided by the Phase 0 spike, S12): a sheet registers named or
+-- numbered frame REGIONS of one hidden source image; each region is sliced
+-- into its own hidden image LAZILY, on first use. A sprite is a transparent
+-- BUTTON whose icon is the current frame's image -- a frame switch is one
+-- property set, and every sprite of a sheet shares the same frame images.
+-- Mirrored (left-facing) frames are flip-clones, also made lazily.
+-- Sheets persist until b2kTeardown; sprites are Kit-created controls, so
+-- b2kClear removes them like everything else the Kit spawned.
+
+-- Register an image FILE as a uniform grid of pFW x pFH frames (no spacing),
+-- numbered 1..N left-to-right, top-to-bottom. Reports the frame count.
+command b2kSheetLoad pName, pPath, pFW, pFH, pCount
+   local tRef
+   put b2kSheetSourceFromFile(pName, pPath) into tRef
+   if tRef is empty then return 0
+   b2kSheetGridRegions pName, pFW, pFH, pCount
+   return the number of lines of sSheetKeys[pName]
+end b2kSheetLoad
+
+-- Register an image already in the stack (e.g. base64-embedded art) as a
+-- grid sheet. The image is used in place and never deleted by the Kit.
+command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount
+   b2kSheetForget pName
+   put the long id of pImgRef into sSheetSrc[pName]
+   put false into sSheetOwned[pName]
+   b2kSheetGridRegions pName, pFW, pFH, pCount
+   return the number of lines of sSheetKeys[pName]
+end b2kSheetFromImage
+
+-- Register a packed atlas: a PNG plus the TextureAtlas XML that names its
+-- regions (<SubTexture name=".." x=".." y=".." width=".." height=".."/> --
+-- the Kenney pack format, like Spritesheets/ in this repo). Frames are
+-- addressed BY NAME. pXmlPath defaults to the png path with ".xml".
+command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
+   local tRef, tXml, tLine, tNm, tX, tY, tW, tH
+   if pXmlPath is empty then
+      put pPngPath into pXmlPath
+      set the itemDelimiter to "."
+      put "xml" into item -1 of pXmlPath
+   end if
+   put URL ("file:" & pXmlPath) into tXml
+   if tXml is empty then return 0
+   put b2kSheetSourceFromFile(pName, pPngPath) into tRef
+   if tRef is empty then return 0
+   set the itemDelimiter to comma
+   repeat for each line tLine in tXml
+      if tLine contains "<SubTexture" then
+         put b2kXmlAttr(tLine, "name") into tNm
+         put b2kXmlAttr(tLine, "x") into tX
+         put b2kXmlAttr(tLine, "y") into tY
+         put b2kXmlAttr(tLine, "width") into tW
+         put b2kXmlAttr(tLine, "height") into tH
+         if tNm is empty or tX is not a number or tY is not a number then next repeat
+         if tW is not a number or tH is not a number then next repeat
+         put tX & comma & tY & comma & tW & comma & tH into sSheetRegion[pName][tNm]
+         put tNm & cr after sSheetKeys[pName]
+      end if
+   end repeat
+   if the last char of sSheetKeys[pName] is cr then delete the last char of sSheetKeys[pName]
+   return the number of lines of sSheetKeys[pName]
+end b2kSheetLoadAtlas
+
+function b2kSheetFrames pName
+   return the number of lines of sSheetKeys[pName]
+end b2kSheetFrames
+
+function b2kSheetHasFrame pName, pFrame
+   return (sSheetRegion[pName][pFrame] is not empty)
+end b2kSheetHasFrame
+
+-- Define a named animation: pFrames is a comma list of frame names and/or
+-- 1-based indices, with numeric ranges ("1-8") expanded. pLoop defaults true.
+command b2kAnimDef pSheet, pAnim, pFrames, pFPS, pLoop
+   local tKey, tList, tItem, tA, tB, i
+   put pSheet & "|" & pAnim into tKey
+   put empty into tList
+   set the itemDelimiter to comma
+   repeat for each item tItem in pFrames
+      put word 1 to -1 of tItem into tItem
+      if tItem contains "-" and tItem is not a number then
+         set the itemDelimiter to "-"
+         put item 1 of tItem into tA
+         put item 2 of tItem into tB
+         set the itemDelimiter to comma
+         if tA is a number and tB is a number then
+            repeat with i = tA to tB
+               put i & cr after tList
+            end repeat
+            next repeat
+         end if
+      end if
+      put tItem & cr after tList
+   end repeat
+   if the last char of tList is cr then delete the last char of tList
+   put tList into sAnimList[tKey]
+   put b2kClamp(pFPS, 0.1, 120) into sAnimFPS[tKey]
+   put (pLoop is not false) into sAnimLoop[tKey]
+end b2kAnimDef
+
+-- Create a sprite: a transparent button showing pFrame (default: the sheet's
+-- first frame), centred on pX,pY and sized to the frame. Reports the control.
+-- It is an ordinary Kit control: pass it to b2kAddCapsule/b2kAddBox for a
+-- body (buttons render position-only with rotation locked), or bind it to
+-- another control's body with b2kSpriteBind.
+command b2kSpriteNew pSheet, pFrame, pX, pY
+   local tName, tRef, tKey, tRegion, tW, tH
+   if sSheetKeys[pSheet] is empty then return empty
+   put pFrame into tKey
+   if tKey is empty then put line 1 of sSheetKeys[pSheet] into tKey
+   put sSheetRegion[pSheet][tKey] into tRegion
+   if tRegion is empty then return empty
+   set the itemDelimiter to comma
+   put item 3 of tRegion into tW
+   put item 4 of tRegion into tH
+   put b2kNumberOr(pX, (the width of this card) div 2) into pX
+   put b2kNumberOr(pY, (the height of this card) div 2) into pY
+   put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
+   create button tName
+   put the long id of button tName into tRef
+   set the style of tRef to "transparent"
+   set the showName of tRef to false
+   set the traversalOn of tRef to false
+   set the autoHilite of tRef to false
+   set the rect of tRef to round(pX - tW / 2), round(pY - tH / 2), round(pX + tW / 2), round(pY + tH / 2)
+   try
+      set the layerMode of tRef to "dynamic"   -- its own compositor layer
+   catch tErr
+   end try
+   put pSheet into sSprSheet[tRef]
+   put "sheet" into sSprKind[tRef]
+   put false into sSprFlip[tRef]
+   put true into sSpawned[tRef]
+   put tRef & cr after sSprRefs
+   b2kSpriteShowFrame tRef, tKey
+   return tRef
+end b2kSpriteNew
+
+-- A sprite backed by an animated GIF file: the engine plays it; the Kit's
+-- play/stop/frame calls drive repeatCount/currentFrame instead of icons.
+command b2kSpriteFromGIF pPath, pX, pY
+   local tName, tRef
+   put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
+   create image tName
+   put the long id of image tName into tRef
+   set the lockLoc of tRef to true
+   try
+      set the filename of tRef to pPath
+   catch tErr
+   end try
+   if the width of tRef < 1 then
+      try
+         delete tRef
+      catch tErr
+      end try
+      return empty
+   end if
+   put b2kNumberOr(pX, (the width of this card) div 2) into pX
+   put b2kNumberOr(pY, (the height of this card) div 2) into pY
+   set the loc of tRef to round(pX) & comma & round(pY)
+   try
+      set the layerMode of tRef to "dynamic"
+   catch tErr
+   end try
+   try
+      set the repeatCount of tRef to -1
+   catch tErr
+   end try
+   put "gif" into sSprKind[tRef]
+   put true into sSpawned[tRef]
+   put tRef & cr after sSprRefs
+   return tRef
+end b2kSpriteFromGIF
+
+-- Start a named animation; a no-op if it is already playing (so calling it
+-- every frame from a state machine is free) unless pRestart forces frame 1.
+command b2kSpritePlay pCtrl, pAnim, pRestart
+   local tRef, tKey
+   put the long id of pCtrl into tRef
+   if sSprKind[tRef] is "gif" then
+      try
+         set the repeatCount of tRef to -1
+      catch tErr
+      end try
+      exit b2kSpritePlay
+   end if
+   if sSprSheet[tRef] is empty then exit b2kSpritePlay
+   put sSprSheet[tRef] & "|" & pAnim into tKey
+   if sAnimList[tKey] is empty then exit b2kSpritePlay
+   if sSprAnim[tRef] is pAnim and pRestart is not true then exit b2kSpritePlay
+   put pAnim into sSprAnim[tRef]
+   put 1 into sSprStep[tRef]
+   if sSprFPSOver[tRef] is not empty then
+      put sSprFPSOver[tRef] into sSprFPS[tRef]
+   else
+      put sAnimFPS[tKey] into sSprFPS[tRef]
+   end if
+   if sSprFPS[tRef] is empty or sSprFPS[tRef] <= 0 then put 8 into sSprFPS[tRef]
+   put the milliseconds + (1000 / sSprFPS[tRef]) into sSprNextMS[tRef]
+   b2kSpriteShowFrame tRef, line 1 of sAnimList[tKey]
+end b2kSpritePlay
+
+command b2kSpriteStop pCtrl
+   local tRef
+   put the long id of pCtrl into tRef
+   if sSprKind[tRef] is "gif" then
+      try
+         set the repeatCount of tRef to 0
+      catch tErr
+      end try
+      exit b2kSpriteStop
+   end if
+   put empty into sSprAnim[tRef]
+end b2kSpriteStop
+
+function b2kSpriteAnim pCtrl
+   return sSprAnim[the long id of pCtrl]
+end b2kSpriteAnim
+
+-- Show one frame by name/index (stops any running animation first).
+command b2kSpriteSetFrame pCtrl, pFrame
+   local tRef
+   put the long id of pCtrl into tRef
+   if sSprKind[tRef] is "gif" then
+      try
+         set the repeatCount of tRef to 0
+         set the currentFrame of tRef to pFrame
+      catch tErr
+      end try
+      exit b2kSpriteSetFrame
+   end if
+   put empty into sSprAnim[tRef]
+   b2kSpriteShowFrame tRef, pFrame
+end b2kSpriteSetFrame
+
+function b2kSpriteFrame pCtrl
+   return sSprFrameKey[the long id of pCtrl]
+end b2kSpriteFrame
+
+-- Per-sprite speed override (empty = use each animation's own fps).
+command b2kSpriteFPS pCtrl, pFPS
+   local tRef
+   put the long id of pCtrl into tRef
+   put pFPS into sSprFPSOver[tRef]
+   if pFPS is a number and pFPS > 0 then put pFPS into sSprFPS[tRef]
+end b2kSpriteFPS
+
+-- Face left (true) or right (false). The mirrored frame image is created
+-- the first time it is needed, by flip-cloning the sliced frame.
+command b2kSpriteFlipH pCtrl, pFlag
+   local tRef
+   put the long id of pCtrl into tRef
+   if sSprSheet[tRef] is empty then exit b2kSpriteFlipH
+   put (pFlag is true) into pFlag
+   if sSprFlip[tRef] is pFlag then exit b2kSpriteFlipH
+   put pFlag into sSprFlip[tRef]
+   if sSprFrameKey[tRef] is not empty then b2kSpriteShowFrame tRef, sSprFrameKey[tRef]
+end b2kSpriteFlipH
+
+function b2kSpriteFlipped pCtrl
+   return (sSprFlip[the long id of pCtrl] is true)
+end b2kSpriteFlipped
+
+-- When a NON-looping animation finishes, send pMessage to the frame target
+-- with the sprite and the animation name (attack/death/effect chaining).
+command b2kSpriteOnFinish pCtrl, pMessage
+   put pMessage into sSprMsg[the long id of pCtrl]
+end b2kSpriteOnFinish
+
+-- Pin this sprite to another control's position each frame (offset in px) --
+-- the standard pattern for "art bigger than the collision shape": give an
+-- invisible control the body, bind the sprite to it.
+command b2kSpriteBind pCtrl, pBodyCtrl, pDX, pDY
+   local tRef
+   put the long id of pCtrl into tRef
+   put the long id of pBodyCtrl into sSprBind[tRef]
+   put b2kNumberOr(pDX, 0) into sSprBindDX[tRef]
+   put b2kNumberOr(pDY, 0) into sSprBindDY[tRef]
+end b2kSpriteBind
+
+command b2kSpriteUnbind pCtrl
+   delete variable sSprBind[the long id of pCtrl]
+end b2kSpriteUnbind
+
+-- Remove a sprite (and its body, if it has one).
+command b2kSpriteRemove pCtrl
+   local tRef
+   put the long id of pCtrl into tRef
+   if sBody[tRef] is not empty then
+      b2kRemove tRef          -- destroys the body and deletes the control
+   else
+      try
+         delete tRef
+      catch tErr
+      end try
+   end if
+   b2kSpriteForget tRef
+end b2kSpriteRemove
+
+-- Internal: drop a sprite's registry entries (the control is already gone).
+command b2kSpriteForget pRef
+   local tLn
+   delete variable sSprSheet[pRef]
+   delete variable sSprKind[pRef]
+   delete variable sSprAnim[pRef]
+   delete variable sSprStep[pRef]
+   delete variable sSprNextMS[pRef]
+   delete variable sSprFPS[pRef]
+   delete variable sSprFPSOver[pRef]
+   delete variable sSprFlip[pRef]
+   delete variable sSprMsg[pRef]
+   delete variable sSprBind[pRef]
+   delete variable sSprBindDX[pRef]
+   delete variable sSprBindDY[pRef]
+   delete variable sSprFrameKey[pRef]
+   delete variable sSprIconNow[pRef]
+   delete variable sSprLastLoc[pRef]
+   set the wholeMatches to true
+   put lineOffset(pRef, sSprRefs) into tLn
+   if tLn > 0 then delete line tLn of sSprRefs
+end b2kSpriteForget
+
+-- Internal: remove every live sprite (b2kClear / b2kTeardown path).
+command b2kSpritesClear
+   local tRef, tList
+   put sSprRefs into tList
+   repeat for each line tRef in tList
+      if tRef is not empty then b2kSpriteRemove tRef
+   end repeat
+   put empty into sSprRefs
+end b2kSpritesClear
+
+-- Internal: forget one sheet -- its regions, anims, sliced/mirrored frame
+-- images, and (if the Kit loaded it) the hidden source image.
+command b2kSheetForget pName
+   local tKey, tId
+   if sSheetSrc[pName] is empty and sSheetKeys[pName] is empty then exit b2kSheetForget
+   repeat for each key tKey in sSheetIcon[pName]
+      put sSheetIcon[pName][tKey] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   repeat for each key tKey in sSheetFlip[pName]
+      put sSheetFlip[pName][tKey] into tId
+      if tId is not empty and tId is not sSheetIcon[pName][tKey] then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+   end repeat
+   if sSheetOwned[pName] is not false and sSheetSrc[pName] is not empty then
+      try
+         delete sSheetSrc[pName]
+      catch tErr
+      end try
+   end if
+   delete variable sSheetSrc[pName]
+   delete variable sSheetOwned[pName]
+   delete variable sSheetRegion[pName]
+   delete variable sSheetKeys[pName]
+   delete variable sSheetIcon[pName]
+   delete variable sSheetFlip[pName]
+   delete variable sSheetData[pName]
+   delete variable sSheetAlpha[pName]
+   repeat for each key tKey in sAnimList
+      if char 1 to (the number of chars of pName) + 1 of tKey is pName & "|" then
+         delete variable sAnimList[tKey]
+         delete variable sAnimFPS[tKey]
+         delete variable sAnimLoop[tKey]
+      end if
+   end repeat
+end b2kSheetForget
+
+-- Internal: every sheet + every sprite (b2kTeardown path).
+command b2kSheetsWipe
+   local tName
+   b2kSpritesClear
+   repeat for each key tName in sSheetSrc
+      b2kSheetForget tName
+   end repeat
+   put empty into sSheetSrc
+   put empty into sSheetRegion
+   put empty into sSheetKeys
+   put empty into sSheetIcon
+   put empty into sSheetFlip
+   put empty into sSheetData
+   put empty into sSheetAlpha
+   put empty into sAnimList
+   put empty into sAnimFPS
+   put empty into sAnimLoop
+end b2kSheetsWipe
+
+-- ---- sprite internals ------------------------------------------------
+
+-- Internal: load an image file into a hidden, Kit-owned source image.
+function b2kSheetSourceFromFile pName, pPath
+   local tImg
+   b2kSheetForget pName
+   put "b2ksheet_" & pName into tImg
+   if there is an image tImg then delete image tImg
+   create image tImg
+   set the visible of it to false
+   set the lockLoc of it to true
+   try
+      set the filename of image tImg to pPath
+   catch tErr
+   end try
+   if the width of image tImg < 1 then
+      delete image tImg
+      return empty
+   end if
+   put the long id of image tImg into sSheetSrc[pName]
+   put true into sSheetOwned[pName]
+   return sSheetSrc[pName]
+end b2kSheetSourceFromFile
+
+-- Internal: register grid regions over the current source image.
+command b2kSheetGridRegions pName, pFW, pFH, pCount
+   local tCols, tRows, tMax, i, tC, tR
+   if sSheetSrc[pName] is empty then exit b2kSheetGridRegions
+   put b2kClamp(pFW, 1, 4096) into pFW
+   put b2kClamp(pFH, 1, 4096) into pFH
+   put (the width of sSheetSrc[pName]) div pFW into tCols
+   put (the height of sSheetSrc[pName]) div pFH into tRows
+   put tCols * tRows into tMax
+   if pCount is a number and pCount > 0 and pCount < tMax then put pCount into tMax
+   repeat with i = 1 to tMax
+      put (i - 1) mod tCols into tC
+      put (i - 1) div tCols into tR
+      put (tC * pFW) & comma & (tR * pFH) & comma & pFW & comma & pFH into sSheetRegion[pName][i]
+      put i & cr after sSheetKeys[pName]
+   end repeat
+   if the last char of sSheetKeys[pName] is cr then delete the last char of sSheetKeys[pName]
+end b2kSheetGridRegions
+
+-- Internal: one attribute value out of an XML tag line (attr="value").
+function b2kXmlAttr pLine, pAttr
+   local tFrom, tLen
+   put offset(pAttr & "=" & quote, pLine) into tFrom
+   if tFrom is 0 then return empty
+   add the number of chars of pAttr + 2 to tFrom
+   put offset(quote, pLine, tFrom - 1) into tLen
+   if tLen is 0 then return empty
+   return char tFrom to tFrom + tLen - 2 of pLine
+end b2kXmlAttr
+
+-- Internal: make sure a frame's sliced image exists (lazy, cached). The
+-- source pixels are fetched once per sheet and kept until teardown.
+command b2kSheetEnsureIcon pSheet, pKey
+   local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName
+   if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
+   put sSheetRegion[pSheet][pKey] into tRegion
+   if tRegion is empty then exit b2kSheetEnsureIcon
+   if sSheetData[pSheet] is empty then
+      put the imageData of sSheetSrc[pSheet] into sSheetData[pSheet]
+      put the alphaData of sSheetSrc[pSheet] into sSheetAlpha[pSheet]
+   end if
+   set the itemDelimiter to comma
+   put item 1 of tRegion into tX
+   put item 2 of tRegion into tY
+   put item 3 of tRegion into tW
+   put item 4 of tRegion into tH
+   put the width of sSheetSrc[pSheet] into tSW
+   put empty into tFD
+   put empty into tFA
+   repeat with y = 0 to tH - 1
+      put (tY + y) * tSW + tX into tRowPx
+      put byte (tRowPx * 4 + 1) to (tRowPx * 4 + tW * 4) of sSheetData[pSheet] after tFD
+      put byte (tRowPx + 1) to (tRowPx + tW) of sSheetAlpha[pSheet] after tFA
+   end repeat
+   put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
+   create image tName
+   set the visible of it to false
+   set the lockLoc of it to true
+   set the width of it to tW
+   set the height of it to tH
+   set the imageData of image tName to tFD
+   set the alphaData of image tName to tFA
+   put the id of image tName into sSheetIcon[pSheet][pKey]
+end b2kSheetEnsureIcon
+
+-- Internal: the mirrored copy of a frame (falls back to the unmirrored
+-- frame if this engine's flip throws, so facing left never errors).
+command b2kSheetEnsureFlip pSheet, pKey
+   local tName
+   if sSheetFlip[pSheet][pKey] is not empty then exit b2kSheetEnsureFlip
+   b2kSheetEnsureIcon pSheet, pKey
+   if sSheetIcon[pSheet][pKey] is empty then exit b2kSheetEnsureFlip
+   try
+      clone image id sSheetIcon[pSheet][pKey]
+      put "b2kfl_" & the milliseconds & "_" & random(1000000) into tName
+      set the name of it to tName
+      set the visible of it to false
+      flip image tName horizontal
+      put the id of image tName into sSheetFlip[pSheet][pKey]
+   catch tErr
+      put sSheetIcon[pSheet][pKey] into sSheetFlip[pSheet][pKey]
+   end try
+end b2kSheetEnsureFlip
+
+-- Internal: point a sprite's icon at a frame, honouring its facing. Skips
+-- the property set when the icon is already right (the sDrawKey idea).
+command b2kSpriteShowFrame pRef, pKey
+   local tSheet, tIcon
+   put sSprSheet[pRef] into tSheet
+   if tSheet is empty then exit b2kSpriteShowFrame
+   if sSprFlip[pRef] is true then
+      b2kSheetEnsureFlip tSheet, pKey
+      put sSheetFlip[tSheet][pKey] into tIcon
+   else
+      b2kSheetEnsureIcon tSheet, pKey
+      put sSheetIcon[tSheet][pKey] into tIcon
+   end if
+   if tIcon is empty then exit b2kSpriteShowFrame
+   put pKey into sSprFrameKey[pRef]
+   if sSprIconNow[pRef] is tIcon then exit b2kSpriteShowFrame
+   set the icon of pRef to tIcon
+   put tIcon into sSprIconNow[pRef]
+end b2kSpriteShowFrame
+
+-- Internal: per-frame service -- bound sprites follow their body's control,
+-- playing animations advance on wall-clock time. Vanished controls are
+-- forgotten, like the body sync does.
+command b2kSpritesTick
+   local tNow, tRef, tDead, tSheet, tAnim, tAKey, tList, tStep, tN, tLoc, tBX, tBY
+   if sSprRefs is empty then exit b2kSpritesTick
+   put the milliseconds into tNow
+   put empty into tDead
+   set the itemDelimiter to comma
+   repeat for each line tRef in sSprRefs
+      if tRef is empty then next repeat
+      try
+         if sSprBind[tRef] is not empty then
+            put the loc of sSprBind[tRef] into tLoc
+            put (item 1 of tLoc) + sSprBindDX[tRef] into tBX
+            put (item 2 of tLoc) + sSprBindDY[tRef] into tBY
+            put tBX & comma & tBY into tLoc
+            if sSprLastLoc[tRef] is not tLoc then
+               set the loc of tRef to tLoc
+               put tLoc into sSprLastLoc[tRef]
+            end if
+         end if
+         if sSprKind[tRef] is "sheet" and sSprAnim[tRef] is not empty then
+            if tNow >= sSprNextMS[tRef] then
+               put sSprSheet[tRef] into tSheet
+               put sSprAnim[tRef] into tAnim
+               put tSheet & "|" & tAnim into tAKey
+               put sAnimList[tAKey] into tList
+               put the number of lines of tList into tN
+               put sSprStep[tRef] + 1 into tStep
+               if tStep > tN then
+                  if sAnimLoop[tAKey] is false then
+                     put empty into sSprAnim[tRef]
+                     if sSprMsg[tRef] is not empty and sFrameObj is not empty then
+                        dispatch sSprMsg[tRef] to sFrameObj with tRef, tAnim
+                     end if
+                     next repeat
+                  end if
+                  put 1 into tStep
+               end if
+               put tStep into sSprStep[tRef]
+               add (1000 / sSprFPS[tRef]) to sSprNextMS[tRef]
+               if sSprNextMS[tRef] < tNow then put tNow + (1000 / sSprFPS[tRef]) into sSprNextMS[tRef]
+               b2kSpriteShowFrame tRef, (line tStep of tList)
+            end if
+         end if
+      catch tErr
+         put tRef & cr after tDead   -- control vanished; clean up below
+      end try
+   end repeat
+   repeat for each line tRef in tDead
+      if tRef is not empty then b2kSpriteForget tRef
+   end repeat
+end b2kSpritesTick
+
+-- =====================================================================
 -- The loop  (fixed timestep, generation-guarded; one screen lock per frame)
 -- =====================================================================
 -- The whole frame -- body sync, contact/sensor dispatch and the app's own
@@ -3325,6 +3932,7 @@ on b2kStep pGen
       try
          b2kSyncBodies         -- lock-free; this frame's single lock is held here
          b2kInputTick          -- keyboard sample, so b2kFrame sees this frame's edges
+         b2kSpritesTick        -- bound sprites follow bodies; animations advance
          b2kDispatchContacts
          b2kDispatchSensors
          if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj
@@ -3359,6 +3967,7 @@ command b2kStepOnce
    try
       b2kSyncBodies
       b2kInputTick
+      b2kSpritesTick
       b2kDispatchContacts
       b2kDispatchSensors
       if sFrameObj is not empty then dispatch "b2kFrame" to sFrameObj

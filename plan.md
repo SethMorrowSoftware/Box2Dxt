@@ -100,6 +100,15 @@ and report; Phase 2 (sprites, icon-button backend) starts on the green light.
 
 ## Phase 2 — Sprite module (M/L)
 
+**Status: built (2026-06-10) — awaiting the OXT pass.** Built on the
+icon-button backend per the spike verdict, extended with a **TextureAtlas
+XML loader** for the Kenney-format `Spritesheets/` pack the project now
+ships (named frames like `character_beige_walk_a`), lazy slicing/mirroring,
+and `b2kSpriteBind` for art-bigger-than-collision characters. The platformer
+example is the test vehicle (banner checklist); it loads the real atlases
+from a remembered folder and falls back to embedded placeholder art if the
+folder dialog is cancelled.
+
 - **Build:** sheet registry (`b2kSheetLoad/FromImage/Frames`), `b2kAnimDef`,
   sprite factory (`b2kSpriteNew`, clipped-group mechanism), `b2kSpritesTick`,
   `b2kSpritePlay/Stop/Anim/SetFrame/Frame/FPS/FlipH/Flipped/OnFinish/Remove`,
@@ -207,4 +216,6 @@ user-confirmed in OXT before the next begins.
 | 2026-06-10 | Spike stage geometry overlapped the chrome (S9 viewport under the button column; S10 arena top wall under the status bar) — user report; v4 shifts the geometry clear. | User report |
 | 2026-06-10 | **Spike v4: icon-button sprites WIN — Phase 2's primary backend.** Identical scene: S12 warm avg 40.2 fps vs S10 mode 1's 30.7 (+31%), build 3785 ms vs 6579 ms, first-frame stall 6.6 s vs 13.5 s. Shared frame images also beat per-sprite sheet copies on memory. Scroll-groups stay documented as the secondary mechanism (sheet-direct cases); neither hits the ceiling at 25 *moving* sprites on this hardware, so Phase 2 also pools at load, builds before enabling acceleration, and documents a per-scene budget. | Spike v4 S12 vs S10 |
 | 2026-06-10 | **Phase 0 CLOSED.** S3/S4 visuals: no artifact/trail reports across four runs (and the icon backend doesn't clip at all); final eyes-on confirmation rides the Phase 2 example rather than a fifth spike pass. The spike stays in `examples/` as the acceptance harness for new platforms (macOS/Linux open, risk R1). | All spike passes |
-| 2026-06-10 | **Phase 1 built:** Kit Input module (18 handlers), paced loop (`in max(1, 16 − elapsed)`), `b2kFrameMS`, and `examples/box2dxt-platformer.livecodescript` (axis run, edge jump + release-cut, ray grounded check, one-way ledge). Statically verified; awaiting the OXT pass. | This commit |
+| 2026-06-10 | **Phase 1 built:** Kit Input module (18 handlers), paced loop (`in max(1, 16 − elapsed)`), `b2kFrameMS`, and `examples/box2dxt-platformer.livecodescript` (axis run, edge jump + release-cut, ray grounded check, one-way ledge). Statically verified; awaiting the OXT pass. | Phase 1 commit |
+| 2026-06-10 | **User shipped the asset pack** — Kenney-format atlases (`Spritesheets/`, PNG + TextureAtlas XML, named non-grid regions at 1px pitch, 1x and 2x variants) merged to main. Consequence: Phase 2 gains a first-class **atlas loader with named frames** (`b2kSheetLoadAtlas`) alongside grid sheets; animations reference frame names. | main merge c95e401 |
+| 2026-06-10 | **Phase 2 built:** Kit Sprite module (~26 handlers) on the icon-button backend — lazy region slicing, shared frame images, lazy mirroring, `b2kAnimDef` names/ranges, `b2kSpriteOnFinish`, `b2kSpriteBind` (invisible body + bound art = collision independent of art size), GIF backend, `b2kClear`/`b2kTeardown` lifecycle. Platformer example v2: atlas hero (idle/walk/jump/hit), coin sensors, bee path sprite, saw hazard with hit-then-respawn chain; placeholder fallback keeps it runnable without the asset folder. Statically verified; awaiting the OXT pass. | Phase 2 commit |

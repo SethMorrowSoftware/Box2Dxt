@@ -257,6 +257,49 @@ end b2kFrame
 See `examples/box2dxt-platformer.livecodescript` for the full pattern
 (grounded check, jump-cut, one-way ledge).
 
+## Sprites & animation
+
+Spritesheet animation on the **icon-button backend** (chosen by the Phase 0
+benchmarks): a sheet registers named or numbered frame *regions* of one
+hidden source image; each region is sliced into its own hidden image lazily,
+on first use; a **sprite is a transparent button** whose `icon` is the
+current frame — all sprites of a sheet share the same frame images. Sheets
+persist until `b2kTeardown`; sprites are Kit-created controls, so `b2kClear`
+removes them with everything else.
+
+| Handler | Purpose |
+|---------|---------|
+| `b2kSheetLoad name, path, fw, fh [,count]` → count | Register an image file as a uniform grid of `fw`×`fh` frames (no spacing), numbered 1..N row-major. |
+| `b2kSheetLoadAtlas name, pngPath [,xmlPath]` → count | Register a packed atlas: PNG + `TextureAtlas` XML naming its regions (the Kenney format — see `Spritesheets/` in this repo). Frames are addressed **by name** (`"coin_gold"`). XML path defaults to the PNG path with `.xml`. |
+| `b2kSheetFromImage name, imgRef, fw, fh [,count]` → count | Register an image already in the stack (e.g. base64-embedded art) as a grid sheet. |
+| `b2kSheetFrames(name)` / `b2kSheetHasFrame(name, frame)` | Frame count / existence checks. |
+| `b2kAnimDef sheet, anim, frames, fps [,loop]` | Name an animation: `frames` is a comma list of names and/or indices, numeric ranges (`"1-8"`) expand. `loop` defaults true. |
+| `b2kSpriteNew sheet [,frame, x, y]` → control | Create a sprite showing `frame` (default: the sheet's first), sized to the frame. An ordinary Kit control: give it a body (`b2kAddCapsule …`) or bind it to one. |
+| `b2kSpriteFromGIF path [,x, y]` → control | An animated-GIF sprite (the engine plays it; play/stop/frame map to `repeatCount`/`currentFrame`). |
+| `b2kSpritePlay spr, anim [,restart]` | Start a named animation — a no-op if already playing it, so calling it every frame from a state machine is free. |
+| `b2kSpriteStop spr` / `b2kSpriteAnim(spr)` | Freeze on the current frame / what's playing. |
+| `b2kSpriteSetFrame spr, frame` / `b2kSpriteFrame(spr)` | Manual frame control (stops any animation). |
+| `b2kSpriteFPS spr, fps` | Per-sprite speed override (empty = each animation's own fps). |
+| `b2kSpriteFlipH spr, flag` / `b2kSpriteFlipped(spr)` | Face left/right — mirrored frames are flip-cloned lazily, shared like the originals. |
+| `b2kSpriteOnFinish spr, message` | When a **non-looping** animation ends, send `message spr, anim` to the frame target (attack/death/effect chains). |
+| `b2kSpriteBind spr, bodyCtrl [,dx, dy]` / `b2kSpriteUnbind spr` | Pin the sprite to another control's position each frame — the standard "art bigger than the collision shape" pattern: an invisible control owns the body, the sprite follows it. |
+| `b2kSpriteRemove spr` | Remove the sprite (and its body, if it has one). |
+
+```
+b2kSheetLoadAtlas "chars", tFolder & "/spritesheet-characters-default.png"
+b2kAnimDef "chars", "walk", "character_beige_walk_a,character_beige_walk_b", 6, true
+b2kSpriteNew "chars", "character_beige_idle", 200, 100
+put the result into tSpr
+b2kSpritePlay tSpr, "walk"
+b2kSpriteFlipH tSpr, true       -- face left
+```
+
+Performance notes (Phase 0 measurements, modest Win32 hardware): a frame
+switch is one icon set; ~25 *moving* animated sprites ≈ 40 fps, a player plus
+a handful sits at the loop ceiling. Create sprites at scene load (not
+mid-play) and **before** enabling `acceleratedRendering` where possible — bulk
+control creation under the compositor caused the spike's one-time stall.
+
 ## Drag & events
 
 | Handler | Purpose |
