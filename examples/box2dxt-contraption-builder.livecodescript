@@ -2046,7 +2046,7 @@ local gPendCtrl, gPendX, gPendY
 local gMotorOn, gMotorSpeed, gBouncy, gMotorsRunning
 local gDragCtrl, gDragMode, gDragMoved
 local gDrawPts, gDrawCtrl               -- freehand-terrain points + its preview graphic
-local gNewControls                      -- true when controls were created since the last compositor nudge
+local gModalOpen, gModalPaused, gModalAccel   -- popups pause the sim + drop GPU compositing beneath them
 local gParts
 local gJN
 local gJKind, gJHandle, gJCa, gJCb
@@ -2187,6 +2187,8 @@ on startCB
    put "build" into gMode
    put "drag" into gTool
    put empty into gJointTool
+   put false into gModalOpen        -- a popup can't survive a close; don't let stale state skip the next enter
+   put false into gModalPaused
    put false into gMotorOn
    put true into gMotorsRunning
    put kDefaultMotorSpeed into gMotorSpeed
@@ -2281,22 +2283,38 @@ on renderBuild
    updateLasers
    drawWires
    unlock screen
-   if gNewControls is true then nudgeCompositor
 end renderBuild
 
--- Under acceleratedRendering, a control created while the screen sits idle can
--- stay INVISIBLE until the compositor rebuilds its scene — the engine-level
--- cause of "my placed part only appears when I press Run" (Run's continuous
--- redraws force rebuilds; idle Build mode never does). Toggling
--- acceleratedRendering forces that rebuild now. Called flag-guarded from
--- renderBuild so it runs once per created-something gesture, never per frame.
-on nudgeCompositor
-   put false into gNewControls
-   if the acceleratedRendering of this stack then
-      set the acceleratedRendering of this stack to false
-      set the acceleratedRendering of this stack to true
+-- =====================================================================
+-- Modal view discipline. While a popup (Recipes / Filter / World / Images)
+-- is up, freeze the world beneath it: a running sim keeps every dynamic-layer
+-- part repainting under the popup, which fights the compositor (parts and
+-- joint markers bleed through patchy chrome) and lets the contraption change
+-- while the user is looking away. Pause the loop and composite the classic,
+-- cache-free way while the modal is open; restore both exactly as found.
+-- =====================================================================
+on enterModalView
+   if gModalOpen is true then exit enterModalView
+   put true into gModalOpen
+   put b2kIsRunning() into gModalPaused          -- only resume what we paused
+   if gModalPaused then
+      b2kPause
+      refreshPauseLabel
    end if
-end nudgeCompositor
+   put the acceleratedRendering of this stack into gModalAccel
+   set the acceleratedRendering of this stack to false
+end enterModalView
+
+on exitModalView
+   if gModalOpen is not true then exit exitModalView
+   put false into gModalOpen
+   set the acceleratedRendering of this stack to gModalAccel
+   if gModalPaused is true then
+      b2kResume
+      refreshPauseLabel
+   end if
+   put false into gModalPaused
+end exitModalView
 
 -- =====================================================================
 -- Arena (walls + a framed play field, mirrors the showcase demo)
@@ -3812,8 +3830,6 @@ on beginDrawTerrain pX, pY
    set the lineSize of gDrawCtrl to kDrawLineSize
    set the foregroundColor of gDrawCtrl to "150,120,84"
    set the points of gDrawCtrl to gDrawPts
-   put true into gNewControls
-   nudgeCompositor                              -- mid-gesture: the sketch must appear NOW, before any renderBuild
    put "Draw the ground — release to set it." into gStatus
 end beginDrawTerrain
 
@@ -3979,13 +3995,6 @@ on tagPart pCtrl, pKind, pColor, pFile
    put pCtrl & cr after gParts
    put true into gDynDirty               -- the dynamic-part cache must be rebuilt
    registerKind pCtrl, pKind
-   -- EVERY part composites on its own GPU layer, not just the physics-dynamic
-   -- kinds: parts move regardless (a build-mode drag, the inspector's resize
-   -- steppers, the selection recolour), and — critically — a control born into
-   -- the compositor's cached static scene often stays invisible until a full
-   -- recomposite. A dynamic layer renders fresh, so new parts show immediately.
-   set the layerMode of pCtrl to "dynamic"
-   put true into gNewControls            -- renderBuild nudges the compositor once
    if gBouncy and kindIsDynamic(pKind) then
       b2kSetBounce pCtrl, kBounceOn
       set the uBounce of pCtrl to kBounceOn
@@ -4002,6 +4011,7 @@ on tagPart pCtrl, pKind, pColor, pFile
       set the uGravity of pCtrl to 1
       set the uToughness of pCtrl to kToughnessDefault
       set the uFixedRot of pCtrl to false
+      set the layerMode of pCtrl to "dynamic"   -- moving bodies composite on their own GPU layer (no smear/clip artifacts)
       b2kWake pCtrl                       -- so the first sync draws it
    end if
 end tagPart
@@ -4507,8 +4517,7 @@ on recordJoint pKind, pJoint, pA, pB, pX, pY, pVis
    put empty into gJEnd[gJN]
    put "cb_joint_" & gJN into tG
    create graphic tG
-   set the layerMode of graphic tG to "dynamic"   -- re-pointed every frame; also shows at once in idle Build mode
-   put true into gNewControls
+   set the layerMode of graphic tG to "dynamic"   -- re-pointed every running frame
    if pVis is "none" then
       set the visible of graphic tG to false      -- internal structural pin: no marker
    else if pVis is "dot" then
@@ -6347,11 +6356,10 @@ on drawWires
       -- time both churns the compositor and would re-trigger its nudge.
       if there is no graphic tName then
          create graphic tName
-         set the layerMode of graphic tName to "dynamic"   -- shows at once in idle Build mode
+         set the layerMode of graphic tName to "dynamic"   -- endpoints move with their parts
          set the style of graphic tName to "line"
          set the lineSize of graphic tName to 2
          set the foregroundColor of graphic tName to "232,200,72"
-         put true into gNewControls
       end if
       set the points of graphic tName to round(tx0) & "," & round(ty0) & cr & round(tx1) & "," & round(ty1)
    end repeat
@@ -6629,8 +6637,6 @@ on refreshImagePanel
       set the uImgMenu of button ("ui_act_imgremove_" & tI) to true
    end repeat
    setImageVisible true
-   put true into gNewControls
-   nudgeCompositor      -- the rows are created while the panel opens; they must show now
 end refreshImagePanel
 
 -- Place an instance of a library image at the top of the stage, then select it.
@@ -6653,6 +6659,8 @@ end placeAssetFromPanel
 
 on setImageVisible pFlag
    local tI, tCtrl, tList
+   if pFlag then enterModalView
+   else exitModalView
    put empty into tList
    repeat with tI = 1 to the number of controls of this card
       put the long id of control tI of this card into tCtrl
@@ -9248,6 +9256,8 @@ end hideRecipesMenu
 -- them: setting the layer mid-loop reorders controls and would skip some.
 on setRecipeVisible pFlag
    local tI, tCtrl, tList
+   if pFlag then enterModalView
+   else exitModalView
    put empty into tList
    repeat with tI = 1 to the number of controls of this card
       put the long id of control tI of this card into tCtrl
@@ -9367,6 +9377,8 @@ end handleFilterToggle
 
 on setFilterVisible pFlag
    local tI, tCtrl, tList
+   if pFlag then enterModalView
+   else exitModalView
    put empty into tList
    repeat with tI = 1 to the number of controls of this card
       put the long id of control tI of this card into tCtrl
@@ -9458,6 +9470,8 @@ end handleWorldToggle
 
 on setWorldVisible pFlag
    local tI, tCtrl, tList
+   if pFlag then enterModalView
+   else exitModalView
    put empty into tList
    repeat with tI = 1 to the number of controls of this card
       put the long id of control tI of this card into tCtrl
@@ -9818,8 +9832,6 @@ on startOnboarding
    put 1 into gOnbStep
    buildOnboardingOverlay
    showOnboardingStep
-   put true into gNewControls
-   nudgeCompositor      -- the tour can be replayed mid-session; the fresh overlay must show now
 end startOnboarding
 
 on buildOnboardingOverlay

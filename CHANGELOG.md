@@ -409,15 +409,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     fast path. Balls, polygons and terrain were never affected — their
     graphics are complete at creation — which is why the bug hit "often"
     rather than always.
-  - **Compositor staleness (contraption builder).** Under
-    `acceleratedRendering`, a control created while the screen sits idle can
-    stay invisible until the compositor rebuilds its scene. Every part now
-    composites on its own dynamic GPU layer the moment it is tagged
-    (previously only the physics-dynamic kinds did), the same applies to
-    joint markers, signal wires, the freehand sketch line, thruster flames
-    and shock rings, and `renderBuild` gives the compositor a one-shot nudge
-    whenever something new was created — including the image library's rows
-    and a replayed onboarding tour.
+  - **Per-frame overlays now composite on their own GPU layer (contraption
+    builder).** Joint markers, signal wires, the freehand sketch line,
+    thruster flames and shock rings are re-pointed constantly while running,
+    but lived in the compositor's cached static scene; they're now dynamic
+    layers like the moving bodies they follow.
+- **Popups no longer glitch over a running sim (contraption builder).**
+  Opening Recipes / Filter / World / Images while running left dozens of
+  GPU-layered parts repainting underneath the popup — parts and joint markers
+  bled through patchy chrome. A popup now freezes the view beneath it: the
+  sim pauses (only if it was running) and the stack composites the classic,
+  cache-free way while the popup is up; both are restored exactly as found on
+  close. This also means a contraption can't change while the user is reading
+  a menu.
 - **Parts can no longer be parked overlapping the chrome (contraption
   builder).** Placement, duplicate/multiply copies, build-mode drags and arrow
   nudges keep the part's whole rect inside the arena (previously only its
