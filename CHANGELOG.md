@@ -39,6 +39,23 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Kit Sprite module (Game Kit Phase 2).** Spritesheet animation on the
+  icon-button backend the Phase 0 benchmarks selected: sheets register
+  frame regions of one hidden source image — a uniform grid
+  (`b2kSheetLoad`), an existing stack image (`b2kSheetFromImage`), or a
+  packed **TextureAtlas XML** with named regions (`b2kSheetLoadAtlas`,
+  the Kenney format shipped in `Spritesheets/`). Regions are sliced into
+  shared per-frame images lazily; a sprite is a transparent button whose
+  icon is the current frame. Named animations (`b2kAnimDef` with ranges
+  or frame names), `b2kSpritePlay/Stop/SetFrame/FPS`, lazy mirrored
+  facing (`b2kSpriteFlipH`), end-of-animation messages
+  (`b2kSpriteOnFinish`), body-following sprites (`b2kSpriteBind` — give
+  an invisible control the body, bind the art to it), an animated-GIF
+  backend (`b2kSpriteFromGIF`), and lifecycle integration (`b2kClear`
+  removes sprites, `b2kTeardown` also frees sheets). The platformer
+  example now plays an atlas-driven animated hero with spinning coin
+  pickups, a patrolling bee, and a saw hazard that chains
+  hit-pose-then-respawn through `b2kSpriteOnFinish`.
 - **Kit Input module (Game Kit Phase 1).** Poll-based keyboard input for
   games: `b2kInputOn` arms a once-per-frame `keysDown` sample (taken inside
   the loop's screen lock, so `on b2kFrame` always sees the current frame's

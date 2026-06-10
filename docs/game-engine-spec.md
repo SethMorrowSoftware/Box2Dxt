@@ -316,7 +316,8 @@ one existing behaviour is what makes sprites compose with physics for free.
 |---|---|
 | `b2kSheetLoad pName, pPath, pFrameW, pFrameH` | Import an image file as a sheet, derive the column/row grid from its size. Reports frame count. |
 | `b2kSheetFromImage pName, pImgRef, pFrameW, pFrameH` | Register an image already in the stack (incl. base64-embedded art) as a sheet. |
-| `b2kSheetFrames(pName)` → int | Frame count (0 = unknown sheet). |
+| `b2kSheetLoadAtlas pName, pPngPath [,pXmlPath]` | Register a packed atlas: PNG + TextureAtlas XML naming its regions (the Kenney format in `Spritesheets/`). Frames are addressed **by name**; regions may be any size/position. *(Added when the project's asset pack arrived.)* |
+| `b2kSheetFrames(pName)` → int / `b2kSheetHasFrame(pName, pFrame)` | Frame count / existence (0/false = unknown). |
 | `b2kAnimDef pSheet, pAnim, pFrames, pFPS [,pLoop]` | Define a named animation: `pFrames` like `"1-8"` or `"1,2,3,2"`; `pLoop` default true. |
 | `b2kSpriteNew pSheet [,pX, pY]` → control | Build the clipped group + inner image; shows frame 1. Reports the control ref. |
 | `b2kSpriteFromGIF pPath [,pX, pY]` → control | GIF-backed sprite (engine plays it; `b2kSpritePlay`/`SetFrame` drive `currentFrame`/`repeatCount` instead of scroll). |
@@ -327,6 +328,7 @@ one existing behaviour is what makes sprites compose with physics for free.
 | `b2kSpriteFlipH pCtrl, pFlag` / `b2kSpriteFlipped(pCtrl)` | Face left/right. First left-facing use of a sheet lazily builds the mirrored copy (§2.2). |
 | `b2kSpriteFPS pCtrl, pFPS` | Per-sprite speed override (run faster when sprinting). |
 | `b2kSpriteOnFinish pCtrl, pMessage` | For non-looping anims: send `pMessage pCtrl, pAnim` to the frame target when it ends (attack/death chaining). |
+| `b2kSpriteBind pCtrl, pBodyCtrl [,dx,dy]` / `b2kSpriteUnbind` | Pin the sprite to another control's position each frame — an invisible control owns the body, the art follows it, so collision size is independent of art size. |
 | `b2kSpriteRemove pCtrl` | Unregister and delete the sprite (and via `b2kRemove` its body, if any). |
 
 Implementation notes:
@@ -449,9 +451,18 @@ keeps sheets, bindings, and camera config.
 
 ## 9. Asset conventions
 
-- **Sheets:** uniform grid, frames numbered left-to-right, top-to-bottom,
-  1-based. Row-per-animation is the recommended layout. PNG with alpha
-  preferred; GIF accepted via the GIF backend.
+- **Sheets:** two supported shapes. (1) **Uniform grid** — frames numbered
+  left-to-right, top-to-bottom, 1-based; row-per-animation recommended; no
+  spacing between cells. (2) **Packed atlas** — PNG + TextureAtlas XML naming
+  each region (`<SubTexture name=".." x=".." y=".." width=".." height=".."/>`);
+  this is the Kenney format of the repo's `Spritesheets/` pack, and the richer
+  option (named frames, mixed sizes, spacing tolerated since regions are
+  explicit). PNG with alpha preferred; GIF accepted via the GIF backend.
+- **Custom art guidance** (for hand-made sheets): keep every frame of one
+  character the same cell size, character centred horizontally with feet on a
+  consistent baseline (sprites anchor by centre, so a wandering baseline
+  bobs); draw facing **right** (the Kit mirrors lazily); full alpha
+  background, no matte.
 - **Self-contained examples:** example stacks can't ship loose PNGs, so the
   platformer example embeds a small CC0 placeholder sheet as **base64 in the
   script** (`set the text of img to base64Decode(kPlayerSheetB64)`), registered
