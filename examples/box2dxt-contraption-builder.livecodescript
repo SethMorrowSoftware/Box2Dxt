@@ -2036,6 +2036,7 @@ command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
       put "xml" into item -1 of pXmlPath
    end if
    put URL ("file:" & pXmlPath) into tXml
+   if tXml is empty then put URL ("binfile:" & pXmlPath) into tXml
    if tXml is empty then return 0
    put b2kSheetSourceFromFile(pName, pPngPath) into tRef
    if tRef is empty then return 0
@@ -2135,12 +2136,14 @@ end b2kSpriteNew
 -- A sprite backed by an animated GIF file: the engine plays it; the Kit's
 -- play/stop/frame calls drive repeatCount/currentFrame instead of icons.
 command b2kSpriteFromGIF pPath, pX, pY
-   local tName, tRef
+   local tName, tRef, tData
+   put URL ("binfile:" & pPath) into tData   -- content-load, like the sheets
+   if tData is empty then return empty
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    put the long id of image tName into tRef
    try
-      set the filename of tRef to pPath   -- before lockLoc: let it auto-size
+      set the text of tRef to tData
    catch tErr
    end try
    set the lockLoc of tRef to true
@@ -2394,27 +2397,33 @@ end b2kSheetsWipe
 -- ---- sprite internals ------------------------------------------------
 
 -- Internal: load an image file into a hidden, Kit-owned source image.
--- ORDER MATTERS: the filename must be set while lockLoc is still false so
--- the control auto-sizes to the source pixels -- the slicer trusts the
--- control's width as the row stride, and `the imageData` renders at the
--- control's size (a locked tiny control would yield garbage frames).
+-- The bytes are loaded as CONTENT (binfile -> set the text), not as a
+-- filename reference: referenced images size and load lazily for hidden
+-- controls, which broke the slicer's stride; content images adopt their
+-- pixel size immediately -- the exact path b2kSheetFromImage users (and
+-- the platformer's embedded placeholder) already exercise successfully.
+-- lockLoc only AFTER the content, so the control has auto-sized first.
 function b2kSheetSourceFromFile pName, pPath
-   local tImg
+   local tImg, tData
    b2kSheetForget pName
    if there is no file pPath then return empty
+   put URL ("binfile:" & pPath) into tData
+   if tData is empty then return empty
    put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
    try
-      set the filename of image tImg to pPath
+      set the text of image tImg to tData
    catch tErr
+      delete image tImg
+      return empty
    end try
    if the width of image tImg < 2 then
       delete image tImg
       return empty
    end if
-   set the lockLoc of it to true   -- freeze at source size, now that it has it
+   set the lockLoc of image tImg to true
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]

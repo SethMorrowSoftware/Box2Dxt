@@ -32,7 +32,7 @@
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
-local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr
+local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -105,19 +105,33 @@ end buildPfUI
 -- =====================================================================
 function pfLoadSheets
    local tFolder, tN
+   put empty into gLoadNote
    put the uSpriteSheetFolderPath of this stack into tFolder
    if tFolder is empty or there is no file (tFolder & "/spritesheet-characters-default.png") then
       answer folder "Locate the repo's Spritesheets folder (Cancel = built-in placeholder art):"
       put it into tFolder
-      if tFolder is empty or the result is "cancel" then return false
-      if there is no file (tFolder & "/spritesheet-characters-default.png") then return false
+      if tFolder is empty or the result is "cancel" then
+         put "no folder chosen" into gLoadNote
+         return false
+      end if
+      if there is no file (tFolder & "/spritesheet-characters-default.png") then
+         put "spritesheet-characters-default.png is not inside: " & tFolder into gLoadNote
+         return false
+      end if
       set the uSpriteSheetFolderPath of this stack to tFolder
    end if
    b2kSheetLoadAtlas "chars", tFolder & "/spritesheet-characters-default.png"
    put the result into tN
-   if tN < 1 then return false
+   if tN < 1 then
+      put "characters atlas gave 0 frames (png or xml unreadable) in: " & tFolder into gLoadNote
+      return false
+   end if
    b2kSheetLoadAtlas "foes", tFolder & "/spritesheet-enemies-default.png"
+   put the result into tN
+   if tN < 1 then put "enemies atlas gave 0 frames. " after gLoadNote
    b2kSheetLoadAtlas "tiles", tFolder & "/spritesheet-tiles-default.png"
+   put the result into tN
+   if tN < 1 then put "tiles atlas gave 0 frames. " after gLoadNote
    -- the hero's animations (the beige character; swap the colour word to
    -- re-skin: green / pink / purple / yellow)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -149,6 +163,7 @@ end pfEmbedPlaceholder
 -- =====================================================================
 command pfStartGame
    local tRef, tW, tH, tDY
+   if the shiftKey is down then set the uSpriteSheetFolderPath of this stack to empty
    b2kTeardown                  -- also wipes sheets; they reload below
    pfWipeStage
    put false into gHurtLock
@@ -158,6 +173,15 @@ command pfStartGame
    b2kAddWalls
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
+   if gAssetsOK is true and gLoadNote is empty then
+      set the text of field "pfHelp" to "Arrows or A/D run; SPACE / UP / W jumps (tap = hop, hold = full). Collect the coins; avoid the saw." & cr & "The GREEN ledge is one-way: jump up through it from below. Drag bodies with the mouse." & cr & "Shift+Reset re-asks for the Spritesheets folder. Banner comments carry the verify checklist."
+   else
+      if gAssetsOK is true then
+         set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Coins/enemies fall back to plain shapes where their atlas is missing." & cr & "Shift+Reset re-asks for the Spritesheets folder."
+      else
+         set the text of field "pfHelp" to "PLACEHOLDER ART - the atlas load failed: " & gLoadNote & cr & "Press Shift+Reset to pick the Spritesheets folder again (it must contain the" & cr & "spritesheet-*-default.png and .xml files)."
+      end if
+   end if
    -- the floor
    create graphic "pf_ground"
    set the style of it to "rectangle"
@@ -214,16 +238,21 @@ command pfStartGame
    pfMakeCoin 560, 300
    pfMakeCoin 922, 400
    put 3 into gCoinsTotal
-   if gAssetsOK is true then
+   put empty into tRef
+   put empty into gBeeSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
       b2kSpriteNew "foes", "saw_a", 700, 546
       put the result into tRef
-      set the uPfHazardFlag of tRef to true
-      b2kSpritePlay tRef, "sawspin"
-      b2kAddSensor tRef, "ball"
+      if tRef is not empty then
+         set the uPfHazardFlag of tRef to true
+         b2kSpritePlay tRef, "sawspin"
+         b2kAddSensor tRef, "ball"
+      end if
       b2kSpriteNew "foes", "bee_a", 860, 200
       put the result into gBeeSpr
-      b2kSpritePlay gBeeSpr, "buzz"
-   else
+      if gBeeSpr is not empty then b2kSpritePlay gBeeSpr, "buzz"
+   end if
+   if tRef is empty then
       create graphic "pf_saw"
       set the style of it to "oval"
       set the rect of it to 676, 522, 724, 570
@@ -232,7 +261,6 @@ command pfStartGame
       put the long id of graphic "pf_saw" into tRef
       set the uPfHazardFlag of tRef to true
       b2kAddSensor tRef, "ball"
-      put empty into gBeeSpr
    end if
    -- input + events
    b2kInputOn
@@ -246,11 +274,13 @@ end pfStartGame
 
 command pfMakeCoin pX, pY
    local tRef
-   if gAssetsOK is true then
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "coin_gold") then
       b2kSpriteNew "tiles", "coin_gold", pX, pY
       put the result into tRef
-      b2kSpritePlay tRef, "spin"
-   else
+      if tRef is not empty then b2kSpritePlay tRef, "spin"
+   end if
+   if tRef is empty then
       create graphic ("pf_coin" & pX)
       set the style of it to "oval"
       set the rect of it to pX - 16, pY - 16, pX + 16, pY + 16
@@ -2420,6 +2450,7 @@ command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
       put "xml" into item -1 of pXmlPath
    end if
    put URL ("file:" & pXmlPath) into tXml
+   if tXml is empty then put URL ("binfile:" & pXmlPath) into tXml
    if tXml is empty then return 0
    put b2kSheetSourceFromFile(pName, pPngPath) into tRef
    if tRef is empty then return 0
@@ -2519,12 +2550,14 @@ end b2kSpriteNew
 -- A sprite backed by an animated GIF file: the engine plays it; the Kit's
 -- play/stop/frame calls drive repeatCount/currentFrame instead of icons.
 command b2kSpriteFromGIF pPath, pX, pY
-   local tName, tRef
+   local tName, tRef, tData
+   put URL ("binfile:" & pPath) into tData   -- content-load, like the sheets
+   if tData is empty then return empty
    put "b2kspr_" & the milliseconds & "_" & random(1000000) into tName
    create image tName
    put the long id of image tName into tRef
    try
-      set the filename of tRef to pPath   -- before lockLoc: let it auto-size
+      set the text of tRef to tData
    catch tErr
    end try
    set the lockLoc of tRef to true
@@ -2778,27 +2811,33 @@ end b2kSheetsWipe
 -- ---- sprite internals ------------------------------------------------
 
 -- Internal: load an image file into a hidden, Kit-owned source image.
--- ORDER MATTERS: the filename must be set while lockLoc is still false so
--- the control auto-sizes to the source pixels -- the slicer trusts the
--- control's width as the row stride, and `the imageData` renders at the
--- control's size (a locked tiny control would yield garbage frames).
+-- The bytes are loaded as CONTENT (binfile -> set the text), not as a
+-- filename reference: referenced images size and load lazily for hidden
+-- controls, which broke the slicer's stride; content images adopt their
+-- pixel size immediately -- the exact path b2kSheetFromImage users (and
+-- the platformer's embedded placeholder) already exercise successfully.
+-- lockLoc only AFTER the content, so the control has auto-sized first.
 function b2kSheetSourceFromFile pName, pPath
-   local tImg
+   local tImg, tData
    b2kSheetForget pName
    if there is no file pPath then return empty
+   put URL ("binfile:" & pPath) into tData
+   if tData is empty then return empty
    put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
    try
-      set the filename of image tImg to pPath
+      set the text of image tImg to tData
    catch tErr
+      delete image tImg
+      return empty
    end try
    if the width of image tImg < 2 then
       delete image tImg
       return empty
    end if
-   set the lockLoc of it to true   -- freeze at source size, now that it has it
+   set the lockLoc of image tImg to true
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]
