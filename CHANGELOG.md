@@ -422,6 +422,15 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   cache-free way while the popup is up; both are restored exactly as found on
   close. This also means a contraption can't change while the user is reading
   a menu.
+- **Inspector text no longer overlaps the settings rows (contraption
+  builder).** The hint/preview line shares screen space with the settings
+  rows by design (visibility-toggled), but two paths showed both at once —
+  the "Simple mode hides some expert settings" notice and the live previews
+  for bomb/laser/fan/magnet/goal drew straight over the first rows.
+  `setSettingsHint` now parks itself below the last visible row (and drops
+  the text when a full tab leaves no room). Also: eleven tool descriptions
+  were longer than the description box and clipped mid-sentence — trimmed to
+  fit — and a long part name no longer overflows the inspector title.
 - **Parts can no longer be parked overlapping the chrome (contraption
   builder).** Placement, duplicate/multiply copies, build-mode drags and arrow
   nudges keep the part's whole rect inside the arena (previously only its
