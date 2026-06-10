@@ -27,6 +27,7 @@ local gS5Made
 local gS8Phase, gS8T0, gS8MinY, gS8Tail, gS8Ball
 local gS9Hero, gS9Logged
 local gS10T0, gS10Logged, gS10Mode, gS10First, gSpFrame, gSpNext, gSpAng, gSpCX, gSpCY
+local gFrameData, gFrIcon
 local gFpsN, gFpsT0, gFpsLast, gFpsMin, gFpsSum, gFpsSamples
 local gFpsWarmMin, gFpsWarmSum, gFpsWarmN
 
@@ -41,7 +42,7 @@ constant kSpikeGifB64 = "R0lGODlhIAAgAIEAAOZGRgAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwE
 on openCard
    -- the S11 check doubles as a UI version guard: pasting a newer spike over
    -- an old stack rebuilds the chrome on next open
-   if there is no button "skbtn_S11" then buildSpikeUI
+   if there is no button "skbtn_S12" then buildSpikeUI
    if gEnvDone is not true then
       put true into gEnvDone
       put 0 into gReportN
@@ -69,8 +70,8 @@ command buildSpikeUI
    set the width of this stack to 980
    set the height of this stack to 700
    set the loc of this stack to the screenLoc
-   put "S0,S1,S3,S4,S5,S6,S7,S8,S9,S10,S11,stop,copy" into tNames
-   put "S0 env + timer|S1+S2 keyboard|S3 sprite scroll|S4 accel + motion|S5 gif frames|S6 flip image|S7 rays (Kit)|S8 one-way (Kit)|S9 camera (Kit)|S10 perf (Kit)|S11 syntax probe|STOP test|Copy report" into tLabels
+   put "S0,S1,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,stop,copy" into tNames
+   put "S0 env + timer|S1+S2 keyboard|S3 sprite scroll|S4 accel + motion|S5 gif frames|S6 flip image|S7 rays (Kit)|S8 one-way (Kit)|S9 camera (Kit)|S10 perf (Kit)|S11 syntax probe|S12 icon sprites|STOP test|Copy report" into tLabels
    put 10 into tTop
    set the itemDelimiter to comma
    repeat with i = 1 to the number of items of tNames
@@ -144,6 +145,9 @@ on mouseUp
             break
          case "skbtn_S11"
             runS11
+            break
+         case "skbtn_S12"
+            runS12
             break
          case "skbtn_stop"
             spikeStopTest false
@@ -249,7 +253,7 @@ command spikeStopTest pQuiet
    put gSpikeTest into tWas
    put empty into gSpikeTest
    if gFpsSamples > 0 then
-      if tWas is "S9" or tWas is "S10" then
+      if tWas is "S9" or tWas is "S10" or tWas is "S12" then
          spikeLog tWas & " fps: last " & gFpsLast & ", min " & gFpsMin & ", avg " & round(gFpsSum / gFpsSamples * 10) / 10 & " over " & gFpsSamples & " s"
          if gFpsWarmN > 0 then
             spikeLog tWas & " fps warm (after 3 s): min " & gFpsWarmMin & ", avg " & round(gFpsWarmSum / gFpsWarmN * 10) / 10 & " - judge against the send-in-16 ceiling from S0"
@@ -581,7 +585,7 @@ command runS6
    try
       clone image "sk_sheet"
       set the name of it to "sk_flip"
-      set the topLeft of image "sk_flip" to 420, 180
+      set the topLeft of image "sk_flip" to 420, 190
       flip image "sk_flip" horizontal
       put the imageData of image "sk_flip" into tData
       -- pixel (4,4) sits inside frame 1 (red, R=230) on the original; after a
@@ -776,7 +780,7 @@ command runS9
    if spikeBeginTest("S9", true) is false then exit runS9
    b2kSetup
    b2kFrameTarget the long id of me
-   get spikeNewGroup("sk_cam", 100, 140)
+   get spikeNewGroup("sk_cam", 220, 140)
    if it is empty then
       spikeStatus "S9 ABORTED - could not build a group from script (see report)."
       put empty into gSpikeTest
@@ -785,17 +789,17 @@ command runS9
    -- world floor: one solid slab, 2000 px wide (the level is ~3 cards wide)
    create graphic "sk_s9ground" in group "sk_cam"
    set the style of it to "rectangle"
-   set the rect of it to 100, 500, 2100, 540
+   set the rect of it to 220, 500, 2220, 540
    set the filled of it to true
    set the backgroundColor of it to "90,90,100"
    b2kAddStatic the long id of graphic "sk_s9ground"
    -- level bounds (invisible segments)
-   b2kWall 100, 140, 100, 540
-   b2kWall 2100, 140, 2100, 540
-   b2kWall 100, 140, 2100, 140
+   b2kWall 220, 140, 220, 540
+   b2kWall 2220, 140, 2220, 540
+   b2kWall 220, 140, 2220, 140
    -- 20 tumbling boxes spread along the level
    repeat with i = 1 to 20
-      put 140 + i * 93 into tX
+      put 260 + i * 93 into tX
       put 180 + (i mod 3) * 50 into tY
       put 28 + (i mod 4) * 8 into tSize
       create graphic ("sk_s9box" & i) in group "sk_cam"
@@ -814,7 +818,7 @@ command runS9
    -- the hero: a ball driven rightward; the camera follows it
    create graphic "sk_s9hero" in group "sk_cam"
    set the style of it to "oval"
-   set the rect of it to 140, 280, 180, 320
+   set the rect of it to 260, 280, 300, 320
    set the filled of it to true
    set the backgroundColor of it to "250,210,60"
    put the long id of it into gS9Hero
@@ -825,7 +829,7 @@ command runS9
    b2kAddBall gS9Hero
    -- freeze the viewport: clip to a 600x400 window onto the 2000px world
    set the lockLoc of group "sk_cam" to true
-   set the rect of group "sk_cam" to 100, 140, 700, 540
+   set the rect of group "sk_cam" to 220, 140, 820, 540
    set the hScroll of group "sk_cam" to 0
    try
       set the acceleratedRendering of this stack to true
@@ -847,9 +851,9 @@ command s9Frame
       put b2kVelocity(gS9Hero) into tVel
       b2kSetVelocity gS9Hero, 200, item 2 of tVel
       put item 1 of b2kPosition(gS9Hero) into tHX
-      if tHX > 2040 then b2kMoveTo gS9Hero, 160, 300
+      if tHX > 2160 then b2kMoveTo gS9Hero, 280, 300
       -- camera: centre the hero, lerped, clamped to the level
-      put trunc(tHX - 100 - 300) into tTarget
+      put trunc(tHX - 220 - 300) into tTarget
       if tTarget < 0 then put 0 into tTarget
       if tTarget > 1400 then put 1400 into tTarget
       put the hScroll of group "sk_cam" into tCur
@@ -876,10 +880,10 @@ command runS10
    b2kSetup
    b2kFrameTarget the long id of me
    -- arena: keep the action inside a walled box right of the button column
-   b2kWall 200, 100, 200, 560
-   b2kWall 960, 100, 960, 560
+   b2kWall 200, 120, 200, 560
+   b2kWall 960, 120, 960, 560
    b2kWall 200, 560, 960, 560
-   b2kWall 200, 100, 960, 100
+   b2kWall 200, 120, 960, 120
    try
       set the acceleratedRendering of this stack to true
    catch tErr
@@ -912,9 +916,9 @@ command runS10
    repeat with i = 1 to 25
       try
          if i mod 2 = 0 then
-            b2kSpawnBox 220 + random(700), 110 + random(80), 30 + random(20), 30 + random(20), "orange"
+            b2kSpawnBox 220 + random(700), 130 + random(70), 30 + random(20), 30 + random(20), "orange"
          else
-            b2kSpawnBall 220 + random(700), 110 + random(80), 26 + random(18), "purple"
+            b2kSpawnBall 220 + random(700), 130 + random(70), 26 + random(18), "purple"
          end if
          put the result into tRef
          if tRef is not empty then set the layerMode of tRef to "dynamic"
@@ -1037,7 +1041,156 @@ command runS11
 end runS11
 
 -- =====================================================================
--- Kit frame router (the spike card is the b2kFrameTarget for S8-S10)
+-- S12 - the icon-button sprite backend (spec plan B): the 4 frames sliced
+-- into standalone hidden images, and 25 transparent BUTTONS whose icon
+-- flips per anim tick. Same scene, grid, motion and rates as S10 mode 1,
+-- so the warm fps numbers are directly comparable - this one number picks
+-- the Phase 2 primary sprite mechanism.
+-- =====================================================================
+command runS12
+   local i, tCol, tRow, tX, tY, tRef
+   if spikeBeginTest("S12", true) is false then exit runS12
+   put the milliseconds into gS10T0   -- reuse the S10 timers; tests are exclusive
+   spikeEnsureFrames
+   if gFrIcon[1] is empty then
+      spikeStatus "S12 ABORTED - could not build the frame images (see report)."
+      put empty into gSpikeTest
+      exit runS12
+   end if
+   b2kSetup
+   b2kFrameTarget the long id of me
+   b2kWall 200, 120, 200, 560
+   b2kWall 960, 120, 960, 560
+   b2kWall 200, 560, 960, 560
+   b2kWall 200, 120, 960, 120
+   try
+      set the acceleratedRendering of this stack to true
+   catch tErr
+   end try
+   try
+      repeat with i = 1 to 25
+         put (i - 1) mod 5 into tCol
+         put (i - 1) div 5 into tRow
+         put 250 + tCol * 130 into tX
+         put 140 + tRow * 80 into tY
+         create button ("sk_b" & i)
+         set the style of it to "transparent"
+         set the showName of it to false
+         set the traversalOn of it to false
+         set the autoHilite of it to false
+         set the rect of it to tX - 32, tY - 32, tX + 32, tY + 32
+         set the icon of it to gFrIcon[1]
+         try
+            set the layerMode of it to "dynamic"
+         catch tErr
+         end try
+         put 1 into gSpFrame[i]
+         put the milliseconds + i * 13 into gSpNext[i]
+         put i * 29 into gSpAng[i]
+         put tX into gSpCX[i]
+         put tY into gSpCY[i]
+      end repeat
+   catch tErr
+      spikeLog "S12 ERROR building sprite buttons: " & tErr
+      put empty into gSpikeTest
+      exit runS12
+   end try
+   repeat with i = 1 to 25
+      try
+         if i mod 2 = 0 then
+            b2kSpawnBox 220 + random(700), 130 + random(70), 30 + random(20), 30 + random(20), "orange"
+         else
+            b2kSpawnBall 220 + random(700), 130 + random(70), 26 + random(18), "purple"
+         end if
+         put the result into tRef
+         if tRef is not empty then set the layerMode of tRef to "dynamic"
+      catch tErr
+         spikeLogOnce "err_s12spawn", "S12 ERROR spawning body " & i & ": " & tErr
+      end try
+   end repeat
+   spikeLog "S12 built: 25 icon-button sprites + 25 bodies in " & (the milliseconds - gS10T0) & " ms (compare S10's build line)"
+   put the milliseconds into gS10T0
+   put false into gS10Logged
+   put false into gS10First
+   b2kStart
+   spikeStatus "S12 ICON SPRITES - same scene as S10 mode 1, but each sprite is a transparent" & cr & "button flipping its icon between 4 shared frame images (no scroll groups, no" & cr & "per-sprite pixel copies). Let it run ~12 s for the auto fps line, then STOP." & cr & "Compare warm avg directly against S10 mode 1."
+end runS12
+
+command s12Frame
+   local i, tNow, tJunk
+   put the milliseconds into tNow
+   if gS10First is not true then
+      put true into gS10First
+      spikeLog "S12 first frame " & (tNow - gS10T0) & " ms after start (compare S10 mode 1's stall)"
+   end if
+   try
+      put the keysDown into tJunk
+      repeat with i = 1 to 25
+         add 3 to gSpAng[i]
+         set the loc of button ("sk_b" & i) to round(gSpCX[i] + 24 * cos(gSpAng[i] * kSpikeDeg)), round(gSpCY[i] + 24 * sin(gSpAng[i] * kSpikeDeg))
+         if tNow >= gSpNext[i] then
+            put (gSpFrame[i] mod 4) + 1 into gSpFrame[i]
+            set the icon of button ("sk_b" & i) to gFrIcon[gSpFrame[i]]
+            put tNow + 100 into gSpNext[i]
+         end if
+      end repeat
+   catch tErr
+      spikeLogOnce "err_s12f", "S12 ERROR in frame logic: " & tErr
+   end try
+   if gS10Logged is not true and tNow - gS10T0 > 12000 then
+      put true into gS10Logged
+      spikeLog "S12 after 12 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10 & " (vs S10 mode 1)"
+   end if
+end s12Frame
+
+-- Slice the strip's 4 frames into standalone hidden 64x64 images; their ids
+-- feed `the icon of` the sprite buttons. The pixel data is cached across
+-- runs; the images are rebuilt per run (STOP wipes sk_* controls).
+command spikeEnsureFrames
+   local f
+   if there is an image "sk_fr1" of this card then exit spikeEnsureFrames
+   repeat with f = 1 to 4
+      if gFrameData[f] is empty then put spikeFrameData(64, 64, f) into gFrameData[f]
+      create image ("sk_fr" & f)
+      set the lockLoc of it to true
+      set the rect of it to 10, 600, 74, 664
+      set the imageData of image ("sk_fr" & f) to gFrameData[f]
+      set the alphaData of image ("sk_fr" & f) to spikeOpaque(64 * 64)
+      set the visible of image ("sk_fr" & f) to false
+      put the id of image ("sk_fr" & f) into gFrIcon[f]
+   end repeat
+end spikeEnsureFrames
+
+-- One 64x64 frame of the test strip: solid colour + 2px black border.
+function spikeFrameData pW, pH, pF
+   local tColors, tBorderPx, tBodyPx, tBorderRow, tBodyRow, tData, tRGB, x, y
+   put "230,70,70" & cr & "70,200,120" & cr & "80,130,255" & cr & "240,200,70" into tColors
+   put numToByte(255) & numToByte(0) & numToByte(0) & numToByte(0) into tBorderPx
+   put empty into tBorderRow
+   repeat with x = 1 to pW
+      put tBorderPx after tBorderRow
+   end repeat
+   set the itemDelimiter to comma
+   put line pF of tColors into tRGB
+   put numToByte(255) & numToByte(item 1 of tRGB) & numToByte(item 2 of tRGB) & numToByte(item 3 of tRGB) into tBodyPx
+   put tBorderPx & tBorderPx into tBodyRow
+   repeat with x = 1 to pW - 4
+      put tBodyPx after tBodyRow
+   end repeat
+   put tBorderPx & tBorderPx after tBodyRow
+   put empty into tData
+   repeat with y = 1 to pH
+      if y <= 2 or y > pH - 2 then
+         put tBorderRow after tData
+      else
+         put tBodyRow after tData
+      end if
+   end repeat
+   return tData
+end spikeFrameData
+
+-- =====================================================================
+-- Kit frame router (the spike card is the b2kFrameTarget for S8-S10/S12)
 -- =====================================================================
 on b2kFrame
    switch gSpikeTest
@@ -1050,6 +1203,10 @@ on b2kFrame
          break
       case "S10"
          s10Frame
+         spikeFpsTick
+         break
+      case "S12"
+         s12Frame
          spikeFpsTick
          break
    end switch
@@ -1070,7 +1227,7 @@ command spikeEnsureSheet
    end if
    create image "sk_sheet"
    set the lockLoc of it to true
-   set the rect of it to 420, 96, 676, 160
+   set the rect of it to 420, 112, 676, 176
    set the imageData of image "sk_sheet" to gSheetData
    set the alphaData of image "sk_sheet" to gSheetAlpha
 end spikeEnsureSheet

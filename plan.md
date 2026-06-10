@@ -33,19 +33,19 @@ why*. Effort scale: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day.
 
 ## Phase 0 — OXT runtime spike (S/M) ★ gate for everything else
 
-**Status: two Win32 passes done (2026-06-10); spike v3 awaiting re-run.**
-All v1/v2 results are in the decision log below. v2's S11 **confirmed** that
-OXT cannot call commands with function syntax — which exposed and fixed two
-latent Kit bugs (`b2kSmoothGround`, named layers via `b2kLayerBits`), the
-builder's servo joint, and ~30 doc snippets teaching the broken pattern (see
-CHANGELOG). v3 re-arms the remaining unknowns: **S8** (the chain one-way
-verdict, previously blocked by the Kit bug), **S9** (run ~20 s for steady
-state), **S10** (re-click cycles orbit/anim/bodies-only modes to attribute
-the sprite cost; logs first-frame stall and the engine-copy build path),
-**S11** (now with valid colour names). **To re-run:** paste the new file over
-the stack script, reopen, run **S8, S9, S10 (cycling its 3 modes), S11** —
-and report one line of eyes-on verdict for **S3/S4** (single clean cell? no
-trails while orbiting?).
+**Status: three Win32 passes done (2026-06-10); spike v4 awaiting the last
+numbers.** v3's verdicts: **chains ARE one-way** (R5 resolved — jump-through
+ledges are in for the platformer), the camera runs at the loop ceiling, the
+sprite cost is fully attributed (decision log), and the calling convention is
+settled. v4 fixes the stage geometry that overlapped the chrome (user report:
+the S9 viewport sat under the button column, the S10 arena's top wall under
+the status bar) and adds **S12** — the icon-button sprite backend on the
+identical S10 scene; its warm fps against mode 1's 29.8 picks Phase 2's
+primary sprite mechanism. **To re-run (closes Phase 0):** paste v4 over the
+stack script, reopen, then: **S10** (let mode 1's 12 s line log, then STOP),
+**S12** (~13 s, STOP), **S9** (visual check after the shift + grab a box),
+and the one-line eyes verdict on **S3/S4** (single clean cell? no trails
+while orbiting?).
 
 One throwaway stack script that answers the spec's *(verify in OXT)* items
 with on-screen instructions and an accumulating PASS/FAIL report. It **embeds
@@ -67,6 +67,7 @@ not re-implementations of them:
 | S9 | Camera: card-sized group, 60 fps scroll while 20 bodies tumble | No smear, frame time < 16 ms |
 | S10 | Perf scene: 25 group-scroll sprites animating + 25 dynamic bodies | ≥ 55 fps (the send-in-16 ceiling) on the user's machine |
 | S11 | Can Kit *commands* be called with function syntax (`get b2kSpawnBall(...)`, as the Kit header/docs show), or only as statements + `the result`? | Two report lines; settles the calling convention for docs and examples |
+| S12 | Icon-button sprites (shared frame images, `the icon` flip) vs S10's scroll-groups, identical scene | Warm fps + build ms + first-frame ms, directly comparable to S10 mode 1 |
 
 **Exit:** user reports the checklist; failures flip the spec's documented
 fallbacks (input backend, sprite backend, one-way deferral) *before* Phase 1
@@ -196,6 +197,9 @@ user-confirmed in OXT before the next begins.
 | 2026-06-10 | **Spike v2 (Win32) results.** S0 re-measured clean: 16.5 ms avg / 17–18 max ⇒ idle ceiling ~58–60 fps (v1's 18/3268 was settling noise). S2 case-shift CONFIRMED (w=119 and W=87 — the Kit binds both). S5 GIF full PASS (frameCount 4; stop; manual stepping wraps in order) — GIF sprite backend viable. S6/S7 re-passed. | Spike report v2 |
 | 2026-06-10 | **`get <command>(...)` CONFIRMED broken in OXT** (S11 throws at the call line; never enters the handler). Statement + `the result` is the project-wide calling convention. Found+fixed: Kit `b2kSmoothGround` (always threw), Kit `b2kLayerBits` (named collision layers always threw), builder servo joint (never created), README/kit-reference/getting-started/kit-guide/Kit-header snippets (~30). Spawn handlers also made tolerant of invalid colour names (S11's form-1 throw was CSS "teal", not the convention). | Spike v2 S11 + traces; CHANGELOG |
 | 2026-06-10 | **S10 sprite-perf flag.** Build 6377 ms (~250 ms/sprite, script imageData path); long first-frame stall before sampling began; warm avg 33.6 / min 27.4 with 25 sprites + 25 bodies — well under the ceiling. v3 instruments: mode cycling (orbit/anim/bodies-only), first-frame latency log, engine `copy…to group` build path. Phase 2's instancing strategy hangs on this. | Spike v2 S10 |
-| *(Phase 0 v3)* | *One-way platforms in v1 (chains) or deferred (mask window)* | *pending S8 re-run (unblocked by the b2kSmoothGround fix)* |
-| *(Phase 0 v3)* | *Sprite cost attribution + instancing path* | *pending S10 mode cycling + copy-to-group log* |
-| *(Phase 0 v3)* | *S3/S4 clip+scroll visual verdict, S9 steady-state fps + grab* | *pending re-run* |
+| 2026-06-10 | **Spike v3: one-way platforms SOLVED — chains are one-sided** (S8 chain: "rose through, landed on top"; walls re-confirmed two-sided on both windings). The platformer gets jump-through ledges via `b2kChain`/`b2kSmoothGround`, top surface listed right-to-left. R5 resolved. | Spike v3 S8 |
+| 2026-06-10 | **S9 camera PASS at the loop ceiling** (warm avg 50.6, last 57.3 and climbing toward the ~58–60 idle ceiling). S11 re-run clean: statement + `the result` works; get-command definitively broken. R9 closed. | Spike v3 |
+| 2026-06-10 | **Sprite cost attributed (S10 mode cycling):** bodies-only warm 54.2 ≈ ceiling-ish; + 25 scroll-anims ≈ 39–44; + 25 orbit moves 29.8. One-time **14.6 s first-frame stall** in mode 1 (bulk dynamic-layer creation under acceleratedRendering; 36 ms once warm). Engine `copy…to group` works but builds no faster (~220–285 ms/sprite either path). v4 adds **S12** (icon-button backend, identical scene) — its warm avg picks Phase 2's primary mechanism; pooling + build-before-accel land in Phase 2 regardless. | Spike v3 S10 |
+| 2026-06-10 | Spike stage geometry overlapped the chrome (S9 viewport under the button column; S10 arena top wall under the status bar) — user report; v4 shifts the geometry clear. | User report |
+| *(Phase 0 v4)* | *Phase 2 primary sprite backend: scroll-group vs icon-button* | *pending S12 vs S10 mode 1* |
+| *(Phase 0 v4)* | *S3/S4 clip+scroll visual verdict; S9 visual after the geometry shift* | *pending re-run* |

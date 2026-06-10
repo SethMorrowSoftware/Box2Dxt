@@ -381,13 +381,15 @@ emits one `land` tick (for dust puffs / landing sounds via `b2kSpriteOnFinish`
 or the frame hook). State changes drive `b2kSpritePlay` + `b2kSpriteFlipH`
 automatically when `b2kPlayerAnims` is set.
 
-**Explicitly deferred** (designed-for, not in v1): moving-platform velocity
-carry (v1 relies on friction), one-way drop-through (plain segments are
-**two-sided** — confirmed by the Phase 0 spike on both windings — so one-way
-support rides on **chain** sidedness, S8 re-test pending; the fallback is a
-brief upward collision-mask window during the jump), wall-jump/slide, swim
-zones, multiple simultaneous players (state is per-control already; only the
-input bindings are global).
+**One-way platforms are in** (no longer deferred): the spike confirmed chain
+segments are one-sided exactly the way platformers need — a capsule rises
+through from below and lands on top (`b2kChain`/`b2kSmoothGround`, top surface
+listed right-to-left; plain `b2kWall` segments are two-sided and cannot do
+this). **Explicitly deferred** (designed-for, not in v1): moving-platform
+velocity carry (v1 relies on friction), player-initiated drop-through
+(pressing down to fall through a ledge — needs a brief collision-mask window),
+wall-jump/slide, swim zones, multiple simultaneous players (state is
+per-control already; only the input bindings are global).
 
 ## 7. Module: Camera
 
@@ -455,10 +457,10 @@ keeps sheets, bindings, and camera config.
 | # | Risk | Likelihood | Mitigation |
 |---|---|---|---|
 | R1 | `the keysDown` unreliable on some OXT platform | **Resolved on Win32** (works); other platforms pending | Fallback frontscript backend (§4) behind the same API stays specced |
-| R2 | Group-scroll sprite cost under `acceleratedRendering` | **Now the top open risk.** S9 camera alone: ~47–55 fps. S10 (25 sprite groups + 25 bodies): warm avg 33.6 on modest hardware, plus a long first-frame stall and ~250 ms *build* per sprite via script `imageData` | v3 spike isolates cost by mode-cycling (orbit / anim / bodies-only), tests engine `copy…to group` builds, and logs first-frame latency; plan B remains the icon-flip backend (§2.2-3); spawn-time pooling regardless |
+| R2 | Group-scroll sprite cost under `acceleratedRendering` | **Quantified (Win32, modest hw):** bodies-only ≈ 54 fps (ceiling-ish); + 25 sprite anims ≈ 40; + 25 *moving* sprites ≈ 30. One-time ~15 s first-frame stall after bulk dynamic-layer creation (36 ms once warm). Build ≈ 220–285 ms/sprite on either copy path | **S12** benchmarks the icon-button backend on the identical scene — that number picks Phase 2's primary mechanism. Regardless: pool sprites at scene load, build before enabling acceleration, document a per-scene sprite budget |
 | R3 | `flip image` missing/odd in OXT | **Resolved** (works on Win32, byte-verified) | Script-side `imageData` row-mirror fallback no longer needed |
 | R4 | Ray-from-inside-shape self-hit behaviour differs | **Resolved** (self-skip confirmed; ray-all also skips; normal and distance exact) | — |
-| R5 | One-way platforms: segment/chain one-sidedness vs a jumping capsule | **Half-resolved**: segments are two-sided on both windings (one-way via `b2kWall` is out); the v2 chain test was blocked by the `b2kSmoothGround` bug (now fixed) — verdict pending the S8 re-run | If chains also fail: brief upward `b2kSetMask` window during the jump |
+| R5 | One-way platforms: segment/chain one-sidedness vs a jumping capsule | **Resolved** — chains are one-sided exactly as platformers need (S8: rose through from below, landed on top); plain segments are two-sided and out | One-way ledges = `b2kChain`/`b2kSmoothGround`, top surface right-to-left; player drop-through stays deferred (mask-window technique) |
 | R9 | Calling Kit *commands* with function syntax (`get b2kSpawnBall(...)`) | **Resolved — confirmed broken** (S11: throws at the call line without entering the handler). Statement + `the result` is the only calling convention | Fixed everywhere: Kit internals (`b2kSmoothGround`, `b2kLayerBits` named layers), the builder's servo joint, the 60-second starts and ~25 kit-guide snippets; CHANGELOG records it |
 | R6 | Perf: 25+ animated sprites + camera at 60 fps on mid hardware | Medium | Redundancy-suppressed ticks; dynamic layers; spike has a numbered scene; degrade by lowering anim fps, never sim rate |
 | R7 | Kit growth (~25 KB) bloats embedded examples | Certain, accepted | By design; sync tool unchanged; ticks early-exit when unused |
