@@ -33,10 +33,16 @@ why*. Effort scale: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day.
 
 ## Phase 0 — OXT runtime spike (S/M) ★ gate for everything else
 
-**Status: built — awaiting OXT results.** Paste
-`examples/box2dxt-spike-gamekit.livecodescript` into a new stack's **stack
-script** and reopen the stack; run the numbered test buttons top to bottom and
-paste the report field's contents back.
+**Status: first Win32 pass done (2026-06-10); spike v2 awaiting re-run.**
+v1 results are recorded in the decision log below (keyboard, rays, flip,
+group creation, camera all good; segments two-sided; timer ceiling ~55 fps).
+v2 adds report-logged error capture everywhere (v1's two failures were
+swallowed silently — one by the Kit loop's protective try/catch), replaces
+every `get <command>(...)` call with statement + `the result`, runs the S8
+chain phase first, splits warm-up from steady-state fps, and adds **S11**, a
+calling-syntax probe. **To re-run:** paste the new file over the old stack
+script and reopen (the UI rebuilds itself); then run **S3, S4, S5, S8, S9,
+S10, S11** and paste the report (S1 step 3 — Shift+w — optional).
 
 One throwaway stack script that answers the spec's *(verify in OXT)* items
 with on-screen instructions and an accumulating PASS/FAIL report. It **embeds
@@ -56,7 +62,8 @@ not re-implementations of them:
 | S7 | `b2kRayHit` cast from inside a capsule downward ignores self, returns ground + sane normal | Hit reports the floor control |
 | S8 | One-way: capsule lands on a correctly-wound `b2kWall`/chain from above, passes from below | Both behaviours |
 | S9 | Camera: card-sized group, 60 fps scroll while 20 bodies tumble | No smear, frame time < 16 ms |
-| S10 | Perf scene: 25 group-scroll sprites animating + 25 dynamic bodies | ≥ 55 fps on the user's machine |
+| S10 | Perf scene: 25 group-scroll sprites animating + 25 dynamic bodies | ≥ 55 fps (the send-in-16 ceiling) on the user's machine |
+| S11 | Can Kit *commands* be called with function syntax (`get b2kSpawnBall(...)`, as the Kit header/docs show), or only as statements + `the result`? | Two report lines; settles the calling convention for docs and examples |
 
 **Exit:** user reports the checklist; failures flip the spec's documented
 fallbacks (input backend, sprite backend, one-way deferral) *before* Phase 1
@@ -179,5 +186,10 @@ user-confirmed in OXT before the next begins.
 | 2026-06-10 | **No native/ABI changes** through Phase 5 | Raw layer already covers Box2D v3.1 (spec §1.1) |
 | 2026-06-10 | Spike **embeds the Kit** (added to the sync tool), instead of a Kit-free card script | S7–S10 must test the real Kit paths (rays, walls, loop) the phases depend on; a raw-`b2*` re-implementation would validate the wrong code |
 | 2026-06-10 | Spec gains §2.6 single-threaded budget; Phase 1 adds the `in max(1, 16 − elapsed)` pacing fix | Honest answer to "is this usable single-threaded": yes within a stated envelope, measured by S9/S10 |
-| *(Phase 0)* | *Sprite inner-image sharing: filename vs data copy* | *pending spike* |
-| *(Phase 0)* | *One-way platforms in v1 or deferred* | *pending S8* |
+| 2026-06-10 | **Spike v1 (Win32) results.** keysDown polling LOCKED as the input backend (3-key chords work; auto-repeat = 21 rawKeyDowns vs 5 rawKeyUps while held, so events are noisy and polling is immune). `create group` from script works (plan A) — camera/sprite groups unblocked. `flip image` works (byte-verified) — mirrored sheets unblocked. Ray ground-probe semantics exact (self-skip, dist 160.000005, normalY −1) — player design locked. | Spike report lines 11–21 |
+| 2026-06-10 | **Win32 `send in 16` cadence ≈ 18 ms ⇒ ~55 fps ceiling**; S9 saturated it (55.2 steady; min 25.8 was warm-up/build). Phase 1 pacing fix (`in max(1, 16 − elapsed)`) promoted from optional to **required**. | Spike S0/S9 |
+| 2026-06-10 | **`b2kWall`/`b2AddSegment` segments are two-sided** (both windings "blocked from below") — one-way platforms cannot use plain segments. Chains pending S8 v2; fallback = brief upward mask window. api-reference.md + kit-reference.md corrected. | Spike S8 v1 |
+| 2026-06-10 | **Suspected: function syntax on commands (`get b2kSpawnBall(...)`) throws.** v1's two silent failures (S8 chain phase, S10) were exactly its two `get <command>(...)` sites — the S8 one swallowed by the Kit loop's protective try/catch. Spike v2: statement + `the result` everywhere, error capture logged to the report, S11 probes the syntax directly. Kit header/docs fix pending S11. | Failure-pattern analysis |
+| *(Phase 0 v2)* | *Sprite inner-image sharing: filename vs data copy* | *pending spike* |
+| *(Phase 0 v2)* | *One-way platforms in v1 (chains) or deferred (mask window)* | *pending S8 v2* |
+| *(Phase 0 v2)* | *S3/S4 clip+scroll visuals, S5 GIF, S9 grab — verdicts not yet reported* | *pending re-run* |

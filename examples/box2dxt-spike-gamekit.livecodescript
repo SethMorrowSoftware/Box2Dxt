@@ -28,6 +28,7 @@ local gS8Phase, gS8T0, gS8MinY, gS8Tail, gS8Ball
 local gS9Hero, gS9Logged
 local gS10T0, gS10Logged, gSpFrame, gSpNext, gSpAng, gSpCX, gSpCY
 local gFpsN, gFpsT0, gFpsLast, gFpsMin, gFpsSum, gFpsSamples
+local gFpsWarmMin, gFpsWarmSum, gFpsWarmN
 
 constant kSpikeDeg = 0.0174532925
 -- 4-frame 32x32 animated GIF (red/green/blue/yellow, 2px black border, 250 ms
@@ -38,7 +39,9 @@ constant kSpikeGifB64 = "R0lGODlhIAAgAIEAAOZGRgAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwE
 -- Lifecycle
 -- =====================================================================
 on openCard
-   if there is no button "skbtn_S0" then buildSpikeUI
+   -- the S11 check doubles as a UI version guard: pasting a newer spike over
+   -- an old stack rebuilds the chrome on next open
+   if there is no button "skbtn_S11" then buildSpikeUI
    if gEnvDone is not true then
       put true into gEnvDone
       put 0 into gReportN
@@ -60,10 +63,14 @@ end closeCard
 -- =====================================================================
 command buildSpikeUI
    local tTop, tNames, tLabels, i, tName
+   spikeWipeControls "skbtn_"
+   if there is a field "skStatus" then delete field "skStatus"
+   if there is a field "skReport" then delete field "skReport"
    set the width of this stack to 980
    set the height of this stack to 700
-   put "S0,S1,S3,S4,S5,S6,S7,S8,S9,S10,stop,copy" into tNames
-   put "S0 env + timer|S1+S2 keyboard|S3 sprite scroll|S4 accel + motion|S5 gif frames|S6 flip image|S7 rays (Kit)|S8 one-way (Kit)|S9 camera (Kit)|S10 perf (Kit)|STOP test|Copy report" into tLabels
+   set the loc of this stack to the screenLoc
+   put "S0,S1,S3,S4,S5,S6,S7,S8,S9,S10,S11,stop,copy" into tNames
+   put "S0 env + timer|S1+S2 keyboard|S3 sprite scroll|S4 accel + motion|S5 gif frames|S6 flip image|S7 rays (Kit)|S8 one-way (Kit)|S9 camera (Kit)|S10 perf (Kit)|S11 syntax probe|STOP test|Copy report" into tLabels
    put 10 into tTop
    set the itemDelimiter to comma
    repeat with i = 1 to the number of items of tNames
@@ -130,6 +137,9 @@ on mouseUp
             break
          case "skbtn_S10"
             runS10
+            break
+         case "skbtn_S11"
+            runS11
             break
          case "skbtn_stop"
             spikeStopTest false
@@ -237,6 +247,9 @@ command spikeStopTest pQuiet
    if gFpsSamples > 0 then
       if tWas is "S9" or tWas is "S10" then
          spikeLog tWas & " fps: last " & gFpsLast & ", min " & gFpsMin & ", avg " & round(gFpsSum / gFpsSamples * 10) / 10 & " over " & gFpsSamples & " s"
+         if gFpsWarmN > 0 then
+            spikeLog tWas & " fps warm (after 3 s): min " & gFpsWarmMin & ", avg " & round(gFpsWarmSum / gFpsWarmN * 10) / 10 & " - judge against the send-in-16 ceiling from S0"
+         end if
       end if
    end if
    if tWas is "S1" then s1LogSummary
@@ -285,6 +298,9 @@ command spikeFpsReset
    put empty into gFpsMin
    put 0 into gFpsSum
    put 0 into gFpsSamples
+   put empty into gFpsWarmMin
+   put 0 into gFpsWarmSum
+   put 0 into gFpsWarmN
 end spikeFpsReset
 
 -- Count b2kFrame dispatches; once a second fold them into last/min/avg and
@@ -302,6 +318,13 @@ command spikeFpsTick
       if gFpsMin is empty or gFpsLast < gFpsMin then put gFpsLast into gFpsMin
       add gFpsLast to gFpsSum
       add 1 to gFpsSamples
+      -- "warm" stats skip the first 3 one-second samples: scene building and
+      -- the compositor's first uploads belong to startup, not steady state
+      if gFpsSamples > 3 then
+         if gFpsWarmMin is empty or gFpsLast < gFpsWarmMin then put gFpsLast into gFpsWarmMin
+         add gFpsLast to gFpsWarmSum
+         add 1 to gFpsWarmN
+      end if
       put 0 into gFpsN
       put tNow into gFpsT0
       put "fps " & gFpsLast & "   min " & gFpsMin & "   avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 into tLine
@@ -346,11 +369,14 @@ command spikeProbeTick pGen
    put the milliseconds into tNow
    put tNow - gProbeLast into tDelta
    put tNow into gProbeLast
-   add tDelta to gProbeSum
-   if gProbeMax is empty or tDelta > gProbeMax then put tDelta into gProbeMax
    add 1 to gProbeN
-   if gProbeN >= 60 then
-      spikeLog "S0 send-in-16 cadence: avg " & round(gProbeSum / 60 * 10) / 10 & " ms, max " & gProbeMax & " ms over 60 idle ticks (16 = ideal)"
+   -- the first ticks absorb window-open / first-paint noise; discard them
+   if gProbeN > 5 then
+      add tDelta to gProbeSum
+      if gProbeMax is empty or tDelta > gProbeMax then put tDelta into gProbeMax
+   end if
+   if gProbeN >= 65 then
+      spikeLog "S0 send-in-16 cadence: avg " & round(gProbeSum / 60 * 10) / 10 & " ms, max " & gProbeMax & " ms over 60 ticks (first 5 discarded; 16 = ideal)"
       exit spikeProbeTick
    end if
    send ("spikeProbeTick " & pGen) to me in 16 milliseconds
@@ -624,103 +650,116 @@ end runS7
 -- =====================================================================
 command runS8
    if spikeBeginTest("S8", true) is false then exit runS8
-   put "wallLR" into gS8Phase
+   put "chain" into gS8Phase
    s8Build
-   spikeStatus "S8 ONE-WAY - watch the ball: it should rise THROUGH the line, then land ON it." & cr & "Three automatic phases: blue wall (L-to-R winding), red wall (R-to-L), green chain." & cr & "Each phase logs its own verdict after ~5 s. STOP after the chain phase logs."
+   spikeStatus "S8 ONE-WAY - watch the ball: it should rise THROUGH the line, then land ON it." & cr & "Three automatic phases: GREEN chain first (the open question), then blue wall" & cr & "(L-to-R winding), then red wall (R-to-L). Each phase logs a built line and, after" & cr & "~5 s, its verdict. STOP after the third verdict."
 end runS8
 
 command s8Build
-   local tColor
+   local tPts
    try
-      b2kTeardown
+      try
+         b2kTeardown
+      catch tErr
+      end try
+      spikeWipeControls "sk_s8"
+      b2kSetup
+      b2kFrameTarget the long id of me
+      create graphic "sk_s8wall"
+      set the style of it to "line"
+      set the points of it to "250,330" & cr & "550,330"
+      set the lineSize of it to 3
+      switch gS8Phase
+         case "wallLR"
+            set the foregroundColor of graphic "sk_s8wall" to "70,130,255"
+            b2kWall 250, 330, 550, 330
+            break
+         case "wallRL"
+            set the foregroundColor of graphic "sk_s8wall" to "230,80,80"
+            b2kWall 550, 330, 250, 330
+            break
+         case "chain"
+            set the foregroundColor of graphic "sk_s8wall" to "60,180,90"
+            -- top surface listed right-to-left = solid side up; outer points
+            -- are ghost vertices, so the collidable span is 550 -> 250.
+            -- Statement call + the result: function syntax on a command is
+            -- exactly what S11 probes, so the spike must not depend on it.
+            put "650,330" & cr & "550,330" & cr & "250,330" & cr & "150,330" into tPts
+            b2kSmoothGround tPts
+            break
+      end switch
+      create graphic "sk_s8ball"
+      set the style of it to "oval"
+      set the rect of it to 382, 542, 418, 578
+      set the filled of it to true
+      set the backgroundColor of it to "240,170,70"
+      put the long id of graphic "sk_s8ball" into gS8Ball
+      b2kAddBall gS8Ball
+      b2kPush gS8Ball, 0, -620
+      put the milliseconds into gS8T0
+      put 99999 into gS8MinY
+      put empty into gS8Tail
+      b2kStart
+      spikeLog "S8 phase " & gS8Phase & ": scene built, ball launched"
    catch tErr
+      spikeLog "S8 ERROR building phase " & gS8Phase & ": " & tErr
+      put empty into gSpikeTest
    end try
-   spikeWipeControls "sk_s8"
-   b2kSetup
-   b2kFrameTarget the long id of me
-   create graphic "sk_s8wall"
-   set the style of it to "line"
-   set the points of it to "250,330" & cr & "550,330"
-   set the lineSize of it to 3
-   switch gS8Phase
-      case "wallLR"
-         set the foregroundColor of graphic "sk_s8wall" to "70,130,255"
-         b2kWall 250, 330, 550, 330
-         break
-      case "wallRL"
-         set the foregroundColor of graphic "sk_s8wall" to "230,80,80"
-         b2kWall 550, 330, 250, 330
-         break
-      case "chain"
-         set the foregroundColor of graphic "sk_s8wall" to "60,180,90"
-         -- top surface listed right-to-left = solid side up; outer points are
-         -- ghost vertices, so the collidable span is 550 -> 250
-         get b2kSmoothGround("650,330" & cr & "550,330" & cr & "250,330" & cr & "150,330")
-         break
-   end switch
-   create graphic "sk_s8ball"
-   set the style of it to "oval"
-   set the rect of it to 382, 542, 418, 578
-   set the filled of it to true
-   set the backgroundColor of it to "240,170,70"
-   put the long id of graphic "sk_s8ball" into gS8Ball
-   b2kAddBall gS8Ball
-   b2kPush gS8Ball, 0, -620
-   put the milliseconds into gS8T0
-   put 99999 into gS8MinY
-   put empty into gS8Tail
-   b2kStart
 end s8Build
 
 command s8Frame
    local tY, tWentAbove, tResting, tSum, tMin, tMax, tLine, tAvg, tVerdict
-   set the itemDelimiter to comma
-   put item 2 of b2kPosition(gS8Ball) into tY
-   if tY is empty then exit s8Frame
-   if tY < gS8MinY then put tY into gS8MinY
-   put tY & cr after gS8Tail
-   if the number of lines of gS8Tail > 20 then delete line 1 of gS8Tail
-   if the milliseconds - gS8T0 < 4500 and tY < 900 then exit s8Frame
-   -- judge this phase
-   put (gS8MinY < 308) into tWentAbove
-   put 0 into tSum
-   put empty into tMin
-   put empty into tMax
-   repeat for each line tLine in gS8Tail
-      add tLine to tSum
-      if tMin is empty or tLine < tMin then put tLine into tMin
-      if tMax is empty or tLine > tMax then put tLine into tMax
-   end repeat
-   put tSum / max(1, the number of lines of gS8Tail) into tAvg
-   put (tMax - tMin < 4 and tAvg > 304 and tAvg < 322) into tResting
-   if tWentAbove and tResting then
-      put "ONE-WAY OK (rose through, landed on top)" into tVerdict
-   else
-      if tWentAbove then
-         put "NOT one-way: passed up through AND fell back through" into tVerdict
+   try
+      set the itemDelimiter to comma
+      put item 2 of b2kPosition(gS8Ball) into tY
+      if tY is empty then exit s8Frame
+      if tY < gS8MinY then put tY into gS8MinY
+      put tY & cr after gS8Tail
+      if the number of lines of gS8Tail > 20 then delete line 1 of gS8Tail
+      if the milliseconds - gS8T0 < 4500 and tY < 900 then exit s8Frame
+      -- judge this phase
+      put (gS8MinY < 308) into tWentAbove
+      put 0 into tSum
+      put empty into tMin
+      put empty into tMax
+      repeat for each line tLine in gS8Tail
+         add tLine to tSum
+         if tMin is empty or tLine < tMin then put tLine into tMin
+         if tMax is empty or tLine > tMax then put tLine into tMax
+      end repeat
+      put tSum / max(1, the number of lines of gS8Tail) into tAvg
+      put (tMax - tMin < 4 and tAvg > 304 and tAvg < 322) into tResting
+      if tWentAbove and tResting then
+         put "ONE-WAY OK (rose through, landed on top)" into tVerdict
       else
-         if gS8MinY > 330 and gS8MinY < 380 then
-            put "blocked from below (solid both ways or solid-down winding)" into tVerdict
+         if tWentAbove then
+            put "NOT one-way: passed up through AND fell back through" into tVerdict
          else
-            put "inconclusive (minY " & round(gS8MinY) & ", restingAvg " & round(tAvg) & ")" into tVerdict
+            if gS8MinY > 330 and gS8MinY < 380 then
+               put "blocked from below (solid both ways or solid-down winding)" into tVerdict
+            else
+               put "inconclusive (minY " & round(gS8MinY) & ", restingAvg " & round(tAvg) & ")" into tVerdict
+            end if
          end if
       end if
-   end if
-   spikeLog "S8 phase " & gS8Phase & ": " & tVerdict
-   switch gS8Phase
-      case "wallLR"
-         put "wallRL" into gS8Phase
-         s8Build
-         break
-      case "wallRL"
-         put "chain" into gS8Phase
-         s8Build
-         break
-      default
-         spikeLog "S8 done - all three phases judged"
-         b2kStop
-         put empty into gSpikeTest
-   end switch
+      spikeLog "S8 phase " & gS8Phase & ": " & tVerdict
+      switch gS8Phase
+         case "chain"
+            put "wallLR" into gS8Phase
+            s8Build
+            break
+         case "wallLR"
+            put "wallRL" into gS8Phase
+            s8Build
+            break
+         default
+            spikeLog "S8 done - all three phases judged"
+            b2kStop
+            put empty into gSpikeTest
+      end switch
+   catch tErr
+      spikeLogOnce "err_s8f", "S8 ERROR in frame logic: " & tErr
+   end try
 end s8Frame
 
 -- =====================================================================
@@ -798,22 +837,26 @@ end runS9
 
 command s9Frame
    local tHX, tTarget, tCur, tVel
-   set the itemDelimiter to comma
-   -- keep the hero moving right at 200 px/s without touching its vertical speed
-   put b2kVelocity(gS9Hero) into tVel
-   b2kSetVelocity gS9Hero, 200, item 2 of tVel
-   put item 1 of b2kPosition(gS9Hero) into tHX
-   if tHX > 2040 then b2kMoveTo gS9Hero, 160, 300
-   -- camera: centre the hero, lerped, clamped to the level
-   put trunc(tHX - 100 - 300) into tTarget
-   if tTarget < 0 then put 0 into tTarget
-   if tTarget > 1400 then put 1400 into tTarget
-   put the hScroll of group "sk_cam" into tCur
-   set the hScroll of group "sk_cam" to round(tCur + 0.2 * (tTarget - tCur))
-   if gS9Logged is not true and gFpsSamples >= 15 then
-      put true into gS9Logged
-      spikeLog "S9 after 15 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / gFpsSamples * 10) / 10
-   end if
+   try
+      set the itemDelimiter to comma
+      -- keep the hero moving right at 200 px/s without touching its vertical speed
+      put b2kVelocity(gS9Hero) into tVel
+      b2kSetVelocity gS9Hero, 200, item 2 of tVel
+      put item 1 of b2kPosition(gS9Hero) into tHX
+      if tHX > 2040 then b2kMoveTo gS9Hero, 160, 300
+      -- camera: centre the hero, lerped, clamped to the level
+      put trunc(tHX - 100 - 300) into tTarget
+      if tTarget < 0 then put 0 into tTarget
+      if tTarget > 1400 then put 1400 into tTarget
+      put the hScroll of group "sk_cam" into tCur
+      set the hScroll of group "sk_cam" to round(tCur + 0.2 * (tTarget - tCur))
+      if gS9Logged is not true and gFpsSamples >= 15 then
+         put true into gS9Logged
+         spikeLog "S9 after 15 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / gFpsSamples * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10
+      end if
+   catch tErr
+      spikeLogOnce "err_s9f", "S9 ERROR in frame logic: " & tErr
+   end try
 end s9Frame
 
 -- =====================================================================
@@ -824,6 +867,7 @@ end s9Frame
 command runS10
    local i, tCol, tRow, tX, tY, tRef
    if spikeBeginTest("S10", true) is false then exit runS10
+   put the milliseconds into gS10T0   -- build-time measurement starts here
    spikeEnsureSheet
    b2kSetup
    b2kFrameTarget the long id of me
@@ -836,58 +880,109 @@ command runS10
       set the acceleratedRendering of this stack to true
    catch tErr
    end try
+   try
+      repeat with i = 1 to 25
+         put (i - 1) mod 5 into tCol
+         put (i - 1) div 5 into tRow
+         put 250 + tCol * 130 into tX
+         put 140 + tRow * 80 into tY
+         get spikeMakeSprite("sk_sp" & i, tX, tY)
+         if it is empty then
+            spikeStatus "S10 ABORTED - could not build a sprite group (see report)."
+            put empty into gSpikeTest
+            exit runS10
+         end if
+         put 1 into gSpFrame[i]
+         put the milliseconds + i * 13 into gSpNext[i]
+         put i * 29 into gSpAng[i]
+         put tX into gSpCX[i]
+         put tY into gSpCY[i]
+      end repeat
+   catch tErr
+      spikeLog "S10 ERROR building sprite " & i & ": " & tErr
+      put empty into gSpikeTest
+      exit runS10
+   end try
+   -- spawn via statement + the result: the documented-safe calling form
+   -- (S11 probes whether the function-syntax alternative works at all)
    repeat with i = 1 to 25
-      put (i - 1) mod 5 into tCol
-      put (i - 1) div 5 into tRow
-      put 250 + tCol * 130 into tX
-      put 140 + tRow * 80 into tY
-      get spikeMakeSprite("sk_sp" & i, tX, tY)
-      if it is empty then
-         spikeStatus "S10 ABORTED - could not build a sprite group (see report)."
-         put empty into gSpikeTest
-         exit runS10
-      end if
-      put 1 into gSpFrame[i]
-      put the milliseconds + i * 13 into gSpNext[i]
-      put i * 29 into gSpAng[i]
-      put tX into gSpCX[i]
-      put tY into gSpCY[i]
-   end repeat
-   repeat with i = 1 to 25
-      if i mod 2 = 0 then
-         get b2kSpawnBox(220 + random(700), 110 + random(80), 30 + random(20), 30 + random(20), "orange")
-      else
-         get b2kSpawnBall(220 + random(700), 110 + random(80), 26 + random(18), "purple")
-      end if
       try
-         set the layerMode of it to "dynamic"
+         if i mod 2 = 0 then
+            b2kSpawnBox 220 + random(700), 110 + random(80), 30 + random(20), 30 + random(20), "orange"
+         else
+            b2kSpawnBall 220 + random(700), 110 + random(80), 26 + random(18), "purple"
+         end if
+         put the result into tRef
+         if tRef is not empty then set the layerMode of tRef to "dynamic"
       catch tErr
+         spikeLogOnce "err_s10spawn", "S10 ERROR spawning body " & i & ": " & tErr
       end try
    end repeat
+   spikeLog "S10 built: 25 sprites + 25 bodies in " & (the milliseconds - gS10T0) & " ms"
    put the milliseconds into gS10T0
    put false into gS10Logged
    b2kStart
-   spikeStatus "S10 PERF - 25 animated orbiting sprites + 25 tumbling bodies + key polling." & cr & "Let it run ~12 s for the auto fps line; drag bodies around meanwhile (mouse grab)." & cr & "PASS if avg fps >= 55 and motion stays smooth. STOP logs the final summary."
+   spikeStatus "S10 PERF - 25 animated orbiting sprites + 25 tumbling bodies + key polling." & cr & "Let it run ~12 s for the auto fps line; drag bodies around meanwhile (mouse grab)." & cr & "PASS if warm avg fps reaches the S0 ceiling (~55 on this machine) and motion stays" & cr & "smooth. STOP logs the final summary."
 end runS10
 
 command s10Frame
    local i, tNow, tJunk
-   put the keysDown into tJunk   -- include the input module's per-frame cost
    put the milliseconds into tNow
-   repeat with i = 1 to 25
-      add 3 to gSpAng[i]
-      set the loc of group ("sk_sp" & i) to round(gSpCX[i] + 24 * cos(gSpAng[i] * kSpikeDeg)), round(gSpCY[i] + 24 * sin(gSpAng[i] * kSpikeDeg))
-      if tNow >= gSpNext[i] then
-         put (gSpFrame[i] mod 4) + 1 into gSpFrame[i]
-         set the hScroll of group ("sk_sp" & i) to (gSpFrame[i] - 1) * 64
-         put tNow + 100 into gSpNext[i]
-      end if
-   end repeat
+   try
+      put the keysDown into tJunk   -- include the input module's per-frame cost
+      repeat with i = 1 to 25
+         add 3 to gSpAng[i]
+         set the loc of group ("sk_sp" & i) to round(gSpCX[i] + 24 * cos(gSpAng[i] * kSpikeDeg)), round(gSpCY[i] + 24 * sin(gSpAng[i] * kSpikeDeg))
+         if tNow >= gSpNext[i] then
+            put (gSpFrame[i] mod 4) + 1 into gSpFrame[i]
+            set the hScroll of group ("sk_sp" & i) to (gSpFrame[i] - 1) * 64
+            put tNow + 100 into gSpNext[i]
+         end if
+      end repeat
+   catch tErr
+      spikeLogOnce "err_s10f", "S10 ERROR in frame logic: " & tErr
+   end try
    if gS10Logged is not true and tNow - gS10T0 > 12000 then
       put true into gS10Logged
-      spikeLog "S10 after 12 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 & " (PASS if avg >= 55)"
+      spikeLog "S10 after 12 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10 & " (PASS if warm avg ~= the S0 ceiling)"
    end if
 end s10Frame
+
+-- =====================================================================
+-- S11 - calling-syntax probe. The Kit's docs show calling spawn COMMANDS
+-- with function syntax (get b2kSpawnBall(...)); the v1 spike's two silent
+-- failures (S8 chain, S10) were exactly its two get-on-a-command sites.
+-- This settles whether that syntax works in this engine at all.
+-- =====================================================================
+command runS11
+   local tRef
+   if spikeBeginTest("S11", true) is false then exit runS11
+   b2kSetup
+   -- form 1: statement call + the result (the documented-safe form)
+   try
+      b2kSpawnBall 320, 220, 44, "teal"
+      put the result into tRef
+      if tRef is empty then
+         spikeLog "S11 statement + the result: ran but result EMPTY (unexpected)"
+      else
+         spikeLog "S11 statement + the result: OK (" & the short name of tRef & ")"
+      end if
+   catch tErr
+      spikeLog "S11 statement + the result THREW: " & tErr & " (very unexpected)"
+   end try
+   -- form 2: function syntax on the same command (the kit header's pattern)
+   try
+      get b2kSpawnBall(400, 220, 44, "lime")
+      if it is empty then
+         spikeLog "S11 get-command syntax: ran but returned EMPTY"
+      else
+         spikeLog "S11 get-command syntax: WORKS (" & the short name of it & ")"
+      end if
+   catch tErr
+      spikeLog "S11 get-command syntax THREW: " & tErr & " -> kit docs/examples must use statement + the result"
+   end try
+   spikeStatus "S11 done - two report lines decide how commands may be called." & cr & "One or two balls now sit frozen on the stage (no loop running). STOP to clean up."
+end runS11
 
 -- =====================================================================
 -- Kit frame router (the spike card is the b2kFrameTarget for S8-S10)

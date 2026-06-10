@@ -88,8 +88,8 @@ baseline. Findings, by feature, with confidence levels:
 
 | Primitive | What it gives us | Confidence |
 |---|---|---|
-| **`the keysDown`** | Comma-list of keycodes of **all keys currently held** — the same codes as `rawKeyDown`. Pollable from any handler, no focus or message-path requirements. | High (documented LC function) — *(verify in OXT, all 3 platforms)* |
-| `rawKeyDown` / `rawKeyUp` | Per-key edge messages with numeric keycodes. Caveats: OS auto-repeat re-sends `rawKeyDown` while held (and on Linux/X11 may send paired up/down), and the messages only reach scripts in the message path (fields and `traversalOn` buttons steal them). | High |
+| **`the keysDown`** | Comma-list of keycodes of **all keys currently held** — the same codes as `rawKeyDown`. Pollable from any handler, no focus or message-path requirements. | **Confirmed on OXT/Win32** (Phase 0 spike: 3-key chords, arrows+space+letters all reported correctly); macOS/Linux pending |
+| `rawKeyDown` / `rawKeyUp` | Per-key edge messages with numeric keycodes. Caveats: OS auto-repeat re-sends `rawKeyDown` while held (confirmed Win32: 21 downs vs 5 ups in the spike — no paired ups), and the messages only reach scripts in the message path (fields and `traversalOn` buttons steal them). | High — repeat noise confirmed, which is exactly why polling wins |
 | `keyDown` / `arrowKey` / etc. | Cooked, auto-repeat-paced — what the examples use now. Fine for UI, wrong for movement. | High (already in use) |
 
 **Conclusion — polling wins.** Sampling `the keysDown` once per `b2kFrame` and
@@ -201,10 +201,13 @@ Consequences the design accepts and documents:
 
 - **Pacing, not throughput, is the first failure mode.** `send … in 16 ms` is
   not vsync-locked and the loop schedules the next step *after* the frame's
-  work, so a loaded frame drifts the real rate to ~55–58 fps. The fixed-step
-  accumulator means this can never corrupt the simulation — the cost is a
-  visual hitch, not physics jitter. Phase 1 includes the cheap fix: schedule
-  the next step `in max(1, 16 − elapsed)` ms.
+  work, so a loaded frame drifts the real rate down. **Measured (Phase 0,
+  Win32): 18 ms average idle cadence — a ~55 fps ceiling before any work**
+  (Windows timer granularity ≈ 15.6 ms plus scheduling slop); the spike's
+  camera scene saturated at exactly that ceiling (55.2 fps steady). The
+  fixed-step accumulator means none of this can corrupt the simulation — the
+  cost is render rate, not physics jitter. Phase 1 therefore **must** include
+  the pacing fix: schedule the next step `in max(1, 16 − elapsed)` ms.
 - **One budget, shared with user code.** There is no other thread: a blocking
   call anywhere (`answer`, `wait`, synchronous file I/O) stalls the world.
   Game code must defer blocking work to pause states — a documented constraint
@@ -379,8 +382,10 @@ or the frame hook). State changes drive `b2kSpritePlay` + `b2kSpriteFlipH`
 automatically when `b2kPlayerAnims` is set.
 
 **Explicitly deferred** (designed-for, not in v1): moving-platform velocity
-carry (v1 relies on friction), one-way drop-through (one-way *support* works
-today via segment/chain sidedness — *(verify in OXT)*), wall-jump/slide, swim
+carry (v1 relies on friction), one-way drop-through (plain segments are
+**two-sided** — confirmed by the Phase 0 spike on both windings — so one-way
+support rides on **chain** sidedness, S8 re-test pending; the fallback is a
+brief upward collision-mask window during the jump), wall-jump/slide, swim
 zones, multiple simultaneous players (state is per-control already; only the
 input bindings are global).
 
@@ -449,11 +454,12 @@ keeps sheets, bindings, and camera config.
 
 | # | Risk | Likelihood | Mitigation |
 |---|---|---|---|
-| R1 | `the keysDown` unreliable on some OXT platform | Low | Phase 0 spike on Linux/macOS/Windows; fallback frontscript backend (§4) behind the same API |
-| R2 | Group-scroll frame-switch or camera scroll fights `acceleratedRendering` (artifacts/cost) | Medium | Spike measures both; plan B for sprites = icon-flip backend (§2.2-3); builder precedent shows the popup workaround pattern |
-| R3 | `flip image` missing/odd in OXT | Low | Script-side `imageData` row-mirror, one-time per sheet |
-| R4 | Ray-from-inside-shape self-hit behaviour differs | Low | `b2kRayHitAll` + skip-self fallback; foot-sensor plan B |
-| R5 | One-way platforms: segment/chain one-sidedness vs a jumping capsule | Medium | Spike test; if leaky, one-way support defers to a later pre-solve-free technique (brief upward `b2kSetMask` window) |
+| R1 | `the keysDown` unreliable on some OXT platform | **Resolved on Win32** (works); other platforms pending | Fallback frontscript backend (§4) behind the same API stays specced |
+| R2 | Group-scroll frame-switch or camera scroll fights `acceleratedRendering` (artifacts/cost) | Medium — S9 ran with `layerMode "scrolling"` and held the machine's loop ceiling (55.2 fps steady); S3/S4 visual verdicts pending | Plan B for sprites = icon-flip backend (§2.2-3); builder precedent shows the popup workaround pattern |
+| R3 | `flip image` missing/odd in OXT | **Resolved** (works on Win32, byte-verified) | Script-side `imageData` row-mirror fallback no longer needed |
+| R4 | Ray-from-inside-shape self-hit behaviour differs | **Resolved** (self-skip confirmed; ray-all also skips; normal and distance exact) | — |
+| R5 | One-way platforms: segment/chain one-sidedness vs a jumping capsule | **Half-resolved**: segments are two-sided on both windings (one-way via `b2kWall` is out); chain verdict pending S8 v2 | If chains also fail: brief upward `b2kSetMask` window during the jump |
+| R9 | Calling Kit *commands* with function syntax (`get b2kSpawnBall(...)`, as Kit docs show) may not work at all — v1 spike's two silent failures were exactly its two such call sites | High (suspected) | Spike v2 uses statement + `the result` everywhere; **S11** probes the syntax directly; Kit docs/examples corrected per its verdict |
 | R6 | Perf: 25+ animated sprites + camera at 60 fps on mid hardware | Medium | Redundancy-suppressed ticks; dynamic layers; spike has a numbered scene; degrade by lowering anim fps, never sim rate |
 | R7 | Kit growth (~25 KB) bloats embedded examples | Certain, accepted | By design; sync tool unchanged; ticks early-exit when unused |
 | R8 | OXT compile strictness on new code | Certain | Existing static gates run on every edit; naming rules in §3.2 |

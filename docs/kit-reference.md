@@ -66,7 +66,7 @@ b2kStart
 | `b2kIsRunning()` | True while the loop is stepping (not stopped or paused). |
 | `b2kAddWalls` | Static walls around the current card edges. |
 | `b2kAddGround [screenY]` | A static floor across the card (optionally at a given Y). |
-| `b2kWall x1, y1, x2, y2` | A static collision segment between two screen points (custom walls, ramps, ledges). Invisible — draw your own graphic to match. |
+| `b2kWall x1, y1, x2, y2` | A static collision segment between two screen points (custom walls, ramps, ledges). **Two-sided** — bodies collide from both sides whichever way you list the points; for one-sided (jump-through) surfaces use `b2kChain`/`b2kSmoothGround`. Invisible — draw your own graphic to match. |
 | `b2kClear` | Remove all bodies/controls the Kit created, keep the world. |
 | `b2kTeardown` | Stop and destroy the world and all Kit state. |
 | `b2kVersion()` | Native shim ABI version (`4`) — a load / in-sync check from Kit-only code. |

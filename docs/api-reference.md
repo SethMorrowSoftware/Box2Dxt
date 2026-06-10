@@ -67,7 +67,7 @@ shape, so `b2ContactsUpdate` works out of the box.
 | `b2AddBox(body, halfW, halfH, density, friction, restitution)` | Box fixture. |
 | `b2AddCircle(body, cx, cy, radius, density, friction, restitution)` | Circle fixture. |
 | `b2AddCapsule(body, x1, y1, x2, y2, radius, density, friction, restitution)` | Capsule fixture. |
-| `b2AddSegment(body, x1, y1, x2, y2, friction, restitution)` | One-sided line edge (best on static bodies). |
+| `b2AddSegment(body, x1, y1, x2, y2, friction, restitution)` | Line edge (best on static bodies). **Two-sided** — bodies collide with it from either side regardless of point order (confirmed empirically, Game Kit Phase 0 spike). For one-sided platforms/terrain use a **chain**: chain segments are the one-sided primitive. |
 | `b2PolyBegin()` → `b2PolyAddPoint(x, y)` … → `b2AddPolygon(body, density, friction, restitution)` | Build a convex polygon (≤ 8 points) without marshalling arrays. |
 | `b2DestroyShape(shape)` | Remove a shape. |
 | `b2SetShapeFriction` / `b2SetShapeRestitution` / `b2SetShapeDensity` | Edit material at runtime. |
