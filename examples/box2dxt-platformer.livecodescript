@@ -41,10 +41,14 @@
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
-local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt, gIntroPan
+local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt, gFacing, gCamLastX, gCamLastY
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
+constant kCamLookAhead = 150
+constant kCamLeadSpeed = 0.09
+constant kCamSnapSpeed = 0.18
+constant kCamVerticalBias = 70
 constant kPfUIVersion = "3"
 constant kLevelW = 3072
 constant kHeroSheetB64 = "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"
@@ -184,6 +188,9 @@ command pfStartGame
    put empty into gPlateLook
    put empty into gSlimeGoneAt
    put 60 into gSlimeDir
+   put 1 into gFacing
+   put empty into gCamLastX
+   put empty into gCamLastY
    b2kSetup
    b2kSetScale 60
    put pfLoadSheets() into gAssetsOK
@@ -211,11 +218,11 @@ command pfStartGame
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
    b2kCamBounds 0, 0, kLevelW, 640
-   -- regular-platformer camera: the hero is LOCKED to screen centre and the
-   -- world scrolls 1:1 (he only approaches the edges where the bounds stop
-   -- the view, at the very start and end of the level)
+   -- Platformer camera: the demo drives the camera manually each frame so it
+   -- can lead in the facing direction, bias slightly upward to show jumps, and
+   -- still use Kit bounds/shake/mouse correction.
    b2kCamDeadzone 0, 0
-   b2kCamGoto 120, 480   -- open on the spawn point, no startup slide
+   b2kCamGoto 512, 410   -- settle on the bounded opening view immediately
    -- level bounds (invisible)
    b2kWall 0, 0, 0, 640
    b2kWall kLevelW, 0, kLevelW, 640
@@ -342,7 +349,7 @@ command pfStartGame
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   put 90 into gIntroPan   -- ~1.5 s diagnostic sweep, then the follow engages
+   pfTickCamera true      -- prime the camera after the hero exists
    -- ===== pickups ====
    pfMakeCoin 380, 384
    pfMakeCoin 688, 470
@@ -551,17 +558,13 @@ end pfWipeStage
 on b2kFrame
    local tHud
    if gHero is empty then exit b2kFrame
-   if gIntroPan > 0 then
-      subtract 1 from gIntroPan
-      b2kCamGoto 512 + 220 * sin((90 - gIntroPan) / 14), 320
-      if gIntroPan is 0 then b2kCamFollow gHero, 1
-   end if
    -- kill plane: anything that slips every other check still respawns
    if gHurtLock is not true then
       set the itemDelimiter to comma
       if (item 2 of b2kPosition(gHero)) > 780 then pfHurt
    end if
    pfTickHero
+   pfTickCamera false
    pfTickGate
    pfTickSlime
    if gBeeSpr is not empty then
@@ -569,9 +572,8 @@ on b2kFrame
    end if
    put "coins " & gCoins & "/" & gCoinsTotal & "   |   anim " & b2kSpriteAnim(gHeroSpr) & "   |   held " & b2kKeysHeld() & "   |   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
    if gCamOK is true then
-      put "   |   hero " & round(item 1 of b2kPosition(gHero)) & "  view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
+      put "   |   hero " & round(item 1 of b2kPosition(gHero)) & "  view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) & "  cam " & b2kCamPos() after tHud
    end if
-   if gIntroPan > 0 then put "INTRO PAN - the whole world should slide right then back.   " before tHud
    if gCoins >= gCoinsTotal then put "   ALL COINS!" after tHud
    if gWon is true then put "LEVEL COMPLETE!   " before tHud
    if tHud is not gHudLast then
@@ -585,6 +587,8 @@ command pfTickHero
    set the itemDelimiter to comma
    put b2kAxis("moveX") into tAxis
    if gHurtLock is true then put 0 into tAxis
+   if tAxis > 0 then put 1 into gFacing
+   if tAxis < 0 then put -1 into gFacing
    put b2kVelocity(gHero) into tVel
    put item 2 of tVel into tVy
    b2kSetVelocity gHero, tAxis * kMoveSpeed, tVy
@@ -611,6 +615,38 @@ command pfTickHero
       if tAxis is not 0 then b2kSpriteFlipH gHeroSpr, (tAxis < 0)
    end if
 end pfTickHero
+
+-- Camera tuned for a side-scrolling platformer. It keeps more level visible
+-- ahead of the player than behind, gives a little extra vertical room for
+-- upcoming jumps, and snaps faster after respawns or large teleports.
+command pfTickCamera pSnap
+   local tPos, tVel, tCam, tHeroX, tHeroY, tTargetX, tTargetY, tCurX, tCurY, tRate
+   if gCamOK is not true or gHero is empty then exit pfTickCamera
+   set the itemDelimiter to comma
+   put b2kPosition(gHero) into tPos
+   if tPos is empty then exit pfTickCamera
+   put item 1 of tPos into tHeroX
+   put item 2 of tPos into tHeroY
+   put b2kVelocity(gHero) into tVel
+   if item 1 of tVel > 35 then put 1 into gFacing
+   if item 1 of tVel < -35 then put -1 into gFacing
+   put tHeroX + gFacing * kCamLookAhead into tTargetX
+   put tHeroY - kCamVerticalBias into tTargetY
+   put b2kCamPos() into tCam
+   put item 1 of tCam into tCurX
+   put item 2 of tCam into tCurY
+   if tCurX is empty then put tTargetX into tCurX
+   if tCurY is empty then put tTargetY into tCurY
+   put kCamLeadSpeed into tRate
+   if pSnap is true then
+      put 1 into tRate
+   else if abs(tTargetX - tCurX) > 420 or abs(tTargetY - tCurY) > 220 then
+      put kCamSnapSpeed into tRate
+   end if
+   put tCurX + (tTargetX - tCurX) * tRate into gCamLastX
+   put tCurY + (tTargetY - tCurY) * tRate into gCamLastY
+   b2kCamGoto gCamLastX, gCamLastY
+end pfTickCamera
 
 -- The kinematic gate chases its open/closed height; the plate's colour
 -- tracks its state. Anything on the plate (the hero OR the crate) holds it.
@@ -737,6 +773,8 @@ end pfHurt
 on pfHurtDone pSprite, pAnim
    b2kMoveTo gHero, 120, 480
    b2kSetVelocity gHero, 0, 0
+   put 1 into gFacing
+   pfTickCamera true
    put false into gHurtLock
    b2kSpritePlay gHeroSpr, "idle"
 end pfHurtDone
