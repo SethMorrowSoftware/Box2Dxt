@@ -2195,10 +2195,15 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
    set the traversalOn of tRef to false
    set the autoHilite of tRef to false
    set the rect of tRef to round(pX - tW / 2), round(pY - tH / 2), round(pX + tW / 2), round(pY + tH / 2)
-   try
-      set the layerMode of tRef to "dynamic"   -- its own compositor layer
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      -- dynamic layers composite in STACK coordinates: inside a scrolled
+      -- viewport they ignore the group scroll and draw unscrolled, so a
+      -- camera sprite must stay a plain group child
+      try
+         set the layerMode of tRef to "dynamic"
+      catch tErr
+      end try
+   end if
    put pSheet into sSprSheet[tRef]
    put "sheet" into sSprKind[tRef]
    put false into sSprFlip[tRef]
@@ -2236,10 +2241,12 @@ command b2kSpriteFromGIF pPath, pX, pY
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    set the loc of tRef to round(pX) & comma & round(pY)
-   try
-      set the layerMode of tRef to "dynamic"
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      try
+         set the layerMode of tRef to "dynamic"   -- see b2kSpriteNew note
+      catch tErr
+      end try
+   end if
    try
       set the repeatCount of tRef to -1
    catch tErr

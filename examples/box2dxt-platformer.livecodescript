@@ -41,7 +41,7 @@
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
-local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt
+local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt, gIntroPan
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -342,7 +342,7 @@ command pfStartGame
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   b2kCamFollow gHero, 1
+   put 90 into gIntroPan   -- ~1.5 s diagnostic sweep, then the follow engages
    -- ===== pickups ====
    pfMakeCoin 380, 384
    pfMakeCoin 688, 470
@@ -423,6 +423,14 @@ command pfStartGame
          b2kAddSensor tRef, "box"
       end if
       set the text of field "pfHelp" to "CAMERA UNAVAILABLE on this engine (" & b2kCamStatus() & ") - the level is clamped" & cr & "to this screen and the flag moved here so it stays completable. Everything else works." & cr & "Please report the quoted reason."
+   end if
+   -- diagnostics: prove world membership at a glance (line 3 of the help)
+   if gCamOK is true and gHeroSpr is not empty then
+      put "diag: hero-sprite in [" & the short name of the owner of gHeroSpr & "]" into tS
+      if gGateSprA is not empty then
+         put "   gate-tile in [" & the short name of the owner of gGateSprA & "]" after tS
+      end if
+      put tS & "   (both should say b2kcam_view)" into line 3 of field "pfHelp"
    end if
    -- ===== input + events ====
    b2kInputOn
@@ -543,6 +551,11 @@ end pfWipeStage
 on b2kFrame
    local tHud
    if gHero is empty then exit b2kFrame
+   if gIntroPan > 0 then
+      subtract 1 from gIntroPan
+      b2kCamGoto 512 + 220 * sin((90 - gIntroPan) / 14), 320
+      if gIntroPan is 0 then b2kCamFollow gHero, 1
+   end if
    -- kill plane: anything that slips every other check still respawns
    if gHurtLock is not true then
       set the itemDelimiter to comma
@@ -558,6 +571,7 @@ on b2kFrame
    if gCamOK is true then
       put "   |   hero " & round(item 1 of b2kPosition(gHero)) & "  view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
    end if
+   if gIntroPan > 0 then put "INTRO PAN - the whole world should slide right then back.   " before tHud
    if gCoins >= gCoinsTotal then put "   ALL COINS!" after tHud
    if gWon is true then put "LEVEL COMPLETE!   " before tHud
    if tHud is not gHudLast then
@@ -2950,10 +2964,15 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
    set the traversalOn of tRef to false
    set the autoHilite of tRef to false
    set the rect of tRef to round(pX - tW / 2), round(pY - tH / 2), round(pX + tW / 2), round(pY + tH / 2)
-   try
-      set the layerMode of tRef to "dynamic"   -- its own compositor layer
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      -- dynamic layers composite in STACK coordinates: inside a scrolled
+      -- viewport they ignore the group scroll and draw unscrolled, so a
+      -- camera sprite must stay a plain group child
+      try
+         set the layerMode of tRef to "dynamic"
+      catch tErr
+      end try
+   end if
    put pSheet into sSprSheet[tRef]
    put "sheet" into sSprKind[tRef]
    put false into sSprFlip[tRef]
@@ -2991,10 +3010,12 @@ command b2kSpriteFromGIF pPath, pX, pY
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
    set the loc of tRef to round(pX) & comma & round(pY)
-   try
-      set the layerMode of tRef to "dynamic"
-   catch tErr
-   end try
+   if sCamGroup is empty then
+      try
+         set the layerMode of tRef to "dynamic"   -- see b2kSpriteNew note
+      catch tErr
+      end try
+   end if
    try
       set the repeatCount of tRef to -1
    catch tErr
