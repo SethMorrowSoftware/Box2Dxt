@@ -33,9 +33,17 @@ why*. Effort scale: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day.
 
 ## Phase 0 — OXT runtime spike (S/M) ★ gate for everything else
 
-Build one throwaway card script, `examples/box2dxt-spike-gamekit.livecodescript`
-(NOT embedding the Kit; plain card script the user pastes and runs), that
-answers the spec's *(verify in OXT)* items with on-screen pass/fail text:
+**Status: built — awaiting OXT results.** Paste
+`examples/box2dxt-spike-gamekit.livecodescript` into a new stack's **stack
+script** and reopen the stack; run the numbered test buttons top to bottom and
+paste the report field's contents back.
+
+One throwaway stack script that answers the spec's *(verify in OXT)* items
+with on-screen instructions and an accumulating PASS/FAIL report. It **embeds
+the Kit** (registered in `tools/sync-embedded-kit.py`) because S7–S10 must
+exercise the *actual Kit code paths* the later phases build on — `b2kRayHit`
+semantics, `b2kWall`/chain sidedness, the real `b2kStep` loop under load —
+not re-implementations of them:
 
 | # | Question | Pass looks like |
 |---|---|---|
@@ -54,6 +62,11 @@ answers the spec's *(verify in OXT)* items with on-screen pass/fail text:
 fallbacks (input backend, sprite backend, one-way deferral) *before* Phase 1
 code exists. Record outcomes in the decision log below. The spike file is
 deleted (or kept under `examples/` clearly marked) once phases land.
+
+The spike also logs engine intel the phases will reuse: baseline `send in 16`
+timer cadence (spec §2.6 pacing), rawKeyDown auto-repeat behaviour on the
+user's platform, which script-side group-creation method OXT accepts (Phase 4
+needs one), and scroll-corrected `b2kGrab` mapping (the `b2kCamMouse…` math).
 
 ## Phase 1 — Input module (M)
 
@@ -164,5 +177,7 @@ user-confirmed in OXT before the next begins.
 | 2026-06-10 | Player = **capsule, fixed rotation, velocity-driven, ray-grounded** | Genre-standard; everything required already exists in the Kit (spec §6) |
 | 2026-06-10 | Camera = **scrolled viewport group**; Kit draw path untouched | Card coords preserved inside scrolled groups (spec §7) |
 | 2026-06-10 | **No native/ABI changes** through Phase 5 | Raw layer already covers Box2D v3.1 (spec §1.1) |
+| 2026-06-10 | Spike **embeds the Kit** (added to the sync tool), instead of a Kit-free card script | S7–S10 must test the real Kit paths (rays, walls, loop) the phases depend on; a raw-`b2*` re-implementation would validate the wrong code |
+| 2026-06-10 | Spec gains §2.6 single-threaded budget; Phase 1 adds the `in max(1, 16 − elapsed)` pacing fix | Honest answer to "is this usable single-threaded": yes within a stated envelope, measured by S9/S10 |
 | *(Phase 0)* | *Sprite inner-image sharing: filename vs data copy* | *pending spike* |
 | *(Phase 0)* | *One-way platforms in v1 or deferred* | *pending S8* |

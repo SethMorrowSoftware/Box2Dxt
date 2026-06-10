@@ -180,6 +180,44 @@ cost on a card-sized group, input mapping)*
   deferred to the game-scaffolding phase (see plan, Phase 5) and out of this
   spec's core.
 
+### 2.6 The single-threaded budget
+
+xTalk script runs on one engine thread, and that thread also paints. Is a game
+engine *usable* on it? Yes — within a stated envelope — because the design
+keeps the per-frame **script** work small, bounded, and constant, and pushes
+the heavy work to native code:
+
+| Frame cost (target: 16.7 ms @ 60 fps) | Where it runs | Expected size |
+|---|---|---|
+| `b2Step` (physics, 50–150 bodies) | Native C (and `b2NewThreadedWorld` can use a Box2D worker pool with no script-side change) | well under 1 ms — measurable via `b2kProfile()` |
+| Body→control sync | Script + FFI, already event-driven and redraw-suppressed | ≈ 1–3 ms at 30 moving bodies |
+| Input tick | 1 `keysDown` call + short list diff | microseconds |
+| Player tick | 10–20 FFI calls incl. 2–3 ray casts | well under 1 ms |
+| Sprite tick (25 sprites) | 25 script comparisons; 2 property sets only on frames where an animation actually advances (sprites animate at 8–12 fps, not 60) | ≈ 1 ms |
+| Camera tick | lerp math + 2 scroll sets (compositor moves cached layers) | small; **empirical — spike S9** |
+| Compositing / property-set redraw | Engine, accelerated layers | the real variable — **spike S9/S10** |
+
+Consequences the design accepts and documents:
+
+- **Pacing, not throughput, is the first failure mode.** `send … in 16 ms` is
+  not vsync-locked and the loop schedules the next step *after* the frame's
+  work, so a loaded frame drifts the real rate to ~55–58 fps. The fixed-step
+  accumulator means this can never corrupt the simulation — the cost is a
+  visual hitch, not physics jitter. Phase 1 includes the cheap fix: schedule
+  the next step `in max(1, 16 − elapsed)` ms.
+- **One budget, shared with user code.** There is no other thread: a blocking
+  call anywhere (`answer`, `wait`, synchronous file I/O) stalls the world.
+  Game code must defer blocking work to pause states — a documented constraint
+  the contraption builder already lives with.
+- **The envelope** is dozens of active bodies plus a few dozen animated
+  sprites at 60 fps (GameMaker-circa-2005 scale, which matches the project
+  goal) — not bullet-hell or 500 entities. The degradation ladder when a scene
+  is too heavy: lower per-sprite animation fps → fewer awake bodies (sleeping
+  is cheap) → render at 30 fps with the sim still stepping at 60 Hz. The sim
+  rate is never lowered.
+- All of the empirical cells above are measured by **Phase 0 spike scenes S9
+  and S10** on real OXT hardware before any module is built (risk R6).
+
 ---
 
 ## 3. Design
