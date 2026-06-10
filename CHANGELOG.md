@@ -39,6 +39,22 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Kit Camera module (Game Kit Phase 4, pulled forward).** Scrolling
+  levels on the viewport-group mechanism the Phase 0 spike benchmarked:
+  `b2kCamOn/Off`, follow with lerp + deadzone (`b2kCamFollow`,
+  `b2kCamDeadzone`), level bounds, `b2kCamGoto`/`b2kCamPos`,
+  `b2kCamShake`, and camera-aware mouse mapping (`b2kCamMouseX/Y` — the
+  Kit's own grab-drag target now routes through it). While the camera is
+  on, spawned bodies and sprites are created inside the viewport
+  automatically and keep world-pixel locs, so physics math is untouched;
+  `b2kCamAdopt` moves hand-made controls in; `b2kTeardown` dissolves the
+  viewport and the orphan sweep ungroups (never deletes) a dead
+  session's viewport so adopted controls survive. The platformer example
+  is now a complete 3072px scrolling level: far-parallax backdrop,
+  spike pit, a pressure-plate + crate puzzle driving a kinematic gate
+  (sensor enter/exit counting), a patrolling stompable slime
+  (contact-event stomp vs hurt), camera shake on every hit, and the
+  goal flag — with plain-graphic fallbacks for every piece of art.
 - **Kit Sprite module (Game Kit Phase 2).** Spritesheet animation on the
   icon-button backend the Phase 0 benchmarks selected: sheets register
   frame regions of one hidden source image — a uniform grid

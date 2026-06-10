@@ -305,6 +305,39 @@ a handful sits at the loop ceiling. Create sprites at scene load (not
 mid-play) and **before** enabling `acceleratedRendering` where possible — bulk
 control creation under the compositor caused the spike's one-time stall.
 
+## Camera (scrolling levels)
+
+A clipped **viewport group** the loop scrolls (the mechanism the Phase 0
+spike benchmarked). While the camera is on, Kit-created controls — spawns and
+sprites — are placed *inside* the viewport, and their locs stay **world
+pixels**: contents of a scrolled group keep their coordinates, so physics and
+the body sync are untouched and the scroll is pure presentation. Chrome stays
+on the card; anything layered *behind* the (transparent) group reads as an
+infinite-distance parallax backdrop. Level coordinates should start at 0,0.
+
+| Handler | Purpose |
+|---------|---------|
+| `b2kCamOn [rect]` | Create the viewport (default: the card rect). Do this *before* building the level, after any static backdrop. |
+| `b2kCamOff` | Dissolve the viewport — children return to the card with their world locs. Called automatically by `b2kTeardown`. |
+| `b2kCamIsOn()` / `b2kCamGroup()` | State / the group's ref — build your own level controls inside it: `create graphic "x" in b2kCamGroup()`. |
+| `b2kCamAdopt ctrl` | Move an existing control (IDE-designed levels, fallback shapes) into the viewport. |
+| `b2kCamFollow ctrl [,lerp]` / `b2kCamUnfollow` | Track a control; `lerp` 0.01–1 smooths (default 0.15). |
+| `b2kCamDeadzone w, h` | Chase only once the target leaves a centre box (0 = always centre). |
+| `b2kCamBounds x1, y1, x2, y2` | Clamp the view to the level. |
+| `b2kCamGoto x, y` / `b2kCamPos()` | Cut to a world point / read the view centre. |
+| `b2kCamShake ampPx, ms` | A decaying random view offset (impacts, blasts). |
+| `b2kCamMouseX()` / `b2kCamMouseY()` | The mouse in **world** pixels — use for `b2kGrab`, click-picking, spawning at the pointer. (The Kit's own drag already uses them.) |
+
+```
+b2kCamOn
+b2kCamBounds 0, 0, 3072, 640
+b2kCamDeadzone 140, 600
+b2kCamFollow gHero, 0.18
+-- in mouseDown:  get b2kGrab(b2kCamMouseX(), b2kCamMouseY())
+```
+
+The platformer example is a complete scrolling level on this module.
+
 ## Drag & events
 
 | Handler | Purpose |
