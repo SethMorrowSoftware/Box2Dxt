@@ -42,7 +42,10 @@ local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
 local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt, gIntroPan
-local gRunStart, gFalls, gWinLock, gFlagHint, gHudCoin
+local gRunStart, gFalls, gWinLock, gFlagHint, gHudCoin, gWinSecs
+local gBlock, gBlockSpr, gBlockState, gBlockT, gFlySpr
+local gSlime2, gSlime2Spr, gSlime2Dir, gSlime2GoneAt
+local gCheckSpr, gCheckpointOn, gRespawnX, gRespawnY
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -80,6 +83,10 @@ command buildPfUI
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
+   try
+      set the title of this stack to "Box2Dxt - Platformer Demo"
+   catch tErr
+   end try
    create field "pfTitle"
    set the rect of it to 20, 8, 1004, 30
    set the lockText of it to true
@@ -189,6 +196,8 @@ function pfLoadSheets
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
    b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
    b2kAnimDef "tiles", "coinpop", "coin_gold_side,coin_gold,coin_gold_side", 14, false
+   b2kAnimDef "tiles", "checkwave", "flag_red_a,flag_red_b", 4, true
+   b2kAnimDef "foes", "flit", "fly_a,fly_b", 10, true
    b2kAnimDef "chars", "win", "character_beige_duck,character_beige_idle", 3, true
    return true
 end pfLoadSheets
@@ -220,6 +229,12 @@ command pfStartGame
    put false into gWon
    put false into gWinLock
    put false into gFlagHint
+   put false into gCheckpointOn
+   put 120 into gRespawnX
+   put 480 into gRespawnY
+   put empty into gWinSecs
+   put empty into gSlime2GoneAt
+   put 60 into gSlime2Dir
    put 0 into gFalls
    put the milliseconds into gRunStart
    put 0 into gCoins
@@ -236,7 +251,7 @@ command pfStartGame
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Run with arrows or A/D; SPACE / UP / W jumps. Route: up through the bridge, over the SPIKE PIT, drag the" & cr & "CRATE onto the gold PLATE to hold the red gate open, past the saw, stomp the slime, climb to the FLAG." & cr & "Drag bodies with the mouse. Shift+Reset re-asks for the Spritesheets folder."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps, R restarts, ESC pauses. Hop the clouds for the bonus coin (mind the fly!)," & cr & "cross the SPIKE PIT, put the CRATE on the gold PLATE to open the gate, grab the red checkpoint, dodge the" & cr & "saw and the falling block, stomp the slimes, then take ALL " & gCoinsTotal & " coins to the FLAG for the finale."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -250,7 +265,11 @@ command pfStartGame
       b2kSpriteNew "bg", "background_color_hills", 320, 320
       put the result into tRef
       if tRef is not empty then set the layer of tRef to 1
-      b2kSpriteNew "bg", "background_color_hills", 960, 320
+      if b2kSheetHasFrame("bg", "background_color_trees") then
+         b2kSpriteNew "bg", "background_color_trees", 960, 320
+      else
+         b2kSpriteNew "bg", "background_color_hills", 960, 320
+      end if
       put the result into tRef
       if tRef is not empty then set the layer of tRef to 2
    end if
@@ -411,24 +430,36 @@ command pfStartGame
          pfTile "mushroom_brown", 2752, 448
       end if
    end if
-   -- a floating cloud (one-way chain) holding the bonus coin
-   b2kSmoothGround "1436,320" & cr & "1372,320" & cr & "1180,320" & cr & "1116,320"
+   -- the cloud route: a LOW cloud you can jump to from the ground, then a
+   -- HIGH cloud holding the bonus coin (both one-way chains); the high one
+   -- overhangs the pit, so it doubles as the daring route across
+   b2kSmoothGround "1280,448" & cr & "1216,448" & cr & "1024,448" & cr & "960,448"
+   b2kSmoothGround "1496,320" & cr & "1432,320" & cr & "1240,320" & cr & "1176,320"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
-      pfTile "terrain_grass_cloud_left", 1180, 320
-      pfTile "terrain_grass_cloud_middle", 1244, 320
-      pfTile "terrain_grass_cloud_right", 1308, 320
+      pfTile "terrain_grass_cloud_left", 1024, 448
+      pfTile "terrain_grass_cloud_middle", 1088, 448
+      pfTile "terrain_grass_cloud_right", 1152, 448
+      pfTile "terrain_grass_cloud_left", 1240, 320
+      pfTile "terrain_grass_cloud_middle", 1304, 320
+      pfTile "terrain_grass_cloud_right", 1368, 320
    else
-      create graphic "pf_cloudledge"
+      create graphic "pf_cloudledgeA"
       set the style of it to "line"
-      set the points of it to "1180,320" & cr & "1372,320"
+      set the points of it to "1024,448" & cr & "1216,448"
       set the lineSize of it to 4
       set the foregroundColor of it to "70,190,110"
-      b2kCamAdopt the long id of graphic "pf_cloudledge"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeA"
+      create graphic "pf_cloudledgeB"
+      set the style of it to "line"
+      set the points of it to "1240,320" & cr & "1432,320"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeB"
    end if
    -- ===== pickups ====
    pfMakeCoin 380, 384
    pfMakeCoin 688, 470
-   pfMakeCoin 1276, 268
+   pfMakeCoin 1336, 268
    pfMakeCoin 1504, 470
    pfMakeCoin 2400, 480
    pfMakeCoin 2820, 448
@@ -460,6 +491,10 @@ command pfStartGame
       b2kAddSensor tRef, "ball"
    end if
    pfMakeSlime
+   pfMakeSlime2
+   pfMakeFallBlock
+   pfMakeFly
+   pfMakeCheckpoint
    -- ===== the goal flag ====
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
@@ -600,6 +635,81 @@ command pfMakeSlime
    if the visible of graphic "pf_slimeBody" is true then b2kCamAdopt gSlime
 end pfMakeSlime
 
+-- A second slime guards the coin on the raised platform.
+command pfMakeSlime2
+   create graphic "pf_slime2Body"
+   set the style of it to "rectangle"
+   set the rect of it to 2756, 476, 2804, 512
+   set the filled of it to true
+   set the backgroundColor of it to "110,190,90"
+   set the visible of it to false
+   put the long id of graphic "pf_slime2Body" into gSlime2
+   b2kAddBox gSlime2
+   b2kSetFixedRotation gSlime2, true
+   b2kSetFriction gSlime2, 0.1
+   put empty into gSlime2Spr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "slime_normal_walk_a") then
+      b2kSpriteNew "foes", "slime_normal_walk_a", 2780, 480
+      put the result into gSlime2Spr
+      if gSlime2Spr is not empty then
+         b2kSpriteBind gSlime2Spr, gSlime2, 0, -6
+         b2kSpritePlay gSlime2Spr, "slimewalk"
+      end if
+   end if
+   if gSlime2Spr is empty then set the visible of graphic "pf_slime2Body" to true
+   if the visible of graphic "pf_slime2Body" is true then b2kCamAdopt gSlime2
+end pfMakeSlime2
+
+-- The falling-block trap: hangs over the path between the saw and the
+-- slime; walking beneath wakes it (static -> dynamic), it slams down,
+-- rests as an obstacle for a moment, then resets back to its perch.
+command pfMakeFallBlock
+   create graphic "pf_blockBody"
+   set the style of it to "rectangle"
+   set the rect of it to 2170, 170, 2230, 230
+   set the filled of it to true
+   set the backgroundColor of it to "120,120,135"
+   set the visible of it to false
+   put the long id of graphic "pf_blockBody" into gBlock
+   b2kAddBox gBlock, false                  -- starts STATIC (armed)
+   put empty into gBlockSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
+      b2kSpriteNew "foes", "block_idle", 2200, 200
+      put the result into gBlockSpr
+      if gBlockSpr is not empty then b2kSpriteBind gBlockSpr, gBlock, 0, 0
+   end if
+   if gBlockSpr is empty then set the visible of graphic "pf_blockBody" to true
+   if the visible of graphic "pf_blockBody" is true then b2kCamAdopt gBlock
+   put "armed" into gBlockState
+end pfMakeFallBlock
+
+-- The hazard fly buzzes a loop between the two clouds (pure-maths hazard:
+-- the sprite has no body; proximity to the hero hurts).
+command pfMakeFly
+   put empty into gFlySpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
+      b2kSpriteNew "foes", "fly_a", 1230, 390
+      put the result into gFlySpr
+      if gFlySpr is not empty then b2kSpritePlay gFlySpr, "flit"
+   end if
+end pfMakeFly
+
+-- The checkpoint flag just past the gate: touch it once and respawns
+-- restart there (the off flag hoists red).
+command pfMakeCheckpoint
+   local tRef
+   put empty into gCheckSpr
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_off") then
+      b2kSpriteNew "tiles", "flag_off", 2032, 544
+      put the result into tRef
+      if tRef is not empty then
+         set the uPfCheckFlag of tRef to true
+         put tRef into gCheckSpr
+         b2kAddSensor tRef, "ball"
+      end if
+   end if
+end pfMakeCheckpoint
+
 command pfChromeFront
    local tN, tC
    put the number of controls of this card into tN
@@ -658,12 +768,18 @@ on b2kFrame
    pfTickHero
    pfTickGate
    pfTickSlime
+   pfTickSlime2
+   pfTickTraps
    if gBeeSpr is not empty then
       -- world-coordinate move (camera-correct on every engine semantics)
       b2kSpriteMoveTo gBeeSpr, 820 + 90 * sin(the milliseconds / 900), 300 + 26 * sin(the milliseconds / 430)
    end if
    local tSecs
-   put (the milliseconds - gRunStart) div 1000 into tSecs
+   if gWinSecs is not empty then
+      put gWinSecs into tSecs
+   else
+      put (the milliseconds - gRunStart) div 1000 into tSecs
+   end if
    put gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   |   " & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
    if gCamOK is true then
       put "   |   view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
@@ -770,6 +886,80 @@ command pfTickSlime
    if gSlimeSpr is not empty then b2kSpriteFlipH gSlimeSpr, (gSlimeDir < 0)
 end pfTickSlime
 
+command pfTickSlime2
+   local tX
+   if gSlime2GoneAt is not empty then
+      if the milliseconds > gSlime2GoneAt then
+         if gSlime2Spr is not empty then b2kSpriteRemove gSlime2Spr
+         put empty into gSlime2Spr
+         if there is a graphic "pf_slime2Body" then delete graphic "pf_slime2Body"
+         put empty into gSlime2GoneAt
+      end if
+      exit pfTickSlime2
+   end if
+   if gSlime2 is empty then exit pfTickSlime2
+   set the itemDelimiter to comma
+   put item 1 of b2kPosition(gSlime2) into tX
+   if tX is empty then exit pfTickSlime2
+   if tX <= 2700 then put 60 into gSlime2Dir
+   if tX >= 2860 then put -60 into gSlime2Dir
+   b2kSetVelocity gSlime2, gSlime2Dir, item 2 of b2kVelocity(gSlime2)
+   if gSlime2Spr is not empty then b2kSpriteFlipH gSlime2Spr, (gSlime2Dir < 0)
+end pfTickSlime2
+
+-- The falling block's life cycle and the fly's flight, plus their
+-- proximity hurt checks (no sensors needed; pure geometry).
+command pfTickTraps
+   local tHX, tHY, tBX, tBY, tPos
+   set the itemDelimiter to comma
+   put b2kPosition(gHero) into tPos
+   put item 1 of tPos into tHX
+   put item 2 of tPos into tHY
+   -- the fly
+   if gFlySpr is not empty then
+      put 1230 + 70 * sin(the milliseconds / 700) into tBX
+      put 390 + 60 * sin(the milliseconds / 450) into tBY
+      b2kSpriteMoveTo gFlySpr, tBX, tBY
+      if gFlySpr is not empty and b2kSpriteFlipped(gFlySpr) is not (cos(the milliseconds / 700) < 0) then
+         b2kSpriteFlipH gFlySpr, (cos(the milliseconds / 700) < 0)
+      end if
+      if abs(tHX - tBX) < 36 and abs(tHY - tBY) < 44 then pfHurt
+   end if
+   -- the falling block
+   if gBlock is empty then exit pfTickTraps
+   put b2kPosition(gBlock) into tPos
+   if tPos is empty then exit pfTickTraps
+   put item 1 of tPos into tBX
+   put item 2 of tPos into tBY
+   switch gBlockState
+      case "armed"
+         if abs(tHX - tBX) < 42 and tHY > tBY then
+            put "falling" into gBlockState
+            b2kSetDynamic gBlock
+            b2kSetGravityScale gBlock, 1.8   -- slam, not float
+            if gBlockSpr is not empty then b2kSpriteSetFrame gBlockSpr, "block_fall"
+         end if
+         break
+      case "falling"
+         if abs(tHX - tBX) < 50 and abs(tHY - tBY) < 62 then pfHurt
+         if abs(item 2 of b2kVelocity(gBlock)) < 4 and tBY > 320 then
+            put "down" into gBlockState
+            put the milliseconds into gBlockT
+            if gBlockSpr is not empty then b2kSpriteSetFrame gBlockSpr, "block_rest"
+         end if
+         break
+      case "down"
+         if the milliseconds - gBlockT > 2600 then
+            put "armed" into gBlockState
+            b2kSetStatic gBlock
+            b2kMoveTo gBlock, 2200, 200
+            b2kSpriteMoveTo gBlock, 2200, 200   -- statics are not body-synced
+            if gBlockSpr is not empty then b2kSpriteSetFrame gBlockSpr, "block_idle"
+         end if
+         break
+   end switch
+end pfTickTraps
+
 -- =====================================================================
 -- Events: sensors (coins, hazards, plate, goal) and contacts (the slime)
 -- =====================================================================
@@ -800,6 +990,16 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       end if
       exit b2kSensorEnter
    end if
+   if the uPfCheckFlag of pSensorCtrl is true then
+      if gCheckpointOn is not true then
+         put true into gCheckpointOn
+         put 2032 into gRespawnX
+         put 470 into gRespawnY
+         if gCheckSpr is not empty then b2kSpritePlay gCheckSpr, "checkwave"
+         b2kCamShake 3, 180
+      end if
+      exit b2kSensorEnter
+   end if
    if the uPfHazardFlag of pSensorCtrl is true then pfHurt
    if the uPfGoalFlag of pSensorCtrl is true then
       if gCoins >= gCoinsTotal then
@@ -820,22 +1020,43 @@ end b2kSensorExit
 
 -- Hero vs slime: falling onto it squashes; anything else hurts.
 on b2kContact pA, pB
-   local tHit
-   if gSlime is empty or gHurtLock is true then exit b2kContact
-   put false into tHit
-   if pA is gHero and pB is gSlime then put true into tHit
-   if pB is gHero and pA is gSlime then put true into tHit
-   if not tHit then exit b2kContact
+   local tWhich
+   if gHurtLock is true then exit b2kContact
+   put empty into tWhich
+   if gSlime is not empty then
+      if (pA is gHero and pB is gSlime) or (pB is gHero and pA is gSlime) then put 1 into tWhich
+   end if
+   if tWhich is empty and gSlime2 is not empty then
+      if (pA is gHero and pB is gSlime2) or (pB is gHero and pA is gSlime2) then put 2 into tWhich
+   end if
+   if tWhich is empty then exit b2kContact
+   local tFoe
+   if tWhich is 1 then
+      put gSlime into tFoe
+   else
+      put gSlime2 into tFoe
+   end if
    set the itemDelimiter to comma
-   if (item 2 of b2kVelocity(gHero)) > 40 and (item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(gSlime)) - 16 then
-      pfSquashSlime
+   if (item 2 of b2kVelocity(gHero)) > 40 and (item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(tFoe)) - 16 then
+      pfSquashSlime tWhich
       b2kSetVelocity gHero, item 1 of b2kVelocity(gHero), -260
    else
       pfHurt
    end if
 end b2kContact
 
-command pfSquashSlime
+command pfSquashSlime pWhich
+   if pWhich is 2 then
+      if gSlime2 is empty then exit pfSquashSlime
+      if gSlime2Spr is not empty and b2kSheetHasFrame("foes", "slime_normal_flat") then
+         b2kSpriteSetFrame gSlime2Spr, "slime_normal_flat"
+         b2kSpriteUnbind gSlime2Spr
+      end if
+      b2kRemove gSlime2
+      put empty into gSlime2
+      put the milliseconds + 700 into gSlime2GoneAt
+      exit pfSquashSlime
+   end if
    if gSlime is empty then exit pfSquashSlime
    if gSlimeSpr is not empty and b2kSheetHasFrame("foes", "slime_normal_flat") then
       b2kSpriteSetFrame gSlimeSpr, "slime_normal_flat"
@@ -861,8 +1082,17 @@ command pfWin
    put true into gWinLock
    put true into gWon
    put (the milliseconds - gRunStart) div 1000 into tSecs
+   put tSecs into gWinSecs
    b2kSpritePlay gHeroSpr, "win", true
    b2kCamShake 5, 400
+   -- physics confetti: a burst of little balls from the flag
+   local i, tC
+   repeat with i = 1 to 12
+      put item ((i mod 5) + 1) of "gold,orange,red,purple,white" into tC
+      b2kSpawnBall 2944 + random(81) - 41, 360 + random(41) - 21, 10 + random(8), tC
+      put the result into tC
+      if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
+   end repeat
    put "LEVEL COMPLETE!" & cr & cr into tMsg
    put "All " & gCoinsTotal & " coins collected" & cr after tMsg
    put "Time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gFalls & cr & cr after tMsg
@@ -891,7 +1121,7 @@ command pfTogglePause
 end pfTogglePause
 
 on pfHurtDone pSprite, pAnim
-   b2kMoveTo gHero, 120, 480
+   b2kMoveTo gHero, gRespawnX, gRespawnY
    b2kSetVelocity gHero, 0, 0
    put false into gHurtLock
    b2kSpritePlay gHeroSpr, "idle"
