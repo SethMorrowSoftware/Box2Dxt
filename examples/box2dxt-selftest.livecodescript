@@ -1,4 +1,544 @@
 -- =====================================================================
+-- box2dxt-selftest.livecodescript  ·  the Kit's in-OXT regression suite
+--
+-- One click, ~30 seconds, a PASS/FAIL report: this stack drives the
+-- REAL Kit deterministically and asserts the behaviours every game
+-- depends on. There is no headless OXT, so this is the project's
+-- runtime safety net: run it after any Kit change, and on every new
+-- platform, BEFORE trusting the games.
+--
+-- It is deterministic by construction: the world is started PAUSED and
+-- advanced by hand (b2kStepOnce = exactly one fixed 1/60 step including
+-- input/player/sprite/camera ticks and event dispatch), and the
+-- keyboard is replaced by b2kInputInject - scripted keys, exact frames.
+--
+-- Every test encodes a lesson this project learned on real hardware:
+--   * fixed-step determinism (the accumulator math)
+--   * frame-exact contact/sensor events: ONE enter, ONE exit, no
+--     duplicates while resting (the event-loss/duplication class)
+--   * the chain GHOST RULE (end segments do not collide; middles do)
+--   * one-way chains (rise through from below, land on top)
+--   * presence POLLING incl. SLEEPING bodies (the pressure-plate class)
+--   * b2kKillFloor + b2kFell (pit destruction, player exempt)
+--   * the player controller's feel contract: run accel, grounded probe,
+--     tap-vs-held jump heights, COYOTE window, jump BUFFER window, and
+--     the land state firing exactly once
+--   * input axes/edges, sprites (sheet/anim/flip/remove), tones,
+--     camera adopt/goto/off, teardown hygiene
+--
+-- HOW TO RUN
+--   1. In OXT, make a new stack. Put this whole file into the STACK
+--      script. Make sure the box2dxt extension is loaded.
+--   2. Close and reopen the stack, then click RUN ALL TESTS.
+--   3. Expect "ALL PASS". Any FAIL line names the broken contract -
+--      report it with the line's numbers.
+-- =====================================================================
+
+local gRep, gPass, gFail, gFellCount, gRunning
+
+constant kStUIVersion = "1"
+
+on openCard
+   if the uStUIVersionTag of this stack is not kStUIVersion then buildStUI
+   pass openCard
+end openCard
+
+on closeCard
+   b2kStop
+   pass closeCard
+end closeCard
+
+command buildStUI
+   if there is a field "stTitle" then delete field "stTitle"
+   if there is a field "stReport" then delete field "stReport"
+   if there is a button "stbtn_run" then delete button "stbtn_run"
+   set the width of this stack to 860
+   set the height of this stack to 640
+   set the loc of this stack to the screenLoc
+   try
+      set the title of this stack to "Box2Dxt - Kit self-test"
+   catch tErr
+   end try
+   create field "stTitle"
+   set the rect of it to 16, 10, 700, 32
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 14
+   set the text of it to "Box2Dxt Kit self-test - deterministic, hand-stepped, asserted"
+   create button "stbtn_run"
+   set the rect of it to 712, 6, 844, 34
+   set the label of it to "RUN ALL TESTS"
+   set the traversalOn of it to false
+   create field "stReport"
+   set the rect of it to 16, 40, 844, 628
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textFont of it to "Courier New"
+   set the textSize of it to 11
+   set the vScrollbar of it to true
+   set the uStUIVersionTag of this stack to kStUIVersion
+end buildStUI
+
+on mouseUp
+   if the short name of the target is "stbtn_run" then stRunAll
+end mouseUp
+
+-- =====================================================================
+-- Harness
+-- =====================================================================
+command stRunAll
+   if gRunning is true then exit stRunAll
+   put true into gRunning
+   put empty into gRep
+   put 0 into gPass
+   put 0 into gFail
+   stOut "Box2Dxt Kit self-test - " & the long date && the time
+   stOut "engine ABI " & b2Version() & "   (every test builds its own world)"
+   try
+      stTestWorld
+      stTestEvents
+      stTestGhostRule
+      stTestOneWay
+      stTestPresence
+      stTestKillFloor
+      stTestInput
+      stTestPlayerRun
+      stTestPlayerJumps
+      stTestCoyoteBuffer
+      stTestSprites
+      stTestSounds
+      stTestCamera
+      stTestTeardown
+   catch tErr
+      add 1 to gFail
+      stOut "FAIL  harness threw: " & tErr
+   end try
+   try
+      b2kInputInjectOff
+      b2kStop
+      b2kTeardown
+      stWipe
+   catch tErr
+   end try
+   stOut "----------------------------------------"
+   if gFail is 0 then
+      stOut "ALL PASS  (" & gPass & " assertions)"
+   else
+      stOut "FAILURES: " & gFail & "   passes: " & gPass
+   end if
+   set the text of field "stReport" to gRep
+   put false into gRunning
+end stRunAll
+
+command stOut pLine
+   put pLine & cr after gRep
+   set the text of field "stReport" to gRep
+   set the scroll of field "stReport" to 100000
+end stOut
+
+command stAssert pName, pCond
+   if pCond is true then
+      add 1 to gPass
+      stOut "  ok    " & pName
+   else
+      add 1 to gFail
+      stOut "  FAIL  " & pName
+   end if
+end stAssert
+
+-- A fresh deterministic world: torn down, rebuilt, started PAUSED so
+-- nothing advances except our hand-stepping.
+command stNewWorld pName
+   b2kInputInjectOff
+   b2kTeardown
+   stWipe
+   put 0 into gFellCount
+   b2kSetup
+   b2kFrameTarget the long id of me
+   b2kStart
+   b2kPause
+   stOut pName
+end stNewWorld
+
+command stStep pN
+   local i
+   repeat with i = 1 to pN
+      b2kStepOnce
+   end repeat
+end stStep
+
+command stWipe
+   local tAgain, i, tName
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         if char 1 to 3 of tName is "st_" then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end stWipe
+
+-- A static slab the player/balls can rest on (st_ prefix = auto-wiped).
+command stSlab pName, pL, pT, pR, pB
+   create graphic pName
+   set the style of it to "rectangle"
+   set the rect of it to pL, pT, pR, pB
+   set the filled of it to true
+   set the visible of it to false
+   b2kAddStatic the long id of graphic pName
+end stSlab
+
+on b2kFell pCtrl
+   add 1 to gFellCount
+end b2kFell
+
+function stX pCtrl
+   set the itemDelimiter to comma
+   return item 1 of b2kPosition(pCtrl)
+end stX
+
+function stY pCtrl
+   set the itemDelimiter to comma
+   return item 2 of b2kPosition(pCtrl)
+end stY
+
+function stVY pCtrl
+   set the itemDelimiter to comma
+   return item 2 of b2kVelocity(pCtrl)
+end stVY
+
+-- =====================================================================
+-- The tests
+-- =====================================================================
+command stTestWorld
+   local tRef, tY1, tVy
+   stNewWorld "world & fixed-step determinism"
+   b2kSpawnBall 300, 100, 30
+   put the result into tRef
+   stAssert "spawn returns a control", (tRef is not empty)
+   put stY(tRef) into tY1
+   stStep 30
+   stAssert "gravity pulls it down", (stY(tRef) > tY1 + 50)
+   -- 30 steps at 1/60 under g=10m/s2, scale 40: vy = 30/60*10*40 = 200
+   put stVY(tRef) into tVy
+   stAssert "30 fixed steps = 200 px/s fall speed (190..210 got " & round(tVy) & ")", \
+         (tVy > 190 and tVy < 210)
+   stAssert "body count tracks", (b2kBodyCount() is 1)
+end stTestWorld
+
+command stTestEvents
+   local tRef, tSens, tEnters, tExits, tDupes, i, tBegins
+   stNewWorld "frame-exact events: one enter, one exit, no duplicates"
+   stSlab "st_ground", 100, 500, 700, 540
+   create graphic "st_sens"
+   set the style of it to "rectangle"
+   set the rect of it to 370, 270, 430, 330
+   set the visible of it to false
+   put the long id of graphic "st_sens" into tSens
+   b2kAddSensor tSens, "box"
+   b2kSpawnBall 400, 150, 30
+   put the result into tRef
+   put 0 into tEnters
+   put 0 into tExits
+   put 0 into tDupes
+   put 0 into tBegins
+   repeat with i = 1 to 150
+      b2kStepOnce
+      add b2kSensorCount() to tEnters
+      add b2kSensorExitCount() to tExits
+      if b2kSensorCount() > 1 then add 1 to tDupes
+      add b2kContactCount() to tBegins
+   end repeat
+   stAssert "sensor fired exactly one enter (got " & tEnters & ")", (tEnters is 1)
+   stAssert "sensor fired exactly one exit (got " & tExits & ")", (tExits is 1)
+   stAssert "never two enters in a frame", (tDupes is 0)
+   stAssert "landing produced contact begins", (tBegins >= 1)
+   -- resting: 30 more frames must produce NOTHING new (the old 0-step
+   -- duplication bug re-fired the last step's events while idle)
+   put 0 into tEnters
+   repeat with i = 1 to 30
+      b2kStepOnce
+      add b2kSensorCount() to tEnters
+      add b2kSensorExitCount() to tEnters
+   end repeat
+   stAssert "no events while at rest", (tEnters is 0)
+end stTestEvents
+
+command stTestGhostRule
+   local tMid, tEnd
+   stNewWorld "chain ghost rule: middle collides, end segments do not"
+   -- right-to-left flat chain 600..200 at y 400: solid span = 500..300
+   b2kSmoothGround "600,400" & cr & "500,400" & cr & "300,400" & cr & "200,400"
+   b2kSpawnBall 400, 300, 30
+   put the result into tMid
+   b2kSpawnBall 560, 300, 30
+   put the result into tEnd
+   stStep 90
+   stAssert "ball on MIDDLE segment rests on the line (y " & round(stY(tMid)) & ")", \
+         (stY(tMid) < 395)
+   stAssert "ball on END (ghost) segment falls through (y " & round(stY(tEnd)) & ")", \
+         (stY(tEnd) > 450)
+end stTestGhostRule
+
+command stTestOneWay
+   local tRef, tMinY, i
+   stNewWorld "one-way chain: rise through from below, land on top"
+   b2kSmoothGround "600,400" & cr & "500,400" & cr & "300,400" & cr & "200,400"
+   b2kSpawnBall 400, 550, 30
+   put the result into tRef
+   b2kSetVelocity tRef, 0, -600
+   put 9999 into tMinY
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stY(tRef) < tMinY then put stY(tRef) into tMinY
+   end repeat
+   stAssert "passed up through the surface (apex y " & round(tMinY) & ")", (tMinY < 360)
+   stAssert "then landed ON it (rest y " & round(stY(tRef)) & ")", \
+         (stY(tRef) < 395 and stY(tRef) > 360)
+end stTestOneWay
+
+command stTestPresence
+   local tRef, i, tAsleep
+   stNewWorld "presence polling: b2kOverlap sees resting AND sleeping bodies"
+   stSlab "st_ground", 100, 500, 700, 540
+   b2kSpawnBox 400, 470, 40, 40
+   put the result into tRef
+   stStep 60
+   stAssert "overlap finds the resting crate", \
+         (b2kOverlap(380, 450, 420, 505) is not empty)
+   -- let it fall asleep (sleep time ~0.5s = 30 steps; allow plenty)
+   put false into tAsleep
+   repeat with i = 1 to 240
+      b2kStepOnce
+      if b2kIsAwake(tRef) is false then
+         put true into tAsleep
+         exit repeat
+      end if
+   end repeat
+   stAssert "the crate fell asleep", (tAsleep is true)
+   stAssert "overlap STILL finds it asleep (the pressure-plate guarantee)", \
+         (b2kOverlap(380, 450, 420, 505) is not empty)
+   stAssert "empty region reports empty", (b2kOverlap(50, 50, 90, 90) is empty)
+end stTestPresence
+
+command stTestKillFloor
+   local tRef
+   stNewWorld "kill floor: fallers are destroyed, b2kFell announces"
+   b2kKillFloor 700
+   b2kSpawnBall 200, 100, 30
+   put the result into tRef
+   stStep 120
+   stAssert "b2kFell was dispatched (got " & gFellCount & ")", (gFellCount is 1)
+   stAssert "the body is gone", (b2kBodyCount() is 0)
+end stTestKillFloor
+
+command stTestInput
+   stNewWorld "input: injected keys, axes, exact edges"
+   b2kInputOn
+   b2kInputInject "left"
+   stStep 1
+   stAssert "axis moveX = -1 on left", (b2kAxis("moveX") is -1)
+   b2kInputInject "left,right"
+   stStep 1
+   stAssert "both directions = 0", (b2kAxis("moveX") is 0)
+   b2kInputInject "space"
+   stStep 1
+   stAssert "jump pressed on its first frame", (b2kActionPressed("jump") is true)
+   stStep 1
+   stAssert "pressed is an EDGE (false the next frame)", (b2kActionPressed("jump") is false)
+   stAssert "...but still down", (b2kActionIsDown("jump") is true)
+   b2kInputInject ""
+   stStep 1
+   stAssert "released fires on let-go", (b2kActionReleased("jump") is true)
+end stTestInput
+
+command stTestPlayerRun
+   local tRef, tX1, tDX
+   stNewWorld "player: accel-clamped run + facing"
+   stSlab "st_ground", 50, 500, 800, 560
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   stStep 30   -- settle onto the slab
+   stAssert "grounded after settling", (b2kPlayerOnGround() is true)
+   put stX(tRef) into tX1
+   b2kInputInject "right"
+   stStep 60
+   put stX(tRef) - tX1 into tDX
+   stAssert "1s of run covers ~moveSpeed px (120..280, got " & round(tDX) & ")", \
+         (tDX > 120 and tDX < 280)
+   stAssert "facing right", (b2kPlayerFacing() is 1)
+   b2kInputInject "left"
+   stStep 10
+   stAssert "facing flips left", (b2kPlayerFacing() is -1)
+   b2kInputInject ""
+   stStep 30
+   stAssert "idles to a stop", (b2kPlayerState() is "idle")
+end stTestPlayerRun
+
+command stTestPlayerJumps
+   local tRef, tHeld, tTap, i, tLands
+   stNewWorld "player: tap vs held jump + one land tick"
+   stSlab "st_ground", 50, 500, 800, 560
+   b2kPlayerMake 300, 470, 32, 48
+   put the result into tRef
+   stStep 30
+   -- HELD jump apex
+   b2kInputInject "space"
+   put 9999 into tHeld
+   put 0 into tLands
+   repeat with i = 1 to 90
+      b2kStepOnce
+      if stY(tRef) < tHeld then put stY(tRef) into tHeld
+      if b2kPlayerState() is "land" then add 1 to tLands
+   end repeat
+   b2kInputInject ""
+   stStep 10
+   stAssert "land state fired exactly once (got " & tLands & ")", (tLands is 1)
+   -- TAP jump apex (release after 2 frames)
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   put 9999 into tTap
+   repeat with i = 1 to 90
+      b2kStepOnce
+      if stY(tRef) < tTap then put stY(tRef) into tTap
+   end repeat
+   stAssert "tap jump is clearly shorter than held (tap rose " & round(476 - tTap) \
+         & "px, held " & round(476 - tHeld) & "px)", (476 - tTap) < ((476 - tHeld) * 0.6)
+end stTestPlayerJumps
+
+command stTestCoyoteBuffer
+   local tRef, i, tOffAt, tJumped
+   stNewWorld "player: coyote window + jump buffer"
+   stSlab "st_ledge", 50, 500, 350, 560
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   stStep 30
+   -- COYOTE: run off the ledge, press jump 3 frames after leaving ground
+   b2kInputInject "right"
+   put 0 into tOffAt
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if b2kPlayerOnGround() is false then
+         put i into tOffAt
+         exit repeat
+      end if
+   end repeat
+   stAssert "walked off the ledge", (tOffAt > 0)
+   stStep 3   -- 50ms airborne: inside the 90ms coyote window
+   b2kInputInject "right,space"
+   stStep 2
+   stAssert "coyote jump fired mid-air (vy " & round(stVY(tRef)) & ")", (stVY(tRef) < -250)
+   b2kInputInject ""
+   -- BUFFER: fall onto the ledge with jump pressed shortly BEFORE landing
+   b2kMoveTo tRef, 200, 300
+   b2kSetVelocity tRef, 0, 0
+   stStep 1
+   put false into tJumped
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stY(tRef) > 420 and i > 3 then exit repeat   -- ~50px above feet-down
+   end repeat
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   repeat with i = 1 to 20
+      b2kStepOnce
+      if stVY(tRef) < -250 then
+         put true into tJumped
+         exit repeat
+      end if
+   end repeat
+   stAssert "buffered jump fired on landing", (tJumped is true)
+end stTestCoyoteBuffer
+
+command stTestSprites
+   local tData, i, tRef, tF1
+   stNewWorld "sprites: generated sheet, anim advance, flip, remove"
+   if there is no image "st_sheet" then
+      create image "st_sheet"
+      set the width of it to 32
+      set the height of it to 32
+      put empty into tData
+      repeat with i = 1 to 1024
+         put numToByte(255) & numToByte((i * 7) mod 256) & numToByte(80) & numToByte(40) after tData
+      end repeat
+      set the imageData of image "st_sheet" to tData
+   end if
+   b2kSheetFromImage "stsheet", the long id of image "st_sheet", 16, 16
+   stAssert "16px grid of a 32px image = 4 frames", (b2kSheetFrames("stsheet") is 4)
+   b2kAnimDef "stsheet", "spin", "1-4", 200, true
+   b2kSpriteNew "stsheet", 1, 120, 120
+   put the result into tRef
+   stAssert "sprite created", (tRef is not empty)
+   b2kSpritePlay tRef, "spin"
+   put b2kSpriteFrame(tRef) into tF1
+   wait 12 milliseconds
+   stStep 1
+   stAssert "animation advanced on wall-clock time", (b2kSpriteFrame(tRef) is not tF1)
+   b2kSpriteFlipH tRef, true
+   stAssert "flip readback", (b2kSpriteFlipped(tRef) is true)
+   b2kSpriteRemove tRef
+   stAssert "removed sprite is forgotten", (b2kSpriteFrame(tRef) is empty)
+end stTestSprites
+
+command stTestSounds
+   stNewWorld "sounds: synthesized clip registers and survives teardown"
+   b2kToneMake "sttone", "440", 30, 30
+   stAssert "tone registered", (b2kSoundIsLoaded("sttone") is true)
+   b2kTeardown
+   stAssert "sounds survive teardown", (b2kSoundIsLoaded("sttone") is true)
+   b2kSoundsWipe
+   stAssert "b2kSoundsWipe purges", (b2kSoundIsLoaded("sttone") is false)
+end stTestSounds
+
+command stTestCamera
+   local tRef, tPos
+   stNewWorld "camera: spawns join the view, goto/pos, off restores"
+   b2kCamOn
+   stAssert "camera reports on", (b2kCamIsOn() is true)
+   b2kSpawnBall 400, 300, 30
+   put the result into tRef
+   stAssert "spawn lives in the viewport group", \
+         (the short name of the owner of tRef is "b2kcam_view")
+   b2kCamGoto 400, 300
+   stStep 2
+   set the itemDelimiter to comma
+   put b2kCamPos() into tPos
+   stAssert "cam pos tracks goto (got " & tPos & ")", \
+         (abs(item 1 of tPos - 400) < 8 and abs(item 2 of tPos - 300) < 8)
+   b2kCamOff
+   stAssert "camera reports off", (b2kCamIsOn() is false)
+   stAssert "children return to the card", \
+         (the short name of the owner of tRef is not "b2kcam_view")
+end stTestCamera
+
+command stTestTeardown
+   stNewWorld "teardown hygiene"
+   b2kSpawnBall 300, 200, 30
+   b2kSpawnBox 360, 200, 40, 40
+   stStep 5
+   b2kTeardown
+   stAssert "no tracked bodies after teardown", (b2kBodyCount() is 0)
+   b2kSetup
+   b2kStart
+   b2kPause
+   b2kSpawnBall 300, 200, 30
+   stStep 10
+   stAssert "a fresh world works after teardown", (b2kBodyCount() is 1)
+end stTestTeardown
+
+-- =====================================================================
+-- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py
+-- - do not edit between the sentinels)
+-- =====================================================================
+-- >>> BEGIN EMBEDDED KIT >>>
+-- =====================================================================
 -- box2dxt-kit.livecodescript   ·   "Box2Dxt Kit"  (b2k...)
 --
 -- A friendly, pure-xTalk toolkit over the box2dxt extension. You work in
@@ -4314,3 +4854,4 @@ command b2kDispatchSensors
       dispatch "b2kSensorExit" to sContactObj with tS, tV
    end repeat
 end b2kDispatchSensors
+-- <<< END EMBEDDED KIT <<<

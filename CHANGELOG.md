@@ -39,6 +39,26 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **The Kit self-test harness** —
+  `examples/box2dxt-selftest.livecodescript`: one click in OXT, ~30
+  seconds, a PASS/FAIL report. There is no headless OXT, so this stack
+  is the project's runtime safety net: it drives the REAL Kit
+  deterministically (worlds started paused and advanced by
+  `b2kStepOnce`; the keyboard replaced by the new
+  **`b2kInputInject`**/`b2kInputInjectOff` — scripted keys with exact
+  frame timing, also useful for replays) and asserts the behaviours the
+  games depend on. Every test encodes a lesson learned on real
+  hardware: fixed-step determinism, frame-exact events (one enter, one
+  exit, no duplicates at rest), the chain ghost rule, one-way chains,
+  presence polling incl. **sleeping** bodies, `b2kKillFloor` +
+  `b2kFell`, the player feel contract (run accel, grounded probe,
+  tap-vs-held jump, the **coyote** and **buffer** windows, land firing
+  exactly once), input edges, sprites, tones, camera adopt/goto/off,
+  and teardown hygiene. Run it after any Kit change and on every new
+  platform before trusting the games. The micro-game's level build is
+  now also **error-proof**: the whole build runs guarded so a mid-build
+  error can never leave the screen locked — it lands, named, in the HUD
+  for verbatim reporting.
 - **The pressure plate is polled, not counted.** Exact events unmasked
   what enter/exit *counting* had been hiding: Box2D's sensor begin/end
   around settling and sleeping bodies is precisely the edge a pressure

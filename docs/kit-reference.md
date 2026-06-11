@@ -230,6 +230,7 @@ shifted and unshifted), or raw keycodes.
 | Handler | Purpose |
 |---------|---------|
 | `b2kInputOn` / `b2kInputOff` | Arm / disarm the per-frame keyboard sample. `b2kInputOn` installs starter bindings: axis `moveX` (left,a / right,d), axis `moveY` (up,w / down,s), action `jump` (space). |
+| `b2kInputInject keys` / `b2kInputInjectOff` | Replace the keyboard with a **scripted** key set (friendly names or codes; empty = nothing held) until turned off. Deterministic input for the self-test harness, input replays, and cutscene "ghost" players — edges fall out of the normal frame diff exactly as with real keys. |
 | `b2kKeyIsDown(key)` | Key currently held. |
 | `b2kKeyPressed(key)` / `b2kKeyReleased(key)` | True only on the frame the key went down / came up. |
 | `b2kKeysHeld()` | Everything held now, as friendly names (debug HUDs). |
