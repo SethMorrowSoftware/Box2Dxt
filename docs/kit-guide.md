@@ -769,8 +769,10 @@ put b2kSensorExitSensor(1)        -- ...and b2kSensorExitVisitor(1)
 > it), don't count enters minus exits: counting drifts, and Box2D's sensor
 > begin/end around settling and sleeping bodies is exactly the edge a plate
 > lives on. Poll instead — `if b2kOverlap(x1,y1,x2,y2) is not empty` each frame
-> is stateless and still sees sleeping bodies. Add a short release debounce
-> (~200 ms) so a settling crate's micro-bounces don't flap your door.
+> is stateless and still sees sleeping bodies — but use **`b2kOverlapMoving`**:
+> the pad region sits on its floor, and the broadphase's fattened boxes make a
+> plain `b2kOverlap` report the floor itself, forever. Add a short release
+> debounce (~200 ms) so a settling crate's micro-bounces don't flap your door.
 
 ## 14. Collision filtering
 
@@ -1222,7 +1224,8 @@ Optional arguments are in `[…]`.
 `b2kChain points [,loop]` · `b2kSmoothGround points` · `b2kAddChain ctrl,points [,loop]`
 
 ### Queries
-`b2kOverlap x1,y1,x2,y2` `[f]` · `b2kOverlapCircle x,y,r` `[f]` ·
+`b2kOverlap x1,y1,x2,y2` `[f]` · `b2kOverlapMoving x1,y1,x2,y2` `[f]` ·
+`b2kOverlapCircle x,y,r` `[f]` ·
 `b2kRayHit(x1,y1,x2,y2)` `[f]` · `b2kRayHitX()` `[f]` · `b2kRayHitY()` `[f]` ·
 `b2kRayHitNormalX()` `[f]` · `b2kRayHitNormalY()` `[f]` · `b2kRayDist()` `[f]` ·
 `b2kRayHitAll x1,y1,x2,y2` `[f]`

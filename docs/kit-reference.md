@@ -465,11 +465,13 @@ accessor returns a control (empty for a wall, the ground, or any untracked body)
 > **One-shots vs. presence:** sensor enter/exit messages are ideal for
 > **one-shot** triggers (coins, checkpoints, goals — consumed or guarded on
 > first fire). For **presence** state that must stay true while something sits
-> there (pressure plates, buttons, zones), poll `b2kOverlap` of the region each
-> frame instead of counting enters minus exits: a poll is stateless (it cannot
-> drift), and the broadphase still includes **sleeping** bodies — a crate that
-> settles and sleeps keeps holding the plate. The platformer's plate works this
-> way, with a ~0.2 s release debounce for feel.
+> there (pressure plates, buttons, zones), poll **`b2kOverlapMoving`** of the
+> region each frame instead of counting enters minus exits: a poll is stateless
+> (it cannot drift), it still sees **sleeping** bodies — a crate that settles
+> and sleeps keeps holding the plate — and the Moving variant filters out the
+> floor the pad sits on (the broadphase's fattened boxes would otherwise report
+> it forever). The platformer's plate works this way, with a ~0.2 s release
+> debounce for feel.
 
 Non-solid fixtures that report overlaps but never block. The Kit enables sensor
 events on every body it creates, so sensors detect them automatically.
@@ -520,7 +522,8 @@ other's mask (and no shared negative group forbids it).
 
 | Handler | Returns |
 |---------|---------|
-| `b2kOverlap x1, y1, x2, y2` | Newline list of controls whose body overlaps a screen rect. |
+| `b2kOverlap x1, y1, x2, y2` | Newline list of controls whose body overlaps a screen rect. **Broadphase boxes are fattened** (~0.1 m ≈ a few px), so a region touching the floor reports the floor — use the Moving variant for presence. |
+| `b2kOverlapMoving x1, y1, x2, y2` | The same query with **static bodies filtered out** — the presence poll for pressure plates and buttons ("is some *thing* on me?"). Dynamic and kinematic count; sleeping bodies still register. |
 | `b2kOverlapCircle x, y, r` | …overlapping a screen circle. |
 | `b2kRayHitAll x1, y1, x2, y2` | Every control a ray crosses, nearest-first (vs `b2kRayHit`'s single closest). |
 
