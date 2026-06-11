@@ -66,7 +66,8 @@ b2kStart
 | `b2kIsRunning()` | True while the loop is stepping (not stopped or paused). |
 | `b2kAddWalls` | Static walls around the current card edges. |
 | `b2kAddGround [screenY]` | A static floor across the card (optionally at a given Y). |
-| `b2kWall x1, y1, x2, y2` | A static collision segment between two screen points (custom walls, ramps, ledges). **Two-sided** — bodies collide from both sides whichever way you list the points; for one-sided (jump-through) surfaces use `b2kChain`/`b2kSmoothGround`. Invisible — draw your own graphic to match. |
+| `b2kWall x1, y1, x2, y2` | A static collision segment between two screen points (custom walls, ramps, ledges). **Two-sided** — bodies collide from both sides whichever way you list the points; for one-sided (jump-through) surfaces use `b2kChain`/`b2kSmoothGround`. Invisible — draw your own graphic to match. For level *edges* a character is driven against, prefer a thick invisible static box just outside the play space — it gives the solver a cleaner stop than a thin segment. |
+| `b2kKillFloor screenY` | Destroy any **moving** Kit body whose centre falls below this line (empty = off) — crates shoved into pits, enemies knocked off the level: removed instead of falling forever. The player's body is exempt (your game owns its respawn). Each removal first sends **`b2kFell ctrl`** to the frame target so you can clean up companions (bound sprites, table slots); don't delete the control inside that handler. |
 | `b2kClear` | Remove all bodies/controls the Kit created, keep the world. |
 | `b2kTeardown` | Stop and destroy the world and all Kit state. |
 | `b2kVersion()` | Native shim ABI version (`4`) — a load / in-sync check from Kit-only code. |
@@ -430,6 +431,12 @@ gate, win) are all synthesized — no asset folder involved.
 | `on b2kContact pCtrlA, pCtrlB` | Sent to your `b2kContactTarget` when two attached controls **begin** touching. Long ids are empty for walls/ground. |
 | `on b2kEndContact pCtrlA, pCtrlB` | Sent when two attached controls **stop** touching. |
 | `on b2kFrame` | Sent to your `b2kFrameTarget` once per simulated frame (after bodies sync) — use it for motors, input, and custom drawing. |
+| `on b2kFell pCtrl` | Sent to your `b2kFrameTarget` just before the Kit removes a body that crossed the `b2kKillFloor` line. |
+
+> **Frame-exact events:** contact and sensor events are harvested after
+> **every** fixed step and buffered for the frame — a frame that ran two
+> physics steps loses nothing, and a frame that ran zero repeats nothing. The
+> messages and the polling accessors below both read the same frame buffer.
 
 **Polling contacts** — instead of (or alongside) the messages above, read this
 frame's touch pairs directly, e.g. from `on b2kFrame`. Indices are 1-based; each
