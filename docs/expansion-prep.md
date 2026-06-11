@@ -171,14 +171,17 @@ to Kit API (`b2kFoe…`).
    breakable bricks + debris, buttons/levers with art, key+lock+door; the
    platformer re-skinned sprite-only (real thwomp art, spike tiles, biome
    ground). *The "it looks like the classics now" wave.*
-   **BUILT 2026-06-11** in the platformer (statically verified; awaiting
-   the OXT pass): springboard + sky coin, the bonk row (?-boxes pay
-   coins, bricks shatter into kill-floor-swept debris), the plate wears
-   pressed/idle button art, a stand-to-flip saw power lever, key + lock
-   + door gating a stone-biome finale, thwomps as chained weights, real
-   spike tips. All POLLED geometry + windows (no static-contact events);
-   **zero Kit changes, so no harness bump**. Art note: Wave 1 ships in
-   the platformer's native 64px family (it has the full switch/spring/
+   **BUILT 2026-06-11** in the platformer (statically verified; first
+   OXT feedback folded in): springboard + sky coin, the bonk row
+   (?-boxes pay coins, bricks shatter into kill-floor-swept debris),
+   the plate wears pressed/idle button art, a stand-to-flip saw power
+   lever, key + lock + door gating a stone-biome finale (opens on
+   approach via `b2kDisable`, flush against the step, crown coin inside
+   the open doorway), thwomps as chained weights — static at rest,
+   **not player-movable** — and the crate wearing the empty-box face.
+   All POLLED geometry + windows (no static-contact events); **zero Kit
+   changes, so no harness bump**. Art note: Wave 1 ships in the
+   platformer's native 64px family (it has the full switch/spring/
    key/door set, style-matched); Family C debuts with content built FOR
    its 70px grid (Waves 2-3).
 2. **Wave 2 — player actions I:** drop-through, climb (ladders), duck,

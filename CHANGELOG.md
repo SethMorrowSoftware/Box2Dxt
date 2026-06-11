@@ -70,14 +70,26 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   - **Key + locked door**: a key floats in thwomp alley (one-shot
     sensor pickup, per doctrine), then rides the hero's shoulder as a
     bound sprite and shows `[KEY]` on the HUD; a lock + two-tile door
-    column gates the stone finale and swings open FOR GOOD on a polled
-    touch — respawns walk back through.
+    column — flush against the first finale step, so the open doorway
+    leads somewhere — opens FOR GOOD on approach (the poll fires ~20px
+    before face contact; the host body is `b2kDisable`d, never deleted
+    mid-loop) and respawns walk back through. The hollow doorway hides
+    its **crown coin**: jump up INSIDE the open door. (First OXT round:
+    the original beat parked a slime right on the unlock threshold —
+    arriving with the key got you hurt at the exact trigger line; the
+    slime now patrols the bridge–mound gap instead.)
   - **Re-skinned, sprite-only**: thwomps are now chained weights
     (`weight` + `chain` tiles; the chain stays at the perch while the
-    weight falls, and follows a dragged re-arm), the spike pit grew
-    real `spikes` tips (placed from measured alpha: tips at y 606,
-    base flush with the stage floor), and the level crosses a biome
-    seam at the locked door into a STONE finale.
+    weight falls) — and a weight on a chain is **not the player's to
+    move**: it rests STATIC (unpushable; `b2kGrab` refuses statics by
+    design) and `mouseDown` filters the brief dynamic fall out of the
+    grab, so only the crate drags. The old drag-a-thwomp coin became
+    the doorway crown coin. The crate itself wears the empty-box face
+    (`block_empty`, the same box a headbutted ?-box turns into) over an
+    invisible fixed-rotation host. The spike pit grew real `spikes`
+    tips (placed from measured alpha: tips at y 606, base flush with
+    the stage floor), and the level crosses a biome seam at the locked
+    door into a STONE finale.
   - Fifteen coins now (sky coin + two box coins); five new synthesized
     cues (spring, smash, key, unlock, lever) — still zero asset files
     for audio.
