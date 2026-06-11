@@ -55,6 +55,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   (sensor enter/exit counting), a patrolling stompable slime
   (contact-event stomp vs hurt), camera shake on every hit, and the
   goal flag — with plain-graphic fallbacks for every piece of art.
+- **The platformer demo (release candidate).** The example grew into a
+  complete showcase: intro splash, centre-locked scrolling camera, a
+  two-cloud one-way route guarding a bonus coin, hazard fly, spike pit,
+  crate-on-pressure-plate gate puzzle, mid-level checkpoint flag, saw, a
+  riding Thwomp (underside kills, head is a platform, slow kinematic
+  rise), two stompable patrol slimes, six coins with pickup pops, and an
+  all-coins-plus-flag win dialogue with run time, fall count and a
+  physics-confetti burst. R restarts and ESC pauses (raw key events, so
+  they work while paused); every art piece has a plain-graphic fallback.
+- **Camera hardening (from the demo's OXT runs).** `b2kCamOn` self-tests
+  that the scroll property pans the group and probes the engine's
+  grouped-loc coordinate model (`b2kCamStatus`, `b2kCamLocSemantics`);
+  scroll-adjusted ("visual") engines get every in-viewport write
+  compensated automatically (`b2kCamShiftX/Y`, `b2kSpriteMoveTo`). The
+  follow carries a mathematical never-offscreen guarantee plus a
+  real-scroll failsafe; the bounds stretch the viewport's invisible
+  anchor so the engine can never clamp the scroll short; teardown wipes
+  sprites BEFORE dissolving the viewport (their stored ids embed the
+  group path), and sprite removal survives stale references.
 - **Kit Sprite module (Game Kit Phase 2).** Spritesheet animation on the
   icon-button backend the Phase 0 benchmarks selected: sheets register
   frame regions of one hidden source image — a uniform grid
