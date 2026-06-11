@@ -599,7 +599,7 @@ command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
    end if
    set the width of tRef to pW
    set the height of tRef to pH
-   set the loc of tRef to round(pScreenX) & "," & round(pScreenY)
+   set the loc of tRef to round(pScreenX - b2kCamShiftX(tRef)) & "," & round(pScreenY - b2kCamShiftY(tRef))
    b2kAddBox tRef
    put true into sSpawned[tRef]
    return tRef
@@ -633,7 +633,7 @@ command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
    end if
    set the width of tRef to pDiameter
    set the height of tRef to pDiameter
-   set the loc of tRef to round(pScreenX) & "," & round(pScreenY)
+   set the loc of tRef to round(pScreenX - b2kCamShiftX(tRef)) & "," & round(pScreenY - b2kCamShiftY(tRef))
    b2kAddBall tRef
    put true into sSpawned[tRef]
    return tRef
@@ -676,7 +676,7 @@ command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
       set the width of tRef to pThickness
       set the height of tRef to pLength
    end if
-   set the loc of tRef to round(pScreenX) & "," & round(pScreenY)
+   set the loc of tRef to round(pScreenX - b2kCamShiftX(tRef)) & "," & round(pScreenY - b2kCamShiftY(tRef))
    b2kAddCapsule tRef
    put true into sSpawned[tRef]
    return tRef
@@ -2193,6 +2193,8 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
    set the showName of tRef to false
    set the traversalOn of tRef to false
    set the autoHilite of tRef to false
+   subtract b2kCamShiftX(tRef) from pX   -- creation while scrolled: place in
+   subtract b2kCamShiftY(tRef) from pY   -- world coords on visual engines too
    set the rect of tRef to round(pX - tW / 2), round(pY - tH / 2), round(pX + tW / 2), round(pY + tH / 2)
    if sCamGroup is empty then
       -- dynamic layers composite in STACK coordinates: inside a scrolled
@@ -2240,7 +2242,7 @@ command b2kSpriteFromGIF pPath, pX, pY
    end if
    put b2kNumberOr(pX, (the width of this card) div 2) into pX
    put b2kNumberOr(pY, (the height of this card) div 2) into pY
-   set the loc of tRef to round(pX) & comma & round(pY)
+   set the loc of tRef to round(pX - b2kCamShiftX(tRef)) & comma & round(pY - b2kCamShiftY(tRef))
    if sCamGroup is empty then
       try
          set the layerMode of tRef to "dynamic"   -- see b2kSpriteNew note
