@@ -219,8 +219,8 @@ command b2kTeardown
    put the milliseconds & random(9999) into sGen
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
-   b2kCamOff       -- dissolve the viewport; its children return to the card
-   b2kSheetsWipe   -- sprites, sliced frames, sources: all module state goes
+   b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   b2kCamOff       -- ...then dissolve the viewport (survivors go to the card)
    b2kResetTables
    put 0 into sDragJoint
    put false into sDragging
@@ -2372,9 +2372,16 @@ end b2kSpriteUnbind
 -- Remove a sprite (and its body, if it has one).
 command b2kSpriteRemove pCtrl
    local tRef
-   put the long id of pCtrl into tRef
+   try
+      put the long id of pCtrl into tRef
+   catch tErr
+      put pCtrl into tRef   -- stale path (group gone): still clear the registry
+   end try
    if sBody[tRef] is not empty then
-      b2kRemove tRef          -- destroys the body and deletes the control
+      try
+         b2kRemove tRef       -- destroys the body and deletes the control
+      catch tErr
+      end try
    else
       try
          delete tRef

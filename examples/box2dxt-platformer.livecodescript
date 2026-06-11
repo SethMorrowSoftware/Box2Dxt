@@ -42,14 +42,14 @@ local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gBeeSpr, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
 local gSlime, gSlimeSpr, gSlimeDir, gSlimeGoneAt, gIntroPan
-local gRunStart, gFalls, gWinLock, gFlagHint, gHudCoin, gWinSecs
+local gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs, gBuilding
 local gBlock, gBlockSpr, gBlockState, gBlockT, gFlySpr
 local gSlime2, gSlime2Spr, gSlime2Dir, gSlime2GoneAt
 local gCheckSpr, gCheckpointOn, gRespawnX, gRespawnY
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
-constant kPfUIVersion = "4"
+constant kPfUIVersion = "5"
 constant kLevelW = 3072
 constant kHeroSheetB64 = "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"
 
@@ -99,7 +99,7 @@ command buildPfUI
    set the traversalOn of it to false
    set the textSize of it to 11
    create field "pfHud"
-   set the rect of it to 74, 584, 760, 612
+   set the rect of it to 20, 584, 760, 612
    set the lockText of it to true
    set the traversalOn of it to false
    set the textSize of it to 11
@@ -222,7 +222,13 @@ end pfEmbedPlaceholder
 -- =====================================================================
 command pfStartGame
    local tRef, tW, tH, tDY, tX, tS
+   if gBuilding is true then exit pfStartGame   -- ignore R-mash mid-rebuild
+   put true into gBuilding
    if the shiftKey is down then set the uSpriteSheetFolderPath of this stack to empty
+   try
+      b2kClear                  -- spawned bodies (confetti, the crate) go
+   catch tErr                   -- while the world still exists
+   end try
    b2kTeardown                  -- wipes sheets, closes the camera, sweeps orphans
    pfWipeStage
    put false into gHurtLock
@@ -272,12 +278,6 @@ command pfStartGame
       end if
       put the result into tRef
       if tRef is not empty then set the layer of tRef to 2
-   end if
-   -- the HUD's coin icon lives on the CARD (chrome, not world)
-   put empty into gHudCoin
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "hud_coin") then
-      b2kSpriteNew "tiles", "hud_coin", 36, 598
-      put the result into gHudCoin
    end if
    -- ===== the camera: everything Kit-made from here lives in the view ====
    b2kCamOn
@@ -559,6 +559,7 @@ command pfStartGame
    unlock screen
    put empty into gHudLast
    put true into gStarted
+   put false into gBuilding
    b2kStart
 end pfStartGame
 
@@ -661,8 +662,9 @@ command pfMakeSlime2
 end pfMakeSlime2
 
 -- The falling-block trap: hangs over the path between the saw and the
--- slime; walking beneath wakes it (static -> dynamic), it slams down,
--- rests as an obstacle for a moment, then resets back to its perch.
+-- slime; walking beneath wakes it (static -> dynamic) and it slams down.
+-- Only its UNDERSIDE is lethal - its head is a platform: stand on it as
+-- it rests, then ride it as it rises slowly (kinematic) back to its perch.
 command pfMakeFallBlock
    create graphic "pf_blockBody"
    set the style of it to "rectangle"
@@ -714,12 +716,6 @@ command pfChromeFront
    local tN, tC
    put the number of controls of this card into tN
    set the itemDelimiter to comma
-   if gHudCoin is not empty then
-      try
-         set the layer of gHudCoin to tN
-      catch tErr
-      end try
-   end if
    repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText"
       if there is a field tC then set the layer of field tC to tN
    end repeat
@@ -925,7 +921,7 @@ command pfTickTraps
       end if
       if abs(tHX - tBX) < 36 and abs(tHY - tBY) < 44 then pfHurt
    end if
-   -- the falling block
+   -- the falling block (only the underside kills; the head is a platform)
    if gBlock is empty then exit pfTickTraps
    put b2kPosition(gBlock) into tPos
    if tPos is empty then exit pfTickTraps
@@ -941,7 +937,7 @@ command pfTickTraps
          end if
          break
       case "falling"
-         if abs(tHX - tBX) < 50 and abs(tHY - tBY) < 62 then pfHurt
+         pfBlockUndersideCheck tHX, tHY, tBX, tBY
          if abs(item 2 of b2kVelocity(gBlock)) < 4 and tBY > 320 then
             put "down" into gBlockState
             put the milliseconds into gBlockT
@@ -949,16 +945,30 @@ command pfTickTraps
          end if
          break
       case "down"
-         if the milliseconds - gBlockT > 2600 then
+         if the milliseconds - gBlockT > 1200 then
+            put "rising" into gBlockState
+            b2kSetKinematic gBlock           -- carries whoever rides its head
+            b2kSetVelocity gBlock, 0, -55
+            if gBlockSpr is not empty then b2kSpriteSetFrame gBlockSpr, "block_idle"
+         end if
+         break
+      case "rising"
+         pfBlockUndersideCheck tHX, tHY, tBX, tBY
+         if tBY <= 202 then
             put "armed" into gBlockState
             b2kSetStatic gBlock
             b2kMoveTo gBlock, 2200, 200
             b2kSpriteMoveTo gBlock, 2200, 200   -- statics are not body-synced
-            if gBlockSpr is not empty then b2kSpriteSetFrame gBlockSpr, "block_idle"
          end if
          break
    end switch
 end pfTickTraps
+
+-- Lethal only from below: the hero must be under the block's bottom edge
+-- and horizontally within it.
+command pfBlockUndersideCheck pHX, pHY, pBX, pBY
+   if abs(pHX - pBX) < 46 and pHY > pBY + 26 and pHY < pBY + 96 then pfHurt
+end pfBlockUndersideCheck
 
 -- =====================================================================
 -- Events: sensors (coins, hazards, plate, goal) and contacts (the slime)
@@ -1396,8 +1406,8 @@ command b2kTeardown
    put the milliseconds & random(9999) into sGen
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
-   b2kCamOff       -- dissolve the viewport; its children return to the card
-   b2kSheetsWipe   -- sprites, sliced frames, sources: all module state goes
+   b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   b2kCamOff       -- ...then dissolve the viewport (survivors go to the card)
    b2kResetTables
    put 0 into sDragJoint
    put false into sDragging
@@ -3549,9 +3559,16 @@ end b2kSpriteUnbind
 -- Remove a sprite (and its body, if it has one).
 command b2kSpriteRemove pCtrl
    local tRef
-   put the long id of pCtrl into tRef
+   try
+      put the long id of pCtrl into tRef
+   catch tErr
+      put pCtrl into tRef   -- stale path (group gone): still clear the registry
+   end try
    if sBody[tRef] is not empty then
-      b2kRemove tRef          -- destroys the body and deletes the control
+      try
+         b2kRemove tRef       -- destroys the body and deletes the control
+      catch tErr
+      end try
    else
       try
          delete tRef
