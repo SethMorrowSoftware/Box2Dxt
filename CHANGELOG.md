@@ -39,6 +39,40 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Kit Player module (Game Kit Phase 3 — the headline feature).** A
+  complete platformer character controller for one keyboard player:
+  `b2kPlayerMake` (capsule body host + bound sprite + controller + input
+  in one call) or `b2kPlayerAttach` (adopt an existing control/sprite —
+  a capsule body is added if missing, with fixed rotation, sleep
+  disabled and low friction). The per-frame `b2kPlayerTick` (loop order:
+  input → player → sprites → camera) reads axis `moveX` / action `jump`,
+  accelerates vx toward `axis × moveSpeed` (`accel`/`airAccel`), probes
+  the ground with three short downward rays gated by a surface-normal
+  slope test (`maxSlopeDeg` — walkable slope vs wall is one cosine
+  compare; the probe is suppressed while the controller's own jump is
+  still rising, so one-way chains can't phantom-ground a jump-through),
+  and runs the state machine (`idle`/`run`/`jump`/`fall` + a one-tick
+  `land` for dust/sound hooks). Genre-standard jump feel is built in:
+  **coyote time** (`coyoteMs`), **jump buffering** (`bufferMs`),
+  **release jump-cut** (`jumpCut` — tap = hop, hold = full) and a
+  terminal fall speed (`maxFall`). `b2kPlayerAnims` maps states to sheet
+  animations (optional held land flourish; facing auto-flips);
+  `b2kPlayerSet/Get` expose the nine tuning knobs (kept across
+  `b2kClear` like input bindings, wiped by `b2kTeardown`);
+  `b2kPlayerJump` gives springs/powerups the same launch without the
+  grounded gate; `b2kPlayerControl false` turns the controller
+  observe-only for cutscenes/hit-poses/knockback; plus
+  `b2kPlayerOnGround/State/Facing`, `b2kPlayer`, `b2kPlayerSprite`,
+  `b2kPlayerRemove`. New general body setting: **`b2kSetSleepEnabled`**
+  (per-body sleep permission over raw `b2EnableSleep`; the controller
+  forbids sleep on its body). The platformer example's entire hand-rolled
+  movement layer — axis-to-velocity tick, jump-press/release handling and
+  the two-ray ground probe (~53 lines) — is replaced by four declarative
+  calls (`b2kPlayerAttach` + `b2kPlayerAnims` + two `b2kPlayerSet`s),
+  and the level gains a **walkable slope mound** (26.6° Kenney ramp
+  tiles over a one-sided chain, with a plain-polygon fallback), a 7th
+  coin on its plateau, and a HUD readout of the controller state, land
+  count and sleep anomaly for the OXT feel checklist.
 - **Kit Camera module (Game Kit Phase 4, pulled forward).** Scrolling
   levels on the viewport-group mechanism the Phase 0 spike benchmarked:
   `b2kCamOn/Off`, follow with lerp + deadzone (`b2kCamFollow`,
