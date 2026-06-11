@@ -273,10 +273,11 @@ ghost sprites frozen on their last frame).
 
 | Handler | Purpose |
 |---------|---------|
-| `b2kSheetLoad name, path, fw, fh [,count]` → count | Register an image file as a uniform grid of `fw`×`fh` frames (no spacing), numbered 1..N row-major. |
+| `b2kSheetLoad name, path, fw, fh [,count] [,margin] [,spacing]` → count | Register an image file as a uniform grid of `fw`×`fh` frames, numbered 1..N row-major. `margin` = outer border px, `spacing` = gap between cells (both default 0, edge-to-edge). Frame size **0 = no grid**: name regions yourself with `b2kSheetAddFrame`. |
 | `b2kSheetLoadAtlas name, pngPath [,xmlPath]` → count | Register a packed atlas: PNG + `TextureAtlas` XML naming its regions (the Kenney format — see `Spritesheets/` in this repo). Frames are addressed **by name** (`"coin_gold"`). XML path defaults to the PNG path with `.xml`. |
-| `b2kSheetFromImage name, imgRef, fw, fh [,count]` → count | Register an image already in the stack (e.g. base64-embedded art) as a grid sheet. |
-| `b2kSheetFrames(name)` / `b2kSheetHasFrame(name, frame)` | Frame count / existence checks. |
+| `b2kSheetFromImage name, imgRef, fw, fh [,count] [,margin] [,spacing]` → count | Register an image already in the stack (e.g. base64-embedded art) as a grid sheet. Same grid arguments as `b2kSheetLoad`. |
+| `b2kSheetAddFrame sheet, frame, x, y, w, h` | Name one region yourself — the **no-XML path for packed sheets in any layout**: load the source with frame size 0, then add each frame by name (any size/position; redefining re-bakes). Also works on top of a grid or atlas. |
+| `b2kSheetFrames(name)` / `b2kSheetHasFrame(name, frame)` / `b2kSheetFrameNames(name)` | Frame count / existence / every frame key one per line (introspect an atlas you didn't make). |
 | `b2kSheetScale name, factor` | Display scale for the sheet's frames (default 1, range 0.05–8) — the engine resamples at slice time, so **any frame size displays at any sprite size**. Set it right after loading, before creating sprites or anims. |
 | `b2kSheetFrameSize(name, frame)` → "w,h" | A frame's display size (region × scale) — lay out tiles and platforms from this instead of hard-coding pixels. |
 | `b2kAnimDef sheet, anim, frames, fps [,loop]` | Name an animation: `frames` is a comma list of names and/or indices, numeric ranges (`"1-8"`) expand. `loop` defaults true. |

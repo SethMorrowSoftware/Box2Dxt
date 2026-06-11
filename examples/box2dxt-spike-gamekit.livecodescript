@@ -1419,8 +1419,10 @@ end spikeNewGroup
 --         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
 --         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
--- SPRITE  b2kSheetLoad name,path,fw,fh[,n] · b2kSheetLoadAtlas name,png[,xml] ·
---         b2kSheetFromImage name,img,fw,fh · b2kSheetFrames(name) ·
+-- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] · b2kSheetLoadAtlas name,png[,xml] ·
+--         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] · b2kSheetFrames(name) ·
+--         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) ·
+--         b2kSheetFrameNames(name) · b2kSheetHasFrame(name,frame) ·
 --         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
 --         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
 --         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
@@ -3402,25 +3404,70 @@ end b2kFrameMS
 -- Sheets persist until b2kTeardown; sprites are Kit-created controls, so
 -- b2kClear removes them like everything else the Kit spawned.
 
--- Register an image FILE as a uniform grid of pFW x pFH frames (no spacing),
--- numbered 1..N left-to-right, top-to-bottom. Reports the frame count.
-command b2kSheetLoad pName, pPath, pFW, pFH, pCount
+-- Register an image FILE as a uniform grid of pFW x pFH frames, numbered
+-- 1..N left-to-right, top-to-bottom. Reports the frame count. Sheets that
+-- are not edge-to-edge take pMargin (outer border px) and pSpacing (gap
+-- between cells px). Pass pFW/pFH 0 (or empty) to register the image with
+-- NO grid and name regions yourself with b2kSheetAddFrame -- the path for
+-- packed sheets that have no Kenney-style XML.
+command b2kSheetLoad pName, pPath, pFW, pFH, pCount, pMargin, pSpacing
    local tRef
    put b2kSheetSourceFromFile(pName, pPath) into tRef
    if tRef is empty then return 0
-   b2kSheetGridRegions pName, pFW, pFH, pCount
+   b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoad
 
 -- Register an image already in the stack (e.g. base64-embedded art) as a
 -- grid sheet. The image is used in place and never deleted by the Kit.
-command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount
+-- Same grid arguments as b2kSheetLoad (margin/spacing; 0x0 = no grid).
+command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount, pMargin, pSpacing
    b2kSheetForget pName
    put the long id of pImgRef into sSheetSrc[pName]
    put false into sSheetOwned[pName]
-   b2kSheetGridRegions pName, pFW, pFH, pCount
+   b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
    return the number of lines of sSheetKeys[pName]
 end b2kSheetFromImage
+
+-- Name one region of a loaded sheet yourself: the no-XML path for packed
+-- sheets in any layout. Load the source first (b2kSheetLoad/FromImage with
+-- frame size 0 for no grid), then add each frame by name; regions may be
+-- any size and position and can also be added on top of a grid or atlas.
+-- Redefining a name re-bakes its slice on next use.
+command b2kSheetAddFrame pSheet, pFrame, pX, pY, pW, pH
+   local tId
+   if sSheetSrc[pSheet] is empty then exit b2kSheetAddFrame
+   if pFrame is empty then exit b2kSheetAddFrame
+   if pX is not a number or pY is not a number then exit b2kSheetAddFrame
+   if pW is not a number or pH is not a number then exit b2kSheetAddFrame
+   if pW < 1 or pH < 1 then exit b2kSheetAddFrame
+   if sSheetRegion[pSheet][pFrame] is empty then
+      if sSheetKeys[pSheet] is empty then
+         put pFrame into sSheetKeys[pSheet]
+      else
+         put cr & pFrame after sSheetKeys[pSheet]
+      end if
+   else
+      -- redefined: drop any stale slices so the new region re-bakes lazily
+      put sSheetIcon[pSheet][pFrame] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+      delete variable sSheetIcon[pSheet][pFrame]
+      put sSheetFlip[pSheet][pFrame] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+      delete variable sSheetFlip[pSheet][pFrame]
+   end if
+   put round(pX) & comma & round(pY) & comma & round(pW) & comma & round(pH) into sSheetRegion[pSheet][pFrame]
+end b2kSheetAddFrame
 
 -- Register a packed atlas: a PNG plus the TextureAtlas XML that names its
 -- regions (<SubTexture name=".." x=".." y=".." width=".." height=".."/> --
@@ -3463,6 +3510,12 @@ end b2kSheetFrames
 function b2kSheetHasFrame pName, pFrame
    return (sSheetRegion[pName][pFrame] is not empty)
 end b2kSheetHasFrame
+
+-- Every frame key of a sheet, one per line, in definition order --
+-- introspect an atlas you didn't make ("what is this frame called?").
+function b2kSheetFrameNames pName
+   return sSheetKeys[pName]
+end b2kSheetFrameNames
 
 -- Display scale for a sheet's frames (default 1). Frames slice lazily, so
 -- set this right after loading the sheet, BEFORE creating sprites or anims:
@@ -3936,20 +3989,28 @@ function b2kSheetSourceFromFile pName, pPath
    return sSheetSrc[pName]
 end b2kSheetSourceFromFile
 
--- Internal: register grid regions over the current source image.
-command b2kSheetGridRegions pName, pFW, pFH, pCount
+-- Internal: register grid regions over the current source image. Margin =
+-- outer border (left AND top, assumed symmetric), spacing = gap between
+-- cells; both default 0 (edge-to-edge, the common case). A frame size of
+-- 0/empty registers NO grid -- the caller names regions with
+-- b2kSheetAddFrame instead.
+command b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
    local tCols, tRows, tMax, i, tC, tR
    if sSheetSrc[pName] is empty then exit b2kSheetGridRegions
+   if b2kNumberOr(pFW, 0) < 1 or b2kNumberOr(pFH, 0) < 1 then exit b2kSheetGridRegions
    put b2kClamp(pFW, 1, 4096) into pFW
    put b2kClamp(pFH, 1, 4096) into pFH
-   put (the width of sSheetSrc[pName]) div pFW into tCols
-   put (the height of sSheetSrc[pName]) div pFH into tRows
+   put round(b2kClamp(pMargin, 0, 2048)) into pMargin
+   put round(b2kClamp(pSpacing, 0, 2048)) into pSpacing
+   put ((the width of sSheetSrc[pName]) - 2 * pMargin + pSpacing) div (pFW + pSpacing) into tCols
+   put ((the height of sSheetSrc[pName]) - 2 * pMargin + pSpacing) div (pFH + pSpacing) into tRows
+   if tCols < 1 or tRows < 1 then exit b2kSheetGridRegions
    put tCols * tRows into tMax
    if pCount is a number and pCount > 0 and pCount < tMax then put pCount into tMax
    repeat with i = 1 to tMax
       put (i - 1) mod tCols into tC
       put (i - 1) div tCols into tR
-      put (tC * pFW) & comma & (tR * pFH) & comma & pFW & comma & pFH into sSheetRegion[pName][i]
+      put (pMargin + tC * (pFW + pSpacing)) & comma & (pMargin + tR * (pFH + pSpacing)) & comma & pFW & comma & pFH into sSheetRegion[pName][i]
       put i & cr after sSheetKeys[pName]
    end repeat
    if the last char of sSheetKeys[pName] is cr then delete the last char of sSheetKeys[pName]

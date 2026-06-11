@@ -628,6 +628,21 @@ platformer example wires all of it together: an atlas-driven hero, spinning
 coin pickups, a bee on a flight path, and a saw hazard that triggers the
 hit-then-respawn chain.
 
+**Not a Kenney sheet? Every layout loads.** Grids with borders or gutters
+pass them straight in (`b2kSheetLoad "run", tPath, 32, 48, 0, 2, 1` —
+2px margin, 1px spacing). A packed sheet with no XML at all loads with
+frame size 0 (no grid) and you name each region yourself:
+
+```livecode
+b2kSheetLoad "boss", tPath, 0, 0          -- source only, no grid
+b2kSheetAddFrame "boss", "idle", 0, 0, 96, 80
+b2kSheetAddFrame "boss", "roar", 96, 0, 128, 80
+b2kAnimDef "boss", "wake", "idle,roar", 4, false
+```
+
+`b2kSheetFrameNames("chars")` lists every frame key of a sheet you didn't
+make — the quickest way to find what an atlas calls things.
+
 ### The player controller (`b2kPlayerMake`)
 
 Everything the input and sprite snippets above hand-roll — and the parts
@@ -1030,9 +1045,11 @@ Optional arguments are in `[…]`.
 `b2kKeyCodes(key)` `[f]` · `b2kKeyName(code)` `[f]` · `b2kFrameMS()` `[f]`
 
 ### Sprites & sheets
-`b2kSheetLoad name,path,fw,fh [,n]` · `b2kSheetLoadAtlas name,png [,xml]` ·
-`b2kSheetFromImage name,img,fw,fh [,n]` · `b2kSheetFrames(name)` `[f]` ·
-`b2kSheetHasFrame(name,frame)` `[f]` · `b2kSheetScale name,factor` ·
+`b2kSheetLoad name,path,fw,fh [,n,margin,spacing]` · `b2kSheetLoadAtlas name,png [,xml]` ·
+`b2kSheetFromImage name,img,fw,fh [,n,margin,spacing]` ·
+`b2kSheetAddFrame sheet,frame,x,y,w,h` · `b2kSheetFrames(name)` `[f]` ·
+`b2kSheetHasFrame(name,frame)` `[f]` · `b2kSheetFrameNames(name)` `[f]` ·
+`b2kSheetScale name,factor` ·
 `b2kSheetFrameSize(name,frame)` `[f]` · `b2kAnimDef sheet,anim,frames,fps [,loop]` ·
 `b2kSpriteNew sheet [,frame,x,y]` · `b2kSpriteFromGIF path [,x,y]` ·
 `b2kSpritePlay spr,anim [,restart]` · `b2kSpriteStop spr` · `b2kSpriteAnim(spr)` `[f]` ·

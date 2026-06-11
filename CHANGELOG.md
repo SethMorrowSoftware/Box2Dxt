@@ -39,6 +39,37 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Sheets beyond the Kenney format: custom grids and hand-named
+  regions.** `b2kSheetLoad`/`b2kSheetFromImage` take optional `margin`
+  (outer border px) and `spacing` (gutter between cells px) for grid
+  sheets that aren't edge-to-edge, and a frame size of **0 registers the
+  source with no grid at all** — then **`b2kSheetAddFrame sheet, frame,
+  x, y, w, h`** names each region yourself: the no-XML path for packed
+  sheets in any layout (any sizes/positions; redefining a name re-bakes
+  its slice; works on top of grids and atlases too).
+  **`b2kSheetFrameNames(sheet)`** lists every frame key of a loaded
+  sheet — introspect an atlas you didn't make.
+- **The platformer is now a collect-them-ALL puzzle platformer** on a
+  rebuilt, half-again-longer level (3072 → 4608 px) with a traditional
+  left-to-right arc: meadow → one-way bridge over a **spike slime** (the
+  unstompable kind — hurts from every side) → the slope mound → two
+  cloud steps guarded by the fly → spike pit with a mid-air coin → the
+  crate/plate/gate puzzle (a coin locked **inside the gateway**) →
+  checkpoint → a saw plus a **sweeping saw** (a bodiless sine-path mover,
+  like the fly) → **thwomp alley** — dodge the first, ride the second
+  one's head to a sky coin, and **mouse-DRAG a resting thwomp** under
+  the lone high coin to ride up from there (rest extended to 2.6 s so
+  dragging is feasible; it rises from wherever you park it, then snaps
+  home) → slime fields → step platforms → flag. **Twelve coins, every
+  one verified reachable** (jump arc ≈ 154 px apex at the demo tuning),
+  most of them a small puzzle; all 12 + flag wins. Enemies/traps/movers
+  are now indexed tables (`pfMakeSlime`/`pfMakeThwomp`/`pfAddMover`), so
+  the level adds foes in one line each. The **mound's ramp art is fixed**
+  by measuring the actual Kenney tiles (the short ramps are a 45° pair,
+  drawn descending left-to-right; the long ramps are the 26.6° pair that
+  matches the chain) — ascent shows them mirrored, and the ground row
+  beneath the mound switches to dirt-centre tiles so the hill reads as
+  one mass.
 - **Kit Player module (Game Kit Phase 3 — the headline feature).** A
   complete platformer character controller for one keyboard player:
   `b2kPlayerMake` (capsule body host + bound sprite + controller + input
