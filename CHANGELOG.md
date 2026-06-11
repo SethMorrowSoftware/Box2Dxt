@@ -39,6 +39,62 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Hot-path performance pass (engine-limitation aware).** The frame
+  budget on a single interpreted thread goes to interpreter ops, FFI
+  round-trips and property-set redraws, so all three got leaner:
+  **sprite tick** now maintains a lazy *live list* (bound and/or playing
+  sprites) and walks only that — a tile-heavy level's ~100 inert sprites
+  cost zero per-frame work, with membership re-derived only when a
+  bind/play/stop/remove actually changes it; **input** resolves friendly
+  key names to keycode lists once at bind time (`b2kBindAction`/
+  `b2kBindAxis`), so the per-frame action/axis queries are pure set
+  scans; the **player tick** reads its nine tuning knobs and probe
+  geometry from values baked at `b2kPlayerSet`/attach time and talks to
+  the body through its raw handle (no per-frame ref lookups or "x,y"
+  string round-trips — same math, gotcha-9 flip preserved). Example
+  side: both games **throttle their HUD to 4 Hz** — the ms readout
+  changed every frame, which forced a field relayout+redraw every frame,
+  the single biggest avoidable cost — and the platformer's gate writes
+  its kinematic velocity only when the target flips. The kit guide's
+  performance section now documents the playbook (throttle HUDs, write
+  on change, one clock read per handler, build heavy things once).
+- **The micro-game (Game Kit Phase 5 exit artifact):**
+  `examples/box2dxt-microgame.livecodescript` — a COMPLETE game in one
+  pasteable file: start screen → two levels → win screen, with nothing
+  to install beyond the extension (the hero sheet is embedded base64,
+  every sound is `b2kToneMake`d). It is the "copy this to start your own
+  game" example and the companion to the kit guide's new **"Building a
+  whole game"** chapter (§20). What it adds over the platformer
+  showcase: the **one-call player** (`b2kPlayerMake` — the green-field
+  path the platformer's adopt-flow doesn't exercise), **levels as
+  data** (each level is a dozen lines of `verb args` text — `slab`,
+  `ledge`, `coin`, `spike`, `sweep`, `door`… — interpreted by a ~100
+  line `mgBuild`; the `ledge` verb ghost-pads its chain automatically),
+  and a **game-state machine** (menu/play/won) gated by
+  `b2kPlayerControl`, so the world runs live behind the menus. The
+  coins-unlock-the-door rule, sweeper hazards, kill-plane respawns and
+  the win screen's time/falls stats are all sensor + frame-hook
+  patterns, no new Kit surface. This is also the plan's scenes/levels
+  design probe: the level format lives at example level first;
+  promotion to `b2kScene*` API gets decided from how it holds up.
+- **Kit Sound module (Game Kit Phase 5 begins).** Named sounds over
+  **audioClips** — the one LC sound path with no external media-layer
+  dependency — with `b2kSoundLoad` (import a WAV/AIFF/AU file) and
+  **`b2kToneMake`**, a pure-script synthesizer (8-bit mono WAV at
+  22050 Hz, square or sine, a comma list of note frequencies with a
+  per-note decay) so self-contained examples ship SFX with **zero asset
+  files**. `b2kSound`/`b2kSoundLoop`/`b2kSoundStop` play (one clip at a
+  time — the classic LC model, documented not fought), `b2kSoundMute` is
+  a preference that survives teardown, `b2kSoundVolume` wraps the
+  engine-global `playLoudness`, and failures degrade to silence, never
+  errors (first failing play trips a dead-flag; `b2kSoundStatus()` says
+  why). Sounds **survive `b2kTeardown`** — clips are tiny and
+  deterministic, and resets must stay snappy; `b2kSoundsWipe` purges
+  them (it also sweeps `b2ksnd_` clips a dead session left behind, and
+  stable names mean re-making replaces rather than accumulates). The
+  platformer gains eight synthesized cues — jump, land (off the player's
+  one-tick land state), coin, stomp, hurt, checkpoint, gate, win — plus
+  an M-key mute and HUD audio diagnostics.
 - **Sheets beyond the Kenney format: custom grids and hand-named
   regions.** `b2kSheetLoad`/`b2kSheetFromImage` take optional `margin`
   (outer border px) and `spacing` (gutter between cells px) for grid
@@ -69,7 +125,26 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   drawn descending left-to-right; the long ramps are the 26.6° pair that
   matches the chain) — ascent shows them mirrored, and the ground row
   beneath the mound switches to dirt-centre tiles so the hill reads as
-  one mass.
+  one mass. The first OXT runs then surfaced **the chain ghost rule**:
+  Box2D collides an open chain's N points as only **N−3 segments** (the
+  first and last are ghost anchors), which the original level had
+  silently respected by always running chains one tile past the art —
+  the rebuild didn't, so the bridge's outer planks, both cloud edges and
+  *both mound ramps* were intangible. All four chains are now
+  ghost-padded (the mound grew to six points so its ramps, the actual
+  slope test, really collide), and the rule is documented in `b2kChain`,
+  the kit reference and the guide. Two more OXT findings fixed: **slime
+  stomps are judged by the player controller's land/fall state**, not by
+  post-impact velocity (contacts dispatch after the solver has already
+  absorbed the impact, so a clean stomp read as ~0 velocity and hurt the
+  hero), and **thwomps re-arm wherever they rose** instead of
+  teleporting back to their perch (the snap-home read as
+  vanish-and-reappear, and it undid the drag-to-reposition puzzle).
+  Optimization pass: the sprite tick now skips inert sprites (no bind,
+  no animation — about a hundred static tiles) before doing any work,
+  sounds persisting across teardown removes the ~quarter-second tone
+  re-synthesis from every reset, and the mover tick reads the clock
+  once per pass.
 - **Kit Player module (Game Kit Phase 3 — the headline feature).** A
   complete platformer character controller for one keyboard player:
   `b2kPlayerMake` (capsule body host + bound sprite + controller + input

@@ -19,7 +19,8 @@
 --
 -- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
 --           full) · the MOUSE DRAGS dynamic bodies: the crate, and a
---           thwomp while it rests - dragging is part of the puzzles
+--           thwomp while it rests - dragging is part of the puzzles ·
+--           R restarts · ESC pauses · M mutes the (synthesized) sound
 --
 -- THE LEVEL, left to right (every beat holds a coin):
 --           meadow - one-way BRIDGE over a spike slime (never stomp it!)
@@ -35,32 +36,40 @@
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
 --      still fires ~90ms after running off a ledge (coyote); pressing
 --      jump just before touchdown fires on landing (buffer).
---   2. The mound's ramp art reads as one hill (mirrored Kenney long
---      ramps + dirt beneath) and walks up/down without sliding.
+--   2. SOLID GROUND EVERYWHERE (the chain ghost-rule fix): the mound
+--      walks up the left ramp, across, down the right with no
+--      fall-through at any edge; the bridge deck and BOTH clouds are
+--      solid out to their visible ends; the art reads as one hill.
 --   3. Every coin is collectable: bridge deck, plateau, high cloud, the
 --      pit jump, inside the gateway, over the sweeping saw, thwomp-ride
 --      (3800), thwomp-DRAG (3980), slime fields, both steps, freebie.
---   4. The spike slime hurts from EVERY side (stomping it = hurt); the
---      normal slimes squash. The sweeping saw hurts without a sensor.
+--   4. STOMPS SQUASH again (judged by the controller's land/fall state,
+--      not post-impact velocity): land on a normal slime = squash +
+--      bounce; its sides hurt; the SPIKE slime hurts from every side.
 --   5. Thwomps: underside kills while falling/rising; resting head is a
---      platform; a resting thwomp DRAGS with the mouse and rises from
---      where you parked it (then snaps home once it re-arms).
+--      platform; a resting thwomp DRAGS with the mouse, rises from
+--      where you parked it and RE-ARMS THERE - no teleport home.
 --   6. HUD "lands" rises by exactly 1 per touchdown; stand still 2+ min
 --      (never ASLEEP); hurt/win cut control then respawn restores it.
 --   7. Camera follows smoothly over the full 4608px; build time after
---      Reset stays tolerable (~100 tiles now); ms/frame stays ~16-18.
---   8. Reset and stack-reopen leave no ghosts (R resets, ESC pauses).
+--      Reset stays tolerable (~100 tiles + 8 synthesized sounds now);
+--      ms/frame stays ~16-18.
+--   8. SOUND (Phase 5 audio, all b2kToneMake - zero asset files): cues
+--      for jump, land, coin, stomp, hurt, checkpoint, gate, win. M
+--      mutes/unmutes; an engine with no audio stays SILENT, no errors
+--      (the HUD would show the b2kSoundStatus reason).
+--   9. Reset and stack-reopen leave no ghosts (R resets, ESC pauses).
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
-local gBuilding, gLands
+local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
-local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT, gBlockHomeX
+local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
 local gMovHurtW, gMovHurtH, gMovFlip
 local gCheckSpr, gCheckpointOn, gRespawnX, gRespawnY
@@ -221,6 +230,22 @@ function pfLoadSheets
    return true
 end pfLoadSheets
 
+-- Every sound is SYNTHESIZED (b2kToneMake): zero asset files. Sounds
+-- survive b2kTeardown (Kit policy), so after the first build a reset
+-- skips the synthesis entirely. Short and plucky on purpose - the
+-- engine plays one clip at a time, so a new cue cuts the previous.
+command pfMakeSounds
+   if b2kSoundIsLoaded("win") then exit pfMakeSounds   -- already built
+   b2kToneMake "jump", "392,587", 40, 55
+   b2kToneMake "coin", "1319,1760", 36, 45
+   b2kToneMake "stomp", "165,110", 40, 70
+   b2kToneMake "hurt", "220,156,110", 55, 65
+   b2kToneMake "land", "98", 26, 40, "sine"
+   b2kToneMake "check", "659,880", 50, 50, "sine"
+   b2kToneMake "gate", "294,392", 40, 35, "sine"
+   b2kToneMake "win", "523,659,784,1047", 110, 65
+end pfMakeSounds
+
 command pfEmbedPlaceholder
    if there is no image "pf_sheetsrc" then
       create image "pf_sheetsrc"
@@ -260,6 +285,8 @@ command pfStartGame
    put empty into gWinSecs
    put 0 into gFalls
    put 0 into gLands
+   put 0 into gHudNextMS
+   put empty into gGateVel
    put the milliseconds into gRunStart
    put 0 into gCoins
    if there is a graphic "pfWinShade" then set the visible of graphic "pfWinShade" to false
@@ -282,7 +309,6 @@ command pfStartGame
    put empty into gBlockSpr
    put empty into gBlockState
    put empty into gBlockT
-   put empty into gBlockHomeX
    put 0 into gMovN
    put empty into gMovSpr
    put empty into gMovX
@@ -294,12 +320,14 @@ command pfStartGame
    put empty into gMovHurtW
    put empty into gMovHurtH
    put empty into gMovFlip
+   put empty into gPrevState
    b2kSetup
    b2kSetScale 60
+   pfMakeSounds
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts, ESC pauses - and the MOUSE DRAGS things:" & cr & "the crate onto the gold plate, a RESTING THWOMP under the lone high coin. Every one of the " & gCoinsTotal & " coins is" & cr & "reachable: bridge, mound, clouds, the pit jump, the gateway, the saw hop, the thwomp rides. All coins + FLAG wins."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts, ESC pauses, M mutes - and the MOUSE DRAGS:" & cr & "the crate onto the gold plate, a RESTING THWOMP under the lone high coin. Every one of the " & gCoinsTotal & " coins is" & cr & "reachable: bridge, mound, clouds, the pit jump, the gateway, the saw hop, the thwomp rides. All coins + FLAG wins."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -387,7 +415,10 @@ command pfStartGame
    set the uPfHazardFlag of tRef to true
    b2kAddSensor tRef, "box"
    -- ===== the one-way bridge (chain, solid side up; coin on the deck) ====
-   b2kSmoothGround "1008,440" & cr & "944,440" & cr & "816,440" & cr & "752,440"
+   -- GHOST RULE: an open chain's outer two points anchor, they don't
+   -- collide -- so every chain here runs one tile PAST its art/surface
+   -- on each side. The deck is 752-1008; the chain reaches 688-1072.
+   b2kSmoothGround "1072,440" & cr & "1008,440" & cr & "752,440" & cr & "688,440"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bridge") then
       repeat with tX = 752 to 944 step 64
          pfTile "bridge", tX, 424
@@ -403,10 +434,13 @@ command pfStartGame
    -- ===== the slope mound (walkable 26.6-degree ramps) ====
    -- one chain, top surface listed right-to-left like the bridges; the
    -- player's maxSlopeDeg (50) decides it counts as ground, not wall.
+   -- Six points: the outer two are the chain's non-colliding ghost
+   -- anchors (flat tails on the ground the slab already covers), so all
+   -- three REAL segments -- down-ramp, plateau, up-ramp -- are solid.
    -- Kenney's grass ramps DESCEND left-to-right as drawn (ramp_long_a is
    -- the upper half of the diagonal, ramp_long_b the lower half), so the
    -- ascent side shows them MIRRORED; the plateau is plain block_top.
-   b2kSmoothGround "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576"
+   b2kSmoothGround "1696,576" & cr & "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576" & cr & "1184,576"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_ramp_long_a") then
       pfTile "terrain_grass_ramp_long_b", 1248, 512, true
       pfTile "terrain_grass_ramp_long_a", 1312, 512, true
@@ -423,8 +457,10 @@ command pfStartGame
       b2kCamAdopt the long id of graphic "pf_mound"
    end if
    -- ===== the cloud steps (one-way chains; the high one holds a coin) ====
-   b2kSmoothGround "1888,448" & cr & "1824,448" & cr & "1760,448" & cr & "1696,448"
-   b2kSmoothGround "2176,320" & cr & "2112,320" & cr & "2048,320" & cr & "1984,320"
+   -- ghost-padded one tile beyond the cloud art on each side, so the
+   -- WHOLE cloud is solid (art: 1696-1888 and 1984-2176)
+   b2kSmoothGround "1952,448" & cr & "1888,448" & cr & "1696,448" & cr & "1632,448"
+   b2kSmoothGround "2240,320" & cr & "2176,320" & cr & "1984,320" & cr & "1920,320"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
       pfTile "terrain_grass_cloud_left", 1696, 448
       pfTile "terrain_grass_cloud_middle", 1760, 448
@@ -793,8 +829,9 @@ end pfMakeSlime
 -- A thwomp (falling-block trap) perched at pX. Walking beneath wakes it
 -- (static -> dynamic) and it slams down. Only its UNDERSIDE is lethal -
 -- the head is a platform: hop on while it rests, ride the slow kinematic
--- rise back to its perch. While it rests it is DYNAMIC, so the mouse can
--- DRAG it - repositioning your elevator is part of the puzzle.
+-- rise back UP to perch height. While it rests it is DYNAMIC, so the
+-- mouse can DRAG it - and it re-arms WHEREVER it rose, so repositioning
+-- your elevator sticks.
 command pfMakeThwomp pIdx, pX
    local tName, tBody
    put "pf_blockBody" & pIdx into tName
@@ -816,7 +853,6 @@ command pfMakeThwomp pIdx, pX
    if the visible of graphic tName is true then b2kCamAdopt tBody
    if pIdx > gBlockN then put pIdx into gBlockN
    put tBody into gBlockB[pIdx]
-   put pX into gBlockHomeX[pIdx]
    put "armed" into gBlockState[pIdx]
    put 0 into gBlockT[pIdx]
 end pfMakeThwomp
@@ -888,13 +924,26 @@ on b2kFrame
       if (item 2 of b2kPosition(gHero)) > 780 then pfHurt
    end if
    -- the Kit's player controller moved/animated the hero before this
-   -- handler ran; the example only counts its one-tick land state
-   if b2kPlayerState() is "land" then add 1 to gLands
+   -- handler ran; the example reads its one-tick land state and the
+   -- jump transition for the sound cues
+   if b2kPlayerState() is "land" then
+      add 1 to gLands
+      b2kSound "land"
+   end if
+   if b2kPlayerState() is "jump" and gPrevState is not "jump" and gHurtLock is not true then
+      b2kSound "jump"   -- also chirps on the slime-stomp bounce: earned
+   end if
+   put b2kPlayerState() into gPrevState
    pfTickGate
    pfTickSlimes
    pfTickThwomps
    pfTickMovers
+   -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
+   -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
+   -- on EVERY frame -- the single biggest avoidable per-frame cost here
    local tSecs
+   if the milliseconds < gHudNextMS then exit b2kFrame
+   put the milliseconds + 250 into gHudNextMS
    if gWinSecs is not empty then
       put gWinSecs into tSecs
    else
@@ -905,6 +954,8 @@ on b2kFrame
       put "   |   view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
    end if
    if not b2kIsAwake(gHero) then put "   [ASLEEP?!]" after tHud   -- must never show
+   if b2kSoundStatus() is not empty then put "   [audio: " & b2kSoundStatus() & "]" after tHud
+   if b2kSoundMuted() then put "   [muted]" after tHud
    if gWon is true then
       put "WINNER!   " before tHud
    else
@@ -927,7 +978,7 @@ end b2kFrame
 -- The kinematic gate chases its open/closed height; the plate's colour
 -- tracks its state. Anything on the plate (the hero OR the crate) holds it.
 command pfTickGate
-   local tTarget, tY, tLook
+   local tTarget, tY, tLook, tVel
    if gGate is empty then exit pfTickGate
    set the itemDelimiter to comma
    if gPlateCount > 0 then
@@ -938,6 +989,7 @@ command pfTickGate
       put "up" into tLook
    end if
    if tLook is not gPlateLook then
+      if gPlateLook is not empty then b2kSound "gate"   -- not on the build tick
       put tLook into gPlateLook
       if there is a graphic "pf_plate" then
          if tLook is "down" then
@@ -948,14 +1000,20 @@ command pfTickGate
       end if
    end if
    put item 2 of b2kPosition(gGate) into tY
+   -- write the kinematic's velocity only when it CHANGES (one less FFI
+   -- round-trip per frame while the gate idles, which is most frames)
    if abs(tY - tTarget) <= 6 then
-      b2kSetVelocity gGate, 0, 0
+      put 0 into tVel
    else
       if tTarget < tY then
-         b2kSetVelocity gGate, 0, -160
+         put -160 into tVel
       else
-         b2kSetVelocity gGate, 0, 160
+         put 160 into tVel
       end if
+   end if
+   if tVel is not gGateVel then
+      put tVel into gGateVel
+      b2kSetVelocity gGate, 0, tVel
    end if
 end pfTickGate
 
@@ -1028,10 +1086,12 @@ command pfTickThwomps
          case "rising"
             pfBlockUndersideCheck tHX, tHY, tBX, tBY
             if tBY <= 202 then
+               -- re-arm WHERE IT IS: a dragged thwomp keeps its new post
+               -- (the old teleport-home read as vanishing + reappearing)
                put "armed" into gBlockState[i]
                b2kSetStatic tBody
-               b2kMoveTo tBody, gBlockHomeX[i], 200
-               b2kSpriteMoveTo tBody, gBlockHomeX[i], 200   -- statics are not body-synced
+               b2kMoveTo tBody, tBX, 200
+               b2kSpriteMoveTo tBody, tBX, 200   -- statics are not body-synced
             end if
             break
       end switch
@@ -1041,19 +1101,20 @@ end pfTickThwomps
 -- Bodiless patrollers (bee, fly, the sweeping saw): sine paths, facing,
 -- and proximity hurt - pure geometry, no physics.
 command pfTickMovers
-   local i, tHX, tHY, tMX, tMY, tPos
+   local i, tHX, tHY, tMX, tMY, tPos, tMS
    if gMovN is 0 or gMovN is empty then exit pfTickMovers
    set the itemDelimiter to comma
+   put the milliseconds into tMS   -- one clock read for the whole pass
    put b2kPosition(gHero) into tPos
    put item 1 of tPos into tHX
    put item 2 of tPos into tHY
    repeat with i = 1 to gMovN
       if gMovSpr[i] is empty then next repeat
-      put gMovX[i] + gMovAX[i] * sin(the milliseconds / gMovPX[i]) into tMX
-      put gMovY[i] + gMovAY[i] * sin(the milliseconds / gMovPY[i]) into tMY
+      put gMovX[i] + gMovAX[i] * sin(tMS / gMovPX[i]) into tMX
+      put gMovY[i] + gMovAY[i] * sin(tMS / gMovPY[i]) into tMY
       b2kSpriteMoveTo gMovSpr[i], tMX, tMY
       if gMovFlip[i] is true and gMovAX[i] > 0 then
-         b2kSpriteFlipH gMovSpr[i], (cos(the milliseconds / gMovPX[i]) < 0)
+         b2kSpriteFlipH gMovSpr[i], (cos(tMS / gMovPX[i]) < 0)
       end if
       if gMovHurtW[i] > 0 and gHurtLock is not true then
          if abs(tHX - tMX) < gMovHurtW[i] and abs(tHY - tMY) < gMovHurtH[i] then pfHurt
@@ -1080,6 +1141,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
    if the uPfCoinFlag of pSensorCtrl is true then
       local tPopAt
       add 1 to gCoins
+      b2kSound "coin"
       put b2kPosition(pSensorCtrl) into tPopAt   -- world px, from its body
       b2kSpriteRemove pSensorCtrl
       try
@@ -1103,6 +1165,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
          put 3072 into gRespawnX
          put 470 into gRespawnY
          if gCheckSpr is not empty then b2kSpritePlay gCheckSpr, "checkwave"
+         b2kSound "check"
          b2kCamShake 3, 180
       end if
       exit b2kSensorEnter
@@ -1129,8 +1192,14 @@ end b2kSensorExit
 
 -- Hero vs slime: falling onto a NORMAL one squashes it (and bounces you);
 -- anything else - sides, undersides, or any touch of a SPIKE slime - hurts.
+-- "Falling onto" is judged by the PLAYER CONTROLLER's state, not by the
+-- hero's velocity: contacts dispatch AFTER the physics step, when the
+-- solver has already absorbed the impact (velocity reads near zero on a
+-- clean stomp). At dispatch time b2kPlayerState() is this frame's state
+-- and gPrevState is last frame's - a stomp shows up as land/fall in one
+-- of them. The raw velocity stays as a belt-and-braces fallback.
 on b2kContact pA, pB
-   local i, tWhich, tFoe
+   local i, tWhich, tFoe, tState, tStomp
    if gHurtLock is true then exit b2kContact
    put empty into tWhich
    repeat with i = 1 to gSlimeN
@@ -1143,8 +1212,11 @@ on b2kContact pA, pB
    if tWhich is empty then exit b2kContact
    put gSlimeB[tWhich] into tFoe
    set the itemDelimiter to comma
-   if gSlimeKind[tWhich] is not "spike" and \
-         (item 2 of b2kVelocity(gHero)) > 40 and \
+   put b2kPlayerState() into tState
+   put (tState is "land" or tState is "fall" \
+         or gPrevState is "land" or gPrevState is "fall" \
+         or (item 2 of b2kVelocity(gHero)) > 40) into tStomp
+   if gSlimeKind[tWhich] is not "spike" and tStomp and \
          (item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(tFoe)) - 16 then
       pfSquashSlime tWhich
       b2kSetVelocity gHero, item 1 of b2kVelocity(gHero), -260
@@ -1156,6 +1228,7 @@ end b2kContact
 command pfSquashSlime pWhich
    local tFlat
    if gSlimeB[pWhich] is empty then exit pfSquashSlime
+   b2kSound "stomp"
    put "slime_" & gSlimeKind[pWhich] & "_flat" into tFlat
    if gSlimeSpr[pWhich] is not empty and b2kSheetHasFrame("foes", tFlat) then
       b2kSpriteSetFrame gSlimeSpr[pWhich], tFlat
@@ -1170,6 +1243,7 @@ command pfHurt
    if gHurtLock is true or gWinLock is true then exit pfHurt
    put true into gHurtLock
    add 1 to gFalls
+   b2kSound "hurt"
    b2kCamShake 7, 280
    -- the controller must not steer or re-anim during the hit pose; it
    -- keeps observing (state stays fresh) and resumes in pfHurtDone
@@ -1187,6 +1261,7 @@ command pfWin
    put true into gWon
    put (the milliseconds - gRunStart) div 1000 into tSecs
    put tSecs into gWinSecs
+   b2kSound "win"
    b2kPlayerControl false   -- the win dance owns the art from here
    set the itemDelimiter to comma
    b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
@@ -1266,9 +1341,9 @@ on mouseRelease
    b2kRelease
 end mouseRelease
 
--- R restarts, ESC pauses/resumes. These are message-path events (not the
--- Kit's polled input) so they also work WHILE PAUSED, when the sampler is
--- not running.
+-- R restarts, ESC pauses/resumes, M mutes. These are message-path events
+-- (not the Kit's polled input) so they also work WHILE PAUSED, when the
+-- sampler is not running.
 on rawKeyDown pKeyCode
    if pKeyCode is 65307 then
       pfTogglePause
@@ -1276,6 +1351,10 @@ on rawKeyDown pKeyCode
    end if
    if pKeyCode is 114 or pKeyCode is 82 then
       pfStartGame
+      exit rawKeyDown
+   end if
+   if pKeyCode is 109 or pKeyCode is 77 then
+      b2kSoundMute (not b2kSoundMuted())
       exit rawKeyDown
    end if
    pass rawKeyDown
@@ -1364,6 +1443,10 @@ end rawKeyDown
 --         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
 --         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
 --         b2kCamAdopt ctrl   (world px == control locs; spawns auto-join the view)
+-- AUDIO   b2kSoundLoad name,path · b2kToneMake name,freqs,msPerNote[,vol,shape] ·
+--         b2kSound name · b2kSoundLoop name · b2kSoundStop · b2kSoundMute flag ·
+--         b2kSoundMuted() · b2kSoundVolume pct · b2kSoundIsLoaded(name) ·
+--         b2kSoundStatus()  (audioClips: one at a time; b2kToneMake = no asset files)
 -- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
 --         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
 --         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
@@ -1413,6 +1496,9 @@ local sKeysPrev      -- last frame's set; pressed/released edges are the diff
 local sKeyActions    -- action name -> bound key list ("jump" -> "space,up,w")
 local sAxisNeg       -- axis name -> negative-direction key list
 local sAxisPos       -- axis name -> positive-direction key list
+local sKeyActionsC   -- action name -> RESOLVED keycode list (bind-time cache)
+local sAxisNegC      -- axis name -> resolved negative keycodes
+local sAxisPosC      -- axis name -> resolved positive keycodes
 local sFrameMS       -- real elapsed ms folded into the last frame (b2kFrameMS)
 local sSheetSrc      -- sheet -> long id of its hidden source image
 local sSheetOwned    -- sheet -> true when the Kit created the source image
@@ -1426,7 +1512,9 @@ local sSheetScale    -- sheet -> display scale factor (default 1; engine-resampl
 local sAnimList      -- "sheet|anim" -> CR list of frame keys
 local sAnimFPS       -- "sheet|anim" -> frames per second
 local sAnimLoop      -- "sheet|anim" -> true/false
-local sSprRefs       -- CR list of live sprite controls (the tick iterates)
+local sSprRefs       -- CR list of every live sprite control
+local sSprLive       -- ...the subset the tick must service (bound/playing)
+local sSprLiveDirty  -- true -> rebuild sSprLive from sSprRefs next tick
 local sSprSheet, sSprKind, sSprAnim, sSprStep, sSprNextMS
 local sSprFPS, sSprFPSOver, sSprFlip, sSprMsg, sSprFrameKey, sSprIconNow
 local sSprBind, sSprBindDX, sSprBindDY, sSprLastLoc
@@ -1458,6 +1546,16 @@ local sPlayHalfW, sPlayHalfH -- capsule half-extents in px (probe geometry)
 local sPlayAnimNow   -- last animation written (redundancy suppression)
 local sPlayFlipNow   -- last flip written
 local sPlayHoldMS    -- suppress anim switches until then (land flourish)
+-- hot-path caches (b2kPlayerTuneCache): the tick runs every frame, so
+-- the nine knobs resolve at SET time, not per use
+local sPlayMoveSpd, sPlayAccelG, sPlayAccelA, sPlayJumpSpd, sPlayJumpCut
+local sPlayCoyote, sPlayBuffer, sPlayMaxFall, sPlayCosSlope
+local sPlayProbeOffs -- the 3 probe x-offsets, precomputed at attach
+local sPlayReach     -- probe ray length (halfH + 4), precomputed
+local sSndClip       -- sound name -> audioClip short name ("b2ksnd_...")
+local sSndMute       -- true = swallow play calls (a user preference; survives teardown)
+local sSndDead       -- true after a play failure: degrade to silence, never errors
+local sSndNote       -- empty = healthy; else why audio is degraded
 
 constant kPI = 3.14159265358979
 
@@ -1507,6 +1605,9 @@ command b2kTeardown
    put empty into sWorld
    b2kPlayerForget true   -- full: a teardown wipes the tuning too
    b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   -- sounds deliberately SURVIVE teardown: clips are tiny (KBs) and
+   -- deterministic, and re-synthesis cost a fifth of a second on every
+   -- reset. b2kSoundsWipe purges them when you really want them gone.
    b2kCamOff       -- ...then dissolve the viewport (survivors go to the card)
    b2kResetTables
    put 0 into sDragJoint
@@ -2929,6 +3030,11 @@ end b2kSetCollisionGroup
 -- line). Unlike joined box/segment edges it has no inner corners for fast bodies
 -- to catch on. Needs >= 4 points; pLoop true closes it. Invisible (draw a matching
 -- graphic). Returns a chain handle (b2DestroyChain to remove).
+-- THE GHOST RULE (open chains): Box2D uses the FIRST and LAST segments as
+-- ghost anchors only -- N points collide as N-3 segments. Run the chain one
+-- segment PAST the surface you need on each side (over solid ground the
+-- ghost tails can simply continue flat). A chain whose endpoints sit AT the
+-- platform edges has non-solid ends -- bodies fall straight through them.
 command b2kChain pPoints, pLoop
    local tBody, p
    if sWorld is empty then return 0
@@ -2942,7 +3048,8 @@ command b2kChain pPoints, pLoop
 end b2kChain
 
 command b2kSmoothGround pPoints
-   -- statement call + the result: OXT cannot call commands function-style
+   -- statement call + the result: OXT cannot call commands function-style.
+   -- Mind b2kChain's GHOST RULE: the outer two points anchor, not collide.
    b2kChain pPoints, false
    return the result
 end b2kSmoothGround
@@ -3257,35 +3364,51 @@ end b2kKeysHeld
 
 -- Actions: a named set of keys ("jump" = "space,up,w"). Any bound key
 -- counts; the action's edges treat the whole set as one logical key.
+-- The name->keycode resolution happens ONCE, at bind time (the cached
+-- code list is what the per-frame queries scan) -- these run inside the
+-- player tick and game code every frame, so they must stay cheap.
 command b2kBindAction pName, pKeyList
    put pKeyList into sKeyActions[pName]
+   put b2kKeyListCodes(pKeyList) into sKeyActionsC[pName]
 end b2kBindAction
 
-function b2kActionIsDown pName
-   local tK
-   repeat for each item tK in sKeyActions[pName]
-      if b2kKeyIsDown(word 1 of tK) then return true
+-- Internal: a friendly key list -> every matching keycode, comma list.
+function b2kKeyListCodes pKeyList
+   local tK, tOut
+   put empty into tOut
+   set the itemDelimiter to comma
+   repeat for each item tK in pKeyList
+      if tOut is empty then
+         put b2kKeyCodes(word 1 of tK) into tOut
+      else
+         put comma & b2kKeyCodes(word 1 of tK) after tOut
+      end if
+   end repeat
+   return tOut
+end b2kKeyListCodes
+
+-- Internal: is any of these (pre-resolved) keycodes in the given set?
+function b2kCodesInSet pSet, pCodes
+   local tC
+   if pSet is empty or pSet is comma then return false
+   repeat for each item tC in pCodes
+      if pSet contains (comma & tC & comma) then return true
    end repeat
    return false
+end b2kCodesInSet
+
+function b2kActionIsDown pName
+   return b2kCodesInSet(sKeysNow, sKeyActionsC[pName])
 end b2kActionIsDown
 
 function b2kActionPressed pName
-   local tK
-   if not b2kActionIsDown(pName) then return false
-   repeat for each item tK in sKeyActions[pName]
-      if b2kKeyInSet(sKeysPrev, word 1 of tK) then return false
-   end repeat
-   return true
+   if not b2kCodesInSet(sKeysNow, sKeyActionsC[pName]) then return false
+   return not b2kCodesInSet(sKeysPrev, sKeyActionsC[pName])
 end b2kActionPressed
 
 function b2kActionReleased pName
-   local tK, tWasDown
-   put false into tWasDown
-   repeat for each item tK in sKeyActions[pName]
-      if b2kKeyInSet(sKeysPrev, word 1 of tK) then put true into tWasDown
-   end repeat
-   if not tWasDown then return false
-   return not b2kActionIsDown(pName)
+   if not b2kCodesInSet(sKeysPrev, sKeyActionsC[pName]) then return false
+   return not b2kCodesInSet(sKeysNow, sKeyActionsC[pName])
 end b2kActionReleased
 
 -- Axes: -1 / 0 / +1 from two key sets ("moveX" defaults to left,a / right,d).
@@ -3293,18 +3416,14 @@ end b2kActionReleased
 command b2kBindAxis pName, pNegKeys, pPosKeys
    put pNegKeys into sAxisNeg[pName]
    put pPosKeys into sAxisPos[pName]
+   put b2kKeyListCodes(pNegKeys) into sAxisNegC[pName]
+   put b2kKeyListCodes(pPosKeys) into sAxisPosC[pName]
 end b2kBindAxis
 
 function b2kAxis pName
-   local tK, tNeg, tPos
-   put false into tNeg
-   put false into tPos
-   repeat for each item tK in sAxisNeg[pName]
-      if b2kKeyIsDown(word 1 of tK) then put true into tNeg
-   end repeat
-   repeat for each item tK in sAxisPos[pName]
-      if b2kKeyIsDown(word 1 of tK) then put true into tPos
-   end repeat
+   local tNeg, tPos
+   put b2kCodesInSet(sKeysNow, sAxisNegC[pName]) into tNeg
+   put b2kCodesInSet(sKeysNow, sAxisPosC[pName]) into tPos
    if tPos and not tNeg then return 1
    if tNeg and not tPos then return -1
    return 0
@@ -3626,6 +3745,7 @@ command b2kSpritePlay pCtrl, pAnim, pRestart
    if sAnimList[tKey] is empty then exit b2kSpritePlay
    if sSprAnim[tRef] is pAnim and pRestart is not true then exit b2kSpritePlay
    put pAnim into sSprAnim[tRef]
+   put true into sSprLiveDirty   -- it now needs per-frame service
    put 1 into sSprStep[tRef]
    if sSprFPSOver[tRef] is not empty then
       put sSprFPSOver[tRef] into sSprFPS[tRef]
@@ -3648,6 +3768,7 @@ command b2kSpriteStop pCtrl
       exit b2kSpriteStop
    end if
    put empty into sSprAnim[tRef]
+   put true into sSprLiveDirty
 end b2kSpriteStop
 
 function b2kSpriteAnim pCtrl
@@ -3667,6 +3788,7 @@ command b2kSpriteSetFrame pCtrl, pFrame
       exit b2kSpriteSetFrame
    end if
    put empty into sSprAnim[tRef]
+   put true into sSprLiveDirty
    b2kSpriteShowFrame tRef, pFrame
 end b2kSpriteSetFrame
 
@@ -3713,10 +3835,12 @@ command b2kSpriteBind pCtrl, pBodyCtrl, pDX, pDY
    put the long id of pBodyCtrl into sSprBind[tRef]
    put b2kNumberOr(pDX, 0) into sSprBindDX[tRef]
    put b2kNumberOr(pDY, 0) into sSprBindDY[tRef]
+   put true into sSprLiveDirty   -- it now needs per-frame service
 end b2kSpriteBind
 
 command b2kSpriteUnbind pCtrl
    delete variable sSprBind[the long id of pCtrl]
+   put true into sSprLiveDirty
 end b2kSpriteUnbind
 
 -- Remove a sprite (and its body, if it has one).
@@ -3763,6 +3887,7 @@ command b2kSpriteForget pRef
    set the wholeMatches to true
    put lineOffset(pRef, sSprRefs) into tLn
    if tLn > 0 then delete line tLn of sSprRefs
+   put true into sSprLiveDirty
 end b2kSpriteForget
 
 -- Internal: remove every live sprite (b2kClear / b2kTeardown path).
@@ -3773,6 +3898,8 @@ command b2kSpritesClear
       if tRef is not empty then b2kSpriteRemove tRef
    end repeat
    put empty into sSprRefs
+   put empty into sSprLive
+   put false into sSprLiveDirty
 end b2kSpritesClear
 
 -- Internal: forget one sheet -- its regions, anims, sliced/mirrored frame
@@ -4053,11 +4180,28 @@ end b2kSpriteShowFrame
 command b2kSpritesTick
    local tNow, tRef, tDead, tSheet, tAnim, tAKey, tList, tStep, tN, tLoc, tBX, tBY
    if sSprRefs is empty then exit b2kSpritesTick
+   -- the tick walks only the LIVE subset (bound and/or playing); the
+   -- list rebuilds lazily when membership changed. Tile-heavy scenes
+   -- are ~90% inert sprites, and per-frame cost must not scale with
+   -- them (a platformer level: ~100 tiles skipped, ~25 live serviced).
+   if sSprLiveDirty is true then
+      put empty into sSprLive
+      repeat for each line tRef in sSprRefs
+         if tRef is empty then next repeat
+         if sSprBind[tRef] is not empty or sSprAnim[tRef] is not empty then
+            put tRef & cr after sSprLive
+         end if
+      end repeat
+      put false into sSprLiveDirty
+   end if
+   if sSprLive is empty then exit b2kSpritesTick
    put the milliseconds into tNow
    put empty into tDead
    set the itemDelimiter to comma
-   repeat for each line tRef in sSprRefs
+   repeat for each line tRef in sSprLive
       if tRef is empty then next repeat
+      -- still-inert guard: membership changed mid-frame retires next tick
+      if sSprBind[tRef] is empty and sSprAnim[tRef] is empty then next repeat
       try
          if sSprBind[tRef] is not empty then
             put the loc of sSprBind[tRef] into tLoc
@@ -4080,6 +4224,7 @@ command b2kSpritesTick
                if tStep > tN then
                   if sAnimLoop[tAKey] is false then
                      put empty into sSprAnim[tRef]
+                     put true into sSprLiveDirty   -- (if also unbound) retire it
                      if sSprMsg[tRef] is not empty and sFrameObj is not empty then
                         dispatch sSprMsg[tRef] to sFrameObj with tRef, tAnim
                      end if
@@ -4195,6 +4340,7 @@ command b2kPlayerAttach pCtrl
    put 0 into sPlayHoldMS
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
+   b2kPlayerTuneCache   -- bake the knobs + probe geometry for the tick
    b2kPlayerResolveArt
    b2kInputOn   -- arms the sampler; starter bindings fill empty slots only
 end b2kPlayerAttach
@@ -4223,7 +4369,26 @@ end b2kPlayerResolveArt
 -- stored verbatim for your own use.
 command b2kPlayerSet pKey, pValue
    put pValue into sPlayTune[toLower(pKey)]
+   b2kPlayerTuneCache
 end b2kPlayerSet
+
+-- Internal: resolve the knobs into flat locals ONCE per change -- the
+-- tick reads these every frame and must not pay name lookups for them.
+command b2kPlayerTuneCache
+   put b2kPlayerGet("moveSpeed") into sPlayMoveSpd
+   put b2kPlayerGet("accel") into sPlayAccelG
+   put b2kPlayerGet("airAccel") into sPlayAccelA
+   put b2kPlayerGet("jumpSpeed") into sPlayJumpSpd
+   put b2kPlayerGet("jumpCut") into sPlayJumpCut
+   put b2kPlayerGet("coyoteMs") into sPlayCoyote
+   put b2kPlayerGet("bufferMs") into sPlayBuffer
+   put b2kPlayerGet("maxFall") into sPlayMaxFall
+   put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into sPlayCosSlope
+   if sPlayHalfW is not empty and sPlayHalfW > 0 then
+      put sPlayHalfH + 4 into sPlayReach
+      put (0 - max(2, sPlayHalfW * 0.6)) & comma & 0 & comma & max(2, sPlayHalfW * 0.6) into sPlayProbeOffs
+   end if
+end b2kPlayerTuneCache
 
 function b2kPlayerGet pKey
    local tDef
@@ -4363,21 +4528,18 @@ end b2kPlayerForget
 -- frame and report phantom landings while rising THROUGH a one-way
 -- chain (the bridge route). Plain upward motion is NOT skipped -- running
 -- up a slope moves the capsule upward while genuinely grounded.
-command b2kPlayerProbe pVY
-   local tPos, tX, tY, tReach, tSpread, tOffsets, tOff, tCos
+command b2kPlayerProbe pBody, pVY
+   local tX, tY, tOff
    put false into sPlayGrounded
    if sPlayJumping is true and pVY < 0 then exit b2kPlayerProbe
    set the itemDelimiter to comma
-   put b2kPosition(sPlayRef) into tPos
-   put item 1 of tPos into tX
-   put item 2 of tPos into tY
-   put sPlayHalfH + 4 into tReach
-   put max(2, sPlayHalfW * 0.6) into tSpread
-   put (0 - tSpread) & comma & 0 & comma & tSpread into tOffsets
-   put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into tCos
-   repeat for each item tOff in tOffsets
-      get b2kRayHit(tX + tOff, tY, tX + tOff, tY + tReach)
-      if sRayNY is not empty and sRayNY <= 0 - tCos then
+   -- raw reads with the caller's body handle: the probe runs every
+   -- frame, so it skips the ref->body lookup and the "x,y" string pack
+   put b2kToScreenX(b2BodyX(pBody)) into tX
+   put b2kToScreenY(b2BodyY(pBody)) into tY
+   repeat for each item tOff in sPlayProbeOffs
+      get b2kRayHit(tX + tOff, tY, tX + tOff, tY + sPlayReach)
+      if sRayNY is not empty and sRayNY <= 0 - sPlayCosSlope then
          put true into sPlayGrounded
          put the milliseconds into sPlayGroundMS
          exit b2kPlayerProbe
@@ -4389,17 +4551,20 @@ end b2kPlayerProbe
 -- sprites -> camera, so it reads this frame's edges and the sprite tick
 -- applies the anim it picks. Exits in one compare when unused.
 command b2kPlayerTick
-   local tNow, tDT, tVel, tVX, tVY, tAxis, tTarget, tAcc, tStep
-   local tPrevState, tMaxFall, tWrite
+   local tNow, tDT, tB, tVX, tVY, tAxis, tTarget, tAcc, tStep
+   local tPrevState, tWrite
    if sPlayRef is empty then exit b2kPlayerTick
-   if sBody[sPlayRef] is empty then exit b2kPlayerTick
+   put sBody[sPlayRef] into tB
+   if tB is empty then exit b2kPlayerTick
    put the milliseconds into tNow
-   -- present velocity, screen-oriented px/s (positive vy = falling)
+   -- present velocity, screen-oriented px/s (positive vy = falling).
+   -- Raw reads with the cached handle: this runs every frame, so skip
+   -- the wrapper's ref lookup and "vx,vy" string round-trip (same math
+   -- as b2kVelocity -- mind the y flip, gotcha 9).
    set the itemDelimiter to comma
-   put b2kVelocity(sPlayRef) into tVel
-   put item 1 of tVel into tVX
-   put item 2 of tVel into tVY
-   b2kPlayerProbe tVY
+   put b2BodyVX(tB) * sScale into tVX
+   put 0 - (b2BodyVY(tB) * sScale) into tVY
+   b2kPlayerProbe tB, tVY
    put false into tWrite
    if sPlayControl is true then
       -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
@@ -4414,11 +4579,11 @@ command b2kPlayerTick
             put 1 into sPlayFacing
          end if
       end if
-      put tAxis * b2kPlayerGet("moveSpeed") into tTarget
+      put tAxis * sPlayMoveSpd into tTarget
       if sPlayGrounded then
-         put b2kPlayerGet("accel") into tAcc
+         put sPlayAccelG into tAcc
       else
-         put b2kPlayerGet("airAccel") into tAcc
+         put sPlayAccelA into tAcc
       end if
       put tAcc * tDT into tStep
       if tVX < tTarget then
@@ -4429,9 +4594,9 @@ command b2kPlayerTick
       put true into tWrite
       -- jump: a buffered press fires while grounded-or-coyote
       if b2kActionPressed("jump") then put tNow into sPlayPressMS
-      if sPlayPressMS > 0 and tNow - sPlayPressMS <= b2kPlayerGet("bufferMs") then
-         if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= b2kPlayerGet("coyoteMs")) then
-            put 0 - b2kPlayerGet("jumpSpeed") into tVY
+      if sPlayPressMS > 0 and tNow - sPlayPressMS <= sPlayBuffer then
+         if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= sPlayCoyote) then
+            put 0 - sPlayJumpSpd into tVY
             put true into sPlayJumping
             put false into sPlayGrounded   -- airborne from this frame on
             put 0 into sPlayGroundMS       -- consume coyote
@@ -4440,17 +4605,16 @@ command b2kPlayerTick
       end if
       -- jump-cut: releasing while still rising from OUR jump shortens it
       if sPlayJumping and tVY < 0 and b2kActionReleased("jump") then
-         put tVY * b2kPlayerGet("jumpCut") into tVY
+         put tVY * sPlayJumpCut into tVY
          put false into sPlayJumping
       end if
    end if
    if sPlayJumping and tVY >= 0 then put false into sPlayJumping   -- apex
-   put b2kPlayerGet("maxFall") into tMaxFall
-   if tVY > tMaxFall then
-      put tMaxFall into tVY
+   if tVY > sPlayMaxFall then
+      put sPlayMaxFall into tVY
       put true into tWrite
    end if
-   if tWrite then b2kSetVelocity sPlayRef, tVX, tVY
+   if tWrite then b2SetVelocity tB, tVX / sScale, 0 - (tVY / sScale)
    -- the state machine (land = exactly one tick on touch-down)
    put sPlayState into tPrevState
    if sPlayGrounded is true then
@@ -4851,6 +5015,225 @@ command b2kCamApply
 end b2kCamApply
 
 -- =====================================================================
+-- Audio: named sounds over audioClips + a script-side tone synthesizer
+-- =====================================================================
+-- Model: a sound is an AUDIOCLIP imported into the stack -- the one LC
+-- sound path with no external media-layer dependency -- and plays by
+-- name (`play audioClip`). The engine plays ONE clip at a time; a new
+-- play cuts the previous. That is the classic LC limit, and it suits
+-- short retro SFX (document it, don't fight it). b2kToneMake SYNTHESIZES
+-- a clip in pure script (8-bit mono WAV at 22050 Hz, square or sine, a
+-- comma list of note frequencies, per-note decay so notes never click),
+-- so a self-contained example ships sound with ZERO asset files. Sounds
+-- are assets that SURVIVE b2kTeardown -- clips are tiny and resets must
+-- stay snappy; names are stable, so re-making replaces rather than
+-- accumulates, and b2kSoundsWipe purges everything (it also sweeps
+-- b2ksnd_ clips a dead session left in the stack). Failures degrade to
+-- silence, never to errors: the first play that throws trips a
+-- dead-flag and b2kSoundStatus() says why. The mute is a user
+-- preference. There is no per-frame tick -- audio is purely
+-- event-driven.
+
+-- Import a WAV/AIFF/AU file as a named sound (replaces any same name).
+command b2kSoundLoad pName, pPath
+   local tClip, tCount
+   if pName is empty then exit b2kSoundLoad
+   if there is no file pPath then
+      put "no such file: " & pPath into sSndNote
+      exit b2kSoundLoad
+   end if
+   put "b2ksnd_" & pName into tClip
+   try
+      if there is an audioClip tClip then delete audioClip tClip
+      put the number of audioClips of this stack into tCount
+      import audioClip from file pPath
+      if the number of audioClips of this stack > tCount then
+         set the name of audioClip (tCount + 1) of this stack to tClip
+         put tClip into sSndClip[pName]
+      end if
+   catch tErr
+      put "import failed: " & tErr into sSndNote
+   end try
+end b2kSoundLoad
+
+-- Synthesize a named sound: pFreqs is a comma list of note frequencies
+-- in Hz (0 = a rest), each pMsPerNote long; pVolPct 0-100 (default 60);
+-- pShape "square" (default -- retro/plucky) or "sine" (soft). About
+-- 22 KB per second of audio, built once -- keep SFX short.
+--   b2kToneMake "coin", "1319,1760", 36          -- a two-note blip
+--   b2kToneMake "win", "523,659,784,1047", 110   -- a little fanfare
+command b2kToneMake pName, pFreqs, pMsPerNote, pVolPct, pShape
+   local tClip, tData, tPath, tCount, tF
+   if pName is empty then exit b2kToneMake
+   put "b2ksnd_" & pName into tClip
+   put b2kClamp(pMsPerNote, 5, 2000) into pMsPerNote
+   put b2kClamp(b2kNumberOr(pVolPct, 60), 0, 100) into pVolPct
+   put empty into tData
+   set the itemDelimiter to comma
+   repeat for each item tF in pFreqs
+      put b2kToneBytes(b2kNumberOr(word 1 of tF, 440), pMsPerNote, pVolPct, pShape) after tData
+   end repeat
+   if tData is empty then exit b2kToneMake
+   put specialFolderPath("temporary") & "/b2ktone_" & the milliseconds & "_" & random(99999) & ".wav" into tPath
+   put b2kWavWrap(tData) into URL ("binfile:" & tPath)
+   try
+      if there is an audioClip tClip then delete audioClip tClip
+      put the number of audioClips of this stack into tCount
+      import audioClip from file tPath
+      if the number of audioClips of this stack > tCount then
+         set the name of audioClip (tCount + 1) of this stack to tClip
+         put tClip into sSndClip[pName]
+      end if
+   catch tErr
+      put "import failed: " & tErr into sSndNote
+   end try
+   try
+      delete file tPath
+   catch tErr
+   end try
+end b2kToneMake
+
+-- Internal: pMs of one note as 8-bit unsigned mono PCM at 22050 Hz,
+-- with a linear decay across the note (clickless and plucky).
+function b2kToneBytes pFreq, pMs, pVolPct, pShape
+   local tRate, tN, tOut, i, tPhase, tStep, tAmp, tEnv, tS
+   put 22050 into tRate
+   put round(tRate * pMs / 1000) into tN
+   if tN < 1 then return empty
+   put pVolPct * 1.27 into tAmp   -- 0-100 -> 0-127 sample amplitude
+   put pFreq / tRate into tStep
+   put 0 into tPhase
+   put empty into tOut
+   repeat with i = 0 to tN - 1
+      put tAmp * (1 - i / tN) into tEnv
+      if pFreq <= 0 then
+         put 0 into tS   -- a rest
+      else
+         if pShape is "sine" then
+            put tEnv * sin(tPhase * 2 * kPI) into tS
+         else
+            if tPhase mod 1 < 0.5 then
+               put tEnv into tS
+            else
+               put 0 - tEnv into tS
+            end if
+         end if
+      end if
+      put numToByte(round(128 + tS)) after tOut
+      add tStep to tPhase
+   end repeat
+   return tOut
+end b2kToneBytes
+
+-- Internal: wrap raw 8-bit mono 22050 Hz samples in a WAV container.
+function b2kWavWrap pData
+   local tLen
+   put the number of bytes in pData into tLen
+   return "RIFF" & b2kLE32(36 + tLen) & "WAVE" & "fmt " & b2kLE32(16) \
+         & b2kLE16(1) & b2kLE16(1) & b2kLE32(22050) & b2kLE32(22050) \
+         & b2kLE16(1) & b2kLE16(8) & "data" & b2kLE32(tLen) & pData
+end b2kWavWrap
+
+-- Internal: little-endian byte packers (hand-rolled: no binaryEncode
+-- format-letter portability worries).
+function b2kLE16 pN
+   return numToByte(pN mod 256) & numToByte(pN div 256 mod 256)
+end b2kLE16
+
+function b2kLE32 pN
+   return numToByte(pN mod 256) & numToByte(pN div 256 mod 256) & numToByte(pN div 65536 mod 256) & numToByte(pN div 16777216 mod 256)
+end b2kLE32
+
+-- Play a named sound (cuts whatever is playing -- the audioClip model).
+command b2kSound pName
+   local tClip
+   if sSndMute is true or sSndDead is true then exit b2kSound
+   put sSndClip[pName] into tClip
+   if tClip is empty then exit b2kSound
+   try
+      play audioClip tClip
+   catch tErr
+      put true into sSndDead   -- this engine can't play: silence, no spam
+      put "play failed: " & tErr into sSndNote
+   end try
+end b2kSound
+
+-- Loop a named sound until b2kSoundStop / the next play (ambience).
+command b2kSoundLoop pName
+   local tClip
+   if sSndMute is true or sSndDead is true then exit b2kSoundLoop
+   put sSndClip[pName] into tClip
+   if tClip is empty then exit b2kSoundLoop
+   try
+      play audioClip tClip looping
+   catch tErr
+      put true into sSndDead
+      put "play failed: " & tErr into sSndNote
+   end try
+end b2kSoundLoop
+
+command b2kSoundStop
+   try
+      play stop
+   catch tErr
+   end try
+end b2kSoundStop
+
+-- Mute is a preference: it survives b2kTeardown and stack resets are up
+-- to the caller (store it in a custom property if you want it saved).
+command b2kSoundMute pFlag
+   put (pFlag is true) into sSndMute
+   if sSndMute then b2kSoundStop
+end b2kSoundMute
+
+function b2kSoundMuted
+   return (sSndMute is true)
+end b2kSoundMuted
+
+-- The engine-GLOBAL output volume (the playLoudness, 0-100): it affects
+-- every stack's audio, so games should expose it, not hardcode it.
+command b2kSoundVolume pPct
+   try
+      set the playLoudness to round(b2kClamp(pPct, 0, 100))
+   catch tErr
+      put "volume failed: " & tErr into sSndNote
+   end try
+end b2kSoundVolume
+
+function b2kSoundIsLoaded pName
+   return (sSndClip[pName] is not empty)
+end b2kSoundIsLoaded
+
+-- Empty = healthy; otherwise the most recent reason audio degraded
+-- (missing file, import failure, play failure). Plays never throw.
+function b2kSoundStatus
+   return sSndNote
+end b2kSoundStatus
+
+-- Internal: delete every Kit-made audioClip ("b2ksnd_" prefix -- catches
+-- a dead session's leftovers too) and reset the registry. The dead-flag
+-- resets (a fresh world may retry); the mute preference survives.
+command b2kSoundsWipe
+   local i, tName
+   try
+      play stop
+   catch tErr
+   end try
+   repeat with i = the number of audioClips of this stack down to 1
+      put the short name of audioClip i of this stack into tName
+      if char 1 to 7 of tName is "b2ksnd_" then
+         try
+            delete audioClip i of this stack
+         catch tErr
+         end try
+      end if
+   end repeat
+   put empty into sSndClip
+   put false into sSndDead
+   put empty into sSndNote
+end b2kSoundsWipe
+
+-- =====================================================================
 -- The loop  (fixed timestep, generation-guarded; one screen lock per frame)
 -- =====================================================================
 -- The whole frame -- body sync, contact/sensor dispatch and the app's own
@@ -4897,13 +5280,18 @@ on b2kStep pGen
    -- "timer cadence (~16.5 ms) plus frame cost", measured at ~50 fps under
    -- load in the Phase 0 spike. Clamp to 1..16 so a heavy frame reschedules
    -- immediately and an idle one never busy-loops.
+   -- Reschedule with pGen (OUR generation), never the live sGen: if a user
+   -- handler inside this frame tore the world down and restarted it (a
+   -- level change from a sensor event), sGen is already the NEW loop's --
+   -- rescheduling with it would clone the loop and double-step forever.
+   -- With pGen, this stale instance's next tick fails the guard and dies.
    if sPaused is true then
-      send ("b2kStep " & sGen) to me in 16 milliseconds
+      send ("b2kStep " & pGen) to me in 16 milliseconds
    else
       put 16 - (the milliseconds - tNow) into tNext
       if tNext < 1 then put 1 into tNext
       if tNext > 16 then put 16 into tNext
-      send ("b2kStep " & sGen) to me in tNext milliseconds
+      send ("b2kStep " & pGen) to me in tNext milliseconds
    end if
 end b2kStep
 

@@ -31,8 +31,9 @@ and degrees** the whole way.
 17. [Tuning and performance](#17-tuning-and-performance)
 18. [Dropping to the core `b2…` API](#18-dropping-to-the-core-b2-api)
 19. [A complete worked example: a little car](#19-a-complete-worked-example-a-little-car)
-20. [xTalk gotchas worth knowing](#20-xtalk-gotchas-worth-knowing)
-21. [Complete API index](#21-complete-api-index)
+20. [Building a whole game (the micro-game pattern)](#20-building-a-whole-game-the-micro-game-pattern)
+21. [xTalk gotchas worth knowing](#21-xtalk-gotchas-worth-knowing)
+22. [Complete API index](#22-complete-api-index)
 
 ---
 
@@ -683,6 +684,31 @@ powerups call `b2kPlayerJump 700`. For cutscenes, hit poses, and knockback,
 owns velocity and animations until you hand control back. The platformer
 example's whole movement system is the four lines above.
 
+### Sound effects (`b2kToneMake`, `b2kSound`)
+
+Sounds are named **audioClips** — the engine plays one at a time (a new
+play cuts the previous), which is exactly right for short retro SFX. You
+can import files (`b2kSoundLoad "boom", tPath`), but the fun path needs no
+files at all: `b2kToneMake` synthesizes a clip from a list of note
+frequencies, square (retro) or sine (soft), with a per-note decay.
+
+```livecode
+b2kToneMake "jump", "392,587", 40          -- a quick up-chirp
+b2kToneMake "coin", "1319,1760", 36, 45    -- a bright blip
+b2kToneMake "win", "523,659,784,1047", 110 -- a four-note fanfare
+
+-- hooks: the player's land state, your sensors, your win handler
+on b2kFrame
+   if b2kPlayerState() is "land" then b2kSound "land"
+end b2kFrame
+```
+
+`b2kSoundMute true` silences everything (a preference — it survives
+`b2kTeardown`); `b2kSoundVolume` drives the engine-global loudness. On an
+engine with no working audio the Kit degrades to silence rather than
+errors — check `b2kSoundStatus()` if you hear nothing. The platformer's
+eight cues are all synthesized; press M in it to mute.
+
 ---
 
 ## 13. Sensors (trigger zones)
@@ -778,9 +804,11 @@ corners to snag. Chains are invisible; draw a matching graphic over them.
 
 ```livecode
 local tPts
-put "40,400" & cr & "200,360" & cr & "360,420" & cr & "560,380" into tPts
+-- six points = four segments, of which the OUTER TWO are ghost anchors
+-- (see below): the solid ground here runs from 520,360 back to 80,400
+put "600,380" & cr & "520,360" & cr & "360,420" & cr & "200,360" & cr & "80,400" & cr & "20,400" into tPts
 b2kChain tPts               -- an open smooth ground line
-b2kChain tPts, true         -- pass true to close it into a loop
+b2kChain tPts, true         -- pass true to close it into a loop (all solid)
 b2kSmoothGround tPts        -- alias for an open chain
 ```
 
@@ -793,8 +821,16 @@ b2kAddChain the long id of graphic "Hill", the points of graphic "Hill", true
 
 > **Winding matters.** A chain's *solid side is to the right of the direction the
 > points travel.* For ground you stand on, list the top surface **right-to-left**
-> so the solid side faces up. (If bodies fall through your terrain, reverse the
-> point order.)
+> so the solid side faces up. (If bodies fall through your terrain *everywhere*,
+> reverse the point order.)
+
+> **The ghost rule.** An **open** chain's first and last segments are Box2D's
+> *ghost anchors* — they smooth the junctions but **don't collide** (N points ⇒
+> N−3 solid segments). Always run the chain **one segment past** the surface you
+> need on each side; over solid ground the tails can just continue flat. If
+> bodies fall through your platform only *near its ends*, this is why — the
+> chain's endpoints are sitting at the platform's edges. Closed loops
+> (`pLoop` true) have no ends, so every segment is solid.
 
 ---
 
@@ -862,9 +898,24 @@ put b2kAwakeBodyCount()    -- awake dynamic bodies (native count)
 > **Performance habits the Kit already follows:** sleeping is on, the renderer
 > syncs from Box2D body-move events instead of scanning every body each frame,
 > angle reads are skipped for non-rotating controls, pixel-identical redraws are
-> skipped, joint markers that haven't moved aren't redrawn, and per-frame work is
-> cached. Keep sleeping enabled and
-> avoid doing heavy work every `on b2kFrame` and big scenes stay smooth.
+> skipped, joint markers that haven't moved aren't redrawn, the sprite tick walks
+> only bound/playing sprites (a hundred static tiles cost nothing per frame),
+> input bindings resolve their keycodes at bind time, and the player tick reads
+> pre-baked tuning over raw body handles. Keep sleeping enabled, avoid heavy work
+> every `on b2kFrame`, and big scenes stay smooth.
+
+> **Performance habits for YOUR game code** (the engine is a single interpreted
+> thread, and every property set risks a redraw):
+> 1. **Throttle your HUD.** Setting a field's text re-lays-out and redraws it —
+>    a readout that changes every frame costs a redraw every frame. Update HUDs
+>    at ~4 Hz (`if the milliseconds < gHudNextMS then …`), and still skip the
+>    set when the text is unchanged. Both game examples do this.
+> 2. **Write properties and velocities only on change.** Track the last value you
+>    applied (the platformer's gate writes its kinematic velocity only when the
+>    target flips).
+> 3. **Read the clock once per handler**, not once per entity.
+> 4. **Build heavy things once.** Sounds survive `b2kTeardown`; tiles are
+>    create-at-level-build; sheets slice lazily and share frames.
 
 ---
 
@@ -948,7 +999,64 @@ joints, smooth chain terrain, and a per-frame motor driven by the keyboard.
 
 ---
 
-## 20. xTalk gotchas worth knowing
+## 20. Building a whole game (the micro-game pattern)
+
+`examples/box2dxt-microgame.livecodescript` is a complete game — start
+screen, two levels, a win screen — in a few hundred lines of card logic,
+with nothing to install beyond the extension (the hero sheet is embedded
+base64; every sound is `b2kToneMake`d). It is the file to copy when you
+start your own game. Its skeleton is four ideas:
+
+**1. A game-state machine, gated by `b2kPlayerControl`.** One `gMode`
+local (`menu` / `play` / `won`) decides what clicks and keys mean. The
+world is built and *running* behind the menu — the hero idles, sweepers
+patrol — but `b2kPlayerControl false` means the keys do nothing until
+`mgBegin` hands them over. Hit poses and the win screen reuse the same
+switch.
+
+**2. Levels are data; the interpreter is yours.** Each level is a few
+lines of text, one verb per line:
+
+```
+bounds 1024,640
+spawn 110,500
+slab 0,576,1024,640
+ledge 620,860,420
+coin 460,448
+spike 250,330,560
+door 945,478
+```
+
+…and `mgBuild` is a ~100-line `switch` that tears the world down
+(`b2kClear` + `b2kTeardown`), interprets the lines, then makes the player
+and hands the camera its bounds. Verbs are cheap — when your game needs a
+new object, add a `case` and a line format. This is the Kit's intended
+scene pattern: the *format* belongs to your game, the heavy lifting
+(bodies, sprites, camera, controller) is already API. Two details worth
+stealing: the `ledge` verb ghost-pads its chain automatically (see §15),
+and `door` is just a sensor plus a `gDoorOpen` flag the frame hook flips
+when the coin count is full.
+
+**3. One call makes the player.** `b2kPlayerMake gSpawnX, gSpawnY, 32,
+56, "hero"` creates the capsule body host, the bound sprite, the
+controller, and arms input. After it: map the anims, set two tuning
+knobs, `b2kCamFollow`. The micro-game's whole "character system" is six
+lines.
+
+**4. Game events ride the hooks you already have.** Coins/spikes/door are
+sensors (`on b2kSensorEnter`); landing and jump sounds key off
+`b2kPlayerState()` in `on b2kFrame`; respawn is a non-looping `hit`
+animation whose `b2kSpriteOnFinish` message teleports the hero home. No
+new machinery — a game is the Kit's events plus your rules.
+
+Play order: `openCard` builds level 1 and shows the menu → click →
+`mgBegin` → door (all coins) → `mgAdvance` → level 2 → door → `mgShowWin`
+→ click → back to level 1. `R` rebuilds the current level, `ESC` pauses,
+`M` mutes.
+
+---
+
+## 21. xTalk gotchas worth knowing
 
 A few things that trip up LiveCode/OpenXTalk users specifically:
 
@@ -970,7 +1078,7 @@ A few things that trip up LiveCode/OpenXTalk users specifically:
 
 ---
 
-## 21. Complete API index
+## 22. Complete API index
 
 Every public handler, grouped. `[f]` marks a **function** (returns a value — call
 it with `()` / `get` / `put`); everything else is a **command** (a statement).
@@ -1071,6 +1179,12 @@ Optional arguments are in `[…]`.
 `b2kCamDeadzone w,h` · `b2kCamBounds x1,y1,x2,y2` · `b2kCamGoto x,y` ·
 `b2kCamPos()` `[f]` · `b2kCamShake ampPx,ms` · `b2kCamStatus()` `[f]` ·
 `b2kCamLocSemantics()` `[f]` · `b2kCamMouseX()` `[f]` · `b2kCamMouseY()` `[f]`
+
+### Sound
+`b2kSoundLoad name,path` · `b2kToneMake name,freqs,msPerNote [,vol,shape]` ·
+`b2kSound name` · `b2kSoundLoop name` · `b2kSoundStop` · `b2kSoundMute flag` ·
+`b2kSoundMuted()` `[f]` · `b2kSoundVolume pct` · `b2kSoundIsLoaded(name)` `[f]` ·
+`b2kSoundStatus()` `[f]`
 
 ### Events (handlers you write)
 `on b2kFrame` · `on b2kContact pA,pB` · `on b2kEndContact pA,pB` ·

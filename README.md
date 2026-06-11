@@ -49,7 +49,13 @@ Box2D v3.1.0 (fetched by CMake)
    Newton's cradle to a drivable car. Or try the flagship
    [contraption builder](examples/box2dxt-contraption-builder.livecodescript):
    a full build-and-run physics sandbox with fans, magnets, lasers, bombs,
-   motors, and save/load.
+   motors, and save/load. Game-minded? The
+   [micro-game](examples/box2dxt-microgame.livecodescript) is a complete
+   two-level platformer (menu → levels → win screen, embedded art,
+   synthesized sound) and the
+   [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
+   Game Kit pushed hard — player controller, scrolling camera, spritesheets,
+   coin puzzles.
 
 The step-by-step version (with troubleshooting) is in
 [**docs/getting-started.md**](docs/getting-started.md).

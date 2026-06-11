@@ -174,21 +174,43 @@ below; run it in OXT and report.
 
 ## Phase 5 — Game scaffolding (L, design-first)
 
-Sketch now, design when Phase 4 is real:
+Phase 4 is real, so the design work is unblocked. The chunks land
+separately, each PR-sized, in rough value order:
 
-- **Scenes/levels:** load/save level layouts (seed: the builder's
-  `serializeText` record format); `b2kSceneLoad/Save/Reset`; win/lose hooks
-  (the ROADMAP §4.1 goal-zone work and this converge here).
-- **Audio:** `b2kSoundLoad/Play` over `play`/player objects with documented
-  platform caveats; hooks from player land/jump/coin events.
-- **Enemy/behaviour patterns:** patrol, chase-on-sight (`b2kRayHit` line of
-  sight), hazard respawn — shipped as documented example patterns first,
-  promoted to API only once two examples repeat them.
+- **Audio — BUILT (2026-06-11), awaiting the OXT pass.** `b2kSound*` over
+  imported audioClips (`play audioClip`: the one LC sound path with no
+  external media dependency; one clip at a time, documented) plus
+  `b2kToneMake`, a pure-script WAV synthesizer (square/sine, note lists,
+  per-note decay) so self-contained examples have SFX with zero asset
+  files. Mute survives teardown; engine-global volume wrapped; a play
+  failure trips a dead-flag (silence, never errors; `b2kSoundStatus()`).
+  The platformer plays eight synthesized cues (jump, land — off the
+  player's land state — coin, stomp, hurt, checkpoint, gate, win); M
+  mutes. Player objects for streamed music stay future work.
+- **Enemy/behaviour patterns — IN THE DEMO as documented patterns.** The
+  platformer's indexed tables are the plan's "example patterns first":
+  `pfMakeSlime` (patrol + stomp/spike kinds), `pfAddMover` (bodiless
+  sine-path hazards: bee/fly/sweeping saw), `pfMakeThwomp` (arm/fall/
+  rest/rise lifecycle, rideable, draggable). Promote to `b2k` API once a
+  second example repeats them (the micro-game below is that test).
+- **Scenes/levels — DESIGN PROBE BUILT (2026-06-11) inside the micro-game.**
+  Levels are data: one `verb args` line per object (`slab`, `ledge`, `coin`,
+  `spike`, `sweep`, `door`, `text`, `spawn`, `bounds`), interpreted by a
+  ~100-line example-side `mgBuild`; the `ledge` verb ghost-pads its chain
+  automatically. Win/lose hooks ride sensors + the frame hook. Whether this
+  is promoted to `b2kScene*` API (and merged with the builder's
+  `serializeText` lineage) gets decided from how the pattern holds up in use.
 - **Builder cross-pollination:** animated sprite parts and the player as a
   placeable "kind" inside the contraption builder (its §3/§4 roadmap), making
   the builder the level editor — the long-game payoff.
-- **Exit:** a complete micro-game (start screen → 2 levels → win screen) as
-  `examples/`, and the "build a game" chapter of the kit guide.
+- **Exit — BUILT (2026-06-11), awaiting the OXT pass:** the micro-game
+  (`examples/box2dxt-microgame.livecodescript`): start screen → 2 levels →
+  win screen, on `b2kPlayerMake` (the green-field path the platformer
+  doesn't exercise), hero sheet embedded as base64, all sounds synthesized
+  — paste one file, click, play. Plus the kit guide's new "Building a whole
+  game" chapter (§20) walking its four ideas: the mode machine gated by
+  `b2kPlayerControl`, levels-as-data, the one-call player, and
+  rules-as-hooks.
 
 ---
 
@@ -246,3 +268,13 @@ user-confirmed in OXT before the next begins.
 | 2026-06-11 | **Ramp art fixed by measuring the PNG, not guessing names.** Decoded the Kenney tiles sheet offline: `ramp_short_a/b` are a 45° pair (filled + full diagonal) drawn DESCENDING left-to-right; `ramp_long_a/b` are the 26.6° halves that match the mound's chain. The mound now uses mirrored long ramps for ascent, long ramps for descent, and dirt-centre ground tiles beneath so the hill reads as one mass. Rule going forward: verify atlas art geometry before placing it. | User report ("ramps wrong/weird") |
 | 2026-06-11 | **Demo rebuilt as a collect-them-ALL puzzle platformer** (user direction): 4608px traditional left-to-right level, 12 coins each verified reachable against the jump arc (154px apex), drag-physics as puzzle verbs (crate→plate; a resting thwomp is draggable for 2.6s and rises from where you park it). New foes on existing mechanisms only: spike slime (unstompable), sweeping saw (bodiless sine mover), second thwomp. Enemy/trap/mover state generalized to indexed tables so a new foe is one `pfMake…` line. | User direction; this commit |
 | 2026-06-11 | **Sheet loaders generalized beyond Kenney** (user requirement): grid sheets take margin/spacing; frame size 0 = source-only registration; `b2kSheetAddFrame` names arbitrary regions (the no-XML packed-sheet path); `b2kSheetFrameNames` for atlas introspection. No new mechanism — regions were always the internal model; this exposes authoring them. | User requirement; this commit |
+| 2026-06-11 | **Phase 5 opened with audio; backend = audioClips + script-synthesized WAVs.** `play audioClip` needs no external media layer and an imported clip is stack-embedded — the only sound path that keeps examples self-contained; `b2kToneMake` removes the asset problem entirely (8-bit mono 22050 Hz WAV built in script, hand-rolled little-endian packers, temp-file import, ~23k samples for the demo's 8 cues). One-clip-at-a-time is documented, not fought (suits retro SFX). Failures degrade to silence via a dead-flag; mute is a preference surviving teardown; teardown sweeps `b2ksnd_` clips like sprite orphans. Streamed music via player objects deferred. | Phase 5 audio commit |
+| 2026-06-11 | **Phase 5 sequencing:** audio first (biggest feel win for the now-good demo), enemy patterns declared satisfied as in-demo documented patterns (indexed tables; promotion to API waits for the micro-game to repeat them), scenes next, then builder cross-pollination and the micro-game exit. | Phase 5 kickoff |
+| 2026-06-11 | **OXT compile gotcha #13 found by the audio module:** `import audio clip from file` fails to compile ("bad image type") — the type token is the single word `audioClip` (prose in the LC dictionary spells it as two words; the parser doesn't). Fixed both import sites; CLAUDE.md gotcha added. | User OXT compile |
+| 2026-06-11 | **The chain GHOST RULE, surfaced by the rebuilt level:** an open Box2D chain collides N points as N−3 segments — the first and last segments are ghost anchors. The original level obeyed it implicitly (chains always ran one tile past the art; that's also why `b2kChain` says ">= 4 points"); the rebuild placed endpoints AT the art edges, making bridge ends, cloud edges and BOTH mound ramps intangible ("falls through on the left side", "collisions occasionally do not work"). All chains re-padded (mound = 6 points so its three real segments collide); rule documented in the Kit comment, kit-reference and kit-guide (whose own example used to violate it). | User OXT runs |
+| 2026-06-11 | **Stomp detection moved off velocity onto controller state.** Contacts dispatch after the physics step, when the solver has already absorbed a clean stomp's impact — `vy > 40` read ~0 and hurt the hero instead of squashing. Now: squash when this frame's or last frame's player state is land/fall (velocity kept as fallback) + the existing above-the-slime position gate. General lesson: judge gameplay intent from controller state, not post-solve velocities. | User OXT runs |
+| 2026-06-11 | **Thwomps re-arm in place** (user direction): the rise ends with set-static at the CURRENT x — no teleport home (it read as vanish/reappear and undid drag-repositioning). `gBlockHomeX` removed. | User direction |
+| 2026-06-11 | **Optimization round:** sprite tick skips inert sprites (no bind + no anim) before the try/catch — the ~100 static tiles now cost two array reads each per frame; sounds persist across `b2kTeardown` (resets skip ~0.25s of tone re-synthesis; clips are KBs); mover tick reads the clock once. Declined as not-worth-it: caching `b2kPlayerGet` lookups (µs), reducing ground tiles (visual cost), rendering-config changes (not statically verifiable). | This commit |
+| 2026-06-11 | **Phase 5 exit built: the micro-game** (start → 2 levels → win, one pasteable file, zero external assets) + the guide's "Building a whole game" chapter. The scenes/levels design shipped as the micro-game's example-side data format (verb-per-line text + a small interpreter) rather than Kit API — per the promote-once-repeated rule, `b2kScene*` waits until a second game wants the same format. `b2kPlayerMake` gets its first real exercise (the platformer adopts; this creates). Statically verified; awaiting the OXT pass. | Phase 5 exit commit |
+| 2026-06-11 | **Loop hardening found by the micro-game design: `b2kStep` now reschedules with ITS OWN generation (pGen), not the live sGen.** A world rebuild from inside a frame (the door sensor advancing a level) changes sGen mid-frame; rescheduling with the new value would clone the loop and double-step forever. With pGen the stale instance dies at the guard. The micro-game still defers its rebuild out of the frame (`send … in 80 ms`) — belt and braces, and the door chime gets its beat. | Micro-game design review |
+| 2026-06-11 | **Final hot-path pass (user direction: "optimize around the engine's limitations").** The three real costs on a single interpreted thread: interpreter ops, FFI round-trips, property-set redraws. Landed: sprite-tick LIVE LIST (lazy, dirty-flagged — per-frame cost no longer scales with inert tiles), bind-time keycode resolution for actions/axes, player-tick knob+probe caches baked at set/attach + raw-handle velocity I/O (same math), 4 Hz HUD throttle in both games (an every-frame ms readout = an every-frame field relayout+redraw), gate velocity written on change only. The guide's §17 now carries the playbook. Declined again: rendering-config changes (not statically verifiable). | User direction; this commit |

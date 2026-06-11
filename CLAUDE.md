@@ -136,6 +136,11 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
    "outrun" the camera at 2x). The Kit's camera probes this at `b2kCamOn`
    and compensates every write (`b2kCamShiftX/Y`); for hand-animated moves
    use `b2kSpriteMoveTo`, never a raw `set the loc`.
+13. **Object-type tokens are single words.** `import audioClip from file …`
+   compiles; `import audio clip from file …` does NOT (OXT reports "bad
+   image type" — the parser rejects `audio` as the import type). Same for
+   `videoClip`. The dictionary's prose spells them as two words; the
+   tokens aren't.
 
 ## The Contraption Builder (`examples/box2dxt-contraption-builder.livecodescript`)
 
