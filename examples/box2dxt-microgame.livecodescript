@@ -832,6 +832,7 @@ local sPlayCoyote, sPlayBuffer, sPlayMaxFall, sPlayCosSlope
 local sPlayProbeOffs -- the 3 probe x-offsets, precomputed at attach
 local sPlayReach     -- probe ray length (halfH + 4), precomputed
 local sPlayAir       -- consecutive airborne ticks (landing hysteresis)
+local sPlayNormX     -- surface normal X at the grounded probe hit (slope test)
 local sPlayClock     -- the player's SIM-TIME clock: summed frame ms.
                      -- Wall-clock would shrink the coyote/buffer windows
                      -- on slow machines (90ms = fewer frames); sim time
@@ -1567,6 +1568,11 @@ command b2kSetVelocity pControl, pVxPx, pVyPx
    put sBody[the long id of pControl] into b
    if b is empty then exit b2kSetVelocity
    b2SetVelocity b, pVxPx / sScale, - pVyPx / sScale
+   -- setting a velocity means "move": wake the body. Raw SetVelocity
+   -- does NOT wake (why b2kPush always called SetAwake) - a SLEEPING
+   -- kinematic (a parked gate) given one cached write stayed frozen,
+   -- which read as "the pressure plate is flaky".
+   b2SetAwake b, true
 end b2kSetVelocity
 
 command b2kPush pControl, pDvxPx, pDvyPx
@@ -3881,6 +3887,7 @@ command b2kPlayerProbe pBody, pVY
       get b2kRayHit(tX + tOff, tY, tX + tOff, tY + sPlayReach)
       if sRayNY is not empty and sRayNY <= 0 - sPlayCosSlope then
          put true into sPlayGrounded
+         put sRayNX into sPlayNormX          -- flat vs slope, for ground-snap
          put sPlayClock into sPlayGroundMS   -- the sim clock, not wall time
          exit b2kPlayerProbe
       end if
@@ -3956,6 +3963,16 @@ command b2kPlayerTick
    if sPlayJumping and tVY >= 0 then put false into sPlayJumping   -- apex
    if tVY > sPlayMaxFall then
       put sPlayMaxFall into tVY
+      put true into tWrite
+   end if
+   -- GROUND-SNAP: grounded on FLAT ground, drifting upward, and we did
+   -- not jump = the contact solver's push-out rebound after a hard
+   -- landing (a ~7px hop: phantom airtime, double land ticks - measured
+   -- by the self-test at vy 61 up). Kill it at the source. Slopes are
+   -- exempt (|normalX| >= 0.1): running uphill is real upward motion.
+   -- External boosts must use b2kPlayerJump, which sets the jump flag.
+   if sPlayGrounded and sPlayJumping is not true and tVY < 0 and abs(sPlayNormX) < 0.1 then
+      put 0 into tVY
       put true into tWrite
    end if
    if tWrite then b2SetVelocity tB, tVX / sScale, 0 - (tVY / sScale)

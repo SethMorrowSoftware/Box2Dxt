@@ -39,6 +39,23 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Self-test round 4: ground-snap + wake-on-SetVelocity.** The
+  instrumented land test measured the truth: after a hard landing the
+  contact solver's push-out launches a real ~7px hop (24 frames of
+  airtime, down-leg at ~61 px/s) — too long for hysteresis to mask, and
+  with restitution already zero. The controller now **ground-snaps**:
+  grounded on *flat* ground (probe normal |x| < 0.1 — slopes exempt,
+  uphill running is real upward motion), drifting upward, without
+  having jumped ⇒ upward velocity zeroed at the source. External
+  boosts must use `b2kPlayerJump` (the platformer's stomp bounce now
+  does — the jump flag exempts it from the snap). Separately,
+  **`b2kSetVelocity` now wakes the body**: raw SetVelocity does not
+  (which is why `b2kPush` always called SetAwake), so a parked,
+  *sleeping* kinematic gate given one velocity write stayed frozen —
+  a gate that randomly refuses to open read as "the plate is flaky
+  again". The platformer's stomp gate also gained a recent-airborne
+  window (250 ms) so a slime sinking under the landing hero can't
+  outrun the state reads.
 - **Self-test round 3: landing hysteresis.** Zeroing restitution wasn't
   the whole story — the suite still counted two land ticks per jump:
   the contact solver's push-out can blip the 4px ground probe off for a
