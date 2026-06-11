@@ -120,6 +120,21 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
    extension is **metres, radians, y-UP**. Kit wrappers do the conversion (divide by `sScale`,
    negate y — e.g. `b2kForce` passes `-fy`). If you add Kit code that calls the raw `b2*` API,
    mind the flip and the scale.
+10. **Dangling else.** A single-line `if cond then stmt` may legally take an
+   `else`; a BARE `else` on the next line therefore binds to that single-line
+   `if`, its `end if` closes the wrong block, and the outer `if` stays open —
+   OXT reports "missing end if" at the handler's end. Chains like
+   `if c then s1` / `else s2` (statement on the else line) are fine. The
+   static checker's dangling-else gate flags the broken pairing.
+11. **Declare `local` only at the top of a handler.** A `local` nested inside
+   an `if`/`repeat` block has broken OXT compilation of the entire script.
+   Keep all declarations together at the handler's top.
+12. **Scrolled-group coordinates are visual.** `the loc`/`rect` of a grouped
+   control is reported and set SCROLL-ADJUSTED on OXT, so a per-frame write
+   of world coordinates into a scrolled group cancels the pan (objects
+   "outrun" the camera at 2x). The Kit's camera probes this at `b2kCamOn`
+   and compensates every write (`b2kCamShiftX/Y`); for hand-animated moves
+   use `b2kSpriteMoveTo`, never a raw `set the loc`.
 
 ## The Contraption Builder (`examples/box2dxt-contraption-builder.livecodescript`)
 

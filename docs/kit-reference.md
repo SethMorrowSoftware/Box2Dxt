@@ -287,6 +287,7 @@ ghost sprites frozen on their last frame).
 | `b2kSpriteFPS spr, fps` | Per-sprite speed override (empty = each animation's own fps). |
 | `b2kSpriteFlipH spr, flag` / `b2kSpriteFlipped(spr)` | Face left/right — mirrored frames are flip-cloned lazily, shared like the originals. |
 | `b2kSpriteOnFinish spr, message` | When a **non-looping** animation ends, send `message spr, anim` to the frame target (attack/death/effect chains). |
+| `b2kSpriteMoveTo spr, x, y` | Move any sprite/control to a **world** position, camera-correct — use this instead of `set the loc` for hand-animated paths (patrols, hovering). |
 | `b2kSpriteBind spr, bodyCtrl [,dx, dy]` / `b2kSpriteUnbind spr` | Pin the sprite to another control's position each frame — the standard "art bigger than the collision shape" pattern: an invisible control owns the body, the sprite follows it. |
 | `b2kSpriteRemove spr` | Remove the sprite (and its body, if it has one). |
 
@@ -326,6 +327,8 @@ infinite-distance parallax backdrop. Level coordinates should start at 0,0.
 | `b2kCamBounds x1, y1, x2, y2` | Clamp the view to the level. |
 | `b2kCamGoto x, y` / `b2kCamPos()` | Cut to a world point / read the view centre. |
 | `b2kCamShake ampPx, ms` | A decaying random view offset (impacts, blasts). |
+| `b2kCamStatus()` | Empty = healthy; otherwise why the camera degraded (group/scroll failures). Check it after `b2kCamOn` and fall back gracefully. |
+| `b2kCamLocSemantics()` | `"visual"` or `"content"` — which grouped-loc coordinate model the startup probe detected. Diagnostic; the Kit compensates automatically. |
 | `b2kCamMouseX()` / `b2kCamMouseY()` | The mouse in **world** pixels — use for `b2kGrab`, click-picking, spawning at the pointer. (The Kit's own drag already uses them.) |
 
 ```

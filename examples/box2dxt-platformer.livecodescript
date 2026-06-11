@@ -414,7 +414,7 @@ command pfStartGame
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   put 90 into gIntroPan   -- ~1.5 s diagnostic sweep, then the follow engages
+   put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== set dressing (pure decor sprites; skipped without the atlas) ====
    if gAssetsOK is true then
       if b2kSheetHasFrame("tiles", "bush") then
@@ -748,12 +748,13 @@ on b2kFrame
    local tHud
    if gHero is empty then exit b2kFrame
    if gIntroPan > 0 then
+      -- no camera pan (cut for reliability): just a splash beat over the
+      -- spawn, then the follow engages and the run clock starts
       subtract 1 from gIntroPan
-      b2kCamGoto 512 + 220 * sin((90 - gIntroPan) / 14), 320
       if gIntroPan is 0 then
          b2kCamFollow gHero, 1
          if there is a field "pfSplash" then set the visible of field "pfSplash" to false
-         put the milliseconds into gRunStart   -- the run clock starts now
+         put the milliseconds into gRunStart
       end if
    end if
    -- kill plane: anything that slips every other check still respawns
