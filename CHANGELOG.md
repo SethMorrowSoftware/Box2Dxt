@@ -39,6 +39,26 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Frame-exact physics events (the "flaky collisions" root cause) +
+  `b2kKillFloor`.** Box2D only exposes the **last step's** begin/end
+  contact and sensor events, but a frame can run two fixed steps (under
+  load) or zero (timer jitter) — so the old once-per-frame snapshot
+  *lost* the first step's coin touches and stomps on heavy frames and
+  *re-dispatched* the previous step's events on empty ones (a pressure
+  plate could double-count). The Kit now **harvests events after every
+  fixed step into per-frame buffers**; the `b2kContact`/`b2kSensorEnter`
+  messages and all polling accessors read the same complete,
+  duplicate-free frame view. New **`b2kKillFloor screenY`**: any moving
+  Kit body whose centre falls below the line is destroyed instead of
+  falling forever (crates thrown into pits, enemies knocked off the
+  level), with a **`b2kFell ctrl`** message to the frame target first so
+  games clean up bound art and table slots — the player's body is
+  exempt. Hooked into the body-sync loop, so it costs nothing extra (a
+  falling body is by definition a moving one). The platformer arms it at
+  820px, cleans up fallen slimes/thwomps in `on b2kFell`, and replaces
+  its thin level-edge segments with **thick boundary slabs** (a capsule
+  driven into a thin segment can jitter or creep; a 48px box stops it
+  flush).
 - **Hot-path performance pass (engine-limitation aware).** The frame
   budget on a single interpreted thread goes to interpreter ops, FFI
   round-trips and property-set redraws, so all three got leaner:

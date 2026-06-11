@@ -630,7 +630,8 @@ end rawKeyDown
 -- =====================  CHEAT SHEET  ================================
 -- WORLD   b2kSetup [gx,gy] · b2kQuickStart [gy] · b2kStart · b2kStop ·
 --         b2kTeardown · b2kAddWalls · b2kWall x1,y1,x2,y2 · b2kClear ·
---         b2kPause · b2kResume · b2kIsRunning()
+--         b2kPause · b2kResume · b2kIsRunning() · b2kKillFloor y
+--         (movers below y are removed; "b2kFell ctrl" precedes each)
 -- CONFIG  b2kSetScale px · b2kSetOrigin x,y · b2kSetGravity gx,gy ·
 --         b2kSetSubsteps n · b2kContactTarget obj · b2kFrameTarget obj ·
 --         b2kEnableSleeping flag · b2kEnableContinuous flag
@@ -731,6 +732,11 @@ local sRayX, sRayY   -- last b2kRayHit point (screen pixels)
 local sRayNX, sRayNY -- last b2kRayHit surface normal (screen-oriented)
 local sRayDist       -- last b2kRayHit distance from the ray start (pixels)
 local sNeedFullSync  -- true when a script-side transform/type edit bypassed move events
+local sEvtCN, sEvtCA, sEvtCB -- begin-contacts buffered THIS FRAME (body handles)
+local sEvtEN, sEvtEA, sEvtEB -- end-contacts buffered this frame
+local sEvtSN, sEvtSS, sEvtSV -- sensor enters this frame (sensor, visitor)
+local sEvtXN, sEvtXS, sEvtXV -- sensor exits this frame
+local sKillY         -- kill floor: screen y below which dynamic bodies are removed
 local sDrawKey       -- ctrlRef -> last rendered pixel/angle key; avoids redundant redraws
 local sInputOn       -- true while the per-frame keyboard sample is armed
 local sKeysNow       -- comma-wrapped keycode set held this frame (",65361,32,")
@@ -822,6 +828,8 @@ command b2kSetup pGravityX, pGravityY
    put false into sRunning
    put false into sPaused
    put false into sNeedFullSync
+   put empty into sKillY
+   b2kEventsReset
 end b2kSetup
 
 command b2kResetTables
@@ -925,6 +933,17 @@ end b2kAddGround
 -- ledges and floors. Like the card-edge walls it is invisible (draw your own
 -- graphic to match) and lives for the world's lifetime; it isn't tracked as a
 -- body, so b2kClear leaves it in place.
+-- Destroy any moving Kit body whose centre falls below this SCREEN y
+-- (empty = off). Crates shoved into pits, enemies knocked off the level:
+-- gone instead of falling forever. The PLAYER's body is exempt (the game
+-- owns its respawn). Each removal first sends "b2kFell <ctrl>" to the
+-- frame target so the game can clean up companions (bound sprites, table
+-- slots) -- do not delete the control inside that handler; the Kit is
+-- mid-removal (Kit-spawned controls are deleted for you).
+command b2kKillFloor pScreenY
+   put pScreenY into sKillY
+end b2kKillFloor
+
 command b2kWall pX1, pY1, pX2, pY2
    b2kEdge b2kToWorldX(pX1), b2kToWorldY(pY1), b2kToWorldX(pX2), b2kToWorldY(pY2)
 end b2kWall
@@ -1886,33 +1905,36 @@ end b2kRayDist
 
 -- ---- contacts, polling style ----------------------------------------
 -- The kit also SENDS `on b2kContact` / `on b2kEndContact` to your
--- b2kContactTarget. These functions instead let you POLL the same per-frame
--- snapshot (e.g. from `on b2kFrame`) without registering a target. The snapshot
--- refreshes once per simulated step; indices are 1-based. Each accessor returns
--- the touching control's long id (empty for a wall, the ground, or any body the
--- kit isn't tracking).
+-- b2kContactTarget. These functions instead let you POLL the same snapshot
+-- (e.g. from `on b2kFrame`) without registering a target. The snapshot
+-- covers EVERY fixed step the frame ran (nothing lost on a 2-step frame,
+-- nothing repeated on a 0-step one); indices are 1-based. Each accessor
+-- returns the touching control's long id (empty for a wall, the ground,
+-- or any body the kit isn't tracking).
 function b2kContactCount
-   return b2ContactBeginCount()
+   if sEvtCN is empty then return 0
+   return sEvtCN
 end b2kContactCount
 
 function b2kContactA pIndex
-   return sCtrl[b2ContactBeginBodyA(pIndex)]
+   return sCtrl[sEvtCA[pIndex]]
 end b2kContactA
 
 function b2kContactB pIndex
-   return sCtrl[b2ContactBeginBodyB(pIndex)]
+   return sCtrl[sEvtCB[pIndex]]
 end b2kContactB
 
 function b2kEndContactCount
-   return b2ContactEndCount()
+   if sEvtEN is empty then return 0
+   return sEvtEN
 end b2kEndContactCount
 
 function b2kEndContactA pIndex
-   return sCtrl[b2ContactEndBodyA(pIndex)]
+   return sCtrl[sEvtEA[pIndex]]
 end b2kEndContactA
 
 function b2kEndContactB pIndex
-   return sCtrl[b2ContactEndBodyB(pIndex)]
+   return sCtrl[sEvtEB[pIndex]]
 end b2kEndContactB
 
 -- =====================================================================
@@ -2188,22 +2210,24 @@ end b2kSetSensor
 -- Polling alternative to the on b2kSensorEnter/Exit messages (read in on b2kFrame).
 -- Counts/indices are 1-based; each returns a control (empty for untracked bodies).
 function b2kSensorCount
-   return b2SensorBeginCount()
+   if sEvtSN is empty then return 0
+   return sEvtSN
 end b2kSensorCount
 function b2kSensorEnterSensor pIndex
-   return sCtrl[b2ShapeBody(b2SensorBeginSensorShape(pIndex))]
+   return sCtrl[sEvtSS[pIndex]]
 end b2kSensorEnterSensor
 function b2kSensorEnterVisitor pIndex
-   return sCtrl[b2ShapeBody(b2SensorBeginVisitorShape(pIndex))]
+   return sCtrl[sEvtSV[pIndex]]
 end b2kSensorEnterVisitor
 function b2kSensorExitCount
-   return b2SensorEndCount()
+   if sEvtXN is empty then return 0
+   return sEvtXN
 end b2kSensorExitCount
 function b2kSensorExitSensor pIndex
-   return sCtrl[b2ShapeBody(b2SensorEndSensorShape(pIndex))]
+   return sCtrl[sEvtXS[pIndex]]
 end b2kSensorExitSensor
 function b2kSensorExitVisitor pIndex
-   return sCtrl[b2ShapeBody(b2SensorEndVisitorShape(pIndex))]
+   return sCtrl[sEvtXV[pIndex]]
 end b2kSensorExitVisitor
 
 -- =====================================================================
@@ -4495,8 +4519,15 @@ on b2kStep pGen
       if sAccum > 0.20 then put 0.20 into sAccum
       put tElapsed * 1000 into sFrameMS
       put 1 / 60 into tFixed
+      -- events are HARVESTED per fixed step into frame buffers: Box2D
+      -- only exposes the LAST step's events, so a 2-step frame would
+      -- lose the first step's pickups/stomps, and a 0-step frame would
+      -- re-read (duplicate!) the previous step's. The buffers make the
+      -- frame's event view exact either way.
+      b2kEventsReset
       repeat while sAccum >= tFixed
          b2Step sWorld, tFixed, sSub
+         b2kHarvestEvents
          subtract tFixed from sAccum
       end repeat
       if sDragging then
@@ -4540,7 +4571,9 @@ end b2kStep
 -- Advance exactly one fixed step, even while paused (drives a Step button).
 command b2kStepOnce
    if not sRunning then exit b2kStepOnce
+   b2kEventsReset
    b2Step sWorld, (1 / 60), sSub
+   b2kHarvestEvents
    put 1000 / 60 into sFrameMS   -- a hand-stepped frame is one fixed step long
    if sDragging then
       b2MouseSetTarget sDragJoint, b2kToWorldX(b2kCamMouseX()), b2kToWorldY(b2kCamMouseY())
@@ -4596,8 +4629,9 @@ command b2kSyncBodies
       exit b2kSyncBodies
    end if
 
-   local tN, i, tBody, tRef, tWx, tWy, tWa, tDead
+   local tN, i, tBody, tRef, tWx, tWy, tWa, tDead, tFell
    put empty into tDead
+   put empty into tFell
    put b2BodiesUpdate(sWorld) into tN
    if tN <= 0 then exit b2kSyncBodies
 
@@ -4610,6 +4644,13 @@ command b2kSyncBodies
       try
          put b2BodyMoveX(i) into tWx
          put b2BodyMoveY(i) into tWy
+         -- the kill floor: a mover that fell below the line is queued for
+         -- removal instead of drawn (the player is the game's to respawn).
+         -- Zero extra scanning: falling bodies are, by definition, moving.
+         if sKillY is not empty and tRef is not sPlayRef and b2kToScreenY(tWy) > sKillY then
+            put tRef & cr after tFell
+            next repeat
+         end if
          if sRender[tRef] is "poly" or sRender[tRef] is "image" then
             put b2BodyMoveAngle(i) into tWa
          else
@@ -4621,6 +4662,11 @@ command b2kSyncBodies
       end try
    end repeat
    b2kPruneDeadRefs tDead
+   repeat for each line tRef in tFell
+      if tRef is empty then next repeat
+      if sFrameObj is not empty then dispatch "b2kFell" to sFrameObj with tRef
+      b2kRemove tRef
+   end repeat
 end b2kSyncBodies
 
 -- Lock-free full scan (the caller owns the screen lock). Comprehensive fallback
@@ -4787,38 +4833,72 @@ function b2kCapsuleVerts pL, pR, pHoriz
    return tV
 end b2kCapsuleVerts
 
-command b2kDispatchContacts
-   local tN, i, tA, tB
-   -- Always snapshot so begin/end counts are current even with no target.
+-- Internal: zero the frame's event buffers (the loop calls this before
+-- it steps; the buffers then accumulate one harvest per fixed step).
+command b2kEventsReset
+   put 0 into sEvtCN
+   put 0 into sEvtEN
+   put 0 into sEvtSN
+   put 0 into sEvtXN
+end b2kEventsReset
+
+-- Internal: pull THIS step's Box2D events into the frame buffers. Box2D
+-- keeps only the latest step's events, so this must run after every
+-- b2Step -- the dispatchers and pollers then see the whole frame.
+command b2kHarvestEvents
+   local tN, i
    put b2ContactsUpdate(sWorld) into tN
-   if sContactObj is empty then exit b2kDispatchContacts
    repeat with i = 1 to tN
-      put sCtrl[b2ContactBeginBodyA(i)] into tA
-      put sCtrl[b2ContactBeginBodyB(i)] into tB
-      dispatch "b2kContact" to sContactObj with tA, tB
+      add 1 to sEvtCN
+      put b2ContactBeginBodyA(i) into sEvtCA[sEvtCN]
+      put b2ContactBeginBodyB(i) into sEvtCB[sEvtCN]
    end repeat
    repeat with i = 1 to b2ContactEndCount()
-      put sCtrl[b2ContactEndBodyA(i)] into tA
-      put sCtrl[b2ContactEndBodyB(i)] into tB
+      add 1 to sEvtEN
+      put b2ContactEndBodyA(i) into sEvtEA[sEvtEN]
+      put b2ContactEndBodyB(i) into sEvtEB[sEvtEN]
+   end repeat
+   put b2SensorsUpdate(sWorld) into tN
+   repeat with i = 1 to tN
+      add 1 to sEvtSN
+      put b2ShapeBody(b2SensorBeginSensorShape(i)) into sEvtSS[sEvtSN]
+      put b2ShapeBody(b2SensorBeginVisitorShape(i)) into sEvtSV[sEvtSN]
+   end repeat
+   repeat with i = 1 to b2SensorEndCount()
+      add 1 to sEvtXN
+      put b2ShapeBody(b2SensorEndSensorShape(i)) into sEvtXS[sEvtXN]
+      put b2ShapeBody(b2SensorEndVisitorShape(i)) into sEvtXV[sEvtXN]
+   end repeat
+end b2kHarvestEvents
+
+command b2kDispatchContacts
+   local i, tA, tB
+   if sContactObj is empty then exit b2kDispatchContacts
+   repeat with i = 1 to sEvtCN
+      put sCtrl[sEvtCA[i]] into tA
+      put sCtrl[sEvtCB[i]] into tB
+      dispatch "b2kContact" to sContactObj with tA, tB
+   end repeat
+   repeat with i = 1 to sEvtEN
+      put sCtrl[sEvtEA[i]] into tA
+      put sCtrl[sEvtEB[i]] into tB
       dispatch "b2kEndContact" to sContactObj with tA, tB
    end repeat
 end b2kDispatchContacts
 
--- Snapshot sensor begin/end overlaps each frame and (if a target is set) deliver
--- them as on b2kSensorEnter / on b2kSensorExit. Sensor and visitor shapes are
--- mapped back to their controls via the shape's body.
+-- Deliver the frame's buffered sensor begin/end overlaps (if a target is
+-- set) as on b2kSensorEnter / on b2kSensorExit, in step order.
 command b2kDispatchSensors
-   local tN, i, tS, tV
-   put b2SensorsUpdate(sWorld) into tN
+   local i, tS, tV
    if sContactObj is empty then exit b2kDispatchSensors
-   repeat with i = 1 to tN
-      put sCtrl[b2ShapeBody(b2SensorBeginSensorShape(i))] into tS
-      put sCtrl[b2ShapeBody(b2SensorBeginVisitorShape(i))] into tV
+   repeat with i = 1 to sEvtSN
+      put sCtrl[sEvtSS[i]] into tS
+      put sCtrl[sEvtSV[i]] into tV
       dispatch "b2kSensorEnter" to sContactObj with tS, tV
    end repeat
-   repeat with i = 1 to b2SensorEndCount()
-      put sCtrl[b2ShapeBody(b2SensorEndSensorShape(i))] into tS
-      put sCtrl[b2ShapeBody(b2SensorEndVisitorShape(i))] into tV
+   repeat with i = 1 to sEvtXN
+      put sCtrl[sEvtXS[i]] into tS
+      put sCtrl[sEvtXV[i]] into tV
       dispatch "b2kSensorExit" to sContactObj with tS, tV
    end repeat
 end b2kDispatchSensors
