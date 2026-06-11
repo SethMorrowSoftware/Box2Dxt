@@ -39,6 +39,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 0: the asset pack catalogued; the content roadmap expanded.**
+  The uploaded Kenney platformer family (~900 frames, three compatible
+  sets) is fully inventoried in `docs/expansion-prep.md`: six 70px
+  terrain biomes with slope and one-way tiles, buttons/levers/
+  springboards/keys+locks/doors/ladders/liquids/ropes/?-boxes, a
+  25-species enemy sheet (bat, ghost, piranha, mimics, crushers…),
+  p1–p3 players plus five alien skins **with climb and swim frames**,
+  and a hearts-and-digits HUD set. Decisions recorded: the 70px grid is
+  primary; **sprite-only visuals from here on** (plain LC graphics only
+  as invisible physics hosts; existing no-asset fallbacks frozen); the
+  roadmap now spans ten player actions, a fourteen-archetype bestiary,
+  seven biomes (snow = ice friction), the full switch family, and eight
+  waves aimed squarely at mimicking the iconic platformers.
 - **`b2kOverlapMoving` — the presence poll done right (the plate's last
   stand).** The polled plate read *pressed from frame one, forever*:
   its pad region sits on the floor, and `b2kOverlap` asks the
