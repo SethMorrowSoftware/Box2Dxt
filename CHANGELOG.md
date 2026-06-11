@@ -39,6 +39,18 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **`b2kOverlapMoving` — the presence poll done right (the plate's last
+  stand).** The polled plate read *pressed from frame one, forever*:
+  its pad region sits on the floor, and `b2kOverlap` asks the
+  **broadphase**, whose boxes are fattened (~0.1 m ≈ a few px at game
+  scale) — so the ground slab itself permanently overlapped the region.
+  New `b2kOverlapMoving` runs the same query with **static bodies
+  filtered out**, which is what a plate means ("is some *thing* on
+  me?"); dynamic and kinematic bodies count, sleeping ones still
+  register. The platformer's plate uses it; both kit docs warn about
+  the fat-AABB margin; and the self-test (v8) closes its own blind spot
+  — the old presence test only asserted positives, never "empty over
+  bare floor", which is exactly where the fattening bites.
 - **Documentation sweep + the expansion plan (the green-board close).**
   With the self-test at v7/all-pass and both games user-verified, every
   doc now states the as-built truth: the game-engine spec is marked
