@@ -3055,6 +3055,9 @@ command b2kPlayerAttach pCtrl
       if sBody[tRef] is empty then exit b2kPlayerAttach   -- zero-sized control
       put true into sPlayOwnBody
       b2kSetFriction tRef, 0.08   -- low: walls must not glue the capsule
+      b2kSetBounce tRef, 0        -- characters land DEAD: the default 0.2
+                                  -- restitution rebounded every landing
+                                  -- (~13px hop = double land ticks/sounds)
    end if
    put tRef into sPlayRef
    b2kSetFixedRotation tRef, true

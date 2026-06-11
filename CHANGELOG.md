@@ -39,6 +39,15 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Self-test round 2: the player landed springy.** The harness's
+  "land fired exactly once (got 2)" caught that controller-created
+  capsules kept `b2kAddCapsule`'s default **0.2 restitution** — every
+  landing rebounded ~13px (a second airborne arc: double land ticks,
+  double land sounds, a faint trampoline feel). `b2kPlayerAttach` now
+  zeroes bounce on bodies it creates; explicit bounces (the slime
+  stomp) are unaffected. The camera test's final assert also stopped
+  using a pre-`b2kCamOff` long id (group paths go stale on ungroup —
+  the test now re-resolves by name).
 - **First self-test run: two real Kit bugs found and fixed.** The
   harness's first hardware run (35 passes) exposed: (1) **the player's
   coyote/buffer timers ran on wall-clock time** — on a slow machine the

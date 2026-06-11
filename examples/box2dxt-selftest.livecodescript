@@ -514,7 +514,7 @@ command stTestSounds
 end stTestSounds
 
 command stTestCamera
-   local tRef, tPos
+   local tRef, tPos, tShort
    stNewWorld "camera: spawns join the view, goto/pos, off restores"
    b2kCamOn
    stAssert "camera reports on", (b2kCamIsOn() is true)
@@ -528,10 +528,14 @@ command stTestCamera
    put b2kCamPos() into tPos
    stAssert "cam pos tracks goto (got " & tPos & ")", \
          (abs(item 1 of tPos - 400) < 8 and abs(item 2 of tPos - 300) < 8)
+   -- a long id EMBEDS the group path, so it goes stale the moment the
+   -- viewport dissolves (the teardown-order lesson) -- re-resolve by name
+   put the short name of tRef into tShort
    b2kCamOff
    stAssert "camera reports off", (b2kCamIsOn() is false)
-   stAssert "children return to the card", \
-         (the short name of the owner of tRef is not "b2kcam_view")
+   stAssert "the child survived the ungroup", (there is a graphic tShort)
+   stAssert "...and returned to the card", \
+         (the short name of the owner of graphic tShort is not "b2kcam_view")
 end stTestCamera
 
 command stTestTeardown
@@ -3575,6 +3579,9 @@ command b2kPlayerAttach pCtrl
       if sBody[tRef] is empty then exit b2kPlayerAttach   -- zero-sized control
       put true into sPlayOwnBody
       b2kSetFriction tRef, 0.08   -- low: walls must not glue the capsule
+      b2kSetBounce tRef, 0        -- characters land DEAD: the default 0.2
+                                  -- restitution rebounded every landing
+                                  -- (~13px hop = double land ticks/sounds)
    end if
    put tRef into sPlayRef
    b2kSetFixedRotation tRef, true
