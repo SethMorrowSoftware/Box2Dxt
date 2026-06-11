@@ -9,7 +9,7 @@ that keep the expansion as reliable as the engine underneath it.
 |---|---|
 | Baseline | Kit + games user-verified; self-test harness **v8, ~96 assertions, all pass** |
 | Assets | **LANDED (2026-06-11)** — Kenney's iconic platformer family, ~900 frames; Wave 0 catalogue below |
-| Next | **Wave 1** (the iconic-feel base) — see §7 |
+| Next | **Wave 1 OXT pass** — built 2026-06-11, statically verified (see §7); then Wave 2 |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
@@ -171,6 +171,16 @@ to Kit API (`b2kFoe…`).
    breakable bricks + debris, buttons/levers with art, key+lock+door; the
    platformer re-skinned sprite-only (real thwomp art, spike tiles, biome
    ground). *The "it looks like the classics now" wave.*
+   **BUILT 2026-06-11** in the platformer (statically verified; awaiting
+   the OXT pass): springboard + sky coin, the bonk row (?-boxes pay
+   coins, bricks shatter into kill-floor-swept debris), the plate wears
+   pressed/idle button art, a stand-to-flip saw power lever, key + lock
+   + door gating a stone-biome finale, thwomps as chained weights, real
+   spike tips. All POLLED geometry + windows (no static-contact events);
+   **zero Kit changes, so no harness bump**. Art note: Wave 1 ships in
+   the platformer's native 64px family (it has the full switch/spring/
+   key/door set, style-matched); Family C debuts with content built FOR
+   its 70px grid (Waves 2-3).
 2. **Wave 2 — player actions I:** drop-through, climb (ladders), duck,
    hurt-knockback standard; alien skins selectable in the micro-game.
 3. **Wave 3 — bestiary I:** shelled (kickable!), ghost, bat, mimic,

@@ -6,10 +6,14 @@
 -- CONTROLLER (b2kPlayerAttach drives movement, jumping, grounding, state
 -- and animations -- this file holds no movement code of its own), atlas
 -- spritesheets with named animations and scaling, and the camera
--- (follow + bounds + shake). Twelve coins, each one reachable and most
+-- (follow + bounds + shake). Fifteen coins, each one reachable and most
 -- of them a little puzzle; the flag only wins once you hold them all.
+-- WAVE 1 (the iconic-feel base) lives here: springboards, ?-boxes,
+-- breakable bricks with debris, a button-faced pressure plate, a saw
+-- power lever, a key-and-lock door, chained-weight thwomps, real spike
+-- tips and a stone-biome finale - all on existing Kit mechanisms.
 -- Anything without sheet art falls back to plain graphics, so the level
--- runs even with no asset folder.
+-- runs even with no asset folder (frozen at the original 12 coins).
 --
 -- HOW TO RUN
 --   1. In OXT, make a new stack. Put this whole file into the STACK script.
@@ -23,14 +27,21 @@
 --           R restarts · ESC pauses · M mutes the (synthesized) sound
 --
 -- THE LEVEL, left to right (every beat holds a coin):
---           meadow - one-way BRIDGE over a spike slime (never stomp it!)
---           - the slope MOUND - two CLOUD steps with the fly - the SPIKE
---           PIT (coin hangs mid-air over it) - CRATE onto the gold PLATE
+--           meadow: the SPRINGBOARD (boing - a sky coin floats high
+--           above it) and the BONK ROW (brick, ?-box, brick, ?-box:
+--           headbutt the boxes for coins, SMASH the bricks to debris) -
+--           one-way BRIDGE over a spike slime (never stomp it!) - the
+--           slope MOUND - two CLOUD steps with the fly - the SPIKE PIT
+--           (coin hangs mid-air over it) - CRATE onto the yellow BUTTON
 --           opens the gate (a coin waits inside the gateway) - red
---           CHECKPOINT - saw + SWEEPING saw - THWOMP ALLEY: dodge the
---           first, ride the second one's head to the top coin, and DRAG
---           a resting thwomp under the lone high coin - slime fields -
---           step platforms - the FLAG (all 12 coins to win).
+--           CHECKPOINT - the saw LEVER (STAND at it to power the
+--           sweeping saw down; running past never flips it) -
+--           saw + SWEEPING saw - THWOMP ALLEY (chained weights): dodge
+--           the first, ride the second one's head to the top coin, DRAG
+--           a resting thwomp under the lone high coin, and GRAB THE KEY
+--           floating between them - slime fields - the LOCKED DOOR into
+--           the STONE finale - step platforms - the FLAG (all 15 coins
+--           to win).
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -65,6 +76,20 @@
 --      mutes/unmutes; an engine with no audio stays SILENT, no errors
 --      (the HUD would show the b2kSoundStatus reason).
 --   9. Reset and stack-reopen leave no ghosts (R resets, ESC pauses).
+--  10. WAVE 1 toys (all verdicts POLLED geometry + windows, no contact
+--      events on statics): the springboard relaunches whenever your
+--      feet rest in its band (b2kPlayerJump, so no ground-snap swallow)
+--      and reaches the sky coin; each ?-box pays exactly ONE coin then
+--      shows its empty face; bricks shatter into chunks that the kill
+--      floor sweeps (no debris ghosts after the bounce); the gate
+--      button shows pressed/idle switch art in step with the polled
+--      plate; STANDING at the lever (not running past) powers the
+--      sweeping saw down (ghosted, spin stopped, harmless) and a second
+--      stand powers it back up; the key rides the hero's
+--      shoulder to the locked door, which opens ONCE and stays open
+--      through respawns; thwomps hang from chains that follow a
+--      dragged re-arm; spike tips show in the pit; the steps past the
+--      door are STONE biome.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -79,6 +104,14 @@ local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
 local gMovHurtW, gMovHurtH, gMovFlip
 local gCheckSpr, gCheckpointOn, gRespawnX, gRespawnY
+-- Wave 1 (the iconic-feel base): springboard, bonk row, lever, key+door
+local gToysOK, gSpringSpr, gSpringX, gSpringMS, gSpringBackMS
+local gBonkN, gBonkHost, gBonkSpr, gBonkKind, gBonkUsed, gBonkX
+local gBonkMS, gRiseMS, gPlateSpr
+local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
+local gHasKey, gKeySpr, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB
+local gDebrisN, gDebrisB, gDebrisSpr
+local gBlockChainA, gBlockChainB, gBlockFace
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -241,7 +274,8 @@ end pfLoadSheets
 -- skips the synthesis entirely. Short and plucky on purpose - the
 -- engine plays one clip at a time, so a new cue cuts the previous.
 command pfMakeSounds
-   if b2kSoundIsLoaded("win") then exit pfMakeSounds   -- already built
+   -- guard on the NEWEST cue, so a stack upgraded in place re-synthesizes
+   if b2kSoundIsLoaded("unlock") then exit pfMakeSounds   -- already built
    b2kToneMake "jump", "392,587", 40, 55
    b2kToneMake "coin", "1319,1760", 36, 45
    b2kToneMake "stomp", "165,110", 40, 70
@@ -250,6 +284,12 @@ command pfMakeSounds
    b2kToneMake "check", "659,880", 50, 50, "sine"
    b2kToneMake "gate", "294,392", 40, 35, "sine"
    b2kToneMake "win", "523,659,784,1047", 110, 65
+   -- Wave 1 cues
+   b2kToneMake "spring", "262,392,587", 36, 55
+   b2kToneMake "smash", "147,98,73", 40, 65
+   b2kToneMake "key", "988,1319", 45, 45, "sine"
+   b2kToneMake "unlock", "392,523,659", 55, 50, "sine"
+   b2kToneMake "lever", "294,220", 30, 45
 end pfMakeSounds
 
 command pfEmbedPlaceholder
@@ -328,13 +368,49 @@ command pfStartGame
    put empty into gMovHurtH
    put empty into gMovFlip
    put empty into gPrevState
+   -- Wave 1 state starts the run empty/idle
+   put false into gToysOK
+   put empty into gSpringSpr
+   put 0 into gSpringMS
+   put 0 into gSpringBackMS
+   put 0 into gBonkN
+   put empty into gBonkHost
+   put empty into gBonkSpr
+   put empty into gBonkKind
+   put empty into gBonkUsed
+   put empty into gBonkX
+   put 0 into gBonkMS
+   put 0 into gRiseMS
+   put empty into gPlateSpr
+   put empty into gLeverSpr
+   put true into gLeverArmed
+   put true into gSawOn
+   put empty into gSawMov
+   put empty into gSawSpr
+   put false into gHasKey
+   put empty into gKeySpr
+   put false into gDoorOpen
+   put empty into gLockSpr
+   put empty into gDoorSprT
+   put empty into gDoorSprB
+   put 0 into gDebrisN
+   put empty into gDebrisB
+   put empty into gDebrisSpr
+   put empty into gBlockChainA
+   put empty into gBlockChainB
+   put empty into gBlockFace
    b2kSetup
    b2kSetScale 60
    pfMakeSounds
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
+   -- Wave 1 toys need the tiles atlas (spring/box/brick/lever/key/door
+   -- art); without it the fallback level stays frozen at its 12 coins
+   put (gAssetsOK is true and b2kSheetHasFrame("tiles", "spring_out")) into gToysOK
+   put 12 into gCoinsTotal
+   if gToysOK is true then put 15 into gCoinsTotal   -- + sky coin, 2 ?-boxes
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts, ESC pauses, M mutes - and the MOUSE DRAGS:" & cr & "the crate onto the gold plate, a RESTING THWOMP under the lone high coin. Every one of the " & gCoinsTotal & " coins is" & cr & "reachable: bridge, mound, clouds, the pit jump, the gateway, the saw hop, the thwomp rides. All coins + FLAG wins."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts, ESC pauses, M mutes - and the MOUSE DRAGS:" & cr & "the crate onto the yellow button, a RESTING THWOMP under the lone high coin. All " & gCoinsTotal & " coins are reachable." & cr & "Spring up, BONK ?-boxes, smash bricks, STAND at the lever to power the saw down, KEY opens the stone door."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -393,24 +469,33 @@ command pfStartGame
          end if
       end repeat
       repeat with tX = 2496 to 4544 step 64
-         pfTile "terrain_grass_block_top", tX, 576
+         if tX >= 4224 then
+            -- the finale plays in STONE: the biome seam sits exactly at
+            -- the locked door (same tile grammar, different skin)
+            pfTile "terrain_stone_block_top", tX, 576
+         else
+            pfTile "terrain_grass_block_top", tX, 576
+         end if
       end repeat
-      pfTile "terrain_grass_block_top_left", 4224, 512
-      pfTile "terrain_grass_block_top", 4288, 512
-      pfTile "terrain_grass_block_top_right", 4352, 512
-      pfTile "terrain_grass_block_top", 4416, 448
-      pfTile "terrain_grass_block_top", 4480, 448
-      pfTile "terrain_grass_block_center", 4416, 512
-      pfTile "terrain_grass_block_center", 4480, 512
+      pfTile "terrain_stone_block_top_left", 4224, 512
+      pfTile "terrain_stone_block_top", 4288, 512
+      pfTile "terrain_stone_block_top_right", 4352, 512
+      pfTile "terrain_stone_block_top", 4416, 448
+      pfTile "terrain_stone_block_top", 4480, 448
+      pfTile "terrain_stone_block_center", 4416, 512
+      pfTile "terrain_stone_block_center", 4480, 512
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
    -- ===== the spike pit (the slabs leave a gap at 2304-2496) ====
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_spikes") then
-      pfTile "block_spikes", 2304, 600
-      pfTile "block_spikes", 2368, 600
-      pfTile "block_spikes", 2432, 600
+   -- real spike strips: the art's alpha is the BOTTOM 34px of the 64px
+   -- cell (measured), so cells at y=576 put the tips at 606 with the
+   -- base flush on the stage floor; the hurt sensor (592+) fires first
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
+      pfTile "spikes", 2304, 576
+      pfTile "spikes", 2368, 576
+      pfTile "spikes", 2432, 576
    else
       create graphic "pf_spikes"
       set the style of it to "rectangle"
@@ -508,6 +593,14 @@ command pfStartGame
    set the filled of it to true
    set the backgroundColor of it to "220,180,60"
    b2kCamAdopt the long id of graphic "pf_plate"
+   -- Wave 1: the plate wears button art (switch alpha is bottom-anchored
+   -- in its cell, so centre y 544 plants it on the ground line); the
+   -- coloured rect survives underneath as the frozen no-asset fallback
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "switch_yellow") then
+      set the visible of graphic "pf_plate" to false
+      b2kSpriteNew "tiles", "switch_yellow", 2800, 544
+      put the result into gPlateSpr
+   end if
    create graphic "pf_gate"
    set the style of it to "rectangle"
    set the rect of it to 2900, 448, 2964, 576
@@ -595,7 +688,22 @@ command pfStartGame
    pfMakeCoin 4100, 500     -- in the slime's beat
    pfMakeCoin 4356, 448     -- over the first step (its slime objects)
    pfMakeCoin 4430, 392     -- over the top step, by the flag
-   put 12 into gCoinsTotal  -- (the 12th is locked inside the gateway)
+   -- ===== Wave 1: the iconic toys (springboard, bonk row, lever, ====
+   -- key + locked door). Invisible static HOSTS carry the physics, atlas
+   -- sprites carry the faces, and every verdict below is POLLED geometry
+   -- (pfTickSpring/Bonks/Lever/Door) - nothing depends on contact events
+   -- with statics. Skipped wholesale without the atlas: the no-asset
+   -- fallback level stays frozen at its original 12 coins.
+   if gToysOK is true then
+      pfMakeSpring 240
+      pfMakeCoin 240, 230   -- the sky coin: spring up to it
+      pfMakeBonk "brick", 384
+      pfMakeBonk "box", 448
+      pfMakeBonk "brick", 512
+      pfMakeBonk "box", 576
+      pfMakeLever 3000      -- past the gateway; the sweep saw is in view
+      pfMakeKeyDoor
+   end if
    -- ===== enemies, traps & critters ====
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
@@ -626,6 +734,8 @@ command pfStartGame
       if tRef is not empty then
          b2kSpritePlay tRef, "sawspin"
          pfAddMover tRef, 3400, 548, 96, 1100, 0, 1, 38, 42, false
+         put gMovN into gSawMov   -- the Wave 1 lever powers THIS mover
+         put tRef into gSawSpr
       end if
    end if
    -- the bee tours the mound (harmless); the fly guards the cloud coin
@@ -648,8 +758,10 @@ command pfStartGame
    -- slimes: the SPIKE one guards the low road under the bridge and never
    -- squashes - go over it. The others stomp like always.
    pfMakeSlime 1, "spike", 880, 760, 1000, 576
-   pfMakeSlime 2, "normal", 4100, 4020, 4180, 576
-   pfMakeSlime 3, "normal", 4310, 4236, 4396, 512
+   -- patrols trimmed so neither slime can bump the locked door column
+   -- at 4156-4220 (a dynamic grinding a static corner jitters forever)
+   pfMakeSlime 2, "normal", 4060, 4020, 4100, 576
+   pfMakeSlime 3, "normal", 4310, 4260, 4396, 512
    -- thwomp alley: dodge the first; the second is the ELEVATOR - bait its
    -- slam, hop on the head, ride the slow rise. While one rests it is
    -- DRAGGABLE: park it under the lone high coin and ride up from there.
@@ -859,11 +971,29 @@ command pfMakeThwomp pIdx, pX
    put the long id of graphic tName into tBody
    b2kAddBox tBody, false                   -- starts STATIC (armed)
    put empty into gBlockSpr[pIdx]
-   if gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
-      b2kSpriteNew "foes", "block_idle", pX, 200
+   put empty into gBlockChainA[pIdx]
+   put empty into gBlockChainB[pIdx]
+   put false into gBlockFace[pIdx]
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "weight") \
+         and b2kSheetHasFrame("tiles", "chain") then
+      -- Wave 1: the REAL thwomp look - a weight on a chain. The chain
+      -- tiles (44..172) reach the block's perch top (170) and STAY put
+      -- while the weight falls; a re-arm moves them to wherever a drag
+      -- parked the block (pfTickThwomps).
+      b2kSpriteNew "tiles", "chain", pX, 76
+      put the result into gBlockChainA[pIdx]
+      b2kSpriteNew "tiles", "chain", pX, 140
+      put the result into gBlockChainB[pIdx]
+      b2kSpriteNew "tiles", "weight", pX, 200
       put the result into gBlockSpr[pIdx]
-      if gBlockSpr[pIdx] is not empty then b2kSpriteBind gBlockSpr[pIdx], tBody, 0, 0
+   else
+      if gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
+         b2kSpriteNew "foes", "block_idle", pX, 200
+         put the result into gBlockSpr[pIdx]
+         put true into gBlockFace[pIdx]   -- this art has state faces
+      end if
    end if
+   if gBlockSpr[pIdx] is not empty then b2kSpriteBind gBlockSpr[pIdx], tBody, 0, 0
    if gBlockSpr[pIdx] is empty then set the visible of graphic tName to true
    if the visible of graphic tName is true then b2kCamAdopt tBody
    if pIdx > gBlockN then put pIdx into gBlockN
@@ -887,6 +1017,88 @@ command pfMakeCheckpoint
       end if
    end if
 end pfMakeCheckpoint
+
+-- =====================================================================
+-- Wave 1 builders: springboard, bonk row, lever, key + locked door.
+-- The pattern everywhere: an invisible static HOST graphic (named pf_*,
+-- wiped with the stage) carries the physics; an atlas sprite carries the
+-- face. Placement comes from MEASURED art (all cells 64px; spring alpha
+-- tops at cell y+20, switch at y+24, spike tips at y+30).
+-- =====================================================================
+
+-- A springboard at centre pCX on the main ground line. It is solid (you
+-- can land on it), but pfTickSpring relaunches you the moment your feet
+-- rest in its band - a springboard is not a place to stand.
+command pfMakeSpring pCX
+   create graphic "pf_springHost"
+   set the style of it to "rectangle"
+   set the rect of it to pCX - 26, 534, pCX + 26, 576
+   set the visible of it to false
+   b2kAddStatic the long id of graphic "pf_springHost"
+   b2kSpriteNew "tiles", "spring", pCX, 544
+   put the result into gSpringSpr
+   put pCX into gSpringX
+end pfMakeSpring
+
+-- One bonk tile (centre pCX; the row hangs at y 384..448, low enough to
+-- headbutt from the ground, too high to stand on from it). "box" pays a
+-- coin once and shows its empty face; "brick" shatters into debris.
+command pfMakeBonk pKind, pCX
+   local tName, tFrame
+   add 1 to gBonkN
+   put "pf_bonk" & gBonkN into tName
+   create graphic tName
+   set the style of it to "rectangle"
+   set the rect of it to pCX - 32, 384, pCX + 32, 448
+   set the visible of it to false
+   b2kAddStatic the long id of graphic tName
+   put the long id of graphic tName into gBonkHost[gBonkN]
+   if pKind is "box" then
+      put "block_coin" into tFrame
+   else
+      put "bricks_brown" into tFrame
+   end if
+   b2kSpriteNew "tiles", tFrame, pCX, 416
+   put the result into gBonkSpr[gBonkN]
+   put pKind into gBonkKind[gBonkN]
+   put false into gBonkUsed[gBonkN]
+   put pCX into gBonkX[gBonkN]
+end pfMakeBonk
+
+-- The saw power lever (centre pCX on the ground line). STANDING at it
+-- toggles the SWEEPING saw (pfTickLever - running past never flips it):
+-- powered down the saw stops spinning, fades and stops hurting - the
+-- timid player's way past the gauntlet.
+command pfMakeLever pCX
+   b2kSpriteNew "tiles", "lever_right", pCX, 544
+   put the result into gLeverSpr
+   put pCX into gLeverX
+end pfMakeLever
+
+-- The key (floating in thwomp alley at walking height, so crossing the
+-- alley collects it) and the locked door into the stone finale: a lock
+-- tile over a two-tile door, one solid host under all three. The key is
+-- a one-shot SENSOR (event doctrine); the unlock is a proximity POLL.
+command pfMakeKeyDoor
+   local tRef
+   b2kSpriteNew "tiles", "key_yellow", 3700, 500
+   put the result into tRef
+   if tRef is not empty then
+      set the uPfKeyFlag of tRef to true
+      b2kAddSensor tRef, "ball"
+   end if
+   create graphic "pf_doorHost"
+   set the style of it to "rectangle"
+   set the rect of it to 4156, 384, 4220, 576
+   set the visible of it to false
+   b2kAddStatic the long id of graphic "pf_doorHost"
+   b2kSpriteNew "tiles", "lock_yellow", 4188, 416
+   put the result into gLockSpr
+   b2kSpriteNew "tiles", "door_closed_top", 4188, 480
+   put the result into gDoorSprT
+   b2kSpriteNew "tiles", "door_closed", 4188, 544
+   put the result into gDoorSprB
+end pfMakeKeyDoor
 
 command pfChromeFront
    local tN, tC
@@ -956,6 +1168,10 @@ on b2kFrame
    pfTickSlimes
    pfTickThwomps
    pfTickMovers
+   pfTickSpring
+   pfTickBonks
+   pfTickLever
+   pfTickDoor
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
    -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
    -- on EVERY frame -- the single biggest avoidable per-frame cost here
@@ -968,6 +1184,7 @@ on b2kFrame
       put (the milliseconds - gRunStart) div 1000 into tSecs
    end if
    put gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   lands " & gLands & "   |   " & b2kPlayerState() & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   if gHasKey is true then put "   [KEY]" after tHud
    if gCamOK is true then
       put "   |   view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
    end if
@@ -1018,6 +1235,15 @@ command pfTickGate
    if tLook is not gPlateLook then
       if gPlateLook is not empty then b2kSound "gate"   -- not on the build tick
       put tLook into gPlateLook
+      -- Wave 1 button art tracks the polled state; the coloured rect
+      -- below is the frozen no-asset fallback (hidden when art loaded)
+      if gPlateSpr is not empty then
+         if tLook is "down" then
+            b2kSpriteSetFrame gPlateSpr, "switch_yellow_pressed"
+         else
+            b2kSpriteSetFrame gPlateSpr, "switch_yellow"
+         end if
+      end if
       if there is a graphic "pf_plate" then
          if tLook is "down" then
             set the backgroundColor of graphic "pf_plate" to "140,110,30"
@@ -1090,7 +1316,9 @@ command pfTickThwomps
                put "falling" into gBlockState[i]
                b2kSetDynamic tBody
                b2kSetGravityScale tBody, 1.8   -- slam, not float
-               if gBlockSpr[i] is not empty then b2kSpriteSetFrame gBlockSpr[i], "block_fall"
+               -- (face swaps only exist on the block_* fallback art; the
+               -- chained weight is one frame and the chain stays behind)
+               if gBlockFace[i] is true then b2kSpriteSetFrame gBlockSpr[i], "block_fall"
             end if
             break
          case "falling"
@@ -1098,7 +1326,7 @@ command pfTickThwomps
             if abs(item 2 of b2kVelocity(tBody)) < 4 and tBY > 320 then
                put "down" into gBlockState[i]
                put the milliseconds into gBlockT[i]
-               if gBlockSpr[i] is not empty then b2kSpriteSetFrame gBlockSpr[i], "block_rest"
+               if gBlockFace[i] is true then b2kSpriteSetFrame gBlockSpr[i], "block_rest"
             end if
             break
          case "down"
@@ -1107,7 +1335,7 @@ command pfTickThwomps
                put "rising" into gBlockState[i]
                b2kSetKinematic tBody         -- carries whoever rides its head
                b2kSetVelocity tBody, 0, -55
-               if gBlockSpr[i] is not empty then b2kSpriteSetFrame gBlockSpr[i], "block_idle"
+               if gBlockFace[i] is true then b2kSpriteSetFrame gBlockSpr[i], "block_idle"
             end if
             break
          case "rising"
@@ -1119,6 +1347,9 @@ command pfTickThwomps
                b2kSetStatic tBody
                b2kMoveTo tBody, tBX, 200
                b2kSpriteMoveTo tBody, tBX, 200   -- statics are not body-synced
+               -- the chain follows the weight to its new post
+               if gBlockChainA[i] is not empty then b2kSpriteMoveTo gBlockChainA[i], tBX, 76
+               if gBlockChainB[i] is not empty then b2kSpriteMoveTo gBlockChainB[i], tBX, 140
             end if
             break
       end switch
@@ -1137,6 +1368,8 @@ command pfTickMovers
    put item 2 of tPos into tHY
    repeat with i = 1 to gMovN
       if gMovSpr[i] is empty then next repeat
+      -- the lever can power the sweeping saw down: parked, no hurt box
+      if i is gSawMov and gSawOn is not true then next repeat
       put gMovX[i] + gMovAX[i] * sin(tMS / gMovPX[i]) into tMX
       put gMovY[i] + gMovAY[i] * sin(tMS / gMovPY[i]) into tMY
       b2kSpriteMoveTo gMovSpr[i], tMX, tMY
@@ -1156,12 +1389,207 @@ command pfBlockUndersideCheck pHX, pHY, pBX, pBY
 end pfBlockUndersideCheck
 
 -- =====================================================================
+-- Wave 1 ticks. All POLLED geometry plus windows (the doctrine: position
+-- verdicts never hang off instantaneous contact reads), and each one
+-- exits in O(1) when its piece is absent or locked out.
+-- =====================================================================
+
+-- Feet in the spring's band = launch, every 420ms while you stay there.
+-- b2kPlayerJump is the ONLY correct boost: a raw upward set-velocity on
+-- a grounded player is treated as solver rebound and ground-snapped to
+-- zero (the landing-hop fix); the API jump is exempt by design.
+command pfTickSpring
+   local tPos, tBottom
+   if gSpringSpr is empty or gHurtLock is true then exit pfTickSpring
+   set the itemDelimiter to comma
+   put b2kPosition(gHero) into tPos
+   put item 2 of tPos + 44 into tBottom
+   if abs(item 1 of tPos - gSpringX) < 28 and tBottom >= 524 and \
+         tBottom <= 560 and the milliseconds > gSpringMS then
+      put the milliseconds + 420 into gSpringMS
+      b2kPlayerJump 620   -- ~320px apex: comfortably reaches the sky coin
+      b2kSound "spring"
+      b2kSpriteSetFrame gSpringSpr, "spring_out"
+      put the milliseconds + 260 into gSpringBackMS
+   end if
+   if gSpringBackMS > 0 and the milliseconds > gSpringBackMS then
+      b2kSpriteSetFrame gSpringSpr, "spring"
+      put 0 into gSpringBackMS
+   end if
+end pfTickSpring
+
+-- Headbutting the row from below. The hero's HEAD must be in a tile's
+-- bottom band while RISING - judged with a 160ms window, because the
+-- solver has already zeroed vy on the very frame the head meets the tile
+-- (the stomp lesson, applied upward). Nearest unspent tile only, one
+-- bonk per 220ms, so a jump between two tiles never pays twice.
+command pfTickBonks
+   local i, tPos, tHX, tHead, tVY, tBest, tBestDX, tDX, tSpr
+   if gBonkN is 0 or gBonkN is empty then exit pfTickBonks
+   if gHurtLock is true then exit pfTickBonks
+   set the itemDelimiter to comma
+   put item 2 of b2kVelocity(gHero) into tVY
+   if tVY < -60 then put the milliseconds into gRiseMS
+   put b2kPosition(gHero) into tPos
+   put item 1 of tPos into tHX
+   put item 2 of tPos - 44 into tHead
+   if tHead < 440 or tHead > 468 then exit pfTickBonks
+   if the milliseconds < gBonkMS then exit pfTickBonks
+   if tVY >= -30 and (gRiseMS is 0 or the milliseconds - gRiseMS > 160) then exit pfTickBonks
+   put 0 into tBest
+   put 9999 into tBestDX
+   repeat with i = 1 to gBonkN
+      if gBonkUsed[i] is true then next repeat
+      if gBonkHost[i] is empty then next repeat
+      put abs(tHX - gBonkX[i]) into tDX
+      if tDX < 40 and tDX < tBestDX then
+         put i into tBest
+         put tDX into tBestDX
+      end if
+   end repeat
+   if tBest is 0 then exit pfTickBonks
+   put the milliseconds + 220 into gBonkMS
+   if gBonkKind[tBest] is "box" then
+      put true into gBonkUsed[tBest]
+      add 1 to gCoins
+      b2kSound "coin"
+      if gBonkSpr[tBest] is not empty then b2kSpriteSetFrame gBonkSpr[tBest], "block_empty"
+      b2kCamShake 2, 90
+      -- the payout pops above the box (the same one-shot as a pickup)
+      b2kSpriteNew "tiles", "coin_gold_side", gBonkX[tBest], 352
+      put the result into tSpr
+      if tSpr is not empty then
+         b2kSpriteOnFinish tSpr, "pfPopDone"
+         b2kSpritePlay tSpr, "coinpop"
+      end if
+   else
+      pfSmashBrick tBest
+   end if
+end pfTickBonks
+
+-- A brick shatters: host body and face go, three small brick chunks
+-- (brick_brown art riding INVISIBLE Kit-spawned balls - sprite-only
+-- policy: the plain graphic is just the physics host) burst out, and
+-- the kill floor destroys them below the stage, where b2kFell sweeps
+-- the bound art. They no-collide with the hero: debris is set dressing.
+command pfSmashBrick pWhich
+   local i, tHost, tRef, tSpr, tX, tDX, tVX
+   put gBonkHost[pWhich] into tHost
+   put true into gBonkUsed[pWhich]
+   b2kSound "smash"
+   b2kCamShake 3, 120
+   if gBonkSpr[pWhich] is not empty then b2kSpriteRemove gBonkSpr[pWhich]
+   put empty into gBonkSpr[pWhich]
+   if tHost is not empty then b2kRemove tHost
+   if there is a graphic ("pf_bonk" & pWhich) then delete graphic ("pf_bonk" & pWhich)
+   put empty into gBonkHost[pWhich]
+   put gBonkX[pWhich] into tX
+   set the itemDelimiter to comma
+   repeat with i = 1 to 3
+      put item i of "-16,16,0" into tDX
+      put item i of "-150,150,20" into tVX
+      b2kSpawnBall tX + tDX, 408 + (i mod 2) * 8, 14, "orange"
+      put the result into tRef
+      if tRef is empty then next repeat
+      set the visible of tRef to false
+      b2kNoCollide tRef, gHero
+      b2kPush tRef, tVX, -280 - i * 20
+      b2kSpriteNew "tiles", "brick_brown", tX + tDX, 408
+      put the result into tSpr
+      if tSpr is not empty then
+         b2kSpriteBind tSpr, tRef
+         add 1 to gDebrisN
+         put tRef into gDebrisB[gDebrisN]
+         put tSpr into gDebrisSpr[gDebrisN]
+      end if
+   end repeat
+end pfSmashBrick
+
+-- The lever: STOP at it (grounded in its band, near-zero vx) to toggle
+-- the sweeping saw's power - running through never flips it, so the
+-- main path stays accident-free. A leave-the-band latch re-arms it; no
+-- timer, no strobing. Powered down the saw stops spinning, fades and
+-- stops hurting; the handle mirrors the state (right = on, left = off).
+command pfTickLever
+   local tPos
+   if gLeverSpr is empty or gHurtLock is true then exit pfTickLever
+   set the itemDelimiter to comma
+   put b2kPosition(gHero) into tPos
+   if abs(item 1 of tPos - gLeverX) >= 30 or abs(item 2 of tPos - 532) >= 50 then
+      put true into gLeverArmed   -- left the band: ready for the next flip
+      exit pfTickLever
+   end if
+   if gLeverArmed is not true then exit pfTickLever
+   if abs(item 1 of b2kVelocity(gHero)) < 40 and b2kPlayerOnGround() then
+      put false into gLeverArmed
+      put (gSawOn is not true) into gSawOn
+      b2kSound "lever"
+      if gSawOn is true then
+         b2kSpriteSetFrame gLeverSpr, "lever_right"
+      else
+         b2kSpriteSetFrame gLeverSpr, "lever_left"
+      end if
+      if gSawSpr is not empty then
+         if gSawOn is true then
+            set the blendLevel of gSawSpr to 0
+            b2kSpritePlay gSawSpr, "sawspin"
+         else
+            b2kSpriteStop gSawSpr
+            set the blendLevel of gSawSpr to 55
+         end if
+      end if
+   end if
+end pfTickLever
+
+-- The locked door: holding the key and touching the door swings it open
+-- FOR GOOD (one-shot world state - respawns walk back through). The
+-- door face is solid, so the hero polls as pressed right against it.
+command pfTickDoor
+   local tPos
+   if gDoorOpen is true or gHasKey is not true then exit pfTickDoor
+   if gDoorSprB is empty then exit pfTickDoor
+   set the itemDelimiter to comma
+   put b2kPosition(gHero) into tPos
+   if abs(item 1 of tPos - 4188) < 78 and item 2 of tPos > 360 then
+      put true into gDoorOpen
+      put false into gHasKey
+      b2kSound "unlock"
+      b2kCamShake 3, 150
+      if gLockSpr is not empty then b2kSpriteRemove gLockSpr
+      put empty into gLockSpr
+      if gKeySpr is not empty then b2kSpriteRemove gKeySpr
+      put empty into gKeySpr
+      if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
+      b2kSpriteSetFrame gDoorSprB, "door_open"
+      if there is a graphic "pf_doorHost" then
+         b2kRemove the long id of graphic "pf_doorHost"
+         delete graphic "pf_doorHost"
+      end if
+   end if
+end pfTickDoor
+
+-- =====================================================================
 -- Events: sensors (coins, hazards, goal) and contacts (the slimes);
 -- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
+   local tKPos
    if pSensorCtrl is empty then exit b2kSensorEnter
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
+   if the uPfKeyFlag of pSensorCtrl is true then
+      if gHasKey is not true then
+         put true into gHasKey
+         b2kSound "key"
+         b2kSpriteRemove pSensorCtrl
+         -- the key rides along, floating off the hero's shoulder
+         set the itemDelimiter to comma
+         put b2kPosition(gHero) into tKPos
+         b2kSpriteNew "tiles", "key_yellow", item 1 of tKPos - 34, item 2 of tKPos - 34
+         put the result into gKeySpr
+         if gKeySpr is not empty then b2kSpriteBind gKeySpr, gHero, -34, -34
+      end if
+      exit b2kSensorEnter
+   end if
    if the uPfCoinFlag of pSensorCtrl is true then
       local tPopAt
       add 1 to gCoins
@@ -1224,8 +1652,22 @@ on b2kFell pCtrl
    repeat with i = 1 to gBlockN
       if gBlockB[i] is not empty and pCtrl is gBlockB[i] then
          if gBlockSpr[i] is not empty then b2kSpriteRemove gBlockSpr[i]
+         if gBlockChainA[i] is not empty then b2kSpriteRemove gBlockChainA[i]
+         if gBlockChainB[i] is not empty then b2kSpriteRemove gBlockChainB[i]
          put empty into gBlockSpr[i]
+         put empty into gBlockChainA[i]
+         put empty into gBlockChainB[i]
          put empty into gBlockB[i]
+         exit b2kFell
+      end if
+   end repeat
+   -- brick debris dying at the kill floor: the Kit removes the spawned
+   -- ball; we sweep the brick art bound to it
+   repeat with i = 1 to gDebrisN
+      if gDebrisB[i] is not empty and pCtrl is gDebrisB[i] then
+         if gDebrisSpr[i] is not empty then b2kSpriteRemove gDebrisSpr[i]
+         put empty into gDebrisSpr[i]
+         put empty into gDebrisB[i]
          exit b2kFell
       end if
    end repeat

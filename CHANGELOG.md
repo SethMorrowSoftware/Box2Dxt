@@ -39,6 +39,48 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 1 — the iconic-feel base: the platformer learns the classics.**
+  Springboards, ?-boxes, breakable bricks, a saw power lever and a
+  key-and-lock door land in the platformer — entirely on existing Kit
+  mechanisms and the already-shipped 64px tiles atlas. **Zero Kit
+  changes** (so no harness bump: the Kit's contract is untouched) and
+  zero new asset dependencies; the no-asset fallback level stays frozen
+  at its original 12 coins.
+  - **Springboard** (`spring`/`spring_out`): feet in its band relaunch
+    every 420ms — you cannot stand on a springboard — reaching a new
+    sky coin ~320px up. The boost is `b2kPlayerJump 620`, the canonical
+    use of the API jump (a raw upward set-velocity on a grounded player
+    is ground-snapped away as solver rebound).
+  - **The bonk row** (brick, ?-box, brick, ?-box over the meadow):
+    headbutts are judged by POLLED geometry plus a 160ms rising window,
+    because the solver has already zeroed the upward velocity on the
+    very frame the head meets the tile (the stomp lesson, applied
+    upward — no contact events on statics anywhere in Wave 1). ?-boxes
+    pay one coin each (pop animation, then the `block_empty` face);
+    bricks shatter into three `brick_brown` chunks (32×24, measured)
+    riding invisible spawned balls — the kill floor destroys them and
+    `b2kFell` sweeps the bound art. Debris no-collides with the hero.
+  - **Button art on the plate**: the polled pressure plate now wears
+    `switch_yellow` / `switch_yellow_pressed` faces in step with its
+    polled state (the coloured-rect fallback survives, frozen).
+  - **The saw lever** (`lever_left/right`): STANDING at it (grounded,
+    near-zero vx — running past never flips it; a leave-the-band latch
+    re-arms it) powers the sweeping saw down: spin stopped, ghosted,
+    hurt box off. Standing again powers it back up.
+  - **Key + locked door**: a key floats in thwomp alley (one-shot
+    sensor pickup, per doctrine), then rides the hero's shoulder as a
+    bound sprite and shows `[KEY]` on the HUD; a lock + two-tile door
+    column gates the stone finale and swings open FOR GOOD on a polled
+    touch — respawns walk back through.
+  - **Re-skinned, sprite-only**: thwomps are now chained weights
+    (`weight` + `chain` tiles; the chain stays at the perch while the
+    weight falls, and follows a dragged re-arm), the spike pit grew
+    real `spikes` tips (placed from measured alpha: tips at y 606,
+    base flush with the stage floor), and the level crosses a biome
+    seam at the locked door into a STONE finale.
+  - Fifteen coins now (sky coin + two box coins); five new synthesized
+    cues (spring, smash, key, unlock, lever) — still zero asset files
+    for audio.
 - **Wave 0: the asset pack catalogued; the content roadmap expanded.**
   The uploaded Kenney platformer family (~900 frames, three compatible
   sets) is fully inventoried in `docs/expansion-prep.md`: six 70px
