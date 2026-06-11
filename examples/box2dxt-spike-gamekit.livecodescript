@@ -1506,6 +1506,9 @@ local sCamX, sCamY   -- current view centre (world px)
 local sCamShakeAmp, sCamShakeEnd
 local sCamLastH, sCamLastV -- last written scroll (skip redundant sets)
 local sCamNote       -- empty = healthy; else why the camera is degraded
+local sCamLocVisual  -- true when this engine reports grouped locs SCROLL-ADJUSTED
+local sCamCurH, sCamCurV -- the scroll actually applied this frame (cached)
+local sInCam         -- ctrlRef -> true when the Kit placed it inside the viewport
 
 constant kPI = 3.14159265358979
 
@@ -1545,6 +1548,7 @@ command b2kResetTables
    put false into sNeedFullSync
    put empty into sSpawned
    put empty into sSensor
+   put empty into sInCam
 end b2kResetTables
 
 command b2kTeardown
@@ -1918,6 +1922,7 @@ command b2kSpawnBox pScreenX, pScreenY, pW, pH, pColor
       create graphic (tName) in group "b2kcam_view"
    end if
    put the long id of graphic (tName) into tRef
+   if sCamGroup is not empty then put true into sInCam[tRef]
    set the style of tRef to "rectangle"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
@@ -1951,6 +1956,7 @@ command b2kSpawnBall pScreenX, pScreenY, pDiameter, pColor
       create graphic (tName) in group "b2kcam_view"
    end if
    put the long id of graphic (tName) into tRef
+   if sCamGroup is not empty then put true into sInCam[tRef]
    set the style of tRef to "oval"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
@@ -1988,6 +1994,7 @@ command b2kSpawnCapsule pScreenX, pScreenY, pLength, pThickness, pColor
       create graphic (tName) in group "b2kcam_view"
    end if
    put the long id of graphic (tName) into tRef
+   if sCamGroup is not empty then put true into sInCam[tRef]
    set the style of tRef to "polygon"
    set the filled of tRef to true
    set the foregroundColor of tRef to "20,20,24"
@@ -2341,6 +2348,7 @@ command b2kRemove pControl
    delete variable sStatic[tRef]
    delete variable sSpawned[tRef]
    delete variable sSensor[tRef]
+   delete variable sInCam[tRef]
    -- If the kit created this control (b2kSpawn...), delete it too, so removing
    -- a body never leaves a dead graphic behind. Attached controls are left alone.
    if tWasSpawned then
@@ -3517,6 +3525,7 @@ command b2kSpriteNew pSheet, pFrame, pX, pY
       create button tName in group "b2kcam_view"
    end if
    put the long id of button tName into tRef
+   if sCamGroup is not empty then put true into sInCam[tRef]
    set the style of tRef to "transparent"
    set the showName of tRef to false
    set the traversalOn of tRef to false
@@ -3553,6 +3562,7 @@ command b2kSpriteFromGIF pPath, pX, pY
       create image tName in group "b2kcam_view"
    end if
    put the long id of image tName into tRef
+   if sCamGroup is not empty then put true into sInCam[tRef]
    try
       set the text of tRef to tData
    catch tErr
@@ -3727,6 +3737,7 @@ command b2kSpriteForget pRef
    delete variable sSprFrameKey[pRef]
    delete variable sSprIconNow[pRef]
    delete variable sSprLastLoc[pRef]
+   delete variable sInCam[pRef]
    set the wholeMatches to true
    put lineOffset(pRef, sSprRefs) into tLn
    if tLn > 0 then delete line tLn of sSprRefs
@@ -4020,11 +4031,11 @@ command b2kSpritesTick
       try
          if sSprBind[tRef] is not empty then
             put the loc of sSprBind[tRef] into tLoc
-            put (item 1 of tLoc) + sSprBindDX[tRef] into tBX
-            put (item 2 of tLoc) + sSprBindDY[tRef] into tBY
+            put (item 1 of tLoc) + b2kCamShiftX(sSprBind[tRef]) + sSprBindDX[tRef] into tBX
+            put (item 2 of tLoc) + b2kCamShiftY(sSprBind[tRef]) + sSprBindDY[tRef] into tBY
             put tBX & comma & tBY into tLoc
             if sSprLastLoc[tRef] is not tLoc then
-               set the loc of tRef to tLoc
+               set the loc of tRef to (tBX - b2kCamShiftX(tRef)) & comma & (tBY - b2kCamShiftY(tRef))
                put tLoc into sSprLastLoc[tRef]
             end if
          end if
@@ -4139,6 +4150,28 @@ command b2kCamOn pRect
    catch tErr
       put "setting the group scroll failed: " & tErr into sCamNote
    end try
+   -- probe the engine's coordinate semantics for grouped controls: place a
+   -- probe at x=100, scroll by 50, and read the loc back. Engines that
+   -- report 50 give SCROLL-ADJUSTED (visual) locs -- every per-frame
+   -- position write into the group must then subtract the live scroll, or
+   -- the write cancels the pan and the control "outruns" the world.
+   put false into sCamLocVisual
+   try
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 4000, 2000
+      create graphic "b2kcam_probe" in group "b2kcam_view"
+      set the rect of it to 96, 96, 104, 104
+      set the visible of it to false
+      set the hScroll of sCamGroup to 50
+      put ((item 1 of the loc of graphic "b2kcam_probe") is 50) into sCamLocVisual
+      set the hScroll of sCamGroup to 0
+      delete graphic "b2kcam_probe"
+      set the rect of graphic "b2kcam_anchor" to 0, 0, 1, 1
+   catch tErr
+      put false into sCamLocVisual
+   end try
+   put 0 into sCamCurH
+   put 0 into sCamCurV
+   put empty into sInCam
    b2kCamApply
 end b2kCamOn
 
@@ -4151,6 +4184,10 @@ command b2kCamOff
    end try
    if there is a graphic "b2kcam_anchor" then delete graphic "b2kcam_anchor"
    put empty into sCamGroup
+   put false into sCamLocVisual
+   put 0 into sCamCurH
+   put 0 into sCamCurV
+   put empty into sInCam
 end b2kCamOff
 
 function b2kCamIsOn
@@ -4166,6 +4203,7 @@ end b2kCamGroup
 -- Move an existing control (IDE-designed levels) into the viewport.
 command b2kCamAdopt pCtrl
    if sCamGroup is empty then exit b2kCamAdopt
+   put true into sInCam[the long id of pCtrl]
    try
       relayer pCtrl to front of group "b2kcam_view"
    catch tErr
@@ -4242,6 +4280,36 @@ function b2kCamStatus
    return sCamNote
 end b2kCamStatus
 
+-- "visual" when this engine reports/sets grouped locs scroll-adjusted,
+-- else "content". Diagnostic; the Kit compensates automatically.
+function b2kCamLocSemantics
+   if sCamLocVisual is true then return "visual"
+   return "content"
+end b2kCamLocSemantics
+
+-- Internal: the scroll to subtract when WRITING a position into the
+-- viewport on a visual-semantics engine (0 otherwise / outside it).
+function b2kCamShiftX pRef
+   if sCamLocVisual is not true then return 0
+   if sInCam[pRef] is not true then return 0
+   return sCamCurH
+end b2kCamShiftX
+
+function b2kCamShiftY pRef
+   if sCamLocVisual is not true then return 0
+   if sInCam[pRef] is not true then return 0
+   return sCamCurV
+end b2kCamShiftY
+
+-- Move ANY sprite/control to a WORLD position, camera-correct (use this
+-- instead of `set the loc` for things you animate by hand, like a patrol
+-- path -- outside a camera it is a plain loc set).
+command b2kSpriteMoveTo pCtrl, pX, pY
+   local tRef
+   put the long id of pCtrl into tRef
+   set the loc of tRef to round(pX - b2kCamShiftX(tRef)) & comma & round(pY - b2kCamShiftY(tRef))
+end b2kSpriteMoveTo
+
 -- Internal, called by the loop each frame: chase the followed control. The
 -- follow eases, but the target is GUARANTEED on screen: if it would leave
 -- the view (fast falls, teleports, lerp lag), the camera snaps to it.
@@ -4252,8 +4320,8 @@ command b2kCamTick
       try
          set the itemDelimiter to comma
          put the loc of sCamFollow into tLoc
-         put item 1 of tLoc into tTX
-         put item 2 of tLoc into tTY
+         put (item 1 of tLoc) + b2kCamShiftX(sCamFollow) into tTX
+         put (item 2 of tLoc) + b2kCamShiftY(sCamFollow) into tTY
          if abs(tTX - sCamX) > sCamDZW / 2 then
             put sCamX + sCamLerp * (tTX - sCamX) into sCamX
          end if
@@ -4277,7 +4345,7 @@ command b2kCamTick
       try
          set the itemDelimiter to comma
          put the loc of sCamFollow into tLoc
-         put (item 1 of tLoc) - (the hScroll of sCamGroup) into tTX
+         put (item 1 of tLoc) + b2kCamShiftX(sCamFollow) - (the hScroll of sCamGroup) into tTX
          put ((item 3 of the rect of sCamGroup) - (item 1 of the rect of sCamGroup)) into tHalfW
          if tTX < 48 or tTX > tHalfW - 48 then
             set the hScroll of sCamGroup to round((item 1 of tLoc) - tHalfW / 2)
@@ -4330,6 +4398,8 @@ command b2kCamApply
       set the vScroll of sCamGroup to tV
       put tV into sCamLastV
    end if
+   put tH into sCamCurH
+   put tV into sCamCurV
 end b2kCamApply
 
 -- =====================================================================
@@ -4520,6 +4590,7 @@ command b2kPruneDeadRefs pDead
          delete variable sSpawned[d]
          delete variable sSensor[d]
          delete variable sDrawKey[d]
+         delete variable sInCam[d]
       end if
    end repeat
 end b2kPruneDeadRefs
@@ -4541,7 +4612,7 @@ command b2kDrawBody pRef, pWx, pWy, pWa
          put round(b2kToScreenY(pWy)) into tSy
          put tSx & "," & tSy into tKey
          if sDrawKey[pRef] is tKey then exit b2kDrawBody
-         set the loc of pRef to tKey
+         set the loc of pRef to (tSx - b2kCamShiftX(pRef)) & "," & (tSy - b2kCamShiftY(pRef))
          put tKey into sDrawKey[pRef]
    end switch
 end b2kDrawBody
@@ -4554,8 +4625,14 @@ command b2kDrawPoly pRef, pWx, pWy, pWa
    put sin(pWa) into s
    put empty into tPts
    put empty into tFirst
+   local tOffX, tOffY
+   put b2kCamShiftX(pRef) into tOffX
+   put b2kCamShiftY(pRef) into tOffY
    repeat for each line p in sVerts[pRef]
       put b2kCorner(pWx, pWy, item 1 of p, item 2 of p, c, s) into pt
+      if tOffX is not 0 or tOffY is not 0 then
+         put ((item 1 of pt) - tOffX) & "," & ((item 2 of pt) - tOffY) into pt
+      end if
       if tFirst is empty then put pt into tFirst
       put pt & cr after tPts
    end repeat
@@ -4571,6 +4648,8 @@ command b2kDrawBall pRef, pWx, pWy
    put round(b2kToScreenY(pWy)) into tSy
    put tSx & "," & tSy & "," & round(tRp) into tKey
    if sDrawKey[pRef] is tKey then exit b2kDrawBall
+   subtract b2kCamShiftX(pRef) from tSx
+   subtract b2kCamShiftY(pRef) from tSy
    set the rect of pRef to round(tSx - tRp), round(tSy - tRp), round(tSx + tRp), round(tSy + tRp)
    put tKey into sDrawKey[pRef]
 end b2kDrawBall
@@ -4591,7 +4670,7 @@ command b2kDrawImage pRef, pWx, pWy, pWa
       set the angle of pRef to tDeg
       put tDeg into sImgAngle[pRef]
    end if
-   set the loc of pRef to tSx & "," & tSy
+   set the loc of pRef to (tSx - b2kCamShiftX(pRef)) & "," & (tSy - b2kCamShiftY(pRef))
    put tKey into sDrawKey[pRef]
 end b2kDrawImage
 
