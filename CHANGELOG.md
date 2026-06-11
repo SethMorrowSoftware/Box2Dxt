@@ -39,6 +39,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **The pressure plate is polled, not counted.** Exact events unmasked
+  what enter/exit *counting* had been hiding: Box2D's sensor begin/end
+  around settling and sleeping bodies is precisely the edge a pressure
+  plate lives on (the old duplicate-enter bug had been inflating the
+  count, accidentally holding the gate open). The plate is now a pure
+  graphic whose pressed state is **polled** with `b2kOverlap` each
+  frame — stateless, so it cannot drift, and the broadphase includes
+  sleeping bodies, so a crate that settles and sleeps keeps holding it —
+  plus a 200 ms release debounce so micro-bounces don't flap the gate.
+  Doctrine added to the sensor docs: **enter/exit for one-shots; polling
+  for presence.** With this, no gameplay state in the demo depends on
+  balanced event counting: everything is one-shot, guarded, geometric,
+  or polled.
 - **Frame-exact physics events (the "flaky collisions" root cause) +
   `b2kKillFloor`.** Box2D only exposes the **last step's** begin/end
   contact and sensor events, but a frame can run two fixed steps (under

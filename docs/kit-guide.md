@@ -758,6 +758,15 @@ put b2kSensorExitSensor(1)        -- ...and b2kSensorExitVisitor(1)
 
 ---
 
+> **One-shots vs. presence.** Enter/exit messages are perfect for one-shot
+> triggers — a coin is removed on first fire, a checkpoint sets a flag. But for
+> *presence* (a pressure plate that must stay pressed while anything sits on
+> it), don't count enters minus exits: counting drifts, and Box2D's sensor
+> begin/end around settling and sleeping bodies is exactly the edge a plate
+> lives on. Poll instead — `if b2kOverlap(x1,y1,x2,y2) is not empty` each frame
+> is stateless and still sees sleeping bodies. Add a short release debounce
+> (~200 ms) so a settling crate's micro-bounces don't flap your door.
+
 ## 14. Collision filtering
 
 By default everything collides with everything. Three independent tools change

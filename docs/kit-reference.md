@@ -451,6 +451,15 @@ accessor returns a control (empty for a wall, the ground, or any untracked body)
 
 ## Sensors (trigger zones)
 
+> **One-shots vs. presence:** sensor enter/exit messages are ideal for
+> **one-shot** triggers (coins, checkpoints, goals — consumed or guarded on
+> first fire). For **presence** state that must stay true while something sits
+> there (pressure plates, buttons, zones), poll `b2kOverlap` of the region each
+> frame instead of counting enters minus exits: a poll is stateless (it cannot
+> drift), and the broadphase still includes **sleeping** bodies — a crate that
+> settles and sleeps keeps holding the plate. The platformer's plate works this
+> way, with a ~0.2 s release debounce for feel.
+
 Non-solid fixtures that report overlaps but never block. The Kit enables sensor
 events on every body it creates, so sensors detect them automatically.
 

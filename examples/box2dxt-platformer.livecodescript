@@ -42,10 +42,13 @@
 --      solid out to their visible ends; the LEVEL EDGES are hard stops
 --      (thick slabs - no creeping past the first/last screen).
 --   3. NO EVENT EVER MISSES (per-step harvest fix): every coin touch
---      collects, every stomp registers, the plate never double-counts -
---      even on heavy frames. Things shoved into the PIT (the crate, a
---      slime, a dragged thwomp) are DESTROYED below the kill floor,
---      never fall forever; the gate closes if its crate goes in.
+--      collects, every stomp registers - even on heavy frames. The
+--      PRESSURE PLATE is now POLLED, not event-counted: pressed exactly
+--      while something physically sits on it (a crate that settles and
+--      falls ASLEEP still holds it; ~0.2s release grace - no flapping,
+--      no chime spam). Things shoved into the PIT are DESTROYED below
+--      the kill floor, never fall forever; losing the crate closes the
+--      gate.
 --   4. STOMPS SQUASH (judged by the controller's land/fall state, not
 --      post-impact velocity): land on a normal slime = squash + bounce;
 --      its sides hurt; the SPIKE slime hurts from every side.
@@ -66,7 +69,7 @@
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
-local gGate, gGateSprA, gGateSprB, gPlateCount, gPlateLook, gCamOK
+local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
@@ -296,7 +299,7 @@ command pfStartGame
    if there is a field "pfWinText" then set the visible of field "pfWinText" to false
    if there is a button "pfbtn_again" then set the visible of button "pfbtn_again" to false
    if there is a field "pfSplash" then set the visible of field "pfSplash" to true
-   put 0 into gPlateCount
+   put 0 into gPlateHoldMS
    put empty into gPlateLook
    -- the indexed enemy/trap tables start the run empty
    put 0 into gSlimeN
@@ -492,15 +495,18 @@ command pfStartGame
    end if
    -- ===== plate + gate puzzle (a coin waits INSIDE the gateway) ====
    pfMakeCoin 2932, 540   -- made before the gate, so the closed gate hides it
+   -- the plate is a PURE GRAPHIC: its pressed state is POLLED from the
+   -- physics world each frame (pfTickGate), not counted from sensor
+   -- enter/exit events. Counting drifts - Box2D sensor begin/end around
+   -- settling and SLEEPING bodies is exactly the edge a pressure plate
+   -- lives on - while an overlap poll is stateless and the broadphase
+   -- still includes sleeping bodies (a parked crate never "evaporates").
    create graphic "pf_plate"
    set the style of it to "rectangle"
    set the rect of it to 2772, 560, 2828, 576
    set the filled of it to true
    set the backgroundColor of it to "220,180,60"
-   put the long id of graphic "pf_plate" into tRef
-   set the uPfPlateFlag of tRef to true
-   b2kCamAdopt tRef
-   b2kAddSensor tRef, "box"
+   b2kCamAdopt the long id of graphic "pf_plate"
    create graphic "pf_gate"
    set the style of it to "rectangle"
    set the rect of it to 2900, 448, 2964, 576
@@ -984,12 +990,17 @@ end b2kFrame
 -- hand-rolled version never had.)
 
 -- The kinematic gate chases its open/closed height; the plate's colour
--- tracks its state. Anything on the plate (the hero OR the crate) holds it.
+-- tracks its state. Anything on the plate (the hero OR the crate) holds
+-- it. Pressed = any tracked body overlapping the pad region, POLLED
+-- (stateless, sleep-proof); a short release debounce keeps a settling
+-- crate's micro-bounces from flapping the gate.
 command pfTickGate
-   local tTarget, tY, tLook, tVel
+   local tTarget, tY, tLook, tVel, tOn
    if gGate is empty then exit pfTickGate
    set the itemDelimiter to comma
-   if gPlateCount > 0 then
+   put (b2kOverlap(2774, 552, 2826, 576) is not empty) into tOn
+   if tOn then put the milliseconds + 200 into gPlateHoldMS
+   if tOn or the milliseconds < gPlateHoldMS then
       put 342 into tTarget
       put "down" into tLook
    else
@@ -1137,14 +1148,11 @@ command pfBlockUndersideCheck pHX, pHY, pBX, pBY
 end pfBlockUndersideCheck
 
 -- =====================================================================
--- Events: sensors (coins, hazards, plate, goal) and contacts (the slime)
+-- Events: sensors (coins, hazards, goal) and contacts (the slimes);
+-- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
    if pSensorCtrl is empty then exit b2kSensorEnter
-   if the uPfPlateFlag of pSensorCtrl is true then
-      add 1 to gPlateCount
-      exit b2kSensorEnter
-   end if
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfCoinFlag of pSensorCtrl is true then
       local tPopAt
@@ -1189,14 +1197,6 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       end if
    end if
 end b2kSensorEnter
-
-on b2kSensorExit pSensorCtrl, pVisitorCtrl
-   if pSensorCtrl is empty then exit b2kSensorExit
-   if the uPfPlateFlag of pSensorCtrl is true then
-      subtract 1 from gPlateCount
-      if gPlateCount < 0 then put 0 into gPlateCount
-   end if
-end b2kSensorExit
 
 -- Something fell past the kill floor and the Kit is about to remove it
 -- (body destroyed; Kit-spawned controls deleted). Clean up OUR
