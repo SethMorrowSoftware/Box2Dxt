@@ -76,6 +76,10 @@
 --         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
 --         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
 --         b2kCamAdopt ctrl   (world px == control locs; spawns auto-join the view)
+-- AUDIO   b2kSoundLoad name,path · b2kToneMake name,freqs,msPerNote[,vol,shape] ·
+--         b2kSound name · b2kSoundLoop name · b2kSoundStop · b2kSoundMute flag ·
+--         b2kSoundMuted() · b2kSoundVolume pct · b2kSoundIsLoaded(name) ·
+--         b2kSoundStatus()  (audioClips: one at a time; b2kToneMake = no asset files)
 -- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
 --         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
 --         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
@@ -170,6 +174,10 @@ local sPlayHalfW, sPlayHalfH -- capsule half-extents in px (probe geometry)
 local sPlayAnimNow   -- last animation written (redundancy suppression)
 local sPlayFlipNow   -- last flip written
 local sPlayHoldMS    -- suppress anim switches until then (land flourish)
+local sSndClip       -- sound name -> audioClip short name ("b2ksnd_...")
+local sSndMute       -- true = swallow play calls (a user preference; survives teardown)
+local sSndDead       -- true after a play failure: degrade to silence, never errors
+local sSndNote       -- empty = healthy; else why audio is degraded
 
 constant kPI = 3.14159265358979
 
@@ -219,6 +227,7 @@ command b2kTeardown
    put empty into sWorld
    b2kPlayerForget true   -- full: a teardown wipes the tuning too
    b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   b2kSoundsWipe   -- sounds are assets like sheets (the mute survives)
    b2kCamOff       -- ...then dissolve the viewport (survivors go to the card)
    b2kResetTables
    put 0 into sDragJoint
@@ -3561,6 +3570,223 @@ command b2kCamApply
    put tH into sCamCurH
    put tV into sCamCurV
 end b2kCamApply
+
+-- =====================================================================
+-- Audio: named sounds over audioClips + a script-side tone synthesizer
+-- =====================================================================
+-- Model: a sound is an AUDIOCLIP imported into the stack -- the one LC
+-- sound path with no external media-layer dependency -- and plays by
+-- name (`play audioClip`). The engine plays ONE clip at a time; a new
+-- play cuts the previous. That is the classic LC limit, and it suits
+-- short retro SFX (document it, don't fight it). b2kToneMake SYNTHESIZES
+-- a clip in pure script (8-bit mono WAV at 22050 Hz, square or sine, a
+-- comma list of note frequencies, per-note decay so notes never click),
+-- so a self-contained example ships sound with ZERO asset files. Sounds
+-- are assets like sheets: b2kTeardown wipes them (the sweep also catches
+-- clips a dead session left behind; names are stable, so re-making
+-- replaces rather than accumulates). Failures degrade to silence, never
+-- to errors: the first play that throws trips a dead-flag and
+-- b2kSoundStatus() says why. The mute is a user preference and survives
+-- teardown. There is no per-frame tick -- audio is purely event-driven.
+
+-- Import a WAV/AIFF/AU file as a named sound (replaces any same name).
+command b2kSoundLoad pName, pPath
+   local tClip, tCount
+   if pName is empty then exit b2kSoundLoad
+   if there is no file pPath then
+      put "no such file: " & pPath into sSndNote
+      exit b2kSoundLoad
+   end if
+   put "b2ksnd_" & pName into tClip
+   try
+      if there is an audioClip tClip then delete audioClip tClip
+      put the number of audioClips of this stack into tCount
+      import audio clip from file pPath
+      if the number of audioClips of this stack > tCount then
+         set the name of audioClip (tCount + 1) of this stack to tClip
+         put tClip into sSndClip[pName]
+      end if
+   catch tErr
+      put "import failed: " & tErr into sSndNote
+   end try
+end b2kSoundLoad
+
+-- Synthesize a named sound: pFreqs is a comma list of note frequencies
+-- in Hz (0 = a rest), each pMsPerNote long; pVolPct 0-100 (default 60);
+-- pShape "square" (default -- retro/plucky) or "sine" (soft). About
+-- 22 KB per second of audio, built once -- keep SFX short.
+--   b2kToneMake "coin", "1319,1760", 36          -- a two-note blip
+--   b2kToneMake "win", "523,659,784,1047", 110   -- a little fanfare
+command b2kToneMake pName, pFreqs, pMsPerNote, pVolPct, pShape
+   local tClip, tData, tPath, tCount, tF
+   if pName is empty then exit b2kToneMake
+   put "b2ksnd_" & pName into tClip
+   put b2kClamp(pMsPerNote, 5, 2000) into pMsPerNote
+   put b2kClamp(b2kNumberOr(pVolPct, 60), 0, 100) into pVolPct
+   put empty into tData
+   set the itemDelimiter to comma
+   repeat for each item tF in pFreqs
+      put b2kToneBytes(b2kNumberOr(word 1 of tF, 440), pMsPerNote, pVolPct, pShape) after tData
+   end repeat
+   if tData is empty then exit b2kToneMake
+   put specialFolderPath("temporary") & "/b2ktone_" & the milliseconds & "_" & random(99999) & ".wav" into tPath
+   put b2kWavWrap(tData) into URL ("binfile:" & tPath)
+   try
+      if there is an audioClip tClip then delete audioClip tClip
+      put the number of audioClips of this stack into tCount
+      import audio clip from file tPath
+      if the number of audioClips of this stack > tCount then
+         set the name of audioClip (tCount + 1) of this stack to tClip
+         put tClip into sSndClip[pName]
+      end if
+   catch tErr
+      put "import failed: " & tErr into sSndNote
+   end try
+   try
+      delete file tPath
+   catch tErr
+   end try
+end b2kToneMake
+
+-- Internal: pMs of one note as 8-bit unsigned mono PCM at 22050 Hz,
+-- with a linear decay across the note (clickless and plucky).
+function b2kToneBytes pFreq, pMs, pVolPct, pShape
+   local tRate, tN, tOut, i, tPhase, tStep, tAmp, tEnv, tS
+   put 22050 into tRate
+   put round(tRate * pMs / 1000) into tN
+   if tN < 1 then return empty
+   put pVolPct * 1.27 into tAmp   -- 0-100 -> 0-127 sample amplitude
+   put pFreq / tRate into tStep
+   put 0 into tPhase
+   put empty into tOut
+   repeat with i = 0 to tN - 1
+      put tAmp * (1 - i / tN) into tEnv
+      if pFreq <= 0 then
+         put 0 into tS   -- a rest
+      else
+         if pShape is "sine" then
+            put tEnv * sin(tPhase * 2 * kPI) into tS
+         else
+            if tPhase mod 1 < 0.5 then
+               put tEnv into tS
+            else
+               put 0 - tEnv into tS
+            end if
+         end if
+      end if
+      put numToByte(round(128 + tS)) after tOut
+      add tStep to tPhase
+   end repeat
+   return tOut
+end b2kToneBytes
+
+-- Internal: wrap raw 8-bit mono 22050 Hz samples in a WAV container.
+function b2kWavWrap pData
+   local tLen
+   put the number of bytes in pData into tLen
+   return "RIFF" & b2kLE32(36 + tLen) & "WAVE" & "fmt " & b2kLE32(16) \
+         & b2kLE16(1) & b2kLE16(1) & b2kLE32(22050) & b2kLE32(22050) \
+         & b2kLE16(1) & b2kLE16(8) & "data" & b2kLE32(tLen) & pData
+end b2kWavWrap
+
+-- Internal: little-endian byte packers (hand-rolled: no binaryEncode
+-- format-letter portability worries).
+function b2kLE16 pN
+   return numToByte(pN mod 256) & numToByte(pN div 256 mod 256)
+end b2kLE16
+
+function b2kLE32 pN
+   return numToByte(pN mod 256) & numToByte(pN div 256 mod 256) & numToByte(pN div 65536 mod 256) & numToByte(pN div 16777216 mod 256)
+end b2kLE32
+
+-- Play a named sound (cuts whatever is playing -- the audioClip model).
+command b2kSound pName
+   local tClip
+   if sSndMute is true or sSndDead is true then exit b2kSound
+   put sSndClip[pName] into tClip
+   if tClip is empty then exit b2kSound
+   try
+      play audioClip tClip
+   catch tErr
+      put true into sSndDead   -- this engine can't play: silence, no spam
+      put "play failed: " & tErr into sSndNote
+   end try
+end b2kSound
+
+-- Loop a named sound until b2kSoundStop / the next play (ambience).
+command b2kSoundLoop pName
+   local tClip
+   if sSndMute is true or sSndDead is true then exit b2kSoundLoop
+   put sSndClip[pName] into tClip
+   if tClip is empty then exit b2kSoundLoop
+   try
+      play audioClip tClip looping
+   catch tErr
+      put true into sSndDead
+      put "play failed: " & tErr into sSndNote
+   end try
+end b2kSoundLoop
+
+command b2kSoundStop
+   try
+      play stop
+   catch tErr
+   end try
+end b2kSoundStop
+
+-- Mute is a preference: it survives b2kTeardown and stack resets are up
+-- to the caller (store it in a custom property if you want it saved).
+command b2kSoundMute pFlag
+   put (pFlag is true) into sSndMute
+   if sSndMute then b2kSoundStop
+end b2kSoundMute
+
+function b2kSoundMuted
+   return (sSndMute is true)
+end b2kSoundMuted
+
+-- The engine-GLOBAL output volume (the playLoudness, 0-100): it affects
+-- every stack's audio, so games should expose it, not hardcode it.
+command b2kSoundVolume pPct
+   try
+      set the playLoudness to round(b2kClamp(pPct, 0, 100))
+   catch tErr
+      put "volume failed: " & tErr into sSndNote
+   end try
+end b2kSoundVolume
+
+function b2kSoundIsLoaded pName
+   return (sSndClip[pName] is not empty)
+end b2kSoundIsLoaded
+
+-- Empty = healthy; otherwise the most recent reason audio degraded
+-- (missing file, import failure, play failure). Plays never throw.
+function b2kSoundStatus
+   return sSndNote
+end b2kSoundStatus
+
+-- Internal: delete every Kit-made audioClip ("b2ksnd_" prefix -- catches
+-- a dead session's leftovers too) and reset the registry. The dead-flag
+-- resets (a fresh world may retry); the mute preference survives.
+command b2kSoundsWipe
+   local i, tName
+   try
+      play stop
+   catch tErr
+   end try
+   repeat with i = the number of audioClips of this stack down to 1
+      put the short name of audioClip i of this stack into tName
+      if char 1 to 7 of tName is "b2ksnd_" then
+         try
+            delete audioClip i of this stack
+         catch tErr
+         end try
+      end if
+   end repeat
+   put empty into sSndClip
+   put false into sSndDead
+   put empty into sSndNote
+end b2kSoundsWipe
 
 -- =====================================================================
 -- The loop  (fixed timestep, generation-guarded; one screen lock per frame)

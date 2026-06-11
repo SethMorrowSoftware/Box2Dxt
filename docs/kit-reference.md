@@ -390,6 +390,37 @@ b2kCamFollow gHero, 0.18
 
 The platformer example is a complete scrolling level on this module.
 
+## Sound (SFX — with or without asset files)
+
+Named sounds over **audioClips** — the one LiveCode sound path with no
+external media-layer dependency. The engine plays **one clip at a time** (a
+new play cuts the previous); that's the classic LC limit, and short retro
+SFX suit it. `b2kToneMake` **synthesizes** a clip in pure script (8-bit mono
+WAV, square or sine, a comma list of note frequencies with a per-note
+decay), so a self-contained stack ships sound with zero files. Sounds are
+assets like sheets: `b2kTeardown` wipes them (names are stable, so
+re-making replaces rather than accumulates). Failures degrade to *silence*,
+never errors — the first play that throws trips a dead-flag.
+
+| Handler | Purpose |
+|---------|---------|
+| `b2kSoundLoad name, path` | Import a WAV/AIFF/AU file as a named sound (replaces any same name). |
+| `b2kToneMake name, freqs, msPerNote [,vol] [,shape]` | Synthesize a sound: `freqs` like `"1319,1760"` (Hz; 0 = a rest), `vol` 0–100 (default 60), `shape` `"square"` (default, retro) or `"sine"` (soft). ~22 KB per second — keep SFX short. |
+| `b2kSound name` | Play (cuts whatever is playing). Stale-safe: unknown names and dead audio no-op. |
+| `b2kSoundLoop name` / `b2kSoundStop` | Loop ambience until stopped / stop the current sound. |
+| `b2kSoundMute flag` / `b2kSoundMuted()` | Swallow play calls — a user preference that survives `b2kTeardown`. |
+| `b2kSoundVolume pct` | The engine-**global** `playLoudness` (0–100) — it affects every stack's audio, so expose it, don't hardcode it. |
+| `b2kSoundIsLoaded(name)` / `b2kSoundStatus()` | Loaded check / empty = healthy, else the most recent reason audio degraded. |
+
+```
+b2kToneMake "coin", "1319,1760", 36          -- a two-note blip
+b2kToneMake "win", "523,659,784,1047", 110   -- a little fanfare
+-- in your coin handler:  b2kSound "coin"
+```
+
+The platformer's eight cues (jump, land, coin, stomp, hurt, checkpoint,
+gate, win) are all synthesized — no asset folder involved.
+
 ## Drag & events
 
 | Handler | Purpose |

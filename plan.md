@@ -174,21 +174,34 @@ below; run it in OXT and report.
 
 ## Phase 5 — Game scaffolding (L, design-first)
 
-Sketch now, design when Phase 4 is real:
+Phase 4 is real, so the design work is unblocked. The chunks land
+separately, each PR-sized, in rough value order:
 
-- **Scenes/levels:** load/save level layouts (seed: the builder's
+- **Audio — BUILT (2026-06-11), awaiting the OXT pass.** `b2kSound*` over
+  imported audioClips (`play audioClip`: the one LC sound path with no
+  external media dependency; one clip at a time, documented) plus
+  `b2kToneMake`, a pure-script WAV synthesizer (square/sine, note lists,
+  per-note decay) so self-contained examples have SFX with zero asset
+  files. Mute survives teardown; engine-global volume wrapped; a play
+  failure trips a dead-flag (silence, never errors; `b2kSoundStatus()`).
+  The platformer plays eight synthesized cues (jump, land — off the
+  player's land state — coin, stomp, hurt, checkpoint, gate, win); M
+  mutes. Player objects for streamed music stay future work.
+- **Enemy/behaviour patterns — IN THE DEMO as documented patterns.** The
+  platformer's indexed tables are the plan's "example patterns first":
+  `pfMakeSlime` (patrol + stomp/spike kinds), `pfAddMover` (bodiless
+  sine-path hazards: bee/fly/sweeping saw), `pfMakeThwomp` (arm/fall/
+  rest/rise lifecycle, rideable, draggable). Promote to `b2k` API once a
+  second example repeats them (the micro-game below is that test).
+- **Scenes/levels (next):** load/save level layouts (seed: the builder's
   `serializeText` record format); `b2kSceneLoad/Save/Reset`; win/lose hooks
   (the ROADMAP §4.1 goal-zone work and this converge here).
-- **Audio:** `b2kSoundLoad/Play` over `play`/player objects with documented
-  platform caveats; hooks from player land/jump/coin events.
-- **Enemy/behaviour patterns:** patrol, chase-on-sight (`b2kRayHit` line of
-  sight), hazard respawn — shipped as documented example patterns first,
-  promoted to API only once two examples repeat them.
 - **Builder cross-pollination:** animated sprite parts and the player as a
   placeable "kind" inside the contraption builder (its §3/§4 roadmap), making
   the builder the level editor — the long-game payoff.
 - **Exit:** a complete micro-game (start screen → 2 levels → win screen) as
-  `examples/`, and the "build a game" chapter of the kit guide.
+  `examples/` — built on `b2kPlayerMake` (the green-field path the platformer
+  doesn't exercise) — and the "build a game" chapter of the kit guide.
 
 ---
 
@@ -246,3 +259,5 @@ user-confirmed in OXT before the next begins.
 | 2026-06-11 | **Ramp art fixed by measuring the PNG, not guessing names.** Decoded the Kenney tiles sheet offline: `ramp_short_a/b` are a 45° pair (filled + full diagonal) drawn DESCENDING left-to-right; `ramp_long_a/b` are the 26.6° halves that match the mound's chain. The mound now uses mirrored long ramps for ascent, long ramps for descent, and dirt-centre ground tiles beneath so the hill reads as one mass. Rule going forward: verify atlas art geometry before placing it. | User report ("ramps wrong/weird") |
 | 2026-06-11 | **Demo rebuilt as a collect-them-ALL puzzle platformer** (user direction): 4608px traditional left-to-right level, 12 coins each verified reachable against the jump arc (154px apex), drag-physics as puzzle verbs (crate→plate; a resting thwomp is draggable for 2.6s and rises from where you park it). New foes on existing mechanisms only: spike slime (unstompable), sweeping saw (bodiless sine mover), second thwomp. Enemy/trap/mover state generalized to indexed tables so a new foe is one `pfMake…` line. | User direction; this commit |
 | 2026-06-11 | **Sheet loaders generalized beyond Kenney** (user requirement): grid sheets take margin/spacing; frame size 0 = source-only registration; `b2kSheetAddFrame` names arbitrary regions (the no-XML packed-sheet path); `b2kSheetFrameNames` for atlas introspection. No new mechanism — regions were always the internal model; this exposes authoring them. | User requirement; this commit |
+| 2026-06-11 | **Phase 5 opened with audio; backend = audioClips + script-synthesized WAVs.** `play audioClip` needs no external media layer and an imported clip is stack-embedded — the only sound path that keeps examples self-contained; `b2kToneMake` removes the asset problem entirely (8-bit mono 22050 Hz WAV built in script, hand-rolled little-endian packers, temp-file import, ~23k samples for the demo's 8 cues). One-clip-at-a-time is documented, not fought (suits retro SFX). Failures degrade to silence via a dead-flag; mute is a preference surviving teardown; teardown sweeps `b2ksnd_` clips like sprite orphans. Streamed music via player objects deferred. | Phase 5 audio commit |
+| 2026-06-11 | **Phase 5 sequencing:** audio first (biggest feel win for the now-good demo), enemy patterns declared satisfied as in-demo documented patterns (indexed tables; promotion to API waits for the micro-game to repeat them), scenes next, then builder cross-pollination and the micro-game exit. | Phase 5 kickoff |

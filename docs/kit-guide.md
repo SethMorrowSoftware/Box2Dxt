@@ -683,6 +683,31 @@ powerups call `b2kPlayerJump 700`. For cutscenes, hit poses, and knockback,
 owns velocity and animations until you hand control back. The platformer
 example's whole movement system is the four lines above.
 
+### Sound effects (`b2kToneMake`, `b2kSound`)
+
+Sounds are named **audioClips** — the engine plays one at a time (a new
+play cuts the previous), which is exactly right for short retro SFX. You
+can import files (`b2kSoundLoad "boom", tPath`), but the fun path needs no
+files at all: `b2kToneMake` synthesizes a clip from a list of note
+frequencies, square (retro) or sine (soft), with a per-note decay.
+
+```livecode
+b2kToneMake "jump", "392,587", 40          -- a quick up-chirp
+b2kToneMake "coin", "1319,1760", 36, 45    -- a bright blip
+b2kToneMake "win", "523,659,784,1047", 110 -- a four-note fanfare
+
+-- hooks: the player's land state, your sensors, your win handler
+on b2kFrame
+   if b2kPlayerState() is "land" then b2kSound "land"
+end b2kFrame
+```
+
+`b2kSoundMute true` silences everything (a preference — it survives
+`b2kTeardown`); `b2kSoundVolume` drives the engine-global loudness. On an
+engine with no working audio the Kit degrades to silence rather than
+errors — check `b2kSoundStatus()` if you hear nothing. The platformer's
+eight cues are all synthesized; press M in it to mute.
+
 ---
 
 ## 13. Sensors (trigger zones)
@@ -1071,6 +1096,12 @@ Optional arguments are in `[…]`.
 `b2kCamDeadzone w,h` · `b2kCamBounds x1,y1,x2,y2` · `b2kCamGoto x,y` ·
 `b2kCamPos()` `[f]` · `b2kCamShake ampPx,ms` · `b2kCamStatus()` `[f]` ·
 `b2kCamLocSemantics()` `[f]` · `b2kCamMouseX()` `[f]` · `b2kCamMouseY()` `[f]`
+
+### Sound
+`b2kSoundLoad name,path` · `b2kToneMake name,freqs,msPerNote [,vol,shape]` ·
+`b2kSound name` · `b2kSoundLoop name` · `b2kSoundStop` · `b2kSoundMute flag` ·
+`b2kSoundMuted()` `[f]` · `b2kSoundVolume pct` · `b2kSoundIsLoaded(name)` `[f]` ·
+`b2kSoundStatus()` `[f]`
 
 ### Events (handlers you write)
 `on b2kFrame` · `on b2kContact pA,pB` · `on b2kEndContact pA,pB` ·

@@ -39,6 +39,22 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Kit Sound module (Game Kit Phase 5 begins).** Named sounds over
+  **audioClips** — the one LC sound path with no external media-layer
+  dependency — with `b2kSoundLoad` (import a WAV/AIFF/AU file) and
+  **`b2kToneMake`**, a pure-script synthesizer (8-bit mono WAV at
+  22050 Hz, square or sine, a comma list of note frequencies with a
+  per-note decay) so self-contained examples ship SFX with **zero asset
+  files**. `b2kSound`/`b2kSoundLoop`/`b2kSoundStop` play (one clip at a
+  time — the classic LC model, documented not fought), `b2kSoundMute` is
+  a preference that survives teardown, `b2kSoundVolume` wraps the
+  engine-global `playLoudness`, and failures degrade to silence, never
+  errors (first failing play trips a dead-flag; `b2kSoundStatus()` says
+  why). `b2kTeardown` wipes sounds like sheets, sweeping any `b2ksnd_`
+  clips a dead session left behind. The platformer gains eight
+  synthesized cues — jump, land (off the player's one-tick land state),
+  coin, stomp, hurt, checkpoint, gate, win — plus an M-key mute and HUD
+  audio diagnostics.
 - **Sheets beyond the Kenney format: custom grids and hand-named
   regions.** `b2kSheetLoad`/`b2kSheetFromImage` take optional `margin`
   (outer border px) and `spacing` (gutter between cells px) for grid
