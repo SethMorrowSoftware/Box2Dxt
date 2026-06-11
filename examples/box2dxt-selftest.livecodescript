@@ -106,8 +106,15 @@ command stRunAll
    stRun "stTestPlayerJumps"
    stRun "stTestCoyoteBuffer"
    stRun "stTestSprites"
+   stRun "stTestSheetExtras"
    stRun "stTestSounds"
    stRun "stTestCamera"
+   stRun "stTestCamScrolledWrite"
+   stRun "stTestEngineContracts"
+   stRun "stTestMaterialsJoints"
+   stRun "stTestFiltering"
+   stRun "stTestQueries"
+   stRun "stTestPlayerSlopes"
    stRun "stTestTeardown"
    try
       b2kInputInjectOff
@@ -573,6 +580,250 @@ command stTestTeardown
    stStep 10
    stAssert "a fresh world works after teardown", (b2kBodyCount() is 1)
 end stTestTeardown
+
+command stTestSheetExtras
+   local tRef, tIc1, tIc2
+   stNewWorld "sheets: scale, margin/spacing grids, manual regions, mirrors"
+   if there is no image "st_sheet" then
+      stAssert "generated sheet image present (sprites test makes it)", false
+      exit stTestSheetExtras
+   end if
+   b2kSheetFromImage "stg1", the long id of image "st_sheet", 16, 16
+   b2kSheetScale "stg1", 2
+   stAssert "scaled frame size doubles", (b2kSheetFrameSize("stg1", 1) is "32,32")
+   b2kSpriteNew "stg1", 1, 100, 100
+   put the result into tRef
+   stAssert "scaled sprite is frame-sized", (the width of tRef is 32)
+   -- margin/spacing grid: (32 - 8 + 4) div (8 + 4) = 2 cols x 2 rows
+   b2kSheetFromImage "stg2", the long id of image "st_sheet", 8, 8, 0, 4, 4
+   stAssert "margin+spacing grid counts 4 frames", (b2kSheetFrames("stg2") is 4)
+   -- no grid + manual region (the no-XML packed-sheet path)
+   b2kSheetFromImage "stg3", the long id of image "st_sheet", 0, 0
+   stAssert "frame size 0 = no grid", (b2kSheetFrames("stg3") is 0)
+   b2kSheetAddFrame "stg3", "face", 4, 4, 10, 12
+   stAssert "manual frame registers", (b2kSheetHasFrame("stg3", "face") is true)
+   b2kSpriteNew "stg3", "face", 200, 100
+   put the result into tRef
+   stAssert "manual frame slices at its size", (the width of tRef is 10 and the height of tRef is 12)
+   -- the mirror is a real second image, swapped in and back
+   b2kSpriteNew "stg1", 1, 300, 100
+   put the result into tRef
+   put the icon of tRef into tIc1
+   b2kSpriteFlipH tRef, true
+   put the icon of tRef into tIc2
+   stAssert "flip swaps to a mirrored frame image", (tIc2 is not tIc1 and tIc2 > 0)
+   b2kSpriteFlipH tRef, false
+   stAssert "flip back restores the original", (the icon of tRef is tIc1)
+end stTestSheetExtras
+
+command stTestCamScrolledWrite
+   local tRef, tScroll, tWorld
+   stNewWorld "camera: world-coordinate writes are scroll-compensated"
+   b2kCamOn
+   b2kCamBounds 0, 0, 3000, 640
+   b2kSpawnBox 200, 300, 30, 30
+   put the result into tRef
+   b2kSetStatic tRef
+   b2kCamGoto 1500, 320
+   stStep 3
+   put the hScroll of b2kCamGroup() into tScroll
+   stAssert "the viewport scrolled (hScroll " & tScroll & ")", (tScroll > 800)
+   stAssert "loc semantics is a known model (" & b2kCamLocSemantics() & ")", \
+         (b2kCamLocSemantics() is "visual" or b2kCamLocSemantics() is "content")
+   b2kSpriteMoveTo tRef, 1500, 320
+   set the itemDelimiter to comma
+   if b2kCamLocSemantics() is "visual" then
+      put (item 1 of the loc of tRef) + tScroll into tWorld
+   else
+      put item 1 of the loc of tRef into tWorld
+   end if
+   stAssert "a world-px write lands on the world point (got " & round(tWorld) & ")", \
+         (abs(tWorld - 1500) < 4)
+end stTestCamScrolledWrite
+
+-- The LC/OXT behaviours the Kit silently RELIES on. When an engine
+-- update or a new platform breaks one, this names it in plain text.
+command stTestEngineContracts
+   local tPath, tData, i, tRef, tVol
+   stNewWorld "engine contracts: the behaviours the Kit relies on"
+   stAssert "fractional mod (the tone synth)", (4.5 mod 2 is 0.5)
+   stAssert "numToByte round-trips", (byteToNum(numToByte(200)) is 200)
+   stAssert "b2kLE16 packs 2 bytes", (the number of bytes in b2kLE16(40000) is 2)
+   stAssert "b2kLE32 packs 4 bytes", (the number of bytes in b2kLE32(123456789) is 4)
+   stAssert "base64 round-trips", (base64Decode(base64Encode("abc123!?")) is "abc123!?")
+   -- the temp-file path the tone synth uses
+   put specialFolderPath("temporary") & "/b2kst_" & the milliseconds & ".bin" into tPath
+   put "hello" into URL ("binfile:" & tPath)
+   stAssert "temp folder writes and reads back", (URL ("binfile:" & tPath) is "hello")
+   delete file tPath
+   stAssert "temp file deletes", (there is no file tPath)
+   -- the imageData stride contract the sprite slicer refuses without
+   if there is no image "st_contract" then
+      create image "st_contract"
+      set the width of it to 8
+      set the height of it to 8
+   end if
+   put empty into tData
+   repeat with i = 1 to 256
+      put numToByte(120) after tData
+   end repeat
+   set the imageData of image "st_contract" to tData
+   stAssert "imageData stride is w*h*4", \
+         (the number of bytes in the imageData of image "st_contract" is 256)
+   stAssert "alphaData stride is w*h", \
+         (the number of bytes in the alphaData of image "st_contract" is 64)
+   -- the chunk semantics the level DSL leans on
+   stAssert "word 2 to -1 keeps the raw tail", \
+         (word 2 to -1 of "text 10,20,hello there" is "10,20,hello there")
+   set the wholeMatches to true
+   stAssert "wholeMatches lineOffset matches exactly", \
+         (lineOffset("bb", "a" & cr & "bb" & cr & "bbb") is 2)
+   -- a long id re-resolves after a relayer (the b2kCamAdopt path)
+   b2kCamOn
+   create graphic "st_reparent"
+   put the long id of graphic "st_reparent" into tRef
+   b2kCamAdopt tRef
+   stAssert "stale long id re-resolves into the group", \
+         (the long id of tRef contains "b2kcam_view")
+   set the uStProbe of tRef to true
+   stAssert "custom-property booleans round-trip", (the uStProbe of tRef is true)
+   -- the engine-global volume the sound module wraps
+   put the playLoudness into tVol
+   b2kSoundVolume 73
+   stAssert "playLoudness readback", (the playLoudness is 73)
+   b2kSoundVolume tVol
+end stTestEngineContracts
+
+command stTestMaterialsJoints
+   local tRef, tB, tJ, tMin, i, tM1, tPosA, tPosB, tDist
+   stNewWorld "materials + joints: bounce, mass, hinge motor, rope limit"
+   stSlab "st_ground", 50, 500, 800, 560
+   -- restitution: a 0.8 ball dropped 145px must rebound well off the floor
+   b2kSpawnBall 200, 340, 30
+   put the result into tRef
+   b2kSetBounce tRef, 0.8
+   stStep 60   -- past the first impact (~51 frames)
+   put 9999 into tMin
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stY(tRef) < tMin then put stY(tRef) into tMin
+   end repeat
+   stAssert "a 0.8 ball rebounds (post-impact apex y " & round(tMin) & ")", (tMin < 455)
+   -- density drives mass (the shim updates body mass)
+   b2kSpawnBox 600, 470, 40, 40
+   put the result into tB
+   put b2kMass(tB) into tM1
+   b2kSetDensity tB, 5
+   stAssert "density x5 raises the mass", (b2kMass(tB) > tM1 * 2)
+   -- a motorised hinge spins its arm
+   b2kSpawnBox 400, 300, 80, 16
+   put the result into tRef
+   b2kHinge tRef, empty, 400, 300
+   put the result into tJ
+   stAssert "hinge pin returns a joint", (tJ > 0)
+   b2kMotor tJ, 180, 100000
+   stStep 60
+   stAssert "the motor spins the arm (got " & round(b2kSpinRate(tRef)) & " deg/s)", \
+         (abs(b2kSpinRate(tRef)) > 60)
+   -- a rope caps the separation of a DANGLING ball (anchor is static)
+   b2kSpawnBall 700, 200, 24
+   put the result into tRef
+   b2kSetStatic tRef
+   b2kSpawnBall 700, 250, 24
+   put the result into tB
+   b2kRope tRef, tB, 80
+   stStep 90
+   set the itemDelimiter to comma
+   put b2kPosition(tRef) into tPosA
+   put b2kPosition(tB) into tPosB
+   put sqrt((item 1 of tPosA - item 1 of tPosB) ^ 2 + (item 2 of tPosA - item 2 of tPosB) ^ 2) into tDist
+   stAssert "rope holds its length (got " & round(tDist) & "px of 80)", (tDist < 112)
+end stTestMaterialsJoints
+
+command stTestFiltering
+   local tA, tB, tRef
+   stNewWorld "filtering: no-collide pairs and NAMED layers"
+   stSlab "st_ground", 50, 500, 800, 560
+   -- a no-collide pair: the upper box falls THROUGH its partner
+   b2kSpawnBox 200, 470, 40, 40
+   put the result into tA
+   b2kSpawnBox 200, 380, 40, 40
+   put the result into tB
+   b2kNoCollide tA, tB
+   stStep 90
+   stAssert "no-collide partner falls through (y " & round(stY(tB)) & ")", (stY(tB) > 440)
+   -- named layers (the b2kLayerBits path that once ALWAYS threw): a
+   -- ghost-layer ball ignores a solid-layer platform
+   b2kDefineLayer "stGhost"
+   b2kDefineLayer "stSolid"
+   stSlab "st_plat", 500, 380, 700, 400
+   b2kSetCategory the long id of graphic "st_plat", "stSolid"
+   b2kSpawnBall 600, 300, 30
+   put the result into tRef
+   b2kSetCategory tRef, "stGhost"
+   b2kSetMask tRef, "stGhost"
+   stStep 90
+   stAssert "ghost-layer ball passes the solid-layer platform (y " & round(stY(tRef)) & ")", \
+         (stY(tRef) > 420)
+end stTestFiltering
+
+command stTestQueries
+   local tRef, tHits
+   stNewWorld "queries: point, circle, multi-ray"
+   stSlab "st_ground", 50, 500, 800, 560
+   b2kSpawnBall 300, 470, 40
+   put the result into tRef
+   stStep 40
+   stAssert "controlAt finds the resting ball", (b2kControlAt(300, stY(tRef)) is tRef)
+   stAssert "controlContains inside", (b2kControlContains(tRef, 300, stY(tRef)) is true)
+   stAssert "controlContains outside", (b2kControlContains(tRef, 600, 100) is false)
+   stAssert "overlapCircle finds it", (b2kOverlapCircle(300, stY(tRef), 50) is not empty)
+   stAssert "overlapCircle empty elsewhere", (b2kOverlapCircle(80, 80, 30) is empty)
+   put b2kRayHitAll(300, 300, 300, 590) into tHits
+   stAssert "rayHitAll sees ball then ground (" & the number of lines of tHits & " hits)", \
+         (the number of lines of tHits >= 2 and line 1 of tHits is tRef)
+end stTestQueries
+
+command stTestPlayerSlopes
+   local tRef, tX1, tY1, tTop, i
+   stNewWorld "player: slope climb, maxFall clamp, kill-floor exemption"
+   stSlab "st_ground", 50, 500, 420, 560
+   -- a 21.8-degree ramp (well under maxSlopeDeg 50), ghost-padded:
+   -- colliding = the top landing (820..700) and the slope (700..400)
+   b2kSmoothGround "880,380" & cr & "820,380" & cr & "700,380" & cr & "400,500" & cr & "340,500"
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   stStep 30
+   put stX(tRef) into tX1
+   put stY(tRef) into tY1
+   put 9999 into tTop
+   b2kInputInject "right"
+   repeat with i = 1 to 200
+      b2kStepOnce
+      if stY(tRef) < tTop then put stY(tRef) into tTop   -- the peak: he may
+   end repeat                                            -- run off the top
+   b2kInputInject ""
+   stAssert "ran up the slope (peak climb " & round(tY1 - tTop) & "px)", \
+         (tY1 - tTop > 80)
+   stAssert "no slope wall-stick (advanced " & round(stX(tRef) - tX1) & "px)", \
+         (stX(tRef) - tX1 > 300)
+   -- terminal velocity: a long, clear fall never exceeds maxFall (900)
+   b2kMoveTo tRef, 950, -2400
+   b2kSetVelocity tRef, 0, 0
+   put 0 into tY1
+   repeat with i = 1 to 150
+      b2kStepOnce
+      if stVY(tRef) > tY1 then put stVY(tRef) into tY1
+   end repeat
+   stAssert "maxFall clamps the dive (peak " & round(tY1) & " px/s)", \
+         (tY1 > 850 and tY1 < 920)
+   -- the kill floor must NEVER take the player: arm it, let him fall
+   -- well past the line, and he must still have his body
+   b2kKillFloor 700
+   stStep 150
+   stAssert "kill floor exempts the player", (b2kBodyOf(tRef) is not empty)
+   b2kKillFloor empty
+end stTestPlayerSlopes
 
 -- =====================================================================
 -- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py

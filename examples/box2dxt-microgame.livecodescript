@@ -46,7 +46,6 @@ local gLevel, gCoins, gCoinsTotal, gFalls, gRunStart, gWinSecs
 local gHero, gHeroSpr, gDoor, gDoorOpen, gSpawnX, gSpawnY
 local gHudLast, gHudNextMS, gHurtLock, gBuilding, gPrevState, gWorldW, gWorldH
 local gSwpN, gSwpRef, gSwpC, gSwpA, gSwpP, gSwpY, gSwpW, gSwpH
-local gEvSeen           -- raw sensor enters seen (HUD diagnostic)
 
 constant kMgUIVersion = "1"
 constant kMgHeroB64 = "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"
@@ -254,7 +253,6 @@ command mgBuild pLevel
    put empty into gPrevState
    put 0 into gCoins
    put 0 into gCoinsTotal
-   put 0 into gEvSeen
    put 0 into gSwpN
    put empty into gSwpRef
    put empty into gSwpC
@@ -486,7 +484,6 @@ on b2kFrame
    local tHud, tSecs, tState
    if gHero is empty then exit b2kFrame
    set the itemDelimiter to comma
-   add b2kSensorCount() to gEvSeen   -- diagnostic: raw enters this run
    -- kill plane: off the bottom = a fall
    if gHurtLock is not true and (item 2 of b2kPosition(gHero)) > gWorldH + 120 then mgHurt
    mgTickSweeps
@@ -512,7 +509,7 @@ on b2kFrame
    else
       put 0 into tSecs
    end if
-   put "Level " & gLevel & "   coins " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   |   " & tState & "   ev " & gEvSeen & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   put "Level " & gLevel & "   coins " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   |   " & tState & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
    if b2kSoundStatus() is not empty then put "   [audio: " & b2kSoundStatus() & "]" after tHud
    if b2kSoundMuted() then put "   [muted]" after tHud
    if tHud is not gHudLast then

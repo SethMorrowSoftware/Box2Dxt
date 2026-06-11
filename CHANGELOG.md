@@ -39,6 +39,27 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **The harness doubles its reach (engine-surprise insurance).** Six new
+  suites, ~40 new assertions, aimed squarely at "the LC engine OXT
+  inherited is full of surprises": **engine contracts** (fractional
+  `mod`, byte packing, base64, temp-file I/O, imageData/alphaData
+  strides, `word 2 to -1` chunk semantics, `wholeMatches lineOffset`,
+  long-id re-resolution after a relayer, custom-property boolean
+  round-trips, `playLoudness` readback — when an engine update or new
+  platform breaks one, the report names it in plain text);
+  **materials + joints** (a 0.8-restitution ball measurably rebounds,
+  density drives mass, a motorised hinge spins, a rope holds a dangling
+  ball at length); **filtering** (no-collide pairs pass through; a
+  ghost-layer ball ignores a solid-layer platform — regression for the
+  named-layers path that once always threw); **queries** (controlAt /
+  contains, overlapCircle, multi-ray nearest-first); **sheet extras**
+  (per-sheet scaling sizes sprites, margin/spacing grids count
+  correctly, frame-size-0 + `b2kSheetAddFrame` manual regions slice,
+  flips swap to a real mirrored frame image and back); **player slopes
+  + limits** (climbs a 22° chain ramp without wall-stick — also guards
+  the ground-snap's slope exemption — maxFall clamps a long dive, and
+  the kill floor never takes the player). The micro-game's temporary
+  `ev` HUD diagnostic is retired now that it plays clean.
 - **The micro-game's actual bug: it never set `b2kContactTarget`.**
   Sensor and contact *messages* dispatch to the contact target; the
   micro-game only set the frame target, so every coin/spike/door event
