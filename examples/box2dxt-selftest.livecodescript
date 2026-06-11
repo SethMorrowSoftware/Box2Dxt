@@ -501,19 +501,25 @@ command stTestCoyoteBuffer
    stAssert "buffered jump fired on landing", (tJumped is true)
 end stTestCoyoteBuffer
 
+-- Internal: the 32x32 generated source image (stNewWorld's wipe deletes
+-- st_* controls, so every test that needs it makes it fresh).
+command stEnsureSheetImage
+   local tData, i
+   if there is an image "st_sheet" then exit stEnsureSheetImage
+   create image "st_sheet"
+   set the width of it to 32
+   set the height of it to 32
+   put empty into tData
+   repeat with i = 1 to 1024
+      put numToByte(255) & numToByte((i * 7) mod 256) & numToByte(80) & numToByte(40) after tData
+   end repeat
+   set the imageData of image "st_sheet" to tData
+end stEnsureSheetImage
+
 command stTestSprites
-   local tData, i, tRef, tF1
+   local tRef, tF1
    stNewWorld "sprites: generated sheet, anim advance, flip, remove"
-   if there is no image "st_sheet" then
-      create image "st_sheet"
-      set the width of it to 32
-      set the height of it to 32
-      put empty into tData
-      repeat with i = 1 to 1024
-         put numToByte(255) & numToByte((i * 7) mod 256) & numToByte(80) & numToByte(40) after tData
-      end repeat
-      set the imageData of image "st_sheet" to tData
-   end if
+   stEnsureSheetImage
    b2kSheetFromImage "stsheet", the long id of image "st_sheet", 16, 16
    stAssert "16px grid of a 32px image = 4 frames", (b2kSheetFrames("stsheet") is 4)
    b2kAnimDef "stsheet", "spin", "1-4", 200, true
@@ -584,10 +590,7 @@ end stTestTeardown
 command stTestSheetExtras
    local tRef, tIc1, tIc2
    stNewWorld "sheets: scale, margin/spacing grids, manual regions, mirrors"
-   if there is no image "st_sheet" then
-      stAssert "generated sheet image present (sprites test makes it)", false
-      exit stTestSheetExtras
-   end if
+   stEnsureSheetImage
    b2kSheetFromImage "stg1", the long id of image "st_sheet", 16, 16
    b2kSheetScale "stg1", 2
    stAssert "scaled frame size doubles", (b2kSheetFrameSize("stg1", 1) is "32,32")
@@ -683,8 +686,11 @@ command stTestEngineContracts
    create graphic "st_reparent"
    put the long id of graphic "st_reparent" into tRef
    b2kCamAdopt tRef
+   -- (long ids are ID-based -- 'of group id N' -- so check the OWNER'S
+   -- NAME; merely evaluating `the owner of tRef` also proves the stale
+   -- pre-relayer id still resolves)
    stAssert "stale long id re-resolves into the group", \
-         (the long id of tRef contains "b2kcam_view")
+         (the short name of the owner of tRef is "b2kcam_view")
    set the uStProbe of tRef to true
    stAssert "custom-property booleans round-trip", (the uStProbe of tRef is true)
    -- the engine-global volume the sound module wraps
