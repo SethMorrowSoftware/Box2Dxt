@@ -814,6 +814,7 @@ local sPlayMoveSpd, sPlayAccelG, sPlayAccelA, sPlayJumpSpd, sPlayJumpCut
 local sPlayCoyote, sPlayBuffer, sPlayMaxFall, sPlayCosSlope
 local sPlayProbeOffs -- the 3 probe x-offsets, precomputed at attach
 local sPlayReach     -- probe ray length (halfH + 4), precomputed
+local sPlayAir       -- consecutive airborne ticks (landing hysteresis)
 local sPlayClock     -- the player's SIM-TIME clock: summed frame ms.
                      -- Wall-clock would shrink the coyote/buffer windows
                      -- on slow machines (90ms = fewer frames); sim time
@@ -3657,6 +3658,7 @@ command b2kPlayerAttach pCtrl
    put true into sPlayControl
    put 0 into sPlayHoldMS
    put 0 into sPlayClock
+   put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
    b2kPlayerTuneCache   -- bake the knobs + probe geometry for the tick
@@ -3834,6 +3836,7 @@ command b2kPlayerForget pFull
    put 0 into sPlayPressMS
    put 0 into sPlayHoldMS
    put 0 into sPlayClock
+   put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
    if pFull is true then put empty into sPlayTune
@@ -3939,10 +3942,17 @@ command b2kPlayerTick
       put true into tWrite
    end if
    if tWrite then b2SetVelocity tB, tVX / sScale, 0 - (tVY / sScale)
-   -- the state machine (land = exactly one tick on touch-down)
+   -- the state machine (land = exactly one tick on touch-down), with
+   -- LANDING HYSTERESIS: the contact solver's push-out (and chain seams)
+   -- can blip the 4px probe off for a tick around an impact -- without
+   -- hysteresis that read as a second micro-fall and a second land tick
+   -- (double land sounds; the self-test caught it). A touchdown counts
+   -- as "land" only after a real airborne stretch (3+ ticks), and a
+   -- single ungrounded blip does not even show as airborne -- unless it
+   -- is OUR jump, which must read as "jump" on its launch frame.
    put sPlayState into tPrevState
    if sPlayGrounded is true then
-      if tPrevState is "jump" or tPrevState is "fall" then
+      if (tPrevState is "jump" or tPrevState is "fall") and sPlayAir >= 3 then
          put "land" into sPlayState
       else
          if abs(tVX) < 8 then
@@ -3951,11 +3961,15 @@ command b2kPlayerTick
             put "run" into sPlayState
          end if
       end if
+      put 0 into sPlayAir
    else
-      if tVY < 0 then
-         put "jump" into sPlayState
-      else
-         put "fall" into sPlayState
+      add 1 to sPlayAir
+      if sPlayJumping is true or sPlayAir >= 2 then
+         if tVY < 0 then
+            put "jump" into sPlayState
+         else
+            put "fall" into sPlayState
+         end if
       end if
    end if
    -- animations: only while controlling (manual poses own the art when

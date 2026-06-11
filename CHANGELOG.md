@@ -39,6 +39,17 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Self-test round 3: landing hysteresis.** Zeroing restitution wasn't
+  the whole story — the suite still counted two land ticks per jump:
+  the contact solver's push-out can blip the 4px ground probe off for a
+  tick around an impact, which the state machine read as a micro-fall
+  and a second landing. The controller now has the genre-standard cure:
+  a touchdown counts as `land` only after a real airborne stretch (3+
+  ticks), and a single ungrounded blip doesn't even show as airborne
+  (no one-frame jump-anim flicker on rough ground or ramp seams) —
+  unless it's the controller's own jump, which still reads `jump` on
+  its launch frame. `b2kPlayerOnGround()` stays raw and truthful; only
+  the state classification gained hysteresis.
 - **Self-test round 2: the player landed springy.** The harness's
   "land fired exactly once (got 2)" caught that controller-created
   capsules kept `b2kAddCapsule`'s default **0.2 restitution** — every
