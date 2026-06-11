@@ -287,7 +287,7 @@ command pfStartGame
    -- world scrolls 1:1 (he only approaches the edges where the bounds stop
    -- the view, at the very start and end of the level)
    b2kCamDeadzone 0, 0
-   b2kCamGoto 120, 480   -- open on the spawn point, no startup slide
+   b2kCamGoto kLevelW - 512, 320   -- open on the GOAL; the intro pan sweeps home
    -- level bounds (invisible)
    b2kWall 0, 0, 0, 640
    b2kWall kLevelW, 0, kLevelW, 640
@@ -414,7 +414,8 @@ command pfStartGame
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
    b2kSpriteOnFinish gHeroSpr, "pfHurtDone"
    b2kSpritePlay gHeroSpr, "idle"
-   put 90 into gIntroPan   -- ~1.5 s diagnostic sweep, then the follow engages
+   put 150 into gIntroPan   -- the opening shot: goal -> spawn (any key skips)
+   if gCamOK is not true then put 30 into gIntroPan   -- no camera: splash only
    -- ===== set dressing (pure decor sprites; skipped without the atlas) ====
    if gAssetsOK is true then
       if b2kSheetHasFrame("tiles", "bush") then
@@ -748,8 +749,18 @@ on b2kFrame
    local tHud
    if gHero is empty then exit b2kFrame
    if gIntroPan > 0 then
+      -- the opening shot: hold on the flag for a beat, then ONE smooth
+      -- eased sweep home to the spawn. Monotonic and always inside the
+      -- camera bounds, so it cannot fight the clamp (the old sine swung
+      -- beneath it and froze). Any key or click skips it.
+      local tP
+      if b2kKeysHeld() is not empty or the mouse is "down" then put 1 into gIntroPan
       subtract 1 from gIntroPan
-      b2kCamGoto 512 + 220 * sin((90 - gIntroPan) / 14), 320
+      put (150 - gIntroPan - 12) / 138 into tP
+      if tP < 0 then put 0 into tP
+      if tP > 1 then put 1 into tP
+      put tP * tP * (3 - 2 * tP) into tP
+      b2kCamGoto (kLevelW - 512) + (512 - (kLevelW - 512)) * tP, 320
       if gIntroPan is 0 then
          b2kCamFollow gHero, 1
          if there is a field "pfSplash" then set the visible of field "pfSplash" to false
@@ -798,11 +809,11 @@ command pfTickHero
    local tAxis, tVel, tVy, tAnim
    set the itemDelimiter to comma
    put b2kAxis("moveX") into tAxis
-   if gHurtLock is true or gWinLock is true then put 0 into tAxis
+   if gHurtLock is true or gWinLock is true or gIntroPan > 0 then put 0 into tAxis
    put b2kVelocity(gHero) into tVel
    put item 2 of tVel into tVy
    b2kSetVelocity gHero, tAxis * kMoveSpeed, tVy
-   if gHurtLock is not true and gWinLock is not true then
+   if gHurtLock is not true and gWinLock is not true and gIntroPan is 0 then
       if b2kActionPressed("jump") and pfOnGround() then
          b2kSetVelocity gHero, tAxis * kMoveSpeed, 0 - kJumpSpeed
       end if
