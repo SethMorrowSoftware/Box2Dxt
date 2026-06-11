@@ -3627,7 +3627,7 @@ command b2kSoundLoad pName, pPath
    try
       if there is an audioClip tClip then delete audioClip tClip
       put the number of audioClips of this stack into tCount
-      import audio clip from file pPath
+      import audioClip from file pPath
       if the number of audioClips of this stack > tCount then
          set the name of audioClip (tCount + 1) of this stack to tClip
          put tClip into sSndClip[pName]
@@ -3660,7 +3660,7 @@ command b2kToneMake pName, pFreqs, pMsPerNote, pVolPct, pShape
    try
       if there is an audioClip tClip then delete audioClip tClip
       put the number of audioClips of this stack into tCount
-      import audio clip from file tPath
+      import audioClip from file tPath
       if the number of audioClips of this stack > tCount then
          set the name of audioClip (tCount + 1) of this stack to tClip
          put tClip into sSndClip[pName]
