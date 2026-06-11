@@ -898,9 +898,24 @@ put b2kAwakeBodyCount()    -- awake dynamic bodies (native count)
 > **Performance habits the Kit already follows:** sleeping is on, the renderer
 > syncs from Box2D body-move events instead of scanning every body each frame,
 > angle reads are skipped for non-rotating controls, pixel-identical redraws are
-> skipped, joint markers that haven't moved aren't redrawn, and per-frame work is
-> cached. Keep sleeping enabled and
-> avoid doing heavy work every `on b2kFrame` and big scenes stay smooth.
+> skipped, joint markers that haven't moved aren't redrawn, the sprite tick walks
+> only bound/playing sprites (a hundred static tiles cost nothing per frame),
+> input bindings resolve their keycodes at bind time, and the player tick reads
+> pre-baked tuning over raw body handles. Keep sleeping enabled, avoid heavy work
+> every `on b2kFrame`, and big scenes stay smooth.
+
+> **Performance habits for YOUR game code** (the engine is a single interpreted
+> thread, and every property set risks a redraw):
+> 1. **Throttle your HUD.** Setting a field's text re-lays-out and redraws it —
+>    a readout that changes every frame costs a redraw every frame. Update HUDs
+>    at ~4 Hz (`if the milliseconds < gHudNextMS then …`), and still skip the
+>    set when the text is unchanged. Both game examples do this.
+> 2. **Write properties and velocities only on change.** Track the last value you
+>    applied (the platformer's gate writes its kinematic velocity only when the
+>    target flips).
+> 3. **Read the clock once per handler**, not once per entity.
+> 4. **Build heavy things once.** Sounds survive `b2kTeardown`; tiles are
+>    create-at-level-build; sheets slice lazily and share frames.
 
 ---
 

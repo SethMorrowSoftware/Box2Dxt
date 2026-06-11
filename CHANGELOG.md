@@ -39,6 +39,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Hot-path performance pass (engine-limitation aware).** The frame
+  budget on a single interpreted thread goes to interpreter ops, FFI
+  round-trips and property-set redraws, so all three got leaner:
+  **sprite tick** now maintains a lazy *live list* (bound and/or playing
+  sprites) and walks only that — a tile-heavy level's ~100 inert sprites
+  cost zero per-frame work, with membership re-derived only when a
+  bind/play/stop/remove actually changes it; **input** resolves friendly
+  key names to keycode lists once at bind time (`b2kBindAction`/
+  `b2kBindAxis`), so the per-frame action/axis queries are pure set
+  scans; the **player tick** reads its nine tuning knobs and probe
+  geometry from values baked at `b2kPlayerSet`/attach time and talks to
+  the body through its raw handle (no per-frame ref lookups or "x,y"
+  string round-trips — same math, gotcha-9 flip preserved). Example
+  side: both games **throttle their HUD to 4 Hz** — the ms readout
+  changed every frame, which forced a field relayout+redraw every frame,
+  the single biggest avoidable cost — and the platformer's gate writes
+  its kinematic velocity only when the target flips. The kit guide's
+  performance section now documents the playbook (throttle HUDs, write
+  on change, one clock read per handler, build heavy things once).
 - **The micro-game (Game Kit Phase 5 exit artifact):**
   `examples/box2dxt-microgame.livecodescript` — a COMPLETE game in one
   pasteable file: start screen → two levels → win screen, with nothing
