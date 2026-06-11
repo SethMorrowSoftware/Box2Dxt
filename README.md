@@ -55,7 +55,10 @@ Box2D v3.1.0 (fetched by CMake)
    synthesized sound) and the
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
    Game Kit pushed hard — player controller, scrolling camera, spritesheets,
-   coin puzzles.
+   coin puzzles. And the
+   [self-test harness](examples/box2dxt-selftest.livecodescript) proves the
+   whole Kit on *your* machine in one click — ~93 deterministic assertions,
+   from physics events to player feel (run it on any new platform first).
 
 The step-by-step version (with troubleshooting) is in
 [**docs/getting-started.md**](docs/getting-started.md).
@@ -69,6 +72,8 @@ The step-by-step version (with troubleshooting) is in
 | [Kit reference](docs/kit-reference.md) | Every `b2k…` handler, one line each. |
 | [API reference](docs/api-reference.md) | The raw `b2…` extension surface. |
 | [Architecture](docs/architecture.md) | The three layers, handles, units, the ABI. |
+| [Game engine spec](docs/game-engine-spec.md) | The Game Kit design (input/sprites/player/camera/sound) — implemented. |
+| [Expansion prep](docs/expansion-prep.md) | The intake plan for the asset pack and the enemy/player-action waves. |
 | [Building](docs/building.md) | Compile the native library yourself with CMake. |
 
 ## Building from source

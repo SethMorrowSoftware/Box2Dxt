@@ -146,7 +146,7 @@ dynamic/static where a handler takes an optional `dyn` flag.
 | `b2kImpulse ctrl, ix, iy` | One-shot impulse, mass-aware (heavier bodies move less). |
 | `b2kTorque ctrl, torque` | Continuous turning force (call each frame); +/- sets direction. |
 | `b2kAngularImpulse ctrl, imp` | One-shot turning impulse, mass-aware (the angular partner of `b2kImpulse`). |
-| `b2kSetVelocity ctrl, vx, vy` | Set linear velocity (px/s). |
+| `b2kSetVelocity ctrl, vx, vy` | Set linear velocity (px/s). **Wakes the body** — setting a velocity means "move" (raw `b2SetVelocity` does not wake, which once froze a sleeping kinematic gate). |
 | `b2kSpin ctrl, degPerSec` | Set angular velocity. |
 | `b2kSpinBy ctrl, degPerSec` | Add to the current angular velocity. |
 | `b2kMoveTo ctrl, x, y [,deg]` | Teleport a body. |
@@ -230,6 +230,7 @@ shifted and unshifted), or raw keycodes.
 | Handler | Purpose |
 |---------|---------|
 | `b2kInputOn` / `b2kInputOff` | Arm / disarm the per-frame keyboard sample. `b2kInputOn` installs starter bindings: axis `moveX` (left,a / right,d), axis `moveY` (up,w / down,s), action `jump` (space). |
+| `b2kInputInject keys` / `b2kInputInjectOff` | Replace the keyboard with a **scripted** key set (friendly names or codes; empty = nothing held) until turned off. Deterministic input for the self-test harness, input replays, and cutscene "ghost" players — edges fall out of the normal frame diff exactly as with real keys. |
 | `b2kKeyIsDown(key)` | Key currently held. |
 | `b2kKeyPressed(key)` / `b2kKeyReleased(key)` | True only on the frame the key went down / came up. |
 | `b2kKeysHeld()` | Everything held now, as friendly names (debug HUDs). |
@@ -356,6 +357,16 @@ state (the old body/sprite stay). The platformer example adopts its own
 invisible body host with `b2kPlayerAttach` — its entire movement,
 ground-probe and animation code is these four calls.
 
+**Feel guarantees** (all asserted by the self-test): the coyote/buffer
+windows run on **sim time** (frame-coherent on slow machines); bodies the
+controller creates get **zero restitution** and low friction (landings are
+dead, walls don't glue); a touchdown is a `land` only after real airtime
+(**landing hysteresis** — solver blips can't double-fire it); and a
+**ground-snap** removes the solver's post-landing rebound on flat ground —
+slopes are exempt via the surface normal, and *external boosts must use
+`b2kPlayerJump`* (a raw upward `b2kSetVelocity` on a grounded player is
+treated as solver noise and snapped).
+
 ## Camera (scrolling levels)
 
 A clipped **viewport group** the loop scrolls (the mechanism the Phase 0
@@ -450,6 +461,15 @@ accessor returns a control (empty for a wall, the ground, or any untracked body)
 | `b2kEndContactA(i)` / `b2kEndContactB(i)` | The two controls of the *i*-th end-touch pair. |
 
 ## Sensors (trigger zones)
+
+> **One-shots vs. presence:** sensor enter/exit messages are ideal for
+> **one-shot** triggers (coins, checkpoints, goals — consumed or guarded on
+> first fire). For **presence** state that must stay true while something sits
+> there (pressure plates, buttons, zones), poll `b2kOverlap` of the region each
+> frame instead of counting enters minus exits: a poll is stateless (it cannot
+> drift), and the broadphase still includes **sleeping** bodies — a crate that
+> settles and sleeps keeps holding the plate. The platformer's plate works this
+> way, with a ~0.2 s release debounce for feel.
 
 Non-solid fixtures that report overlaps but never block. The Kit enables sensor
 events on every body it creates, so sensors detect them automatically.

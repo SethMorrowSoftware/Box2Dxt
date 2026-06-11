@@ -30,6 +30,7 @@ EXAMPLES = [
     ROOT / "examples" / "box2dxt-spike-gamekit.livecodescript",
     ROOT / "examples" / "box2dxt-platformer.livecodescript",
     ROOT / "examples" / "box2dxt-microgame.livecodescript",
+    ROOT / "examples" / "box2dxt-selftest.livecodescript",
 ]
 
 BEGIN = "-- >>> BEGIN EMBEDDED KIT >>>"

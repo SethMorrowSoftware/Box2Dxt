@@ -128,7 +128,14 @@ slimes, hazard fly, plate-gate puzzle, confetti — see the decision log.
 
 ## Phase 3 — Player controller (M/L) ← the headline feature
 
-**Status: built (2026-06-11) — awaiting the OXT pass.** The full surface
+**Status: shipped and user-verified (2026-06-11).** Verified twice over:
+the platformer's feel checklist on real hardware, and the self-test's
+player contract (run accel, grounded probe, tap-vs-held apex, coyote and
+buffer windows on the sim clock, single land tick, slope climb, maxFall,
+ground-snap, kill-floor exemption) — all green. As-built additions beyond
+the spec: sim-time feel windows, landing hysteresis, ground-snap with
+slope exemption, zero-restitution owned bodies, `b2kPlayerJump` as the
+required path for external boosts. Originally: The full surface
 below landed in the Kit (loop order: input → player → sprites → camera),
 and the platformer demo's hand-rolled movement layer (~53 lines: velocity
 tick, jump press/release, two-ray ground probe) collapsed into four calls —
@@ -177,7 +184,7 @@ below; run it in OXT and report.
 Phase 4 is real, so the design work is unblocked. The chunks land
 separately, each PR-sized, in rough value order:
 
-- **Audio — BUILT (2026-06-11), awaiting the OXT pass.** `b2kSound*` over
+- **Audio — SHIPPED and user-verified (2026-06-11).** `b2kSound*` over
   imported audioClips (`play audioClip`: the one LC sound path with no
   external media dependency; one clip at a time, documented) plus
   `b2kToneMake`, a pure-script WAV synthesizer (square/sine, note lists,
@@ -193,7 +200,7 @@ separately, each PR-sized, in rough value order:
   sine-path hazards: bee/fly/sweeping saw), `pfMakeThwomp` (arm/fall/
   rest/rise lifecycle, rideable, draggable). Promote to `b2k` API once a
   second example repeats them (the micro-game below is that test).
-- **Scenes/levels — DESIGN PROBE BUILT (2026-06-11) inside the micro-game.**
+- **Scenes/levels — design probe SHIPPED and user-verified inside the micro-game.**
   Levels are data: one `verb args` line per object (`slab`, `ledge`, `coin`,
   `spike`, `sweep`, `door`, `text`, `spawn`, `bounds`), interpreted by a
   ~100-line example-side `mgBuild`; the `ledge` verb ghost-pads its chain
@@ -203,7 +210,7 @@ separately, each PR-sized, in rough value order:
 - **Builder cross-pollination:** animated sprite parts and the player as a
   placeable "kind" inside the contraption builder (its §3/§4 roadmap), making
   the builder the level editor — the long-game payoff.
-- **Exit — BUILT (2026-06-11), awaiting the OXT pass:** the micro-game
+- **Exit — SHIPPED and user-verified (2026-06-11):** the micro-game
   (`examples/box2dxt-microgame.livecodescript`): start screen → 2 levels →
   win screen, on `b2kPlayerMake` (the green-field path the platformer
   doesn't exercise), hero sheet embedded as base64, all sounds synthesized
@@ -277,5 +284,14 @@ user-confirmed in OXT before the next begins.
 | 2026-06-11 | **Optimization round:** sprite tick skips inert sprites (no bind + no anim) before the try/catch — the ~100 static tiles now cost two array reads each per frame; sounds persist across `b2kTeardown` (resets skip ~0.25s of tone re-synthesis; clips are KBs); mover tick reads the clock once. Declined as not-worth-it: caching `b2kPlayerGet` lookups (µs), reducing ground tiles (visual cost), rendering-config changes (not statically verifiable). | This commit |
 | 2026-06-11 | **Phase 5 exit built: the micro-game** (start → 2 levels → win, one pasteable file, zero external assets) + the guide's "Building a whole game" chapter. The scenes/levels design shipped as the micro-game's example-side data format (verb-per-line text + a small interpreter) rather than Kit API — per the promote-once-repeated rule, `b2kScene*` waits until a second game wants the same format. `b2kPlayerMake` gets its first real exercise (the platformer adopts; this creates). Statically verified; awaiting the OXT pass. | Phase 5 exit commit |
 | 2026-06-11 | **Loop hardening found by the micro-game design: `b2kStep` now reschedules with ITS OWN generation (pGen), not the live sGen.** A world rebuild from inside a frame (the door sensor advancing a level) changes sGen mid-frame; rescheduling with the new value would clone the loop and double-step forever. With pGen the stale instance dies at the guard. The micro-game still defers its rebuild out of the frame (`send … in 80 ms`) — belt and braces, and the door chime gets its beat. | Micro-game design review |
+| 2026-06-11 | **FINAL GREEN BOARD (harness v7, ~93 assertions, all pass; both games user-verified).** Phases 0–5 closed on Win32 except builder cross-pollination (deferred to the content phase, where sprite parts arrive naturally). Docs swept current; the spec marked implemented; `docs/expansion-prep.md` created — the intake plan for the Kenney asset dump and the enemy/player-action expansion. Content phase is GO. | This commit |
+| 2026-06-11 | **Green board (user): self-test all-pass, platformer good, micro-game plays both levels.** Harness then doubled (user direction: more robustness vs LC/OXT surprises): +6 suites/~40 asserts — engine contracts (mod/bytes/strides/chunks/relayer-id/playLoudness…), materials+joints, filtering (incl. named-layers regression), queries, sheet extras (scale/margin/AddFrame/mirror images), player slopes+maxFall+kill-floor exemption. Content phase (Kenney pack) is GO on the next all-pass. | User report; this commit |
+| 2026-06-11 | **The micro-game mystery solved: a missing `b2kContactTarget`.** Sensor/contact MESSAGES go to the contact target; the micro-game set only the frame target — every sensor event fired into the void (coins, spikes, door dead; solids fine) across every build tested. The harness missed it because its sensor test polls (no target needed): the events test now asserts the message path too. Lesson: the harness must cover every DELIVERY mechanism, not just every event source. | User reports; code audit |
+| 2026-06-11 | **Self-test round 4: the double land was the SOLVER's push-out hop, measured** (instrumented test: land at vy 460 falling, then 24 frames later at vy 61 — a real ~7px rebound with restitution 0). Fix = GROUND-SNAP in the controller: grounded + flat (probe |normalX| < 0.1; slopes exempt) + rising + not jumping ⇒ vy zeroed. External boosts go through `b2kPlayerJump` (stomp bounce converted). Plus `b2kSetVelocity` now wakes (raw SetVelocity never did — a sleeping parked kinematic gate with one cached write stayed frozen = "plate flaky again"). Doctrine reinforced twice over: windows/polls over instantaneous reads; setting a velocity means move, so wake. | Fourth self-test run (user) |
+| 2026-06-11 | **Self-test round 3 (50/51): landing hysteresis.** Bounce 0 wasn't sufficient — solver push-out blips the probe for a tick around impacts, reading as micro-fall + second land. State machine now requires 3+ airborne ticks for `land` and 2+ to show airborne at all (own jumps exempt: instant `jump`). Kills double land sounds and one-frame anim flicker on seams; `b2kPlayerOnGround()` stays raw. | Third self-test run (user) |
+| 2026-06-11 | **Self-test round 2 (48/50): the player capsule kept the default 0.2 restitution** — every landing was a ~13px rebound (double land ticks/sounds, springy feel since Phase 3 day one). Controller-owned bodies now get bounce 0 alongside friction 0.08. The camera-test throw was a stale long id after `b2kCamOff` (group paths dissolve) — test re-resolves by name. | Second self-test run (user) |
+| 2026-06-11 | **The harness's first run paid out instantly: 35 pass, 5 fail → 2 real Kit bugs.** (1) Player coyote/buffer timers were WALL-clock — windows shrink in frames on slow machines; now a SIM-TIME clock (summed sFrameMS: identical live, deterministic hand-stepped). (2) Sprite getters threw on removed controls — now stale-safe per the Kit's own tolerance principle. The other 3 were harness arithmetic (full jump arcs at scale 40 ≈ 138 frames; settle between phases; per-test isolation added so one throw can't abort the suite). | First self-test run (user) |
+| 2026-06-11 | **The self-test harness is the new robustness backbone** (user direction: "rock solid, reliable, robust"). `examples/box2dxt-selftest.livecodescript`: deterministic in-OXT regression suite — paused world + `b2kStepOnce` hand-stepping + the new `b2kInputInject` scripted keyboard — encoding every hardware-learned lesson as an assertion (events, ghost rule, one-way, presence/sleep, kill floor, player feel incl. coyote/buffer windows and the single land tick, sprites, tones, camera, teardown). Run after every Kit change and on each new platform (the R1 acceptance path). Kenney content pack (new enemies, player actions) queued BEHIND a green self-test + micro-game pass. | User direction; this commit |
+| 2026-06-11 | **Pressure plate converted to presence POLLING** (user report: plate flaky after exact events). Exact events unmasked what duplicate enters had been hiding — sensor begin/end around settling/sleeping bodies drifts a counter. New doctrine, documented in both kit docs: enter/exit messages for ONE-SHOT triggers; `b2kOverlap` polling for PRESENCE (stateless, sees sleeping bodies), plus a ~200ms release debounce for feel. Demo audit: with the plate converted, no gameplay state depends on balanced event counting anywhere (coins/checkpoint/goal = one-shot + guarded; stomps = state-based; thwomps/movers = geometric; plate = polled). | User OXT runs |
 | 2026-06-11 | **Event loss root-caused: Box2D exposes only the LAST step's events, and frames run 0..n steps.** A 2-step frame lost the first step's coin/stomp events; a 0-step frame re-dispatched (duplicated) the previous step's — together, the "occasional" collision flakiness that survived the chain fix. The Kit now harvests events after EVERY fixed step into per-frame buffers; messages and pollers read one complete, duplicate-free frame view. Plus `b2kKillFloor`/`on b2kFell` (movers below the line are destroyed, player exempt, zero-cost hook in the move-event sync) and thick boundary slabs replacing the platformer's thin edge segments (capsule-vs-segment creep). | User OXT runs |
 | 2026-06-11 | **Final hot-path pass (user direction: "optimize around the engine's limitations").** The three real costs on a single interpreted thread: interpreter ops, FFI round-trips, property-set redraws. Landed: sprite-tick LIVE LIST (lazy, dirty-flagged — per-frame cost no longer scales with inert tiles), bind-time keycode resolution for actions/axes, player-tick knob+probe caches baked at set/attach + raw-handle velocity I/O (same math), 4 Hz HUD throttle in both games (an every-frame ms readout = an every-frame field relayout+redraw), gate velocity written on change only. The guide's §17 now carries the playbook. Declined again: rendering-config changes (not statically verifiable). | User direction; this commit |

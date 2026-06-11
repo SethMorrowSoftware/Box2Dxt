@@ -243,7 +243,7 @@ end mgLevelText
 -- The level interpreter: tear down, parse, build, hand over the keys
 -- =====================================================================
 command mgBuild pLevel
-   local tLine, tVerb, tArgs, tRef, tName, tPts
+   local tLine, tVerb, tArgs, tRef, tName, tPts, tBuildErr
    if gBuilding is true then exit mgBuild
    put true into gBuilding
    put pLevel into gLevel
@@ -267,9 +267,15 @@ command mgBuild pLevel
    end try
    b2kTeardown
    mgWipeStage
-   b2kSetup
-   b2kSetScale 60
-   mgMakeSounds
+   -- the whole build runs guarded: an error mid-build must NEVER leave
+   -- the screen locked (a frozen stack reads as "completely broken") --
+   -- instead it lands, named, in the HUD so it can be reported verbatim
+   put empty into tBuildErr
+   lock screen
+   try
+      b2kSetup
+      b2kSetScale 60
+      mgMakeSounds
    -- the hero sheet rides INSIDE this file: a hidden image fed from
    -- base64, registered as a 48x64 grid (teardown wiped the registry;
    -- re-registering is cheap, frames re-slice lazily)
@@ -284,7 +290,6 @@ command mgBuild pLevel
    b2kAnimDef "hero", "walk", "9-16", 10, true
    b2kAnimDef "hero", "jump", "17", 1, true
    b2kAnimDef "hero", "hit", "19", 2, false
-   lock screen
    b2kCamOn
    set the itemDelimiter to comma
    put 1024 into gWorldW
@@ -404,10 +409,21 @@ command mgBuild pLevel
             break
       end switch
    end repeat
-   -- world edges + camera
-   b2kWall 0, 0, 0, gWorldH
-   b2kWall gWorldW, 0, gWorldW, gWorldH
-   b2kWall 0, 0, gWorldW, 0
+      -- world edges: THICK slabs, not thin segments - a velocity-driven
+      -- capsule can creep past a segment (the platformer learned this);
+      -- a 48px box is a hard stop. Past-the-door-into-white-space = the
+      -- old thin right wall giving way.
+      create graphic "mg_wallL"
+      set the style of it to "rectangle"
+      set the rect of it to -48, 0 - gWorldH, 0, gWorldH
+      set the visible of it to false
+      b2kAddStatic the long id of graphic "mg_wallL"
+      create graphic "mg_wallR"
+      set the style of it to "rectangle"
+      set the rect of it to gWorldW, 0 - gWorldH, gWorldW + 48, gWorldH
+      set the visible of it to false
+      b2kAddStatic the long id of graphic "mg_wallR"
+      b2kWall 0, 0, gWorldW, 0
    b2kCamBounds 0, 0, gWorldW, gWorldH
    b2kCamDeadzone 0, 0
    -- THE player: one call builds the body host, the capsule, the
@@ -424,13 +440,23 @@ command mgBuild pLevel
    end if
    b2kCamFollow gHero, 1
    b2kCamGoto gSpawnX, gSpawnY
-   b2kPlayerControl false   -- menus own the keys; mgBegin hands them over
-   b2kFrameTarget the long id of me
+      b2kPlayerControl false   -- menus own the keys; mgBegin hands them over
+      b2kFrameTarget the long id of me
+      -- sensor + contact MESSAGES dispatch to the CONTACT target - this
+      -- line missing meant every coin/spike/door event fired into the
+      -- void while solids worked fine ("no collisions with sensors")
+      b2kContactTarget the long id of me
+   catch tBuildErr
+   end try
    mgChromeFront
    unlock screen
    put empty into gHudLast
    put 0 into gHudNextMS
-   b2kStart
+   if tBuildErr is not empty then
+      set the text of field "mgHud" to "BUILD ERROR (report this): " & tBuildErr
+   else
+      b2kStart
+   end if
    put false into gBuilding
 end mgBuild
 
@@ -513,9 +539,12 @@ end mgTickSweeps
 -- =====================================================================
 -- Events: pickups, hazards, the door
 -- =====================================================================
+-- The hero is the ONLY dynamic body in this game, so no visitor gate
+-- is needed (or wanted: gating on long-id string equality is one more
+-- thing that can silently fail).
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
    if pSensorCtrl is empty then exit b2kSensorEnter
-   if pVisitorCtrl is not gHero then exit b2kSensorEnter
+   if gMode is not "play" then exit b2kSensorEnter
    if the uMgCoin of pSensorCtrl is true then
       add 1 to gCoins
       b2kSound "coin"
@@ -663,6 +692,7 @@ end rawKeyDown
 --         b2kSpring j,hz[,damp] · b2kWeldSpring j,hz[,damp] · b2kWheelSpring j,hz[,damp]
 -- DRAG    b2kGrab(x,y) -> control · b2kRelease
 -- INPUT   b2kInputOn/Off · b2kKeyIsDown(k) · b2kKeyPressed/Released(k) ·
+--         b2kInputInject keys / b2kInputInjectOff (scripted keys: tests/replays) ·
 --         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
 --         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
@@ -739,6 +769,8 @@ local sEvtXN, sEvtXS, sEvtXV -- sensor exits this frame
 local sKillY         -- kill floor: screen y below which dynamic bodies are removed
 local sDrawKey       -- ctrlRef -> last rendered pixel/angle key; avoids redundant redraws
 local sInputOn       -- true while the per-frame keyboard sample is armed
+local sInjectOn      -- true = the sample comes from sInjectKeys, not the keyboard
+local sInjectKeys    -- injected keycode list (tests, replays, cutscene ghosts)
 local sKeysNow       -- comma-wrapped keycode set held this frame (",65361,32,")
 local sKeysPrev      -- last frame's set; pressed/released edges are the diff
 local sKeyActions    -- action name -> bound key list ("jump" -> "space,up,w")
@@ -800,6 +832,13 @@ local sPlayMoveSpd, sPlayAccelG, sPlayAccelA, sPlayJumpSpd, sPlayJumpCut
 local sPlayCoyote, sPlayBuffer, sPlayMaxFall, sPlayCosSlope
 local sPlayProbeOffs -- the 3 probe x-offsets, precomputed at attach
 local sPlayReach     -- probe ray length (halfH + 4), precomputed
+local sPlayAir       -- consecutive airborne ticks (landing hysteresis)
+local sPlayNormX     -- surface normal X at the grounded probe hit (slope test)
+local sPlayClock     -- the player's SIM-TIME clock: summed frame ms.
+                     -- Wall-clock would shrink the coyote/buffer windows
+                     -- on slow machines (90ms = fewer frames); sim time
+                     -- keeps them frame-coherent everywhere and makes
+                     -- hand-stepped tests deterministic.
 local sSndClip       -- sound name -> audioClip short name ("b2ksnd_...")
 local sSndMute       -- true = swallow play calls (a user preference; survives teardown)
 local sSndDead       -- true after a play failure: degrade to silence, never errors
@@ -1530,6 +1569,11 @@ command b2kSetVelocity pControl, pVxPx, pVyPx
    put sBody[the long id of pControl] into b
    if b is empty then exit b2kSetVelocity
    b2SetVelocity b, pVxPx / sScale, - pVyPx / sScale
+   -- setting a velocity means "move": wake the body. Raw SetVelocity
+   -- does NOT wake (why b2kPush always called SetAwake) - a SLEEPING
+   -- kinematic (a parked gate) given one cached write stayed frozen,
+   -- which read as "the pressure plate is flaky".
+   b2SetAwake b, true
 end b2kSetVelocity
 
 command b2kPush pControl, pDvxPx, pDvyPx
@@ -2504,8 +2548,26 @@ end b2kInputIsOn
 command b2kInputTick
    if sInputOn is not true then exit b2kInputTick
    put sKeysNow into sKeysPrev
-   put comma & the keysDown & comma into sKeysNow
+   if sInjectOn is true then
+      put comma & sInjectKeys & comma into sKeysNow
+   else
+      put comma & the keysDown & comma into sKeysNow
+   end if
 end b2kInputTick
+
+-- Replace the keyboard with a SCRIPTED key set (friendly names or codes;
+-- empty = nothing held) until b2kInputInjectOff. Deterministic input for
+-- the self-test harness, input replays, and cutscene "ghost" players --
+-- edges fall out of the normal frame diff exactly as with real keys.
+command b2kInputInject pKeys
+   put true into sInjectOn
+   put b2kKeyListCodes(pKeys) into sInjectKeys
+end b2kInputInject
+
+command b2kInputInjectOff
+   put false into sInjectOn
+   put empty into sInjectKeys
+end b2kInputInjectOff
 
 -- A friendly key name (or raw keycode) -> the keycode candidates it matches,
 -- comma-separated. Numbers >= 32 pass through as raw keycodes; single
@@ -3038,7 +3100,11 @@ command b2kSpriteStop pCtrl
 end b2kSpriteStop
 
 function b2kSpriteAnim pCtrl
-   return sSprAnim[the long id of pCtrl]
+   try
+      return sSprAnim[the long id of pCtrl]
+   catch tErr
+      return empty   -- a removed control is a stale ref, not an error
+   end try
 end b2kSpriteAnim
 
 -- Show one frame by name/index (stops any running animation first).
@@ -3059,7 +3125,11 @@ command b2kSpriteSetFrame pCtrl, pFrame
 end b2kSpriteSetFrame
 
 function b2kSpriteFrame pCtrl
-   return sSprFrameKey[the long id of pCtrl]
+   try
+      return sSprFrameKey[the long id of pCtrl]
+   catch tErr
+      return empty
+   end try
 end b2kSpriteFrame
 
 -- Per-sprite speed override (empty = use each animation's own fps).
@@ -3083,7 +3153,11 @@ command b2kSpriteFlipH pCtrl, pFlag
 end b2kSpriteFlipH
 
 function b2kSpriteFlipped pCtrl
-   return (sSprFlip[the long id of pCtrl] is true)
+   try
+      return (sSprFlip[the long id of pCtrl] is true)
+   catch tErr
+      return false
+   end try
 end b2kSpriteFlipped
 
 -- When a NON-looping animation finishes, send pMessage to the frame target
@@ -3590,6 +3664,9 @@ command b2kPlayerAttach pCtrl
       if sBody[tRef] is empty then exit b2kPlayerAttach   -- zero-sized control
       put true into sPlayOwnBody
       b2kSetFriction tRef, 0.08   -- low: walls must not glue the capsule
+      b2kSetBounce tRef, 0        -- characters land DEAD: the default 0.2
+                                  -- restitution rebounded every landing
+                                  -- (~13px hop = double land ticks/sounds)
    end if
    put tRef into sPlayRef
    b2kSetFixedRotation tRef, true
@@ -3604,6 +3681,8 @@ command b2kPlayerAttach pCtrl
    put false into sPlayJumping
    put true into sPlayControl
    put 0 into sPlayHoldMS
+   put 0 into sPlayClock
+   put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
    b2kPlayerTuneCache   -- bake the knobs + probe geometry for the tick
@@ -3780,6 +3859,8 @@ command b2kPlayerForget pFull
    put 0 into sPlayGroundMS
    put 0 into sPlayPressMS
    put 0 into sPlayHoldMS
+   put 0 into sPlayClock
+   put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
    if pFull is true then put empty into sPlayTune
@@ -3807,7 +3888,8 @@ command b2kPlayerProbe pBody, pVY
       get b2kRayHit(tX + tOff, tY, tX + tOff, tY + sPlayReach)
       if sRayNY is not empty and sRayNY <= 0 - sPlayCosSlope then
          put true into sPlayGrounded
-         put the milliseconds into sPlayGroundMS
+         put sRayNX into sPlayNormX          -- flat vs slope, for ground-snap
+         put sPlayClock into sPlayGroundMS   -- the sim clock, not wall time
          exit b2kPlayerProbe
       end if
    end repeat
@@ -3822,7 +3904,11 @@ command b2kPlayerTick
    if sPlayRef is empty then exit b2kPlayerTick
    put sBody[sPlayRef] into tB
    if tB is empty then exit b2kPlayerTick
-   put the milliseconds into tNow
+   -- the controller's clock is SIM time: the coyote/buffer windows must
+   -- mean the same number of frames on every machine (and stand still
+   -- while paused/hand-stepped) -- wall-clock would not
+   put sPlayClock + b2kClamp(sFrameMS, 0, 100) into sPlayClock
+   put sPlayClock into tNow
    -- present velocity, screen-oriented px/s (positive vy = falling).
    -- Raw reads with the cached handle: this runs every frame, so skip
    -- the wrapper's ref lookup and "vx,vy" string round-trip (same math
@@ -3880,11 +3966,28 @@ command b2kPlayerTick
       put sPlayMaxFall into tVY
       put true into tWrite
    end if
+   -- GROUND-SNAP: grounded on FLAT ground, drifting upward, and we did
+   -- not jump = the contact solver's push-out rebound after a hard
+   -- landing (a ~7px hop: phantom airtime, double land ticks - measured
+   -- by the self-test at vy 61 up). Kill it at the source. Slopes are
+   -- exempt (|normalX| >= 0.1): running uphill is real upward motion.
+   -- External boosts must use b2kPlayerJump, which sets the jump flag.
+   if sPlayGrounded and sPlayJumping is not true and tVY < 0 and abs(sPlayNormX) < 0.1 then
+      put 0 into tVY
+      put true into tWrite
+   end if
    if tWrite then b2SetVelocity tB, tVX / sScale, 0 - (tVY / sScale)
-   -- the state machine (land = exactly one tick on touch-down)
+   -- the state machine (land = exactly one tick on touch-down), with
+   -- LANDING HYSTERESIS: the contact solver's push-out (and chain seams)
+   -- can blip the 4px probe off for a tick around an impact -- without
+   -- hysteresis that read as a second micro-fall and a second land tick
+   -- (double land sounds; the self-test caught it). A touchdown counts
+   -- as "land" only after a real airborne stretch (3+ ticks), and a
+   -- single ungrounded blip does not even show as airborne -- unless it
+   -- is OUR jump, which must read as "jump" on its launch frame.
    put sPlayState into tPrevState
    if sPlayGrounded is true then
-      if tPrevState is "jump" or tPrevState is "fall" then
+      if (tPrevState is "jump" or tPrevState is "fall") and sPlayAir >= 3 then
          put "land" into sPlayState
       else
          if abs(tVX) < 8 then
@@ -3893,11 +3996,15 @@ command b2kPlayerTick
             put "run" into sPlayState
          end if
       end if
+      put 0 into sPlayAir
    else
-      if tVY < 0 then
-         put "jump" into sPlayState
-      else
-         put "fall" into sPlayState
+      add 1 to sPlayAir
+      if sPlayJumping is true or sPlayAir >= 2 then
+         if tVY < 0 then
+            put "jump" into sPlayState
+         else
+            put "fall" into sPlayState
+         end if
       end if
    end if
    -- animations: only while controlling (manual poses own the art when
@@ -4081,12 +4188,18 @@ end b2kCamGroup
 -- Move an existing control (IDE-designed levels) into the viewport.
 command b2kCamAdopt pCtrl
    if sCamGroup is empty then exit b2kCamAdopt
-   put true into sInCam[the long id of pCtrl]
    try
       relayer pCtrl to front of group "b2kcam_view"
    catch tErr
       -- no script relayer on this engine: the control stays on the card.
       -- Physics is unaffected; only its drawing will not scroll.
+   end try
+   -- mark AFTER the move: a long id embeds the group path, so the key
+   -- must be the post-relayer id or the camera's write-compensation
+   -- (b2kCamShiftX/Y) never recognises adopted controls
+   try
+      put true into sInCam[the long id of pCtrl]
+   catch tErr
    end try
 end b2kCamAdopt
 

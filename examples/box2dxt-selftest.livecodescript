@@ -1,27 +1,852 @@
--- #####################################################################
--- #  Box2Dxt  —  SELF-CONTAINED DEMO  (Kit + showcase in one file)    #
--- #                                                                   #
--- #  HOW TO RUN                                                       #
--- #   1. Load the box2dxt.lcb extension and put the box2dxt native    #
--- #      library where it can be found. Check: put b2Version()  -- 4  #
--- #   2. Paste THIS WHOLE FILE into a stack`s script                  #
--- #      (Object > Stack Script).                                     #
--- #   3. Open/close the card, or run  startBox2DDemo  in the          #
--- #      Message Box.  Stop with  stopBox2DDemo.                      #
--- #                                                                   #
--- #  This file bundles a verbatim copy of the reusable Kit            #
--- #  (src/box2dxt-kit.livecodescript) so the demo runs from a single  #
--- #  paste. For your own projects, load the Kit on its own instead.   #
--- #####################################################################
+-- =====================================================================
+-- box2dxt-selftest.livecodescript  ·  the Kit's in-OXT regression suite
+--
+-- One click, ~30 seconds, a PASS/FAIL report: this stack drives the
+-- REAL Kit deterministically and asserts the behaviours every game
+-- depends on. There is no headless OXT, so this is the project's
+-- runtime safety net: run it after any Kit change, and on every new
+-- platform, BEFORE trusting the games.
+--
+-- It is deterministic by construction: the world is started PAUSED and
+-- advanced by hand (b2kStepOnce = exactly one fixed 1/60 step including
+-- input/player/sprite/camera ticks and event dispatch), and the
+-- keyboard is replaced by b2kInputInject - scripted keys, exact frames.
+--
+-- Every test encodes a lesson this project learned on real hardware:
+--   * fixed-step determinism (the accumulator math)
+--   * frame-exact contact/sensor events: ONE enter, ONE exit, no
+--     duplicates while resting (the event-loss/duplication class)
+--   * the chain GHOST RULE (end segments do not collide; middles do)
+--   * one-way chains (rise through from below, land on top)
+--   * presence POLLING incl. SLEEPING bodies (the pressure-plate class)
+--   * b2kKillFloor + b2kFell (pit destruction, player exempt)
+--   * the player controller's feel contract: run accel, grounded probe,
+--     tap-vs-held jump heights, COYOTE window, jump BUFFER window, and
+--     the land state firing exactly once
+--   * input axes/edges, sprites (sheet/anim/flip/remove), tones,
+--     camera adopt/goto/off, teardown hygiene
+--
+-- HOW TO RUN
+--   1. In OXT, make a new stack. Put this whole file into the STACK
+--      script. Make sure the box2dxt extension is loaded.
+--   2. Close and reopen the stack, then click RUN ALL TESTS.
+--   3. Expect "ALL PASS". Any FAIL line names the broken contract -
+--      report it with the line's numbers.
+-- =====================================================================
+
+local gRep, gPass, gFail, gFellCount, gRunning
+local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
+
+constant kStUIVersion = "1"
+constant kStHarnessV = "7"   -- bump on EVERY harness change: the report
+                             -- header prints it, so a stale paste is
+                             -- visible at a glance
+
+on openCard
+   if the uStUIVersionTag of this stack is not kStUIVersion then buildStUI
+   pass openCard
+end openCard
+
+on closeCard
+   b2kStop
+   pass closeCard
+end closeCard
+
+command buildStUI
+   if there is a field "stTitle" then delete field "stTitle"
+   if there is a field "stReport" then delete field "stReport"
+   if there is a button "stbtn_run" then delete button "stbtn_run"
+   set the width of this stack to 860
+   set the height of this stack to 640
+   set the loc of this stack to the screenLoc
+   try
+      set the title of this stack to "Box2Dxt - Kit self-test"
+   catch tErr
+   end try
+   create field "stTitle"
+   set the rect of it to 16, 10, 700, 32
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 14
+   set the text of it to "Box2Dxt Kit self-test - deterministic, hand-stepped, asserted"
+   create button "stbtn_run"
+   set the rect of it to 712, 6, 844, 34
+   set the label of it to "RUN ALL TESTS"
+   set the traversalOn of it to false
+   create field "stReport"
+   set the rect of it to 16, 40, 844, 628
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textFont of it to "Courier New"
+   set the textSize of it to 11
+   set the vScrollbar of it to true
+   set the uStUIVersionTag of this stack to kStUIVersion
+end buildStUI
+
+on mouseUp
+   if the short name of the target is "stbtn_run" then stRunAll
+end mouseUp
 
 -- =====================================================================
--- EMBEDDED KIT  ·  auto-generated copy of src/box2dxt-kit.livecodescript
---
--- This file is self-contained: paste the whole thing into one stack script
--- and it runs.  The Kit below is a GENERATED copy — do not edit it here.
--- Edit the canonical Kit at src/box2dxt-kit.livecodescript, then run:
---     python3 tools/sync-embedded-kit.py
--- (CI checks it stays in sync via:  tools/sync-embedded-kit.py --check)
+-- Harness
+-- =====================================================================
+command stRunAll
+   if gRunning is true then exit stRunAll
+   put true into gRunning
+   put empty into gRep
+   put 0 into gPass
+   put 0 into gFail
+   stOut "Box2Dxt Kit self-test v" & kStHarnessV & " - " & the long date && the time
+   stOut "engine ABI " & b2Version() & "   (every test builds its own world)"
+   stRun "stTestWorld"
+   stRun "stTestEvents"
+   stRun "stTestGhostRule"
+   stRun "stTestOneWay"
+   stRun "stTestPresence"
+   stRun "stTestKillFloor"
+   stRun "stTestInput"
+   stRun "stTestPlayerRun"
+   stRun "stTestPlayerJumps"
+   stRun "stTestCoyoteBuffer"
+   stRun "stTestSprites"
+   stRun "stTestSheetExtras"
+   stRun "stTestSounds"
+   stRun "stTestCamera"
+   stRun "stTestCamScrolledWrite"
+   stRun "stTestEngineContracts"
+   stRun "stTestMaterialsJoints"
+   stRun "stTestFiltering"
+   stRun "stTestQueries"
+   stRun "stTestPlayerSlopes"
+   stRun "stTestTeardown"
+   try
+      b2kInputInjectOff
+      b2kStop
+      b2kTeardown
+      stWipe
+   catch tErr
+   end try
+   stOut "----------------------------------------"
+   if gFail is 0 then
+      stOut "ALL PASS  (" & gPass & " assertions)"
+   else
+      stOut "FAILURES: " & gFail & "   passes: " & gPass
+   end if
+   set the text of field "stReport" to gRep
+   put false into gRunning
+end stRunAll
+
+-- Run one test isolated: a throw fails THAT test and the suite goes on.
+command stRun pTest
+   try
+      dispatch pTest to me
+   catch tErr
+      add 1 to gFail
+      stOut "  FAIL  " & pTest & " threw: " & line 1 of tErr
+   end try
+end stRun
+
+command stOut pLine
+   put pLine & cr after gRep
+   set the text of field "stReport" to gRep
+   set the scroll of field "stReport" to 100000
+end stOut
+
+command stAssert pName, pCond
+   if pCond is true then
+      add 1 to gPass
+      stOut "  ok    " & pName
+   else
+      add 1 to gFail
+      stOut "  FAIL  " & pName
+   end if
+end stAssert
+
+-- A fresh deterministic world: torn down, rebuilt, started PAUSED so
+-- nothing advances except our hand-stepping.
+command stNewWorld pName
+   b2kInputInjectOff
+   b2kTeardown
+   stWipe
+   put 0 into gFellCount
+   put 0 into gMsgEnters
+   put 0 into gMsgContacts
+   b2kSetup
+   b2kFrameTarget the long id of me
+   b2kContactTarget the long id of me
+   b2kStart
+   b2kPause
+   stOut pName
+end stNewWorld
+
+command stStep pN
+   local i
+   repeat with i = 1 to pN
+      b2kStepOnce
+   end repeat
+end stStep
+
+command stWipe
+   local tAgain, i, tName
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         if char 1 to 3 of tName is "st_" then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end stWipe
+
+-- A static slab the player/balls can rest on (st_ prefix = auto-wiped).
+command stSlab pName, pL, pT, pR, pB
+   create graphic pName
+   set the style of it to "rectangle"
+   set the rect of it to pL, pT, pR, pB
+   set the filled of it to true
+   set the visible of it to false
+   b2kAddStatic the long id of graphic pName
+end stSlab
+
+on b2kFell pCtrl
+   add 1 to gFellCount
+end b2kFell
+
+-- message-path receivers: the harness must prove DISPATCH works, not
+-- just the polling accessors (a game that forgets b2kContactTarget gets
+-- silence - the micro-game shipped with exactly that bug)
+on b2kSensorEnter pSensorCtrl, pVisitorCtrl
+   add 1 to gMsgEnters
+end b2kSensorEnter
+
+on b2kContact pA, pB
+   add 1 to gMsgContacts
+end b2kContact
+
+function stX pCtrl
+   set the itemDelimiter to comma
+   return item 1 of b2kPosition(pCtrl)
+end stX
+
+function stY pCtrl
+   set the itemDelimiter to comma
+   return item 2 of b2kPosition(pCtrl)
+end stY
+
+function stVY pCtrl
+   set the itemDelimiter to comma
+   return item 2 of b2kVelocity(pCtrl)
+end stVY
+
+-- =====================================================================
+-- The tests
+-- =====================================================================
+command stTestWorld
+   local tRef, tY1, tVy
+   stNewWorld "world & fixed-step determinism"
+   b2kSpawnBall 300, 100, 30
+   put the result into tRef
+   stAssert "spawn returns a control", (tRef is not empty)
+   put stY(tRef) into tY1
+   stStep 30
+   stAssert "gravity pulls it down", (stY(tRef) > tY1 + 50)
+   -- 30 steps at 1/60 under g=10m/s2, scale 40: vy = 30/60*10*40 = 200
+   put stVY(tRef) into tVy
+   stAssert "30 fixed steps = 200 px/s fall speed (190..210 got " & round(tVy) & ")", \
+         (tVy > 190 and tVy < 210)
+   stAssert "body count tracks", (b2kBodyCount() is 1)
+end stTestWorld
+
+command stTestEvents
+   local tRef, tSens, tEnters, tExits, tDupes, i, tBegins
+   stNewWorld "frame-exact events: one enter, one exit, no duplicates"
+   stSlab "st_ground", 100, 500, 700, 540
+   create graphic "st_sens"
+   set the style of it to "rectangle"
+   set the rect of it to 370, 270, 430, 330
+   set the visible of it to false
+   put the long id of graphic "st_sens" into tSens
+   b2kAddSensor tSens, "box"
+   b2kSpawnBall 400, 150, 30
+   put the result into tRef
+   put 0 into tEnters
+   put 0 into tExits
+   put 0 into tDupes
+   put 0 into tBegins
+   repeat with i = 1 to 150
+      b2kStepOnce
+      add b2kSensorCount() to tEnters
+      add b2kSensorExitCount() to tExits
+      if b2kSensorCount() > 1 then add 1 to tDupes
+      add b2kContactCount() to tBegins
+   end repeat
+   stAssert "sensor fired exactly one enter (got " & tEnters & ")", (tEnters is 1)
+   stAssert "sensor fired exactly one exit (got " & tExits & ")", (tExits is 1)
+   stAssert "never two enters in a frame", (tDupes is 0)
+   stAssert "landing produced contact begins", (tBegins >= 1)
+   stAssert "the MESSAGE path delivered on b2kSensorEnter (got " & gMsgEnters & ")", (gMsgEnters is 1)
+   stAssert "the MESSAGE path delivered on b2kContact", (gMsgContacts >= 1)
+   -- resting: 30 more frames must produce NOTHING new (the old 0-step
+   -- duplication bug re-fired the last step's events while idle)
+   put 0 into tEnters
+   repeat with i = 1 to 30
+      b2kStepOnce
+      add b2kSensorCount() to tEnters
+      add b2kSensorExitCount() to tEnters
+   end repeat
+   stAssert "no events while at rest", (tEnters is 0)
+end stTestEvents
+
+command stTestGhostRule
+   local tMid, tEnd
+   stNewWorld "chain ghost rule: middle collides, end segments do not"
+   -- right-to-left flat chain 600..200 at y 400: solid span = 500..300
+   b2kSmoothGround "600,400" & cr & "500,400" & cr & "300,400" & cr & "200,400"
+   b2kSpawnBall 400, 300, 30
+   put the result into tMid
+   b2kSpawnBall 560, 300, 30
+   put the result into tEnd
+   stStep 90
+   stAssert "ball on MIDDLE segment rests on the line (y " & round(stY(tMid)) & ")", \
+         (stY(tMid) < 395)
+   stAssert "ball on END (ghost) segment falls through (y " & round(stY(tEnd)) & ")", \
+         (stY(tEnd) > 450)
+end stTestGhostRule
+
+command stTestOneWay
+   local tRef, tMinY, i
+   stNewWorld "one-way chain: rise through from below, land on top"
+   b2kSmoothGround "600,400" & cr & "500,400" & cr & "300,400" & cr & "200,400"
+   b2kSpawnBall 400, 550, 30
+   put the result into tRef
+   -- launch -500 px/s: apex ~238 (clears the 400 line), round trip ~130
+   -- frames at scale-40 gravity (400 px/s2); 240 frames = arc + settle
+   b2kSetVelocity tRef, 0, -500
+   put 9999 into tMinY
+   repeat with i = 1 to 240
+      b2kStepOnce
+      if stY(tRef) < tMinY then put stY(tRef) into tMinY
+   end repeat
+   stAssert "passed up through the surface (apex y " & round(tMinY) & ")", (tMinY < 360)
+   stAssert "then landed ON it (rest y " & round(stY(tRef)) & ")", \
+         (stY(tRef) < 395 and stY(tRef) > 360)
+end stTestOneWay
+
+command stTestPresence
+   local tRef, i, tAsleep
+   stNewWorld "presence polling: b2kOverlap sees resting AND sleeping bodies"
+   stSlab "st_ground", 100, 500, 700, 540
+   b2kSpawnBox 400, 470, 40, 40
+   put the result into tRef
+   stStep 60
+   stAssert "overlap finds the resting crate", \
+         (b2kOverlap(380, 450, 420, 505) is not empty)
+   -- let it fall asleep (sleep time ~0.5s = 30 steps; allow plenty)
+   put false into tAsleep
+   repeat with i = 1 to 240
+      b2kStepOnce
+      if b2kIsAwake(tRef) is false then
+         put true into tAsleep
+         exit repeat
+      end if
+   end repeat
+   stAssert "the crate fell asleep", (tAsleep is true)
+   stAssert "overlap STILL finds it asleep (the pressure-plate guarantee)", \
+         (b2kOverlap(380, 450, 420, 505) is not empty)
+   stAssert "empty region reports empty", (b2kOverlap(50, 50, 90, 90) is empty)
+end stTestPresence
+
+command stTestKillFloor
+   local tRef
+   stNewWorld "kill floor: fallers are destroyed, b2kFell announces"
+   b2kKillFloor 700
+   b2kSpawnBall 200, 100, 30
+   put the result into tRef
+   stStep 120
+   stAssert "b2kFell was dispatched (got " & gFellCount & ")", (gFellCount is 1)
+   stAssert "the body is gone", (b2kBodyCount() is 0)
+end stTestKillFloor
+
+command stTestInput
+   stNewWorld "input: injected keys, axes, exact edges"
+   b2kInputOn
+   b2kInputInject "left"
+   stStep 1
+   stAssert "axis moveX = -1 on left", (b2kAxis("moveX") is -1)
+   b2kInputInject "left,right"
+   stStep 1
+   stAssert "both directions = 0", (b2kAxis("moveX") is 0)
+   b2kInputInject "space"
+   stStep 1
+   stAssert "jump pressed on its first frame", (b2kActionPressed("jump") is true)
+   stStep 1
+   stAssert "pressed is an EDGE (false the next frame)", (b2kActionPressed("jump") is false)
+   stAssert "...but still down", (b2kActionIsDown("jump") is true)
+   b2kInputInject ""
+   stStep 1
+   stAssert "released fires on let-go", (b2kActionReleased("jump") is true)
+end stTestInput
+
+command stTestPlayerRun
+   local tRef, tX1, tDX
+   stNewWorld "player: accel-clamped run + facing"
+   stSlab "st_ground", 50, 500, 800, 560
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   stStep 30   -- settle onto the slab
+   stAssert "grounded after settling", (b2kPlayerOnGround() is true)
+   put stX(tRef) into tX1
+   b2kInputInject "right"
+   stStep 60
+   put stX(tRef) - tX1 into tDX
+   stAssert "1s of run covers ~moveSpeed px (120..280, got " & round(tDX) & ")", \
+         (tDX > 120 and tDX < 280)
+   stAssert "facing right", (b2kPlayerFacing() is 1)
+   b2kInputInject "left"
+   stStep 10
+   stAssert "facing flips left", (b2kPlayerFacing() is -1)
+   b2kInputInject ""
+   stStep 30
+   stAssert "idles to a stop", (b2kPlayerState() is "idle")
+end stTestPlayerRun
+
+command stTestPlayerJumps
+   local tRef, tHeld, tTap, i, tLands, tLandAt
+   stNewWorld "player: tap vs held jump + one land tick"
+   stSlab "st_ground", 50, 500, 800, 560
+   b2kPlayerMake 300, 470, 32, 48
+   put the result into tRef
+   stStep 30
+   -- HELD jump: at scale 40 (g = 400 px/s2) a 460 px/s jump flies ~138
+   -- frames -- run 220 so the arc lands and the land tick can fire
+   b2kInputInject "space"
+   put 9999 into tHeld
+   put 0 into tLands
+   put empty into tLandAt
+   repeat with i = 1 to 220
+      b2kStepOnce
+      if stY(tRef) < tHeld then put stY(tRef) into tHeld
+      if b2kPlayerState() is "land" then
+         add 1 to tLands
+         put i & "@y" & round(stY(tRef)) & "/vy" & round(stVY(tRef)) & space after tLandAt
+      end if
+   end repeat
+   b2kInputInject ""
+   stStep 10
+   stAssert "land fired exactly once (got " & tLands & ": " & tLandAt & ")", (tLands is 1)
+   -- settle fully on the ground before the tap phase (no overlap with
+   -- the held arc -- that was this test's own first-run bug)
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if b2kPlayerOnGround() is true then exit repeat
+   end repeat
+   stStep 20
+   -- TAP jump apex (release after 2 frames -> the jump-cut)
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   put 9999 into tTap
+   repeat with i = 1 to 220
+      b2kStepOnce
+      if stY(tRef) < tTap then put stY(tRef) into tTap
+   end repeat
+   stAssert "tap jump is clearly shorter than held (tap rose " & round(476 - tTap) \
+         & "px, held " & round(476 - tHeld) & "px)", (476 - tTap) < ((476 - tHeld) * 0.6)
+end stTestPlayerJumps
+
+command stTestCoyoteBuffer
+   local tRef, i, tOffAt, tJumped
+   stNewWorld "player: coyote window + jump buffer"
+   stSlab "st_ledge", 50, 500, 350, 560
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   stStep 30
+   -- COYOTE: run off the ledge, press jump 3 frames after leaving ground
+   b2kInputInject "right"
+   put 0 into tOffAt
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if b2kPlayerOnGround() is false then
+         put i into tOffAt
+         exit repeat
+      end if
+   end repeat
+   stAssert "walked off the ledge", (tOffAt > 0)
+   stStep 3   -- 50ms airborne: inside the 90ms coyote window
+   b2kInputInject "right,space"
+   stStep 2
+   stAssert "coyote jump fired mid-air (vy " & round(stVY(tRef)) & ")", (stVY(tRef) < -250)
+   b2kInputInject ""
+   -- BUFFER: fall onto the ledge with jump pressed shortly BEFORE landing
+   b2kMoveTo tRef, 200, 300
+   b2kSetVelocity tRef, 0, 0
+   stStep 1
+   put false into tJumped
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stY(tRef) > 450 and i > 3 then exit repeat   -- ~4 frames before
+   end repeat                                         -- touchdown: inside
+                                                      -- the 110ms buffer
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   repeat with i = 1 to 20
+      b2kStepOnce
+      if stVY(tRef) < -250 then
+         put true into tJumped
+         exit repeat
+      end if
+   end repeat
+   stAssert "buffered jump fired on landing", (tJumped is true)
+end stTestCoyoteBuffer
+
+-- Internal: the 32x32 generated source image (stNewWorld's wipe deletes
+-- st_* controls, so every test that needs it makes it fresh).
+command stEnsureSheetImage
+   local tData, i
+   if there is an image "st_sheet" then exit stEnsureSheetImage
+   create image "st_sheet"
+   set the width of it to 32
+   set the height of it to 32
+   put empty into tData
+   repeat with i = 1 to 1024
+      put numToByte(255) & numToByte((i * 7) mod 256) & numToByte(80) & numToByte(40) after tData
+   end repeat
+   set the imageData of image "st_sheet" to tData
+end stEnsureSheetImage
+
+command stTestSprites
+   local tRef, tF1
+   stNewWorld "sprites: generated sheet, anim advance, flip, remove"
+   stEnsureSheetImage
+   b2kSheetFromImage "stsheet", the long id of image "st_sheet", 16, 16
+   stAssert "16px grid of a 32px image = 4 frames", (b2kSheetFrames("stsheet") is 4)
+   b2kAnimDef "stsheet", "spin", "1-4", 200, true
+   b2kSpriteNew "stsheet", 1, 120, 120
+   put the result into tRef
+   stAssert "sprite created", (tRef is not empty)
+   b2kSpritePlay tRef, "spin"
+   put b2kSpriteFrame(tRef) into tF1
+   wait 12 milliseconds
+   stStep 1
+   stAssert "animation advanced on wall-clock time", (b2kSpriteFrame(tRef) is not tF1)
+   b2kSpriteFlipH tRef, true
+   stAssert "flip readback", (b2kSpriteFlipped(tRef) is true)
+   b2kSpriteRemove tRef
+   stAssert "removed sprite is forgotten", (b2kSpriteFrame(tRef) is empty)
+end stTestSprites
+
+command stTestSounds
+   stNewWorld "sounds: synthesized clip registers and survives teardown"
+   b2kToneMake "sttone", "440", 30, 30
+   stAssert "tone registered", (b2kSoundIsLoaded("sttone") is true)
+   b2kTeardown
+   stAssert "sounds survive teardown", (b2kSoundIsLoaded("sttone") is true)
+   b2kSoundsWipe
+   stAssert "b2kSoundsWipe purges", (b2kSoundIsLoaded("sttone") is false)
+end stTestSounds
+
+command stTestCamera
+   local tRef, tPos, tShort
+   stNewWorld "camera: spawns join the view, goto/pos, off restores"
+   b2kCamOn
+   stAssert "camera reports on", (b2kCamIsOn() is true)
+   b2kSpawnBall 400, 300, 30
+   put the result into tRef
+   stAssert "spawn lives in the viewport group", \
+         (the short name of the owner of tRef is "b2kcam_view")
+   b2kCamGoto 400, 300
+   stStep 2
+   set the itemDelimiter to comma
+   put b2kCamPos() into tPos
+   stAssert "cam pos tracks goto (got " & tPos & ")", \
+         (abs(item 1 of tPos - 400) < 8 and abs(item 2 of tPos - 300) < 8)
+   -- a long id EMBEDS the group path, so it goes stale the moment the
+   -- viewport dissolves (the teardown-order lesson) -- re-resolve by name
+   put the short name of tRef into tShort
+   b2kCamOff
+   stAssert "camera reports off", (b2kCamIsOn() is false)
+   stAssert "the child survived the ungroup", (there is a graphic tShort)
+   stAssert "...and returned to the card", \
+         (the short name of the owner of graphic tShort is not "b2kcam_view")
+end stTestCamera
+
+command stTestTeardown
+   stNewWorld "teardown hygiene"
+   b2kSpawnBall 300, 200, 30
+   b2kSpawnBox 360, 200, 40, 40
+   stStep 5
+   b2kTeardown
+   stAssert "no tracked bodies after teardown", (b2kBodyCount() is 0)
+   b2kSetup
+   b2kStart
+   b2kPause
+   b2kSpawnBall 300, 200, 30
+   stStep 10
+   stAssert "a fresh world works after teardown", (b2kBodyCount() is 1)
+end stTestTeardown
+
+command stTestSheetExtras
+   local tRef, tIc1, tIc2
+   stNewWorld "sheets: scale, margin/spacing grids, manual regions, mirrors"
+   stEnsureSheetImage
+   b2kSheetFromImage "stg1", the long id of image "st_sheet", 16, 16
+   b2kSheetScale "stg1", 2
+   stAssert "scaled frame size doubles", (b2kSheetFrameSize("stg1", 1) is "32,32")
+   b2kSpriteNew "stg1", 1, 100, 100
+   put the result into tRef
+   stAssert "scaled sprite is frame-sized", (the width of tRef is 32)
+   -- margin/spacing grid: (32 - 8 + 4) div (8 + 4) = 2 cols x 2 rows
+   b2kSheetFromImage "stg2", the long id of image "st_sheet", 8, 8, 0, 4, 4
+   stAssert "margin+spacing grid counts 4 frames", (b2kSheetFrames("stg2") is 4)
+   -- no grid + manual region (the no-XML packed-sheet path)
+   b2kSheetFromImage "stg3", the long id of image "st_sheet", 0, 0
+   stAssert "frame size 0 = no grid", (b2kSheetFrames("stg3") is 0)
+   b2kSheetAddFrame "stg3", "face", 4, 4, 10, 12
+   stAssert "manual frame registers", (b2kSheetHasFrame("stg3", "face") is true)
+   b2kSpriteNew "stg3", "face", 200, 100
+   put the result into tRef
+   stAssert "manual frame slices at its size", (the width of tRef is 10 and the height of tRef is 12)
+   -- the mirror is a real second image, swapped in and back
+   b2kSpriteNew "stg1", 1, 300, 100
+   put the result into tRef
+   put the icon of tRef into tIc1
+   b2kSpriteFlipH tRef, true
+   put the icon of tRef into tIc2
+   stAssert "flip swaps to a mirrored frame image", (tIc2 is not tIc1 and tIc2 > 0)
+   b2kSpriteFlipH tRef, false
+   stAssert "flip back restores the original", (the icon of tRef is tIc1)
+end stTestSheetExtras
+
+command stTestCamScrolledWrite
+   local tRef, tScroll, tWorld
+   stNewWorld "camera: world-coordinate writes are scroll-compensated"
+   b2kCamOn
+   b2kCamBounds 0, 0, 3000, 640
+   b2kSpawnBox 200, 300, 30, 30
+   put the result into tRef
+   b2kSetStatic tRef
+   b2kCamGoto 1500, 320
+   stStep 3
+   put the hScroll of b2kCamGroup() into tScroll
+   stAssert "the viewport scrolled (hScroll " & tScroll & ")", (tScroll > 800)
+   stAssert "loc semantics is a known model (" & b2kCamLocSemantics() & ")", \
+         (b2kCamLocSemantics() is "visual" or b2kCamLocSemantics() is "content")
+   b2kSpriteMoveTo tRef, 1500, 320
+   set the itemDelimiter to comma
+   if b2kCamLocSemantics() is "visual" then
+      put (item 1 of the loc of tRef) + tScroll into tWorld
+   else
+      put item 1 of the loc of tRef into tWorld
+   end if
+   stAssert "a world-px write lands on the world point (got " & round(tWorld) & ")", \
+         (abs(tWorld - 1500) < 4)
+end stTestCamScrolledWrite
+
+-- The LC/OXT behaviours the Kit silently RELIES on. When an engine
+-- update or a new platform breaks one, this names it in plain text.
+command stTestEngineContracts
+   local tPath, tData, i, tRef, tVol, tOwn, tErr
+   stNewWorld "engine contracts: the behaviours the Kit relies on"
+   stAssert "fractional mod (the tone synth)", (4.5 mod 2 is 0.5)
+   stAssert "numToByte round-trips", (byteToNum(numToByte(200)) is 200)
+   stAssert "b2kLE16 packs 2 bytes", (the number of bytes in b2kLE16(40000) is 2)
+   stAssert "b2kLE32 packs 4 bytes", (the number of bytes in b2kLE32(123456789) is 4)
+   stAssert "base64 round-trips", (base64Decode(base64Encode("abc123!?")) is "abc123!?")
+   -- the temp-file path the tone synth uses
+   put specialFolderPath("temporary") & "/b2kst_" & the milliseconds & ".bin" into tPath
+   put "hello" into URL ("binfile:" & tPath)
+   stAssert "temp folder writes and reads back", (URL ("binfile:" & tPath) is "hello")
+   delete file tPath
+   stAssert "temp file deletes", (there is no file tPath)
+   -- the imageData stride contract the sprite slicer refuses without
+   if there is no image "st_contract" then
+      create image "st_contract"
+      set the width of it to 8
+      set the height of it to 8
+   end if
+   put empty into tData
+   repeat with i = 1 to 256
+      put numToByte(120) after tData
+   end repeat
+   set the imageData of image "st_contract" to tData
+   stAssert "imageData stride is w*h*4", \
+         (the number of bytes in the imageData of image "st_contract" is 256)
+   stAssert "alphaData stride is w*h", \
+         (the number of bytes in the alphaData of image "st_contract" is 64)
+   -- the chunk semantics the level DSL leans on
+   stAssert "word 2 to -1 keeps the raw tail", \
+         (word 2 to -1 of "text 10,20,hello there" is "10,20,hello there")
+   set the wholeMatches to true
+   stAssert "wholeMatches lineOffset matches exactly", \
+         (lineOffset("bb", "a" & cr & "bb" & cr & "bbb") is 2)
+   -- a long id re-resolves after a relayer (the b2kCamAdopt path)
+   b2kCamOn
+   create graphic "st_reparent"
+   put the long id of graphic "st_reparent" into tRef
+   b2kCamAdopt tRef
+   -- self-diagnosing: report WHAT we saw -- the owner's name, or the
+   -- exact error if resolving the stale pre-relayer id threw. (Long ids
+   -- are ID-based, so we check the owner's NAME, not the id string.)
+   put empty into tErr
+   put empty into tOwn
+   try
+      put the short name of the owner of tRef into tOwn
+   catch tErr
+   end try
+   if tErr is empty then
+      stAssert "stale long id re-resolves into the group (owner: " & tOwn & ")", \
+            (tOwn is "b2kcam_view")
+   else
+      stAssert "stale long id re-resolves into the group (read threw: " & line 1 of tErr & ")", false
+   end if
+   set the uStProbe of tRef to true
+   stAssert "custom-property booleans round-trip", (the uStProbe of tRef is true)
+   -- the engine-global volume the sound module wraps
+   put the playLoudness into tVol
+   b2kSoundVolume 73
+   stAssert "playLoudness readback", (the playLoudness is 73)
+   b2kSoundVolume tVol
+end stTestEngineContracts
+
+command stTestMaterialsJoints
+   local tRef, tB, tJ, tMin, i, tM1, tPosA, tPosB, tDist
+   stNewWorld "materials + joints: bounce, mass, hinge motor, rope limit"
+   stSlab "st_ground", 50, 500, 800, 560
+   -- restitution: a 0.8 ball dropped 145px must rebound well off the floor
+   b2kSpawnBall 200, 340, 30
+   put the result into tRef
+   b2kSetBounce tRef, 0.8
+   stStep 60   -- past the first impact (~51 frames)
+   put 9999 into tMin
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stY(tRef) < tMin then put stY(tRef) into tMin
+   end repeat
+   stAssert "a 0.8 ball rebounds (post-impact apex y " & round(tMin) & ")", (tMin < 455)
+   -- density drives mass (the shim updates body mass)
+   b2kSpawnBox 600, 470, 40, 40
+   put the result into tB
+   put b2kMass(tB) into tM1
+   b2kSetDensity tB, 5
+   stAssert "density x5 raises the mass", (b2kMass(tB) > tM1 * 2)
+   -- a motorised hinge spins its arm
+   b2kSpawnBox 400, 300, 80, 16
+   put the result into tRef
+   b2kHinge tRef, empty, 400, 300
+   put the result into tJ
+   stAssert "hinge pin returns a joint", (tJ > 0)
+   b2kMotor tJ, 180, 100000
+   stStep 60
+   stAssert "the motor spins the arm (got " & round(b2kSpinRate(tRef)) & " deg/s)", \
+         (abs(b2kSpinRate(tRef)) > 60)
+   -- a rope caps the separation of a DANGLING ball (anchor is static)
+   b2kSpawnBall 700, 200, 24
+   put the result into tRef
+   b2kSetStatic tRef
+   b2kSpawnBall 700, 250, 24
+   put the result into tB
+   b2kRope tRef, tB, 80
+   stStep 90
+   set the itemDelimiter to comma
+   put b2kPosition(tRef) into tPosA
+   put b2kPosition(tB) into tPosB
+   put sqrt((item 1 of tPosA - item 1 of tPosB) ^ 2 + (item 2 of tPosA - item 2 of tPosB) ^ 2) into tDist
+   stAssert "rope holds its length (got " & round(tDist) & "px of 80)", (tDist < 112)
+end stTestMaterialsJoints
+
+command stTestFiltering
+   local tA, tB, tRef
+   stNewWorld "filtering: no-collide pairs and NAMED layers"
+   stSlab "st_ground", 50, 500, 800, 560
+   -- a no-collide pair: the upper box falls THROUGH its partner
+   b2kSpawnBox 200, 470, 40, 40
+   put the result into tA
+   b2kSpawnBox 200, 380, 40, 40
+   put the result into tB
+   b2kNoCollide tA, tB
+   stStep 90
+   stAssert "no-collide partner falls through (y " & round(stY(tB)) & ")", (stY(tB) > 440)
+   -- named layers (the b2kLayerBits path that once ALWAYS threw): a
+   -- ghost-layer ball ignores a solid-layer platform
+   b2kDefineLayer "stGhost"
+   b2kDefineLayer "stSolid"
+   stSlab "st_plat", 500, 380, 700, 400
+   b2kSetCategory the long id of graphic "st_plat", "stSolid"
+   b2kSpawnBall 600, 300, 30
+   put the result into tRef
+   b2kSetCategory tRef, "stGhost"
+   b2kSetMask tRef, "stGhost"
+   stStep 90
+   stAssert "ghost-layer ball passes the solid-layer platform (y " & round(stY(tRef)) & ")", \
+         (stY(tRef) > 420)
+end stTestFiltering
+
+command stTestQueries
+   local tRef, tHits
+   stNewWorld "queries: point, circle, multi-ray"
+   stSlab "st_ground", 50, 500, 800, 560
+   b2kSpawnBall 300, 470, 40
+   put the result into tRef
+   stStep 40
+   stAssert "controlAt finds the resting ball", (b2kControlAt(300, stY(tRef)) is tRef)
+   stAssert "controlContains inside", (b2kControlContains(tRef, 300, stY(tRef)) is true)
+   stAssert "controlContains outside", (b2kControlContains(tRef, 600, 100) is false)
+   stAssert "overlapCircle finds it", (b2kOverlapCircle(300, stY(tRef), 50) is not empty)
+   stAssert "overlapCircle empty elsewhere", (b2kOverlapCircle(80, 80, 30) is empty)
+   put b2kRayHitAll(300, 300, 300, 590) into tHits
+   stAssert "rayHitAll sees ball then ground (" & the number of lines of tHits & " hits)", \
+         (the number of lines of tHits >= 2 and line 1 of tHits is tRef)
+end stTestQueries
+
+command stTestPlayerSlopes
+   local tRef, tX1, tY1, tTop, i
+   stNewWorld "player: slope climb, maxFall clamp, kill-floor exemption"
+   stSlab "st_ground", 50, 500, 420, 560
+   -- a 21.8-degree ramp (well under maxSlopeDeg 50), ghost-padded:
+   -- colliding = the top landing (820..700) and the slope (700..400)
+   b2kSmoothGround "880,380" & cr & "820,380" & cr & "700,380" & cr & "400,500" & cr & "340,500"
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   stStep 30
+   put stX(tRef) into tX1
+   put stY(tRef) into tY1
+   put 9999 into tTop
+   b2kInputInject "right"
+   repeat with i = 1 to 200
+      b2kStepOnce
+      if stY(tRef) < tTop then put stY(tRef) into tTop   -- the peak: he may
+   end repeat                                            -- run off the top
+   b2kInputInject ""
+   stAssert "ran up the slope (peak climb " & round(tY1 - tTop) & "px)", \
+         (tY1 - tTop > 80)
+   stAssert "no slope wall-stick (advanced " & round(stX(tRef) - tX1) & "px)", \
+         (stX(tRef) - tX1 > 300)
+   -- terminal velocity: a long, clear fall never exceeds maxFall (900)
+   b2kMoveTo tRef, 950, -2400
+   b2kSetVelocity tRef, 0, 0
+   put 0 into tY1
+   repeat with i = 1 to 150
+      b2kStepOnce
+      if stVY(tRef) > tY1 then put stVY(tRef) into tY1
+   end repeat
+   stAssert "maxFall clamps the dive (peak " & round(tY1) & " px/s)", \
+         (tY1 > 850 and tY1 < 920)
+   -- the kill floor must NEVER take the player: arm it, let him fall
+   -- well past the line, and he must still have his body
+   b2kKillFloor 700
+   stStep 150
+   stAssert "kill floor exempts the player", (b2kBodyOf(tRef) is not empty)
+   b2kKillFloor empty
+end stTestPlayerSlopes
+
+-- =====================================================================
+-- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py
+-- - do not edit between the sentinels)
 -- =====================================================================
 -- >>> BEGIN EMBEDDED KIT >>>
 -- =====================================================================
@@ -4404,1051 +5229,3 @@ command b2kDispatchSensors
    end repeat
 end b2kDispatchSensors
 -- <<< END EMBEDDED KIT <<<
-
--- =====================================================================
--- DEMO APP  ·  built on the Kit above (b2k...)
---
--- WHAT IT SHOWS
---   · Every shape: boxes, balls, capsules, polygons.
---   · Joints: hinge + motor (windmill, see-saw), distance (cradle), revolute
---     chain (bridge), wheel + suspension (vehicle).
---   · Forces, dragging, contact + end-contact events, live ray casting.
---   · The b2kFrame per-frame hook for app logic and custom drawing.
---
--- NAMING: LiveCode conventions throughout — p* parameters, t* locals,
--- g* script-locals, k* constants — so nothing collides with reserved words.
--- All scene coordinates are in SCREEN PIXELS.
--- =====================================================================
-
-local gScene, gTool, gDrops
-local gFrames, gFpsTime, gFps
-local gBombs, gFlash
-local gCableN, gCableAX, gCableAY, gCableCtrl
-local gRingN, gRingX, gRingY, gRingF
-local gRayN
-local gThrottle, gThrottleTtl, gWheelBack, gWheelFront
-local gArenaL, gArenaR, gArenaT, gArenaB
-local gObjective, gTargets, gSpawnX, gStartX, gCar
-local gScore, gCoins, gCoinTotal, gWheelBC, gWheelFC
-
-constant kScenes     = "playground,pyramid,cradle,bridge,vehicle,lidar"
-constant kLabels     = "Playground,Pyramid,Cradle,Bridge,Vehicle,Lidar"
-constant kTools      = "box,ball,capsule,poly,bomb"
-constant kToolLabels = "Box,Ball,Capsule,Poly,Bomb"
-constant kMaxDrops = 70
-
--- ---------------------------------------------------------------------
-on preOpenCard
-   startBox2DDemo
-end preOpenCard
-
-on closeCard
-   stopBox2DDemo
-end closeCard
-
-on startBox2DDemo
-   -- a proper, centred, non-resizable window
-   set the title of this stack to "Box2Dxt — Kit Showcase"
-   set the decorations of this stack to "default"
-   set the resizable of this stack to false
-   set the width of this stack to 980
-   set the height of this stack to 660
-   set the loc of this stack to the screenLoc
-   set the backgroundColor of this card to "22,24,30"
-   put "box" into gTool
-   buildUI
-   switchScene "playground"
-end startBox2DDemo
-
-on stopBox2DDemo
-   b2kTeardown
-   clearSceneControls
-end stopBox2DDemo
-
--- =====================================================================
--- Scene lifecycle
--- =====================================================================
-on switchScene pScene
-   lock screen
-   b2kStop
-   clearSceneControls
-   clearState
-   put pScene into gScene
-   b2kSetup 0, -10
-   b2kFrameTarget the long id of this stack
-   b2kContactTarget the long id of this stack
-   switch pScene
-      case "playground"
-         buildPlayground
-         break
-      case "pyramid"
-         buildPyramid
-         break
-      case "cradle"
-         buildCradle
-         break
-      case "bridge"
-         buildBridge
-         break
-      case "vehicle"
-         buildVehicle
-         break
-      case "lidar"
-         buildLidar
-         break
-   end switch
-   raiseUI                       -- keep the chrome above all scene controls
-   b2kStart
-   highlightScenes
-   highlightTools
-   setHelp
-   updateHud
-   unlock screen
-end switchScene
-
--- Keep every UI control above the scene's bodies/rays so the chrome is always
--- visible and clickable, whatever the simulation draws.
-on raiseUI
-   local tI, tName, tList
-   put empty into tList
-   repeat with tI = 1 to the number of controls of this card
-      put the short name of control tI of this card into tName
-      if char 1 to 3 of tName is "ui_" then put tName & cr after tList
-   end repeat
-   repeat for each line tName in tList
-      set the layer of control tName of this card to top
-   end repeat
-end raiseUI
-
-on clearState
-   put the milliseconds into gFpsTime   -- seed the FPS window so the first reading is sane
-   put 0 into gFrames
-   put empty into gFps
-   put empty into gDrops
-   put empty into gBombs
-   put empty into gFlash
-   put 0 into gCableN
-   put empty into gCableAX
-   put empty into gCableAY
-   put empty into gCableCtrl
-   put 0 into gRingN
-   put empty into gRingX
-   put empty into gRingY
-   put empty into gRingF
-   put 0 into gRayN
-   put 0 into gThrottle
-   put 0 into gThrottleTtl
-   put empty into gWheelBack
-   put empty into gWheelFront
-   put empty into gObjective
-   put empty into gTargets
-   put empty into gSpawnX
-   put 0 into gStartX
-   put 0 into gScore
-   put empty into gCoins
-   put 0 into gCoinTotal
-   put empty into gWheelBC
-   put empty into gWheelFC
-end clearState
-
--- Build the four bounding walls (so bodies stay inside the play area, clear of
--- the toolbar) plus a visible ground strip. Top = below the toolbar.
-on prepArena
-   local tGroundY, tWide
-   put the width of this card into tWide
-   put (the height of this card) - 48 into tGroundY
-   -- screen-space arena bounds (used to keep gameplay + the lidar inside)
-   put 2 into gArenaL
-   put tWide - 2 into gArenaR
-   put 130 into gArenaT
-   put tGroundY into gArenaB
-   -- a framed play-field panel behind the bodies (game-board look)
-   create graphic "demo_field"
-   set the style of graphic "demo_field" to "rectangle"
-   set the filled of graphic "demo_field" to true
-   set the backgroundColor of graphic "demo_field" to "26,29,37"
-   set the foregroundColor of graphic "demo_field" to "46,60,86"
-   set the lineSize of graphic "demo_field" to 2
-   set the rect of graphic "demo_field" to gArenaL, gArenaT, gArenaR, tGroundY + 20
-   -- physics walls (b2kWall takes screen points and converts to world for us)
-   b2kWall 2, tGroundY, tWide - 2, tGroundY
-   b2kWall 2, 130, tWide - 2, 130
-   b2kWall 2, tGroundY, 2, 130
-   b2kWall tWide - 2, tGroundY, tWide - 2, 130
-   -- visible ground strip
-   create graphic "demo_groundbar"
-   set the style of graphic "demo_groundbar" to "rectangle"
-   set the filled of graphic "demo_groundbar" to true
-   set the backgroundColor of graphic "demo_groundbar" to "44,49,60"
-   set the lineSize of graphic "demo_groundbar" to 0
-   set the rect of graphic "demo_groundbar" to gArenaL, tGroundY, gArenaR, tGroundY + 20
-end prepArena
-
--- =====================================================================
--- Scenes  (all in screen pixels)
--- =====================================================================
-on buildPlayground
-   prepArena
-   local tCx
-   put (the width of this card) div 2 into tCx
-
-   -- a sampler of every shape, dropping in
-   get newBox(tCx - 250, 200, 58, 58, accentShape(1))
-   get newBall(tCx - 120, 180, 56, accentShape(2))
-   get newCapsule(tCx + 40, 180, 96, 38, accentShape(3))
-   get newPoly(tCx + 210, 180, 36, accentShape(4))
-
-   -- SEE-SAW: a plank hinged to the world at its centre. The fulcrum is purely
-   -- decorative — making it a static *body* (as before) jams the plank against
-   -- it and the see-saw can't tilt.
-   local tPlank, tPivotX, tPivotY
-   put tCx - 250 into tPivotX
-   put 470 into tPivotY
-   create graphic "demo_fulcrum"
-   set the style of graphic "demo_fulcrum" to "polygon"
-   set the filled of graphic "demo_fulcrum" to true
-   set the backgroundColor of graphic "demo_fulcrum" to "92,98,112"
-   set the points of graphic "demo_fulcrum" to \
-         (tPivotX - 30) & "," & (tPivotY + 70) & cr & (tPivotX + 30) & "," & (tPivotY + 70) \
-         & cr & tPivotX & "," & (tPivotY + 6)
-   put newBox(tPivotX, tPivotY, 260, 16, "120,180,210") into tPlank
-   b2kHinge tPlank, empty, tPivotX, tPivotY
-   get newBox(tPivotX - 116, 330, 52, 52, accentShape(5))         -- weight tips it
-
-   -- WINDMILL: a blade hinged to the world, driven by a motor
-   local tHubX, tHubY, tBlade, tJoint
-   put tCx + 150 into tHubX
-   put 300 into tHubY
-   put newBox(tHubX, tHubY, 160, 16, "240,212,120") into tBlade
-   b2kHinge tBlade, empty, tHubX, tHubY
-   put the result into tJoint
-   b2kMotor tJoint, 110, 90
-
-   -- PENDULUM: a bob hinged to the world, with a drawn cable
-   local tAnchorX, tAnchorY, tBob
-   put tCx + 330 into tAnchorX
-   put 150 into tAnchorY
-   put newBall(tAnchorX + 130, 300, 46, "214,92,92") into tBob
-   b2kHinge tBob, empty, tAnchorX, tAnchorY
-   addCable tAnchorX, tAnchorY, tBob
-   put "Sandbox: drag anything; click empty space to drop the selected shape." into gObjective
-end buildPlayground
-
-on buildPyramid
-   prepArena
-   local tRows, tI, tK, tBw, tCx, tGroundY, tX, tY, tBox
-   put 7 into tRows
-   put 46 into tBw
-   put (the width of this card) div 2 into tCx
-   put (the height of this card) - 48 into tGroundY
-   repeat with tI = 0 to tRows - 1
-      repeat with tK = 0 to tRows - 1 - tI
-         put tCx + (tK - (tRows - 1 - tI) / 2) * (tBw + 2) into tX
-         put tGroundY - tBw / 2 - tI * (tBw + 1) into tY
-         put newBox(tX, tY, tBw, tBw, pyramidColor(tI, tRows)) into tBox
-         put tBox & cr after gTargets        -- track for the scatter score
-         put tX into gSpawnX[tBox]
-      end repeat
-   end repeat
-   put "Objective: pick the Bomb tool (top-right) and blast the stack apart!" into gObjective
-end buildPyramid
-
-on buildCradle
-   local tN, tI, tR, tAnchorX, tAnchorY, tRestY, tBob, tBx, tLen, tCx, tSpace
-   prepArena
-   put 5 into tN
-   put 48 into tR                       -- ball diameter
-   put tR + 1 into tSpace               -- 1px gap: avoids a spawn-overlap blow-up
-   put 160 into tAnchorY
-   put 400 into tRestY
-   put tRestY - tAnchorY into tLen       -- pendulum arm length
-   put (the width of this card) div 2 into tCx
-   repeat with tI = 1 to tN
-      put tCx + (tI - (tN + 1) / 2) * tSpace into tBx
-      if tI is 1 then
-         -- Create the end ball ALREADY lifted (~50 deg) so the hinge is built
-         -- consistent with its position. Teleporting a ball AFTER hinging it
-         -- violates the joint and makes the whole cradle explode on step 1.
-         put newBall(tBx - tLen * 0.766, tAnchorY + tLen * 0.643, tR, "196,200,214") into tBob
-      else
-         put newBall(tBx, tRestY, tR, "196,200,214") into tBob
-      end if
-      b2kSetBounce tBob, 0.9
-      b2kSetFriction tBob, 0.05
-      b2kHinge tBob, empty, tBx, tAnchorY
-      addCable tBx, tAnchorY, tBob
-   end repeat
-   put "Watch momentum carry through the line — drag a ball aside and release." into gObjective
-end buildCradle
-
-on buildBridge
-   local tN, tI, tPw, tPy, tStartX, tX, tPlank, tPrevPlank, tCx
-   prepArena
-   put 12 into tN
-   put 62 into tPw
-   put 320 into tPy
-   put (the width of this card) div 2 into tCx
-   put tCx - tN * tPw / 2 into tStartX
-   put empty into tPrevPlank
-   repeat with tI = 1 to tN
-      put tStartX + (tI - 0.5) * tPw into tX
-      put newBox(tX, tPy, tPw, 14, "168,146,98") into tPlank
-      if tI is 1 then
-         b2kHinge tPlank, empty, tX - tPw / 2, tPy
-      else
-         b2kHinge tPrevPlank, tPlank, tX - tPw / 2, tPy
-      end if
-      put tPlank into tPrevPlank
-   end repeat
-   b2kHinge tPrevPlank, empty, tStartX + tN * tPw, tPy
-   get newBall(tCx - 60, 150, 54, "92,202,162")
-   get newBall(tCx + 60, 140, 66, "214,118,118")
-   put "Objective: pile heavy shapes on the plank bridge and watch it sag." into gObjective
-end buildBridge
-
-on buildVehicle
-   local tGroundY, tChassis, tWheelB, tWheelF, tX, tY, tPrevX, tPrevY, tPts, tCarY
-   prepArena
-   put (the height of this card) - 48 into tGroundY
-   -- ROLLING TERRAIN: a chain of static segments + a filled silhouette to match.
-   put empty into tPts
-   put gArenaL + 6 into tPrevX
-   put terrainY(tPrevX) into tPrevY
-   put tPrevX & "," & round(tPrevY) & cr after tPts
-   put tPrevX + 26 into tX
-   repeat until tX > gArenaR - 6
-      put terrainY(tX) into tY
-      b2kWall tPrevX, tPrevY, tX, tY
-      put tX & "," & round(tY) & cr after tPts
-      put tX into tPrevX
-      put tY into tPrevY
-      add 26 to tX
-   end repeat
-   put (gArenaR - 6) & "," & (tGroundY + 20) & cr & (gArenaL + 6) & "," & (tGroundY + 20) after tPts
-   create graphic "demo_terrain"
-   set the style of graphic "demo_terrain" to "polygon"
-   set the filled of graphic "demo_terrain" to true
-   set the backgroundColor of graphic "demo_terrain" to "56,72,50"
-   set the foregroundColor of graphic "demo_terrain" to "84,108,74"
-   set the lineSize of graphic "demo_terrain" to 2
-   set the points of graphic "demo_terrain" to tPts
-   -- COINS to grab along the course
-   put empty into gCoins
-   put 0 into gCoinTotal
-   put gArenaL + 150 into tX
-   repeat until tX > gArenaR - 130
-      put newCoin(tX, terrainY(tX) - 52) & cr after gCoins
-      add 1 to gCoinTotal
-      add 150 to tX
-   end repeat
-   -- THE CAR: chassis + two sprung wheels
-   put terrainY(190) - 64 into tCarY
-   put newBox(190, tCarY, 122, 34, "228,132,60") into tChassis
-   put newBall(158, tCarY + 30, 44, "40,40,48") into tWheelB
-   put newBall(222, tCarY + 30, 44, "40,40,48") into tWheelF
-   b2kWheel tChassis, tWheelB
-   put the result into gWheelBack
-   b2kWheel tChassis, tWheelF
-   put the result into gWheelFront
-   b2kWheelSpring gWheelBack, 5, 0.7
-   b2kWheelSpring gWheelFront, 5, 0.7
-   makeSpoke "demo_spokeB"
-   makeSpoke "demo_spokeF"
-   put tChassis into gCar
-   put tWheelB into gWheelBC
-   put tWheelF into gWheelFC
-   put 190 into gStartX
-   put "Drive with the ← / → arrow keys — roll over the hills and grab the coins!" into gObjective
-end buildVehicle
-
--- Terrain height (screen Y) at a screen X — gentle rolling hills that always
--- stay above the arena floor.
-function terrainY pX
-   local tBase, tRel
-   put (the height of this card) - 140 into tBase
-   put pX - gArenaL into tRel
-   return tBase - 40 * sin(tRel / 115) - 18 * sin(tRel / 270 + 1)
-end terrainY
-
-function newCoin pX, pY
-   local tName, tRef
-   put "demo_coin_" & the milliseconds & "_" & random(99999) into tName
-   create graphic tName
-   put the long id of graphic tName into tRef
-   set the style of tRef to "oval"
-   set the filled of tRef to true
-   set the backgroundColor of tRef to "246,206,90"
-   set the foregroundColor of tRef to "176,136,40"
-   set the lineSize of tRef to 2
-   set the width of tRef to 26
-   set the height of tRef to 26
-   set the loc of tRef to round(pX) & "," & round(pY)
-   return tRef
-end newCoin
-
-on makeSpoke pName
-   create graphic pName
-   set the style of graphic pName to "line"
-   set the lineSize of graphic pName to 3
-   set the foregroundColor of graphic pName to "205,205,215"
-end makeSpoke
-
-on updateSpoke pName, pWheel
-   local tcx, tcy, tA
-   put empty into tcx
-   try
-      put item 1 of the loc of pWheel into tcx
-      put item 2 of the loc of pWheel into tcy
-   catch tErr
-   end try
-   if tcx is empty then exit updateSpoke
-   put b2kAngle(pWheel) * kPI / 180 into tA
-   set the points of graphic pName to round(tcx) & "," & round(tcy) & cr \
-         & round(tcx + 19 * cos(tA)) & "," & round(tcy + 19 * sin(tA))
-end updateSpoke
-
-on buildLidar
-   local tI, tBody
-   prepArena
-   b2kSetGravity 0, 0
-   repeat with tI = 1 to 8
-      put newBall(rnd(170, 810), rnd(170, 560), rnd(30, 72), "96,150,210") into tBody
-      b2kSetBounce tBody, 1
-      b2kSetFriction tBody, 0
-      b2kSetVelocity tBody, rnd(-170, 170), rnd(-170, 170)
-   end repeat
-   repeat with tI = 1 to 3
-      put newPoly(rnd(220, 760), rnd(180, 540), rnd(28, 48), "200,160,120") into tBody
-      b2kSetBounce tBody, 1
-      b2kSetFriction tBody, 0
-      b2kSetVelocity tBody, rnd(-130, 130), rnd(-130, 130)
-   end repeat
-   put 48 into gRayN
-   repeat with tI = 1 to gRayN
-      create graphic ("demo_ray_" & tI)
-      set the style of graphic ("demo_ray_" & tI) to "line"
-      set the lineSize of graphic ("demo_ray_" & tI) to 1
-      set the foregroundColor of graphic ("demo_ray_" & tI) to "0,214,130"
-      set the blendLevel of graphic ("demo_ray_" & tI) to 28
-   end repeat
-   create graphic "demo_emitter"
-   set the style of graphic "demo_emitter" to "oval"
-   set the filled of graphic "demo_emitter" to true
-   set the backgroundColor of graphic "demo_emitter" to "0,230,140"
-   set the foregroundColor of graphic "demo_emitter" to "190,255,220"
-   set the lineSize of graphic "demo_emitter" to 2
-   set the width of graphic "demo_emitter" to 16
-   set the height of graphic "demo_emitter" to 16
-   set the visible of graphic "demo_emitter" to false
-   put "Move the mouse inside the arena — rays scan outward and stop at the nearest shape." into gObjective
-end buildLidar
-
--- =====================================================================
--- Per-frame hook (the Kit sends this once per simulated frame)
--- =====================================================================
-on b2kFrame
-   switch gScene
-      case "vehicle"
-         driveFrame
-         break
-      case "lidar"
-         renderLidar
-         break
-      case "pyramid"
-         framePyramid
-         break
-   end switch
-   renderCables
-   updateFlashes
-   updateBombs
-   updateRings
-   tickHud
-end b2kFrame
-
--- Count how many tower blocks have been knocked well away from where they
--- started — the demolition "score".
-on framePyramid
-   local t, tScattered, tX
-   put 0 into tScattered
-   repeat for each line t in gTargets
-      put empty into tX
-      try
-         put item 1 of the loc of t into tX
-      catch tErr
-      end try
-      if tX is not empty and abs(tX - gSpawnX[t]) > 70 then add 1 to tScattered
-   end repeat
-   put "Scattered: " & tScattered & " / " & (the number of lines of gTargets) \
-         & "   ·   pick the Bomb tool and click the stack" into gObjective
-end framePyramid
-
-on driveFrame
-   if gThrottleTtl > 0 then
-      subtract 1 from gThrottleTtl
-   else
-      put 0 into gThrottle
-   end if
-   if gWheelBack is not empty then
-      b2kWheelMotor gWheelBack, gThrottle, 170
-      b2kWheelMotor gWheelFront, gThrottle, 170
-   end if
-   updateSpoke "demo_spokeB", gWheelBC
-   updateSpoke "demo_spokeF", gWheelFC
-   -- car position
-   local tCx, tCy
-   put empty into tCx
-   try
-      put item 1 of the loc of gCar into tCx
-      put item 2 of the loc of gCar into tCy
-   catch tErr
-   end try
-   if tCx is empty then exit driveFrame
-   -- collect coins on contact
-   local tCoin, tKeep, tCoinX, tCoinY, dx, dy
-   put empty into tKeep
-   repeat for each line tCoin in gCoins
-      put empty into tCoinX
-      try
-         put item 1 of the loc of tCoin into tCoinX
-         put item 2 of the loc of tCoin into tCoinY
-      catch tErr
-      end try
-      if tCoinX is empty then next repeat
-      put tCoinX - tCx into dx
-      put tCoinY - tCy into dy
-      if dx * dx + dy * dy < 3600 then          -- within 60 px
-         add 1 to gScore
-         spawnRing tCoinX, tCoinY
-         try
-            delete tCoin
-         end try
-      else
-         put tCoin & cr after tKeep
-      end if
-   end repeat
-   put tKeep into gCoins
-   local tDist
-   put round((tCx - gStartX) / 40 * 10) / 10 into tDist
-   put "Coins: " & gScore & " / " & gCoinTotal & "        Distance: " & max(0, tDist) \
-         & " m        ← / → to drive" into gObjective
-end driveFrame
-
-on renderLidar
-   local tN, tI, tAng, tEx, tEy, tTx, tTy, tRange, tHx, tHy
-   put gRayN into tN
-   if tN < 1 then exit renderLidar
-   put the mouseH into tEx
-   put the mouseV into tEy
-   -- Only scan while the cursor is inside the arena, so rays never spill over
-   -- the toolbar/HUD (and the UI stays clickable).
-   if tEx < gArenaL or tEx > gArenaR or tEy < gArenaT or tEy > gArenaB then
-      hideLidar
-      exit renderLidar
-   end if
-   set the visible of graphic "demo_emitter" to true
-   set the loc of graphic "demo_emitter" to round(tEx) & "," & round(tEy)
-   put 1400 into tRange    -- long enough to always reach a wall, which stops it
-   repeat with tI = 1 to tN
-      put (tI - 1) * (2 * kPI / tN) into tAng
-      put tEx + cos(tAng) * tRange into tTx
-      put tEy + sin(tAng) * tRange into tTy
-      get b2kRayHit(tEx, tEy, tTx, tTy)
-      put b2kRayHitX() into tHx
-      put b2kRayHitY() into tHy
-      if tHx is empty then       -- a miss: draw the ray out to its far end
-         put round(tTx) into tHx
-         put round(tTy) into tHy
-      end if
-      set the points of graphic ("demo_ray_" & tI) to \
-            round(tEx) & "," & round(tEy) & cr & tHx & "," & tHy
-   end repeat
-end renderLidar
-
-on hideLidar
-   local tI
-   if there is a graphic "demo_emitter" then set the visible of graphic "demo_emitter" to false
-   repeat with tI = 1 to gRayN
-      if there is a graphic ("demo_ray_" & tI) then set the points of graphic ("demo_ray_" & tI) to empty
-   end repeat
-end hideLidar
-
--- Cables (pendulum / cradle): a line from a fixed anchor to a body's centre.
-on addCable pAx, pAy, pCtrl
-   add 1 to gCableN
-   put pAx into gCableAX[gCableN]
-   put pAy into gCableAY[gCableN]
-   put pCtrl into gCableCtrl[gCableN]
-   create graphic ("demo_cable_" & gCableN)
-   set the style of graphic ("demo_cable_" & gCableN) to "line"
-   set the lineSize of graphic ("demo_cable_" & gCableN) to 2
-   set the foregroundColor of graphic ("demo_cable_" & gCableN) to "150,154,168"
-end addCable
-
-on renderCables
-   local tI
-   if gCableN < 1 then exit renderCables
-   repeat with tI = 1 to gCableN
-      if there is a graphic ("demo_cable_" & tI) then
-         try
-            set the points of graphic ("demo_cable_" & tI) to \
-                  gCableAX[tI] & "," & gCableAY[tI] & cr & the loc of gCableCtrl[tI]
-         end try
-      end if
-   end repeat
-end renderCables
-
--- Contact flashing: light a body's outline white when it starts touching.
-on b2kContact pA, pB
-   flashCtrl pA
-   flashCtrl pB
-end b2kContact
-
-on flashCtrl pCtrl
-   if pCtrl is empty then exit flashCtrl
-   try
-      set the foregroundColor of pCtrl to "255,255,255"
-      set the lineSize of pCtrl to 2
-      put the milliseconds + 150 into gFlash[pCtrl]
-   end try
-end flashCtrl
-
-on updateFlashes
-   local tKey, tNow
-   put the milliseconds into tNow
-   repeat for each key tKey in gFlash
-      if tNow > gFlash[tKey] then
-         try
-            set the foregroundColor of tKey to "20,20,24"
-            set the lineSize of tKey to 1
-         end try
-         delete variable gFlash[tKey]
-      end if
-   end repeat
-end updateFlashes
-
--- Bombs: a flashing fuse, then a radial blast + an expanding shock ring.
-on spawnBomb pX, pY
-   local tBody
-   put newBall(pX, pY, 40, "150,40,40") into tBody
-   put 60 into gBombs[tBody]
-end spawnBomb
-
-on updateBombs
-   local tKey, tFuse, tToBlow
-   put empty into tToBlow
-   repeat for each key tKey in gBombs
-      put gBombs[tKey] - 1 into tFuse
-      put tFuse into gBombs[tKey]
-      if tFuse < 28 then
-         try
-            if (tFuse mod 6) < 3 then set the backgroundColor of tKey to "245,80,55"
-            else set the backgroundColor of tKey to "150,40,40"
-         end try
-      end if
-      if tFuse <= 0 then put tKey & cr after tToBlow
-   end repeat
-   repeat for each line tKey in tToBlow
-      detonate tKey
-   end repeat
-end updateBombs
-
-on detonate pBomb
-   local tLx, tLy
-   try
-      put item 1 of the loc of pBomb into tLx
-      put item 2 of the loc of pBomb into tLy
-      b2kExplode tLx, tLy, 210, 720
-      spawnRing tLx, tLy
-      b2kRemove pBomb
-   end try
-   delete variable gBombs[pBomb]
-end detonate
-
-on spawnRing pX, pY
-   add 1 to gRingN
-   put pX into gRingX[gRingN]
-   put pY into gRingY[gRingN]
-   put 0 into gRingF[gRingN]
-   create graphic ("demo_ring_" & gRingN)
-   set the style of graphic ("demo_ring_" & gRingN) to "oval"
-   set the filled of graphic ("demo_ring_" & gRingN) to false
-   set the lineSize of graphic ("demo_ring_" & gRingN) to 3
-   set the foregroundColor of graphic ("demo_ring_" & gRingN) to "255,170,70"
-end spawnRing
-
-on updateRings
-   local tI, tFrame, tRad
-   if gRingN < 1 then exit updateRings
-   repeat with tI = 1 to gRingN
-      if gRingF[tI] is not empty then
-         put gRingF[tI] + 1 into tFrame
-         put tFrame into gRingF[tI]
-         if tFrame > 16 then
-            if there is a graphic ("demo_ring_" & tI) then delete graphic ("demo_ring_" & tI)
-            put empty into gRingF[tI]
-         else
-            put tFrame * 15 into tRad
-            set the rect of graphic ("demo_ring_" & tI) to \
-                  round(gRingX[tI] - tRad), round(gRingY[tI] - tRad), \
-                  round(gRingX[tI] + tRad), round(gRingY[tI] + tRad)
-            set the blendLevel of graphic ("demo_ring_" & tI) to round(tFrame / 16 * 85)
-         end if
-      end if
-   end repeat
-end updateRings
-
-on tickHud
-   add 1 to gFrames
-   local tNow
-   put the milliseconds into tNow
-   if tNow - gFpsTime >= 500 then
-      put round(gFrames * 1000 / (tNow - gFpsTime)) into gFps
-      put 0 into gFrames
-      put tNow into gFpsTime
-      updateHud
-   end if
-end tickHud
-
-on updateHud
-   if there is not a field "ui_hud" then exit updateHud
-   local tLine
-   put sceneTitle(gScene) & "        FPS " & gFps & "        Bodies " \
-         & b2kBodyCount() & " (" & b2kAwakeCount() & " awake)" into tLine
-   if gObjective is not empty then put "        " & gObjective after tLine
-   put tLine into field "ui_hud"
-end updateHud
-
--- =====================================================================
--- Input
--- =====================================================================
-on mouseDown
-   if "ui_" is in the short name of the target then exit mouseDown
-   -- If the script was just (re)compiled, the demo isn't running yet; start it
-   -- on the first click rather than acting on an un-built world.
-   if b2kWorld() is empty then
-      startBox2DDemo
-      exit mouseDown
-   end if
-   if gScene is "lidar" then exit mouseDown
-   get b2kGrab(the mouseH, the mouseV)
-   if it is empty then sceneClick the mouseH, the mouseV
-end mouseDown
-
-on mouseUp
-   local tName
-   put the short name of the target into tName
-   if "ui_scene_" is in tName then
-      switchScene the uSceneId of the target
-      exit mouseUp
-   end if
-   if "ui_tool_" is in tName then
-      put the uToolId of the target into gTool
-      highlightTools
-      updateHud
-      exit mouseUp
-   end if
-   b2kRelease
-end mouseUp
-
-on mouseRelease
-   b2kRelease
-end mouseRelease
-
-on arrowKey pKey
-   if gScene is "vehicle" then
-      if pKey is "right" then
-         put -560 into gThrottle
-         put 20 into gThrottleTtl
-      else if pKey is "left" then
-         put 560 into gThrottle
-         put 20 into gThrottleTtl
-      end if
-      exit arrowKey
-   end if
-   pass arrowKey
-end arrowKey
-
-on sceneClick pX, pY
-   local tCtrl
-   switch gTool
-      case "ball"
-         put newBall(pX, pY, rnd(28, 64), randomColor()) into tCtrl
-         break
-      case "capsule"
-         put newCapsule(pX, pY, rnd(70, 120), 34, randomColor()) into tCtrl
-         break
-      case "poly"
-         put newPoly(pX, pY, rnd(22, 42), randomColor()) into tCtrl
-         break
-      case "bomb"
-         spawnBomb pX, pY
-         exit sceneClick
-      default
-         put newBox(pX, pY, rnd(34, 60), rnd(34, 60), randomColor()) into tCtrl
-   end switch
-   registerDrop tCtrl
-end sceneClick
-
--- Keep the count of click-dropped bodies bounded so spamming stays smooth.
-on registerDrop pCtrl
-   put pCtrl & cr after gDrops
-   if the number of lines of gDrops > kMaxDrops then
-      local tOldest
-      put line 1 of gDrops into tOldest
-      delete line 1 of gDrops
-      try
-         b2kRemove tOldest          -- removes the body (and spawned controls)
-         delete tOldest             -- and the graphic, for directly-made polys
-      end try
-   end if
-end registerDrop
-
--- =====================================================================
--- Body factories  (call as functions; return the control)
--- =====================================================================
-function newBox pX, pY, pW, pH, pColor
-   b2kSpawnBox pX, pY, pW, pH, pColor
-   return the result
-end newBox
-
-function newBall pX, pY, pDiam, pColor
-   b2kSpawnBall pX, pY, pDiam, pColor
-   return the result
-end newBall
-
-function newCapsule pX, pY, pLen, pThick, pColor
-   b2kSpawnCapsule pX, pY, pLen, pThick, pColor
-   return the result
-end newCapsule
-
-function newPoly pX, pY, pR, pColor
-   local tName, tRef, tI, tAng, tPoints
-   put "demo_poly_" & the milliseconds & "_" & random(99999) into tName
-   create graphic tName
-   put the long id of graphic tName into tRef
-   set the style of tRef to "polygon"
-   set the filled of tRef to true
-   set the backgroundColor of tRef to pColor
-   set the foregroundColor of tRef to "20,20,24"
-   set the lineSize of tRef to 1
-   put empty into tPoints
-   repeat with tI = 0 to 5
-      put tI * 60 * kPI / 180 into tAng
-      put round(pX + pR * cos(tAng)) & "," & round(pY + pR * sin(tAng)) & cr after tPoints
-   end repeat
-   set the points of tRef to tPoints
-   b2kAddPolygon tRef
-   return tRef
-end newPoly
-
-function newStaticBar pX, pY, pW, pH, pColor
-   local tName, tRef
-   put "demo_static_" & the milliseconds & "_" & random(99999) into tName
-   create graphic tName
-   put the long id of graphic tName into tRef
-   set the style of tRef to "rectangle"
-   set the filled of tRef to true
-   set the backgroundColor of tRef to pColor
-   set the foregroundColor of tRef to "20,20,24"
-   set the lineSize of tRef to 1
-   set the width of tRef to pW
-   set the height of tRef to pH
-   set the loc of tRef to round(pX) & "," & round(pY)
-   b2kAddStatic tRef
-   return tRef
-end newStaticBar
-
--- =====================================================================
--- UI
--- =====================================================================
-on buildUI
-   clearUI
-   local tWide, tI, tScene, tTool, tX
-   put the width of this card into tWide
-
-   makeBar "ui_header", 0, 0, tWide, 54, "30,33,42"
-   makeBar "ui_accent", 0, 54, tWide, 57, "64,132,232"
-   makeLabel "ui_title", 18, 11, 320, 44, "Box2Dxt", 22, "236,238,245", true
-   makeLabel "ui_sub", 20, 33, 460, 53, "Box2D v3 physics · the OpenXTalk Kit, in action", 11, "150,154,166", false
-
-   put 16 into tX
-   repeat with tI = 1 to the number of items of kScenes
-      put item tI of kScenes into tScene
-      makeButton ("ui_scene_" & tScene), (item tI of kLabels), tX, 66, 96, 28
-      set the uSceneId of button ("ui_scene_" & tScene) to tScene
-      add 100 to tX
-   end repeat
-
-   put tWide - (5 * 62) - 8 into tX
-   repeat with tI = 1 to the number of items of kTools
-      put item tI of kTools into tTool
-      makeButton ("ui_tool_" & tTool), (item tI of kToolLabels), tX, 66, 58, 28
-      set the uToolId of button ("ui_tool_" & tTool) to tTool
-      add 62 to tX
-   end repeat
-
-   makeBar "ui_hudbar", 0, 100, tWide, 126, "18,20,26"
-   makeField "ui_hud", 12, 103, tWide - 12, 124, 12, "224,226,234"
-   makeBar "ui_helpbar", 0, (the height of this card) - 28, tWide, the height of this card, "18,20,26"
-   makeField "ui_help", 12, (the height of this card) - 26, tWide - 12, (the height of this card) - 5, 11, "168,172,184"
-end buildUI
-
-on clearUI
-   local tI, tName
-   repeat with tI = the number of controls of this card down to 1
-      put the short name of control tI of this card into tName
-      if char 1 to 3 of tName is "ui_" then delete control tI of this card
-   end repeat
-end clearUI
-
-on clearSceneControls
-   local tI, tName
-   repeat with tI = the number of controls of this card down to 1
-      put the short name of control tI of this card into tName
-      if char 1 to 3 of tName is not "ui_" then delete control tI of this card
-   end repeat
-end clearSceneControls
-
-on makeBar pName, pLeft, pTop, pRight, pBottom, pColor
-   create graphic pName
-   set the style of graphic pName to "rectangle"
-   set the filled of graphic pName to true
-   set the lineSize of graphic pName to 0
-   set the backgroundColor of graphic pName to pColor
-   set the rect of graphic pName to pLeft, pTop, pRight, pBottom
-end makeBar
-
-on makeLabel pName, pLeft, pTop, pRight, pBottom, pText, pSize, pColor, pBold
-   create field pName
-   set the rect of field pName to pLeft, pTop, pRight, pBottom
-   set the locked of field pName to true
-   set the traversalOn of field pName to false
-   set the opaque of field pName to false
-   set the showBorder of field pName to false
-   set the borderWidth of field pName to 0
-   set the textSize of field pName to pSize
-   set the textColor of field pName to pColor
-   if pBold then set the textStyle of field pName to "bold"
-   put pText into field pName
-end makeLabel
-
-on makeField pName, pLeft, pTop, pRight, pBottom, pSize, pColor
-   create field pName
-   set the rect of field pName to pLeft, pTop, pRight, pBottom
-   set the locked of field pName to true
-   set the traversalOn of field pName to false
-   set the opaque of field pName to false
-   set the showBorder of field pName to false
-   set the borderWidth of field pName to 0
-   set the textSize of field pName to pSize
-   set the textColor of field pName to pColor
-   set the margins of field pName to 6
-end makeField
-
-on makeButton pName, pLabel, pX, pY, pW, pH
-   create button pName
-   set the label of button pName to pLabel
-   set the autoHilite of button pName to false
-   set the opaque of button pName to true
-   set the showBorder of button pName to false
-   set the threeD of button pName to false
-   set the textSize of button pName to 11
-   set the rect of button pName to pX, pY, pX + pW, pY + pH
-end makeButton
-
-on highlightScenes
-   local tScene
-   repeat for each item tScene in kScenes
-      if there is a button ("ui_scene_" & tScene) then
-         if tScene is gScene then
-            set the backgroundColor of button ("ui_scene_" & tScene) to "64,132,232"
-            set the textColor of button ("ui_scene_" & tScene) to "255,255,255"
-         else
-            set the backgroundColor of button ("ui_scene_" & tScene) to "44,48,58"
-            set the textColor of button ("ui_scene_" & tScene) to "196,200,212"
-         end if
-      end if
-   end repeat
-end highlightScenes
-
-on highlightTools
-   local tTool
-   repeat for each item tTool in kTools
-      if there is a button ("ui_tool_" & tTool) then
-         if tTool is gTool then
-            set the backgroundColor of button ("ui_tool_" & tTool) to "72,190,130"
-            set the textColor of button ("ui_tool_" & tTool) to "255,255,255"
-         else
-            set the backgroundColor of button ("ui_tool_" & tTool) to "44,48,58"
-            set the textColor of button ("ui_tool_" & tTool) to "196,200,212"
-         end if
-      end if
-   end repeat
-end highlightTools
-
-on setHelp
-   if there is a field "ui_help" then put sceneHelp(gScene) into field "ui_help"
-end setHelp
-
--- =====================================================================
--- Helpers
--- =====================================================================
-function shapePalette
-   return "92,150,222" & cr & "84,206,142" & cr & "232,182,92" & cr \
-         & "214,92,92" & cr & "206,124,206" & cr & "120,200,232"
-end shapePalette
-
-function accentShape pIndex
-   return line (((pIndex - 1) mod 6) + 1) of shapePalette()
-end accentShape
-
-function randomColor
-   return line (random(6)) of shapePalette()
-end randomColor
-
-function pyramidColor pRow, pRows
-   local tT, tRed, tGreen, tBlue
-   put pRow / (pRows - 1) into tT
-   put round(80 + tT * 150) into tRed
-   put round(120 + tT * 60) into tGreen
-   put round(220 - tT * 120) into tBlue
-   return tRed & "," & tGreen & "," & tBlue
-end pyramidColor
-
-function rnd pLow, pHigh
-   return pLow + random(max(1, pHigh - pLow))
-end rnd
-
-function sceneTitle pScene
-   switch pScene
-      case "playground"
-         return "PLAYGROUND — shapes, a see-saw, a motorised windmill & a pendulum"
-      case "pyramid"
-         return "PYRAMID — stacking (pick the Bomb tool and click the stack!)"
-      case "cradle"
-         return "NEWTON'S CRADLE — distance/hinge joints + restitution"
-      case "bridge"
-         return "BRIDGE — a chain of revolute joints you can load up"
-      case "vehicle"
-         return "VEHICLE — wheel joints, a motor & spring suspension"
-      case "lidar"
-         return "LIDAR — live ray casting that follows your mouse"
-   end switch
-   return pScene
-end sceneTitle
-
-function sceneHelp pScene
-   local tTail
-   put "   Drag any body with the mouse. Click empty space to add the selected shape (top-right). Click a tab to reset that scene." into tTail
-   switch pScene
-      case "vehicle"
-         return "Drive with the LEFT / RIGHT arrow keys to climb the bumps. Drag the car to mess with it." & tTail
-      case "lidar"
-         return "Move the mouse — rays fan out from the cursor and each stops at the nearest shape (b2kRayHit)."
-      case "pyramid"
-         return "Choose the Bomb tool and click beside the stack to scatter it with a blast." & tTail
-      case "cradle"
-         return "Momentum carries through the line of balls. Drag one aside and let go." & tTail
-   end switch
-   return "Bodies flash white the instant they touch (contact events)." & tTail
-end sceneHelp

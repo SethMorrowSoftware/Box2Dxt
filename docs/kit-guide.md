@@ -678,11 +678,16 @@ Feel lives in `b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`,
 read the character back with `b2kPlayerState()` (`idle`/`run`/`jump`/`fall`,
 plus `land` for exactly one frame on touch-down — perfect for dust and
 sound), `b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body
-or sprite? `b2kPlayerAttach` adopts it instead of making one. Springs and
-powerups call `b2kPlayerJump 700`. For cutscenes, hit poses, and knockback,
+or sprite? `b2kPlayerAttach` adopts it instead of making one. Springs,
+bounces and powerups call `b2kPlayerJump 700` — always use it for external
+boosts: a raw upward `b2kSetVelocity` on a grounded player is treated as
+solver rebound and snapped flat. For cutscenes, hit poses, and knockback,
 `b2kPlayerControl false` makes the controller *observe only* — your code
-owns velocity and animations until you hand control back. The platformer
-example's whole movement system is the four lines above.
+owns velocity and animations until you hand control back. Under the hood
+the controller guarantees consistent feel (sim-time reaction windows,
+dead landings, hysteresis against solver blips) — all of it asserted by
+the self-test harness. The platformer example's whole movement system is
+the four lines above.
 
 ### Sound effects (`b2kToneMake`, `b2kSound`)
 
@@ -757,6 +762,15 @@ put b2kSensorExitSensor(1)        -- ...and b2kSensorExitVisitor(1)
 > 0→1 and 1→0 transitions.
 
 ---
+
+> **One-shots vs. presence.** Enter/exit messages are perfect for one-shot
+> triggers — a coin is removed on first fire, a checkpoint sets a flag. But for
+> *presence* (a pressure plate that must stay pressed while anything sits on
+> it), don't count enters minus exits: counting drifts, and Box2D's sensor
+> begin/end around settling and sleeping bodies is exactly the edge a plate
+> lives on. Poll instead — `if b2kOverlap(x1,y1,x2,y2) is not empty` each frame
+> is stateless and still sees sleeping bodies. Add a short release debounce
+> (~200 ms) so a settling crate's micro-bounces don't flap your door.
 
 ## 14. Collision filtering
 
@@ -1150,6 +1164,7 @@ Optional arguments are in `[…]`.
 `b2kBindAction name,keys` · `b2kActionIsDown(name)` `[f]` ·
 `b2kActionPressed(name)` `[f]` · `b2kActionReleased(name)` `[f]` ·
 `b2kBindAxis name,negKeys,posKeys` · `b2kAxis(name)` `[f]` ·
+`b2kInputInject keys` · `b2kInputInjectOff` ·
 `b2kKeyCodes(key)` `[f]` · `b2kKeyName(code)` `[f]` · `b2kFrameMS()` `[f]`
 
 ### Sprites & sheets

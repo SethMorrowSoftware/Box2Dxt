@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| Status | Research spec — approved design pending an OXT runtime spike (Phase 0 of [plan.md](../plan.md)) |
+| Status | **Implemented and user-verified on Win32 (2026-06-11)** — all four modules + audio shipped; as-built deltas live in [plan.md](../plan.md)'s decision log; runtime behaviour is asserted by `examples/box2dxt-selftest.livecodescript` (~93 checks). macOS/Linux passes still open (risk R1). |
 | Scope | New `b2k…` modules in the Kit: **Input**, **Sprites**, **Player**, **Camera** |
 | Native impact | **None.** No C-shim or LCB changes; ABI stays at 4 |
 | Companion | [plan.md](../plan.md) — the phased implementation plan |

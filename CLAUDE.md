@@ -33,7 +33,11 @@ Box2D v3.1.0 (fetched by CMake)
   loop. This is what the examples and most users actually call.
 
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
-`kit-guide.md`, `kit-reference.md`). Drop-in prebuilt binaries are in `prebuilt/`.
+`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`). Drop-in prebuilt
+binaries are in `prebuilt/`. The **Game Kit** (input/sprites/player/camera/sound modules, plan.md
+Phases 0-5) is implemented and user-verified on Win32; `plan.md`'s decision log is the as-built
+record. Six examples: demo, contraption builder, spike (Phase-0 harness), **platformer showcase**,
+**micro-game** (the "copy this to start a game" file), and the **self-test harness** (below).
 
 ## The golden rule: the embedded-Kit sync
 
@@ -88,6 +92,15 @@ failure. Run it after **every** `.livecodescript` edit.
 **Do not claim runtime behavior you cannot observe** — say "verified statically; needs an OXT
 pass" and let the user confirm.
 
+**The self-test harness** (`examples/box2dxt-selftest.livecodescript`) is the runtime safety net:
+~93 deterministic assertions driving the real Kit (paused world + `b2kStepOnce` hand-stepping +
+`b2kInputInject` scripted keys). The workflow for every Kit change: (1) add/extend an assertion
+that captures the new behavior, (2) **bump `kStHarnessV`** (the report header prints it, so a
+stale paste identifies itself), (3) the user clicks RUN ALL TESTS and reports. It has caught five
+real Kit bugs that play-testing missed; score so far is 5 Kit bugs : 5 harness bugs — expect
+first-contact arithmetic errors in new tests and write them self-diagnosing (print what was
+observed, not just FAIL).
+
 ## LiveCodeScript / OXT gotchas (learned the hard way)
 
 OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns:
@@ -141,6 +154,20 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
    image type" — the parser rejects `audio` as the import type). Same for
    `videoClip`. The dictionary's prose spells them as two words; the
    tokens aren't.
+14. **Sensor/contact MESSAGES go to `b2kContactTarget`, not the frame
+   target.** Forgetting it = silent sensors (coins/doors dead, solids
+   fine) with zero errors — the micro-game shipped that way. Set BOTH
+   targets in every game; the harness asserts the message path now.
+15. **The chain ghost rule.** An open chain's first and last segments are
+   ghost anchors — N points collide as N−3 segments. Run every chain one
+   segment past the surface on each side, or its ends are intangible.
+16. **Gameplay verdicts use windows/polls, never instantaneous reads.**
+   Post-solve velocities read ~0 on clean impacts; sensor enter/exit
+   counting drifts around sleeping/settling bodies; states can be
+   outrun by event timing. Presence = poll `b2kOverlap` (sees sleeping
+   bodies); stomp-like verdicts = recent-state windows; one-shots =
+   sensor events. External player boosts go through `b2kPlayerJump`
+   (a raw upward set-velocity on a grounded player gets ground-snapped).
 
 ## The Contraption Builder (`examples/box2dxt-contraption-builder.livecodescript`)
 

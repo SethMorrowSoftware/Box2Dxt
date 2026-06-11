@@ -39,6 +39,138 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Documentation sweep + the expansion plan (the green-board close).**
+  With the self-test at v7/all-pass and both games user-verified, every
+  doc now states the as-built truth: the game-engine spec is marked
+  **implemented** (deltas live in plan.md's decision log), plan.md flips
+  Phase 3 / audio / scenes / the micro-game exit to *shipped and
+  user-verified*, the Kit reference documents the player's **feel
+  guarantees** (sim-time windows, dead landings, hysteresis,
+  ground-snap + the `b2kPlayerJump` rule) and `b2kSetVelocity`'s
+  wake-on-write, README points new platforms at the self-test first,
+  and CLAUDE.md codifies the campaign's doctrine as gotchas #14–16
+  (contact-target wiring, the chain ghost rule, windows/polls over
+  instantaneous reads) plus the harness workflow (assert + bump
+  `kStHarnessV` with every Kit change). New: **`docs/expansion-prep.md`**
+  — the intake plan for the upcoming asset dump and the content phase:
+  delivery format, the measure-before-placing rule, a player-actions
+  roadmap (drop-through, wall-jump, dash, double-jump, platform carry —
+  each with tuning keys and a self-test sketch), an enemy archetype
+  roadmap mapped to the known Kenney frames, the rules of engagement,
+  and a six-wave order ending in builder cross-pollination.
+- **The harness doubles its reach (engine-surprise insurance).** Six new
+  suites, ~40 new assertions, aimed squarely at "the LC engine OXT
+  inherited is full of surprises": **engine contracts** (fractional
+  `mod`, byte packing, base64, temp-file I/O, imageData/alphaData
+  strides, `word 2 to -1` chunk semantics, `wholeMatches lineOffset`,
+  long-id re-resolution after a relayer, custom-property boolean
+  round-trips, `playLoudness` readback — when an engine update or new
+  platform breaks one, the report names it in plain text);
+  **materials + joints** (a 0.8-restitution ball measurably rebounds,
+  density drives mass, a motorised hinge spins, a rope holds a dangling
+  ball at length); **filtering** (no-collide pairs pass through; a
+  ghost-layer ball ignores a solid-layer platform — regression for the
+  named-layers path that once always threw); **queries** (controlAt /
+  contains, overlapCircle, multi-ray nearest-first); **sheet extras**
+  (per-sheet scaling sizes sprites, margin/spacing grids count
+  correctly, frame-size-0 + `b2kSheetAddFrame` manual regions slice,
+  flips swap to a real mirrored frame image and back); **player slopes
+  + limits** (climbs a 22° chain ramp without wall-stick — also guards
+  the ground-snap's slope exemption — maxFall clamps a long dive, and
+  the kill floor never takes the player). The micro-game's temporary
+  `ev` HUD diagnostic is retired now that it plays clean.
+- **The micro-game's actual bug: it never set `b2kContactTarget`.**
+  Sensor and contact *messages* dispatch to the contact target; the
+  micro-game only set the frame target, so every coin/spike/door event
+  fired into the void on every build — solids, player, camera and
+  visuals all worked, which made it look like "collision" breakage.
+  One line fixes it. The self-test had a matching blind spot — its
+  sensor test used the polling accessors, which need no target — so the
+  events test now also asserts the **message path** delivers
+  (`on b2kSensorEnter` / `on b2kContact` received exactly once /
+  at-least-once via a registered contact target).
+- **Self-test round 4: ground-snap + wake-on-SetVelocity.** The
+  instrumented land test measured the truth: after a hard landing the
+  contact solver's push-out launches a real ~7px hop (24 frames of
+  airtime, down-leg at ~61 px/s) — too long for hysteresis to mask, and
+  with restitution already zero. The controller now **ground-snaps**:
+  grounded on *flat* ground (probe normal |x| < 0.1 — slopes exempt,
+  uphill running is real upward motion), drifting upward, without
+  having jumped ⇒ upward velocity zeroed at the source. External
+  boosts must use `b2kPlayerJump` (the platformer's stomp bounce now
+  does — the jump flag exempts it from the snap). Separately,
+  **`b2kSetVelocity` now wakes the body**: raw SetVelocity does not
+  (which is why `b2kPush` always called SetAwake), so a parked,
+  *sleeping* kinematic gate given one velocity write stayed frozen —
+  a gate that randomly refuses to open read as "the plate is flaky
+  again". The platformer's stomp gate also gained a recent-airborne
+  window (250 ms) so a slime sinking under the landing hero can't
+  outrun the state reads.
+- **Self-test round 3: landing hysteresis.** Zeroing restitution wasn't
+  the whole story — the suite still counted two land ticks per jump:
+  the contact solver's push-out can blip the 4px ground probe off for a
+  tick around an impact, which the state machine read as a micro-fall
+  and a second landing. The controller now has the genre-standard cure:
+  a touchdown counts as `land` only after a real airborne stretch (3+
+  ticks), and a single ungrounded blip doesn't even show as airborne
+  (no one-frame jump-anim flicker on rough ground or ramp seams) —
+  unless it's the controller's own jump, which still reads `jump` on
+  its launch frame. `b2kPlayerOnGround()` stays raw and truthful; only
+  the state classification gained hysteresis.
+- **Self-test round 2: the player landed springy.** The harness's
+  "land fired exactly once (got 2)" caught that controller-created
+  capsules kept `b2kAddCapsule`'s default **0.2 restitution** — every
+  landing rebounded ~13px (a second airborne arc: double land ticks,
+  double land sounds, a faint trampoline feel). `b2kPlayerAttach` now
+  zeroes bounce on bodies it creates; explicit bounces (the slime
+  stomp) are unaffected. The camera test's final assert also stopped
+  using a pre-`b2kCamOff` long id (group paths go stale on ungroup —
+  the test now re-resolves by name).
+- **First self-test run: two real Kit bugs found and fixed.** The
+  harness's first hardware run (35 passes) exposed: (1) **the player's
+  coyote/buffer timers ran on wall-clock time** — on a slow machine the
+  90/110 ms windows silently shrink to fewer frames than designed; they
+  now run on a **sim-time clock** (summed frame ms — identical under
+  the live loop, frame-coherent everywhere, deterministic under
+  hand-stepping); (2) **`b2kSpriteAnim`/`b2kSpriteFrame`/
+  `b2kSpriteFlipped` threw on a removed control** instead of honouring
+  the Kit's stale-ref tolerance — they now return empty/false. Three
+  failures were the harness's own arithmetic (jump arcs at scale 40
+  take ~138 frames; tests now run full arcs, settle between phases, and
+  isolate each test so one throw cannot abort the suite).
+- **The Kit self-test harness** —
+  `examples/box2dxt-selftest.livecodescript`: one click in OXT, ~30
+  seconds, a PASS/FAIL report. There is no headless OXT, so this stack
+  is the project's runtime safety net: it drives the REAL Kit
+  deterministically (worlds started paused and advanced by
+  `b2kStepOnce`; the keyboard replaced by the new
+  **`b2kInputInject`**/`b2kInputInjectOff` — scripted keys with exact
+  frame timing, also useful for replays) and asserts the behaviours the
+  games depend on. Every test encodes a lesson learned on real
+  hardware: fixed-step determinism, frame-exact events (one enter, one
+  exit, no duplicates at rest), the chain ghost rule, one-way chains,
+  presence polling incl. **sleeping** bodies, `b2kKillFloor` +
+  `b2kFell`, the player feel contract (run accel, grounded probe,
+  tap-vs-held jump, the **coyote** and **buffer** windows, land firing
+  exactly once), input edges, sprites, tones, camera adopt/goto/off,
+  and teardown hygiene. Run it after any Kit change and on every new
+  platform before trusting the games. The micro-game's level build is
+  now also **error-proof**: the whole build runs guarded so a mid-build
+  error can never leave the screen locked — it lands, named, in the HUD
+  for verbatim reporting.
+- **The pressure plate is polled, not counted.** Exact events unmasked
+  what enter/exit *counting* had been hiding: Box2D's sensor begin/end
+  around settling and sleeping bodies is precisely the edge a pressure
+  plate lives on (the old duplicate-enter bug had been inflating the
+  count, accidentally holding the gate open). The plate is now a pure
+  graphic whose pressed state is **polled** with `b2kOverlap` each
+  frame — stateless, so it cannot drift, and the broadphase includes
+  sleeping bodies, so a crate that settles and sleeps keeps holding it —
+  plus a 200 ms release debounce so micro-bounces don't flap the gate.
+  Doctrine added to the sensor docs: **enter/exit for one-shots; polling
+  for presence.** With this, no gameplay state in the demo depends on
+  balanced event counting: everything is one-shot, guarded, geometric,
+  or polled.
 - **Frame-exact physics events (the "flaky collisions" root cause) +
   `b2kKillFloor`.** Box2D only exposes the **last step's** begin/end
   contact and sensor events, but a frame can run two fixed steps (under
