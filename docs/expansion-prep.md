@@ -175,10 +175,11 @@ to Kit API (`b2kFoe…`).
    OXT feedback folded in): springboard + sky coin, the bonk row
    (?-boxes pay coins, bricks shatter into kill-floor-swept debris),
    the plate wears pressed/idle button art, a stand-to-flip saw power
-   lever, key + lock + door gating a stone-biome finale (opens on
-   approach via `b2kDisable`, flush against the step, crown coin inside
-   the open doorway), thwomps as chained weights — static at rest,
-   **not player-movable** — and the crate wearing the empty-box face.
+   lever, key + lock + door on the flat before the stone steps (opens
+   on approach; the body is disabled AND parked off-world; crown coin
+   inside the open doorway), thwomps as chained weights — static at
+   rest, **not player-movable** — and the crate wearing the empty-box
+   face.
    All POLLED geometry + windows (no static-contact events); **zero Kit
    changes, so no harness bump**. Art note: Wave 1 ships in the
    platformer's native 64px family (it has the full switch/spring/

@@ -39,10 +39,10 @@
 --           saw + SWEEPING saw - THWOMP ALLEY (chained weights: ride
 --           the second one's head to the top coin, and GRAB THE KEY
 --           floating between them - the weights themselves cannot be
---           dragged or shoved) - the LOCKED DOOR into the STONE finale
---           (its crown coin sits above the doorway: jump up INSIDE
---           once it opens) - step platforms - the FLAG (all 15 coins
---           to win).
+--           dragged or shoved) - the LOCKED DOOR on the flat run-up to
+--           the STONE steps (it opens on approach with the key; its
+--           crown coin sits above the doorway: jump up INSIDE the open
+--           door) - step platforms - the FLAG (all 15 coins to win).
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -87,11 +87,13 @@
 --      plate; STANDING at the lever (not running past) powers the
 --      sweeping saw down (ghosted, spin stopped, harmless) and a second
 --      stand powers it back up; the key rides the hero's shoulder, the
---      locked door opens on approach (no pressing-in needed), STAYS
---      open through respawns, and its now-hollow doorway hides the
---      crown coin (jump up inside it); the crate wears the empty-box
---      face but still drags; spike tips show in the pit; the steps
---      past the door are STONE biome.
+--      locked door opens on approach (no pressing-in needed; the body
+--      is disabled AND parked far off-world, and the doorway exits
+--      onto FLAT ground - walk straight through), STAYS open through
+--      respawns, and the hollow doorway hides the crown coin (jump up
+--      inside it); the crate wears the empty-box face but still drags;
+--      spike tips show in the pit; the steps past the door are STONE
+--      biome.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -474,8 +476,8 @@ command pfStartGame
       end repeat
       repeat with tX = 2496 to 4544 step 64
          if tX >= 4224 then
-            -- the finale plays in STONE: the biome seam sits exactly at
-            -- the locked door (same tile grammar, different skin)
+            -- the finale plays in STONE: the steps rise just past the
+            -- locked door (same tile grammar, different skin)
             pfTile "terrain_stone_block_top", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
@@ -702,7 +704,7 @@ command pfStartGame
    pfMakeCoin 2400, 440     -- mid-air over the spike pit: grab it mid-jump
    pfMakeCoin 3400, 448     -- above the sweeping saw: time the hop
    pfMakeCoin 3800, 64      -- ride the second thwomp's head to the top
-   pfMakeCoin 4192, 340     -- the door's crown: jump up INSIDE the open doorway
+   pfMakeCoin 4032, 340     -- the door's crown: jump up INSIDE the open doorway
    pfMakeCoin 1130, 500     -- in the meadow slime's beat (past the bridge)
    pfMakeCoin 4356, 448     -- over the first step (its slime objects)
    pfMakeCoin 4430, 392     -- over the top step, by the flag
@@ -778,8 +780,7 @@ command pfStartGame
    pfMakeSlime 1, "spike", 880, 760, 1000, 576
    -- slime 2 patrols the bridge-mound gap (it used to guard the door
    -- approach, where its reach overlapped the unlock threshold - a hurt
-   -- at the exact moment of arrival read as "the door never opens");
-   -- slime 3's patrol stays clear of the door column at 4160-4224
+   -- at the exact moment of arrival read as "the door never opens")
    pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
    pfMakeSlime 3, "normal", 4310, 4260, 4396, 512
    -- thwomp alley: dodge the first; the second is the ELEVATOR - bait its
@@ -1095,12 +1096,14 @@ command pfMakeLever pCX
 end pfMakeLever
 
 -- The key (floating in thwomp alley at walking height, so crossing the
--- alley collects it) and the locked door into the stone finale: a lock
--- tile over a two-tile door, one solid host under all three, the column
--- FLUSH against the first step (no dead-end pocket behind it - walking
--- through the open doorway puts you at the step face). The key is a
--- one-shot SENSOR (event doctrine); the unlock is a proximity POLL; the
--- crown coin above the doorway is grabbed by jumping up INSIDE it.
+-- alley collects it) and the locked door: a lock tile over a two-tile
+-- door, one solid host under all three, standing on the FLAT run-up
+-- 160px before the stone steps - so the open doorway exits onto plain
+-- walkable ground and the step jump happens later, in the open (a
+-- column flush against the step made the open door a one-tile jump
+-- shaft that read as blocked). The key is a one-shot SENSOR (event
+-- doctrine); the unlock is a proximity POLL; the crown coin above the
+-- doorway is grabbed by jumping up INSIDE the open door.
 command pfMakeKeyDoor
    local tRef
    b2kSpriteNew "tiles", "key_yellow", 3700, 500
@@ -1111,14 +1114,14 @@ command pfMakeKeyDoor
    end if
    create graphic "pf_doorHost"
    set the style of it to "rectangle"
-   set the rect of it to 4160, 384, 4224, 576
+   set the rect of it to 4000, 384, 4064, 576
    set the visible of it to false
    b2kAddStatic the long id of graphic "pf_doorHost"
-   b2kSpriteNew "tiles", "lock_yellow", 4192, 416
+   b2kSpriteNew "tiles", "lock_yellow", 4032, 416
    put the result into gLockSpr
-   b2kSpriteNew "tiles", "door_closed_top", 4192, 480
+   b2kSpriteNew "tiles", "door_closed_top", 4032, 480
    put the result into gDoorSprT
-   b2kSpriteNew "tiles", "door_closed", 4192, 544
+   b2kSpriteNew "tiles", "door_closed", 4032, 544
    put the result into gDoorSprB
 end pfMakeKeyDoor
 
@@ -1573,17 +1576,19 @@ end pfTickLever
 -- The locked door: holding the key and approaching the door swings it
 -- open FOR GOOD (one-shot world state - respawns walk back through).
 -- The trigger fires ~20px before the hero physically touches the face,
--- so no pressing-into-the-door is ever needed. The host body is
--- DISABLED, not removed - no control deletion inside the frame loop,
--- nothing to throw, nothing to dangle - and the doorway goes hollow:
--- jump up inside it for the crown coin.
+-- so no pressing-into-the-door is ever needed. Clearing the body fires
+-- BOTH barrels - b2kDisable (the builder's pick-under path) AND
+-- b2kMoveTo parking it 2000px above the world (the thwomp re-arm
+-- path) - so the doorway goes hollow even if one path misbehaves on a
+-- given engine build; nothing is deleted inside the frame loop. Then
+-- jump up inside the doorway for the crown coin.
 command pfTickDoor
    local tPos
    if gDoorOpen is true or gHasKey is not true then exit pfTickDoor
    if gDoorSprB is empty then exit pfTickDoor
    set the itemDelimiter to comma
    put b2kPosition(gHero) into tPos
-   if abs(item 1 of tPos - 4192) < 80 and item 2 of tPos > 360 then
+   if abs(item 1 of tPos - 4032) < 80 and item 2 of tPos > 360 then
       put true into gDoorOpen
       put false into gHasKey
       b2kSound "unlock"
@@ -1594,7 +1599,10 @@ command pfTickDoor
       put empty into gKeySpr
       if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
       b2kSpriteSetFrame gDoorSprB, "door_open"
-      if there is a graphic "pf_doorHost" then b2kDisable the long id of graphic "pf_doorHost"
+      if there is a graphic "pf_doorHost" then
+         b2kDisable the long id of graphic "pf_doorHost"
+         b2kMoveTo the long id of graphic "pf_doorHost", 4032, -2000
+      end if
    end if
 end pfTickDoor
 

@@ -70,14 +70,18 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   - **Key + locked door**: a key floats in thwomp alley (one-shot
     sensor pickup, per doctrine), then rides the hero's shoulder as a
     bound sprite and shows `[KEY]` on the HUD; a lock + two-tile door
-    column — flush against the first finale step, so the open doorway
-    leads somewhere — opens FOR GOOD on approach (the poll fires ~20px
-    before face contact; the host body is `b2kDisable`d, never deleted
-    mid-loop) and respawns walk back through. The hollow doorway hides
-    its **crown coin**: jump up INSIDE the open door. (First OXT round:
-    the original beat parked a slime right on the unlock threshold —
-    arriving with the key got you hurt at the exact trigger line; the
-    slime now patrols the bridge–mound gap instead.)
+    column on the **flat run-up before the stone steps** opens FOR
+    GOOD on approach (the poll fires ~20px before face contact) and
+    respawns walk back through. The unlock clears the body two
+    independent, already-proven ways — `b2kDisable` (the builder's
+    pick-under path) plus `b2kMoveTo` parking it 2000px above the
+    world (the thwomp re-arm path); nothing is deleted mid-loop — and
+    the open doorway exits onto flat ground, so walking through reads
+    as walking through. It hides its **crown coin**: jump up INSIDE
+    the open door. (OXT rounds: a slime first guarded the unlock
+    threshold — relocated to the bridge–mound gap; then a column flush
+    against the step made the open door a one-tile jump shaft that
+    read as blocked — moved onto the flat.)
   - **Re-skinned, sprite-only**: thwomps are now chained weights
     (`weight` + `chain` tiles; the chain stays at the perch while the
     weight falls) — and a weight on a chain is **not the player's to
