@@ -36,16 +36,19 @@
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
 --      still fires ~90ms after running off a ledge (coyote); pressing
 --      jump just before touchdown fires on landing (buffer).
---   2. The mound's ramp art reads as one hill (mirrored Kenney long
---      ramps + dirt beneath) and walks up/down without sliding.
+--   2. SOLID GROUND EVERYWHERE (the chain ghost-rule fix): the mound
+--      walks up the left ramp, across, down the right with no
+--      fall-through at any edge; the bridge deck and BOTH clouds are
+--      solid out to their visible ends; the art reads as one hill.
 --   3. Every coin is collectable: bridge deck, plateau, high cloud, the
 --      pit jump, inside the gateway, over the sweeping saw, thwomp-ride
 --      (3800), thwomp-DRAG (3980), slime fields, both steps, freebie.
---   4. The spike slime hurts from EVERY side (stomping it = hurt); the
---      normal slimes squash. The sweeping saw hurts without a sensor.
+--   4. STOMPS SQUASH again (judged by the controller's land/fall state,
+--      not post-impact velocity): land on a normal slime = squash +
+--      bounce; its sides hurt; the SPIKE slime hurts from every side.
 --   5. Thwomps: underside kills while falling/rising; resting head is a
---      platform; a resting thwomp DRAGS with the mouse and rises from
---      where you parked it (then snaps home once it re-arms).
+--      platform; a resting thwomp DRAGS with the mouse, rises from
+--      where you parked it and RE-ARMS THERE - no teleport home.
 --   6. HUD "lands" rises by exactly 1 per touchdown; stand still 2+ min
 --      (never ASLEEP); hurt/win cut control then respawn restores it.
 --   7. Camera follows smoothly over the full 4608px; build time after
@@ -66,7 +69,7 @@ local gBuilding, gLands, gPrevState
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
-local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT, gBlockHomeX
+local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
 local gMovHurtW, gMovHurtH, gMovFlip
 local gCheckSpr, gCheckpointOn, gRespawnX, gRespawnY
@@ -227,10 +230,12 @@ function pfLoadSheets
    return true
 end pfLoadSheets
 
--- Every sound is SYNTHESIZED (b2kToneMake): zero asset files, rebuilt in
--- ~a quarter second on each reset. Short and plucky on purpose - the
+-- Every sound is SYNTHESIZED (b2kToneMake): zero asset files. Sounds
+-- survive b2kTeardown (Kit policy), so after the first build a reset
+-- skips the synthesis entirely. Short and plucky on purpose - the
 -- engine plays one clip at a time, so a new cue cuts the previous.
 command pfMakeSounds
+   if b2kSoundIsLoaded("win") then exit pfMakeSounds   -- already built
    b2kToneMake "jump", "392,587", 40, 55
    b2kToneMake "coin", "1319,1760", 36, 45
    b2kToneMake "stomp", "165,110", 40, 70
@@ -302,7 +307,6 @@ command pfStartGame
    put empty into gBlockSpr
    put empty into gBlockState
    put empty into gBlockT
-   put empty into gBlockHomeX
    put 0 into gMovN
    put empty into gMovSpr
    put empty into gMovX
@@ -409,7 +413,10 @@ command pfStartGame
    set the uPfHazardFlag of tRef to true
    b2kAddSensor tRef, "box"
    -- ===== the one-way bridge (chain, solid side up; coin on the deck) ====
-   b2kSmoothGround "1008,440" & cr & "944,440" & cr & "816,440" & cr & "752,440"
+   -- GHOST RULE: an open chain's outer two points anchor, they don't
+   -- collide -- so every chain here runs one tile PAST its art/surface
+   -- on each side. The deck is 752-1008; the chain reaches 688-1072.
+   b2kSmoothGround "1072,440" & cr & "1008,440" & cr & "752,440" & cr & "688,440"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bridge") then
       repeat with tX = 752 to 944 step 64
          pfTile "bridge", tX, 424
@@ -425,10 +432,13 @@ command pfStartGame
    -- ===== the slope mound (walkable 26.6-degree ramps) ====
    -- one chain, top surface listed right-to-left like the bridges; the
    -- player's maxSlopeDeg (50) decides it counts as ground, not wall.
+   -- Six points: the outer two are the chain's non-colliding ghost
+   -- anchors (flat tails on the ground the slab already covers), so all
+   -- three REAL segments -- down-ramp, plateau, up-ramp -- are solid.
    -- Kenney's grass ramps DESCEND left-to-right as drawn (ramp_long_a is
    -- the upper half of the diagonal, ramp_long_b the lower half), so the
    -- ascent side shows them MIRRORED; the plateau is plain block_top.
-   b2kSmoothGround "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576"
+   b2kSmoothGround "1696,576" & cr & "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576" & cr & "1184,576"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_ramp_long_a") then
       pfTile "terrain_grass_ramp_long_b", 1248, 512, true
       pfTile "terrain_grass_ramp_long_a", 1312, 512, true
@@ -445,8 +455,10 @@ command pfStartGame
       b2kCamAdopt the long id of graphic "pf_mound"
    end if
    -- ===== the cloud steps (one-way chains; the high one holds a coin) ====
-   b2kSmoothGround "1888,448" & cr & "1824,448" & cr & "1760,448" & cr & "1696,448"
-   b2kSmoothGround "2176,320" & cr & "2112,320" & cr & "2048,320" & cr & "1984,320"
+   -- ghost-padded one tile beyond the cloud art on each side, so the
+   -- WHOLE cloud is solid (art: 1696-1888 and 1984-2176)
+   b2kSmoothGround "1952,448" & cr & "1888,448" & cr & "1696,448" & cr & "1632,448"
+   b2kSmoothGround "2240,320" & cr & "2176,320" & cr & "1984,320" & cr & "1920,320"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
       pfTile "terrain_grass_cloud_left", 1696, 448
       pfTile "terrain_grass_cloud_middle", 1760, 448
@@ -815,8 +827,9 @@ end pfMakeSlime
 -- A thwomp (falling-block trap) perched at pX. Walking beneath wakes it
 -- (static -> dynamic) and it slams down. Only its UNDERSIDE is lethal -
 -- the head is a platform: hop on while it rests, ride the slow kinematic
--- rise back to its perch. While it rests it is DYNAMIC, so the mouse can
--- DRAG it - repositioning your elevator is part of the puzzle.
+-- rise back UP to perch height. While it rests it is DYNAMIC, so the
+-- mouse can DRAG it - and it re-arms WHEREVER it rose, so repositioning
+-- your elevator sticks.
 command pfMakeThwomp pIdx, pX
    local tName, tBody
    put "pf_blockBody" & pIdx into tName
@@ -838,7 +851,6 @@ command pfMakeThwomp pIdx, pX
    if the visible of graphic tName is true then b2kCamAdopt tBody
    if pIdx > gBlockN then put pIdx into gBlockN
    put tBody into gBlockB[pIdx]
-   put pX into gBlockHomeX[pIdx]
    put "armed" into gBlockState[pIdx]
    put 0 into gBlockT[pIdx]
 end pfMakeThwomp
@@ -1061,10 +1073,12 @@ command pfTickThwomps
          case "rising"
             pfBlockUndersideCheck tHX, tHY, tBX, tBY
             if tBY <= 202 then
+               -- re-arm WHERE IT IS: a dragged thwomp keeps its new post
+               -- (the old teleport-home read as vanishing + reappearing)
                put "armed" into gBlockState[i]
                b2kSetStatic tBody
-               b2kMoveTo tBody, gBlockHomeX[i], 200
-               b2kSpriteMoveTo tBody, gBlockHomeX[i], 200   -- statics are not body-synced
+               b2kMoveTo tBody, tBX, 200
+               b2kSpriteMoveTo tBody, tBX, 200   -- statics are not body-synced
             end if
             break
       end switch
@@ -1074,19 +1088,20 @@ end pfTickThwomps
 -- Bodiless patrollers (bee, fly, the sweeping saw): sine paths, facing,
 -- and proximity hurt - pure geometry, no physics.
 command pfTickMovers
-   local i, tHX, tHY, tMX, tMY, tPos
+   local i, tHX, tHY, tMX, tMY, tPos, tMS
    if gMovN is 0 or gMovN is empty then exit pfTickMovers
    set the itemDelimiter to comma
+   put the milliseconds into tMS   -- one clock read for the whole pass
    put b2kPosition(gHero) into tPos
    put item 1 of tPos into tHX
    put item 2 of tPos into tHY
    repeat with i = 1 to gMovN
       if gMovSpr[i] is empty then next repeat
-      put gMovX[i] + gMovAX[i] * sin(the milliseconds / gMovPX[i]) into tMX
-      put gMovY[i] + gMovAY[i] * sin(the milliseconds / gMovPY[i]) into tMY
+      put gMovX[i] + gMovAX[i] * sin(tMS / gMovPX[i]) into tMX
+      put gMovY[i] + gMovAY[i] * sin(tMS / gMovPY[i]) into tMY
       b2kSpriteMoveTo gMovSpr[i], tMX, tMY
       if gMovFlip[i] is true and gMovAX[i] > 0 then
-         b2kSpriteFlipH gMovSpr[i], (cos(the milliseconds / gMovPX[i]) < 0)
+         b2kSpriteFlipH gMovSpr[i], (cos(tMS / gMovPX[i]) < 0)
       end if
       if gMovHurtW[i] > 0 and gHurtLock is not true then
          if abs(tHX - tMX) < gMovHurtW[i] and abs(tHY - tMY) < gMovHurtH[i] then pfHurt
@@ -1164,8 +1179,14 @@ end b2kSensorExit
 
 -- Hero vs slime: falling onto a NORMAL one squashes it (and bounces you);
 -- anything else - sides, undersides, or any touch of a SPIKE slime - hurts.
+-- "Falling onto" is judged by the PLAYER CONTROLLER's state, not by the
+-- hero's velocity: contacts dispatch AFTER the physics step, when the
+-- solver has already absorbed the impact (velocity reads near zero on a
+-- clean stomp). At dispatch time b2kPlayerState() is this frame's state
+-- and gPrevState is last frame's - a stomp shows up as land/fall in one
+-- of them. The raw velocity stays as a belt-and-braces fallback.
 on b2kContact pA, pB
-   local i, tWhich, tFoe
+   local i, tWhich, tFoe, tState, tStomp
    if gHurtLock is true then exit b2kContact
    put empty into tWhich
    repeat with i = 1 to gSlimeN
@@ -1178,8 +1199,11 @@ on b2kContact pA, pB
    if tWhich is empty then exit b2kContact
    put gSlimeB[tWhich] into tFoe
    set the itemDelimiter to comma
-   if gSlimeKind[tWhich] is not "spike" and \
-         (item 2 of b2kVelocity(gHero)) > 40 and \
+   put b2kPlayerState() into tState
+   put (tState is "land" or tState is "fall" \
+         or gPrevState is "land" or gPrevState is "fall" \
+         or (item 2 of b2kVelocity(gHero)) > 40) into tStomp
+   if gSlimeKind[tWhich] is not "spike" and tStomp and \
          (item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(tFoe)) - 16 then
       pfSquashSlime tWhich
       b2kSetVelocity gHero, item 1 of b2kVelocity(gHero), -260
@@ -1557,7 +1581,9 @@ command b2kTeardown
    put empty into sWorld
    b2kPlayerForget true   -- full: a teardown wipes the tuning too
    b2kSheetsWipe   -- sprites first: their stored long ids include the group
-   b2kSoundsWipe   -- sounds are assets like sheets (the mute survives)
+   -- sounds deliberately SURVIVE teardown: clips are tiny (KBs) and
+   -- deterministic, and re-synthesis cost a fifth of a second on every
+   -- reset. b2kSoundsWipe purges them when you really want them gone.
    b2kCamOff       -- ...then dissolve the viewport (survivors go to the card)
    b2kResetTables
    put 0 into sDragJoint
@@ -2980,6 +3006,11 @@ end b2kSetCollisionGroup
 -- line). Unlike joined box/segment edges it has no inner corners for fast bodies
 -- to catch on. Needs >= 4 points; pLoop true closes it. Invisible (draw a matching
 -- graphic). Returns a chain handle (b2DestroyChain to remove).
+-- THE GHOST RULE (open chains): Box2D uses the FIRST and LAST segments as
+-- ghost anchors only -- N points collide as N-3 segments. Run the chain one
+-- segment PAST the surface you need on each side (over solid ground the
+-- ghost tails can simply continue flat). A chain whose endpoints sit AT the
+-- platform edges has non-solid ends -- bodies fall straight through them.
 command b2kChain pPoints, pLoop
    local tBody, p
    if sWorld is empty then return 0
@@ -2993,7 +3024,8 @@ command b2kChain pPoints, pLoop
 end b2kChain
 
 command b2kSmoothGround pPoints
-   -- statement call + the result: OXT cannot call commands function-style
+   -- statement call + the result: OXT cannot call commands function-style.
+   -- Mind b2kChain's GHOST RULE: the outer two points anchor, not collide.
    b2kChain pPoints, false
    return the result
 end b2kSmoothGround
@@ -4109,6 +4141,10 @@ command b2kSpritesTick
    set the itemDelimiter to comma
    repeat for each line tRef in sSprRefs
       if tRef is empty then next repeat
+      -- inert fast path: not bound, nothing playing -> no service at all.
+      -- Tile-heavy scenes are mostly inert sprites; skipping them here
+      -- (before the try/catch setup) is the tick's main cost saving.
+      if sSprBind[tRef] is empty and sSprAnim[tRef] is empty then next repeat
       try
          if sSprBind[tRef] is not empty then
             put the loc of sSprBind[tRef] into tLoc
@@ -4912,12 +4948,14 @@ end b2kCamApply
 -- a clip in pure script (8-bit mono WAV at 22050 Hz, square or sine, a
 -- comma list of note frequencies, per-note decay so notes never click),
 -- so a self-contained example ships sound with ZERO asset files. Sounds
--- are assets like sheets: b2kTeardown wipes them (the sweep also catches
--- clips a dead session left behind; names are stable, so re-making
--- replaces rather than accumulates). Failures degrade to silence, never
--- to errors: the first play that throws trips a dead-flag and
--- b2kSoundStatus() says why. The mute is a user preference and survives
--- teardown. There is no per-frame tick -- audio is purely event-driven.
+-- are assets that SURVIVE b2kTeardown -- clips are tiny and resets must
+-- stay snappy; names are stable, so re-making replaces rather than
+-- accumulates, and b2kSoundsWipe purges everything (it also sweeps
+-- b2ksnd_ clips a dead session left in the stack). Failures degrade to
+-- silence, never to errors: the first play that throws trips a
+-- dead-flag and b2kSoundStatus() says why. The mute is a user
+-- preference. There is no per-frame tick -- audio is purely
+-- event-driven.
 
 -- Import a WAV/AIFF/AU file as a named sound (replaces any same name).
 command b2kSoundLoad pName, pPath

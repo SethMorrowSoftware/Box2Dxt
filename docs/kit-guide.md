@@ -803,9 +803,11 @@ corners to snag. Chains are invisible; draw a matching graphic over them.
 
 ```livecode
 local tPts
-put "40,400" & cr & "200,360" & cr & "360,420" & cr & "560,380" into tPts
+-- six points = four segments, of which the OUTER TWO are ghost anchors
+-- (see below): the solid ground here runs from 520,360 back to 80,400
+put "600,380" & cr & "520,360" & cr & "360,420" & cr & "200,360" & cr & "80,400" & cr & "20,400" into tPts
 b2kChain tPts               -- an open smooth ground line
-b2kChain tPts, true         -- pass true to close it into a loop
+b2kChain tPts, true         -- pass true to close it into a loop (all solid)
 b2kSmoothGround tPts        -- alias for an open chain
 ```
 
@@ -818,8 +820,16 @@ b2kAddChain the long id of graphic "Hill", the points of graphic "Hill", true
 
 > **Winding matters.** A chain's *solid side is to the right of the direction the
 > points travel.* For ground you stand on, list the top surface **right-to-left**
-> so the solid side faces up. (If bodies fall through your terrain, reverse the
-> point order.)
+> so the solid side faces up. (If bodies fall through your terrain *everywhere*,
+> reverse the point order.)
+
+> **The ghost rule.** An **open** chain's first and last segments are Box2D's
+> *ghost anchors* — they smooth the junctions but **don't collide** (N points ⇒
+> N−3 solid segments). Always run the chain **one segment past** the surface you
+> need on each side; over solid ground the tails can just continue flat. If
+> bodies fall through your platform only *near its ends*, this is why — the
+> chain's endpoints are sitting at the platform's edges. Closed loops
+> (`pLoop` true) have no ends, so every segment is solid.
 
 ---
 

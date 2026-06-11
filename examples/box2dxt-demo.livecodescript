@@ -253,7 +253,9 @@ command b2kTeardown
    put empty into sWorld
    b2kPlayerForget true   -- full: a teardown wipes the tuning too
    b2kSheetsWipe   -- sprites first: their stored long ids include the group
-   b2kSoundsWipe   -- sounds are assets like sheets (the mute survives)
+   -- sounds deliberately SURVIVE teardown: clips are tiny (KBs) and
+   -- deterministic, and re-synthesis cost a fifth of a second on every
+   -- reset. b2kSoundsWipe purges them when you really want them gone.
    b2kCamOff       -- ...then dissolve the viewport (survivors go to the card)
    b2kResetTables
    put 0 into sDragJoint
@@ -1676,6 +1678,11 @@ end b2kSetCollisionGroup
 -- line). Unlike joined box/segment edges it has no inner corners for fast bodies
 -- to catch on. Needs >= 4 points; pLoop true closes it. Invisible (draw a matching
 -- graphic). Returns a chain handle (b2DestroyChain to remove).
+-- THE GHOST RULE (open chains): Box2D uses the FIRST and LAST segments as
+-- ghost anchors only -- N points collide as N-3 segments. Run the chain one
+-- segment PAST the surface you need on each side (over solid ground the
+-- ghost tails can simply continue flat). A chain whose endpoints sit AT the
+-- platform edges has non-solid ends -- bodies fall straight through them.
 command b2kChain pPoints, pLoop
    local tBody, p
    if sWorld is empty then return 0
@@ -1689,7 +1696,8 @@ command b2kChain pPoints, pLoop
 end b2kChain
 
 command b2kSmoothGround pPoints
-   -- statement call + the result: OXT cannot call commands function-style
+   -- statement call + the result: OXT cannot call commands function-style.
+   -- Mind b2kChain's GHOST RULE: the outer two points anchor, not collide.
    b2kChain pPoints, false
    return the result
 end b2kSmoothGround
@@ -2805,6 +2813,10 @@ command b2kSpritesTick
    set the itemDelimiter to comma
    repeat for each line tRef in sSprRefs
       if tRef is empty then next repeat
+      -- inert fast path: not bound, nothing playing -> no service at all.
+      -- Tile-heavy scenes are mostly inert sprites; skipping them here
+      -- (before the try/catch setup) is the tick's main cost saving.
+      if sSprBind[tRef] is empty and sSprAnim[tRef] is empty then next repeat
       try
          if sSprBind[tRef] is not empty then
             put the loc of sSprBind[tRef] into tLoc
@@ -3608,12 +3620,14 @@ end b2kCamApply
 -- a clip in pure script (8-bit mono WAV at 22050 Hz, square or sine, a
 -- comma list of note frequencies, per-note decay so notes never click),
 -- so a self-contained example ships sound with ZERO asset files. Sounds
--- are assets like sheets: b2kTeardown wipes them (the sweep also catches
--- clips a dead session left behind; names are stable, so re-making
--- replaces rather than accumulates). Failures degrade to silence, never
--- to errors: the first play that throws trips a dead-flag and
--- b2kSoundStatus() says why. The mute is a user preference and survives
--- teardown. There is no per-frame tick -- audio is purely event-driven.
+-- are assets that SURVIVE b2kTeardown -- clips are tiny and resets must
+-- stay snappy; names are stable, so re-making replaces rather than
+-- accumulates, and b2kSoundsWipe purges everything (it also sweeps
+-- b2ksnd_ clips a dead session left in the stack). Failures degrade to
+-- silence, never to errors: the first play that throws trips a
+-- dead-flag and b2kSoundStatus() says why. The mute is a user
+-- preference. There is no per-frame tick -- audio is purely
+-- event-driven.
 
 -- Import a WAV/AIFF/AU file as a named sound (replaces any same name).
 command b2kSoundLoad pName, pPath

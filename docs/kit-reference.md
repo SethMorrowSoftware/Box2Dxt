@@ -479,7 +479,15 @@ other's mask (and no shared negative group forbids it).
 
 > **Winding:** a chain's solid side is to the *right* of the point-travel
 > direction. For ground you stand on, list the top surface **right-to-left** so
-> the solid side faces up. (Bodies falling through? Reverse the point order.)
+> the solid side faces up. (Bodies falling through *everywhere*? Reverse the
+> point order.)
+
+> **The ghost rule (open chains):** Box2D treats an open chain's **first and
+> last segments as ghost anchors — they don't collide** (N points ⇒ N−3 solid
+> segments). Run the chain **one segment past** the surface you need on each
+> side; over solid ground the tails can simply continue flat. Endpoints placed
+> *at* a platform's edges leave its ends intangible — bodies fall through the
+> outer tiles. (Bodies falling through *near the ends*? This, not winding.)
 
 ## Region & ray queries
 

@@ -50,11 +50,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   a preference that survives teardown, `b2kSoundVolume` wraps the
   engine-global `playLoudness`, and failures degrade to silence, never
   errors (first failing play trips a dead-flag; `b2kSoundStatus()` says
-  why). `b2kTeardown` wipes sounds like sheets, sweeping any `b2ksnd_`
-  clips a dead session left behind. The platformer gains eight
-  synthesized cues — jump, land (off the player's one-tick land state),
-  coin, stomp, hurt, checkpoint, gate, win — plus an M-key mute and HUD
-  audio diagnostics.
+  why). Sounds **survive `b2kTeardown`** — clips are tiny and
+  deterministic, and resets must stay snappy; `b2kSoundsWipe` purges
+  them (it also sweeps `b2ksnd_` clips a dead session left behind, and
+  stable names mean re-making replaces rather than accumulates). The
+  platformer gains eight synthesized cues — jump, land (off the player's
+  one-tick land state), coin, stomp, hurt, checkpoint, gate, win — plus
+  an M-key mute and HUD audio diagnostics.
 - **Sheets beyond the Kenney format: custom grids and hand-named
   regions.** `b2kSheetLoad`/`b2kSheetFromImage` take optional `margin`
   (outer border px) and `spacing` (gutter between cells px) for grid
@@ -85,7 +87,26 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   drawn descending left-to-right; the long ramps are the 26.6° pair that
   matches the chain) — ascent shows them mirrored, and the ground row
   beneath the mound switches to dirt-centre tiles so the hill reads as
-  one mass.
+  one mass. The first OXT runs then surfaced **the chain ghost rule**:
+  Box2D collides an open chain's N points as only **N−3 segments** (the
+  first and last are ghost anchors), which the original level had
+  silently respected by always running chains one tile past the art —
+  the rebuild didn't, so the bridge's outer planks, both cloud edges and
+  *both mound ramps* were intangible. All four chains are now
+  ghost-padded (the mound grew to six points so its ramps, the actual
+  slope test, really collide), and the rule is documented in `b2kChain`,
+  the kit reference and the guide. Two more OXT findings fixed: **slime
+  stomps are judged by the player controller's land/fall state**, not by
+  post-impact velocity (contacts dispatch after the solver has already
+  absorbed the impact, so a clean stomp read as ~0 velocity and hurt the
+  hero), and **thwomps re-arm wherever they rose** instead of
+  teleporting back to their perch (the snap-home read as
+  vanish-and-reappear, and it undid the drag-to-reposition puzzle).
+  Optimization pass: the sprite tick now skips inert sprites (no bind,
+  no animation — about a hundred static tiles) before doing any work,
+  sounds persisting across teardown removes the ~quarter-second tone
+  re-synthesis from every reset, and the mover tick reads the clock
+  once per pass.
 - **Kit Player module (Game Kit Phase 3 — the headline feature).** A
   complete platformer character controller for one keyboard player:
   `b2kPlayerMake` (capsule body host + bound sprite + controller + input
