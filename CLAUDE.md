@@ -27,9 +27,10 @@ Box2D v3.1.0 (fetched by CMake)
 - **LCB binding** (`src/box2dxt.lcb`, `library org.openxtalk.box2dxt`): declares `foreign handler`
   bindings to the shared library and public `b2PascalCase` handlers callable from xTalk. This API
   speaks **metres and radians**; body type codes are `0=static, 1=kinematic, 2=dynamic`.
-- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (161 `b2k*`
-  handlers) that speaks **screen pixels and degrees**, binds bodies to LiveCode controls, and runs
-  the animation loop. This is what the examples and most users actually call.
+- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (260+ `b2k*`
+  handlers incl. the game modules: input, sprites, player controller, camera) that speaks
+  **screen pixels and degrees**, binds bodies to LiveCode controls, and runs the animation
+  loop. This is what the examples and most users actually call.
 
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
 `kit-guide.md`, `kit-reference.md`). Drop-in prebuilt binaries are in `prebuilt/`.

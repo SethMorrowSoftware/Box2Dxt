@@ -80,10 +80,12 @@ needs one), and scroll-corrected `b2kGrab` mapping (the `b2kCamMouse…` math).
 
 ## Phase 1 — Input module (M)
 
-**Status: built (2026-06-10) — awaiting the OXT pass.** The Kit gained the
-full input surface below plus the pacing fix; the platformer example is the
-test vehicle (its banner lists the 8-point verify checklist). Run it in OXT
-and report; Phase 2 (sprites, icon-button backend) starts on the green light.
+**Status: shipped and user-verified (2026-06-11), through the RC demo.**
+Built 2026-06-10 (the full input surface below plus the pacing fix); the
+platformer demo is driven entirely by this module, and its Phase 2+4
+user-verified pass exercised held-axis running, chords, jump press/release
+edges and pause/resume on real hardware — the module's own checklist rode
+along with it.
 
 - **Build:** `b2kInputOn/Off`, `b2kInputTick` (keysDown sample + diff),
   key-name map, `b2kKeyIsDown/Pressed/Released`, `b2kKeysHeld`,
@@ -125,6 +127,17 @@ slimes, hazard fly, plate-gate puzzle, confetti — see the decision log.
 - **Exit:** spec §5 table fully live; perf within S10 numbers.
 
 ## Phase 3 — Player controller (M/L) ← the headline feature
+
+**Status: built (2026-06-11) — awaiting the OXT pass.** The full surface
+below landed in the Kit (loop order: input → player → sprites → camera),
+and the platformer demo's hand-rolled movement layer (~53 lines: velocity
+tick, jump press/release, two-ray ground probe) collapsed into four calls —
+`b2kPlayerAttach` + `b2kPlayerAnims` + two `b2kPlayerSet`s — exactly the
+shrink the plan predicted. The level gained a walkable slope mound (26.6°
+ramp tiles over a one-sided chain, plain-polygon fallback) with a 7th coin
+on its plateau, and the HUD now reads controller state, a land counter and
+a sleep anomaly flag. The demo's banner carries the 8-point feel checklist
+below; run it in OXT and report.
 
 - **Build:** `b2kPlayerMake/Attach/Set/Get/Anims/OnGround/State/Facing/Jump/`
   `Control/Remove`, `b2kPlayerTick` (axes → accel-clamped vx; ray ground probe
@@ -225,3 +238,11 @@ user-confirmed in OXT before the next begins.
 | 2026-06-11 | **Compile gotchas found by OXT, now gated/documented:** the dangling else (single-line `if` before a bare `else` — checker gate added; CLAUDE.md #10) and `local` declarations nested in control blocks breaking the whole script (CLAUDE.md #11 — broke the intro-pan rework, which was reverted). | OXT compiles |
 | 2026-06-11 | **Teardown order fixed:** sprites must be wiped BEFORE the viewport dissolves (their stored long ids embed the group path); sprite removal made stale-ref-proof; example `b2kClear`s spawned bodies pre-teardown and guards re-entrant restarts. Fixed Reset/Play-again breakage. | User report |
 | 2026-06-11 | **The demo is the release candidate.** Win dialogue (all coins + flag: time, falls, confetti, Play again), checkpoint flag, riding Thwomp (underside-kill, head rideable, slow kinematic rise), second slime, hazard fly, two-cloud bonus route, splash, R/ESC keys. The opening camera pan was CUT (the rework broke an OXT compile; reverted) — the demo opens with a splash beat. **Phase 3 (player controller) is next.** | This commit |
+| 2026-06-11 | **Phase 3 built:** Kit Player module (20 handlers incl. internals) + `b2kSetSleepEnabled`; `b2kPlayerTick` wired between input and sprites in both loop paths; demo movement collapsed to 4 declarative calls; slope mound + 7th coin + state/lands/asleep HUD. Statically verified; awaiting the OXT feel pass. | Phase 3 commit |
+| 2026-06-11 | **Controller state is a singleton** (flat `sPlay*` locals, one player), matching the argless public API (`b2kPlayerOnGround()` etc.). Spec principle 4's per-control keying is deferred with multi-player (the refactor is mechanical: key the locals by ref, add an optional ctrl arg). | Phase 3 design |
+| 2026-06-11 | **`b2kPlayerControl false` = observe-only:** the tick keeps state/ground/facing fresh but writes neither velocity NOR animations (only the maxFall clamp stays live). Rationale: the demo's hit pose and win dance need manual `b2kSpritePlay` to survive; a controller that kept animating would stomp them on the next tick. Cutscene walks animate via manual `b2kSpritePlay "walk"`. | Phase 3 design |
+| 2026-06-11 | **Ground probe is suppressed while the controller's own jump is still rising** (`sPlayJumping` and vy upward). Without it, the launch frame could re-ground at low jumpSpeed and — the real case — rising THROUGH a one-way chain (the bridge route) phantom-grounded mid-flight. Plain upward motion is NOT suppressed: running up a slope rises while genuinely grounded (upslope vy ≈ vx·tan θ, ~140 px/s on the mound — any naive vy threshold would misfire). | Phase 3 design |
+| 2026-06-11 | **Player tuning survives `b2kClear`, dies with `b2kTeardown`/`b2kPlayerRemove`** — tuning is config (like input bindings, which clear also keeps), not world state. Spec §8's "clear removes sprites/player" applies to the controller *binding*, which clear does drop. | Phase 3 design |
+| 2026-06-11 | **Ramp art fixed by measuring the PNG, not guessing names.** Decoded the Kenney tiles sheet offline: `ramp_short_a/b` are a 45° pair (filled + full diagonal) drawn DESCENDING left-to-right; `ramp_long_a/b` are the 26.6° halves that match the mound's chain. The mound now uses mirrored long ramps for ascent, long ramps for descent, and dirt-centre ground tiles beneath so the hill reads as one mass. Rule going forward: verify atlas art geometry before placing it. | User report ("ramps wrong/weird") |
+| 2026-06-11 | **Demo rebuilt as a collect-them-ALL puzzle platformer** (user direction): 4608px traditional left-to-right level, 12 coins each verified reachable against the jump arc (154px apex), drag-physics as puzzle verbs (crate→plate; a resting thwomp is draggable for 2.6s and rises from where you park it). New foes on existing mechanisms only: spike slime (unstompable), sweeping saw (bodiless sine mover), second thwomp. Enemy/trap/mover state generalized to indexed tables so a new foe is one `pfMake…` line. | User direction; this commit |
+| 2026-06-11 | **Sheet loaders generalized beyond Kenney** (user requirement): grid sheets take margin/spacing; frame size 0 = source-only registration; `b2kSheetAddFrame` names arbitrary regions (the no-XML packed-sheet path); `b2kSheetFrameNames` for atlas introspection. No new mechanism — regions were always the internal model; this exposes authoring them. | User requirement; this commit |

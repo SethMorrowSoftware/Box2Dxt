@@ -130,6 +130,7 @@ dynamic/static where a handler takes an optional `dyn` flag.
 | `b2kSetDamping ctrl, lin [,ang]` | Linear (and optional angular) damping. |
 | `b2kWake ctrl` | Wake a sleeping body. |
 | `b2kSleep ctrl` | Send a body to sleep until something wakes it. |
+| `b2kSetSleepEnabled ctrl, flag` | Allow / forbid **this body** ever sleeping (vs `b2kEnableSleeping`, which switches the whole world). The player controller forbids it on its body. |
 | `b2kSetSleepThreshold ctrl, pxPerSec` | Speed below which a body may fall asleep. |
 | `b2kSetStatic ctrl` / `b2kSetDynamic ctrl` / `b2kSetKinematic ctrl` | Change body type at runtime (freeze/unfreeze, moving platforms). |
 | `b2kSetType ctrl, "static"\|"kinematic"\|"dynamic"` | Set body type by name. |
@@ -272,10 +273,11 @@ ghost sprites frozen on their last frame).
 
 | Handler | Purpose |
 |---------|---------|
-| `b2kSheetLoad name, path, fw, fh [,count]` → count | Register an image file as a uniform grid of `fw`×`fh` frames (no spacing), numbered 1..N row-major. |
+| `b2kSheetLoad name, path, fw, fh [,count] [,margin] [,spacing]` → count | Register an image file as a uniform grid of `fw`×`fh` frames, numbered 1..N row-major. `margin` = outer border px, `spacing` = gap between cells (both default 0, edge-to-edge). Frame size **0 = no grid**: name regions yourself with `b2kSheetAddFrame`. |
 | `b2kSheetLoadAtlas name, pngPath [,xmlPath]` → count | Register a packed atlas: PNG + `TextureAtlas` XML naming its regions (the Kenney format — see `Spritesheets/` in this repo). Frames are addressed **by name** (`"coin_gold"`). XML path defaults to the PNG path with `.xml`. |
-| `b2kSheetFromImage name, imgRef, fw, fh [,count]` → count | Register an image already in the stack (e.g. base64-embedded art) as a grid sheet. |
-| `b2kSheetFrames(name)` / `b2kSheetHasFrame(name, frame)` | Frame count / existence checks. |
+| `b2kSheetFromImage name, imgRef, fw, fh [,count] [,margin] [,spacing]` → count | Register an image already in the stack (e.g. base64-embedded art) as a grid sheet. Same grid arguments as `b2kSheetLoad`. |
+| `b2kSheetAddFrame sheet, frame, x, y, w, h` | Name one region yourself — the **no-XML path for packed sheets in any layout**: load the source with frame size 0, then add each frame by name (any size/position; redefining re-bakes). Also works on top of a grid or atlas. |
+| `b2kSheetFrames(name)` / `b2kSheetHasFrame(name, frame)` / `b2kSheetFrameNames(name)` | Frame count / existence / every frame key one per line (introspect an atlas you didn't make). |
 | `b2kSheetScale name, factor` | Display scale for the sheet's frames (default 1, range 0.05–8) — the engine resamples at slice time, so **any frame size displays at any sprite size**. Set it right after loading, before creating sprites or anims. |
 | `b2kSheetFrameSize(name, frame)` → "w,h" | A frame's display size (region × scale) — lay out tiles and platforms from this instead of hard-coding pixels. |
 | `b2kAnimDef sheet, anim, frames, fps [,loop]` | Name an animation: `frames` is a comma list of names and/or indices, numeric ranges (`"1-8"`) expand. `loop` defaults true. |
@@ -305,6 +307,53 @@ switch is one icon set; ~25 *moving* animated sprites ≈ 40 fps, a player plus
 a handful sits at the loop ceiling. Create sprites at scene load (not
 mid-play) and **before** enabling `acceleratedRendering` where possible — bulk
 control creation under the compositor caused the spike's one-time stall.
+
+## Player (the platformer controller)
+
+A complete keyboard character controller for **one** player: a vertical
+capsule with fixed rotation, sleep disabled, and low friction, steered every
+frame from the Input module's axis **`moveX`** and action **`jump`** (rebind
+those names to remap the controls). Horizontal motion is velocity-driven —
+vx accelerates toward `axis × moveSpeed` — and grounding comes from three
+short downward rays whose surface normal must point up within `maxSlopeDeg`,
+so walkable slope vs wall is one comparison. The jump feel platformers
+expect is built in: **coyote time** (jump shortly after running off a
+ledge), **jump buffering** (press just before landing), **jump-cut** (tap =
+hop, hold = full height), and a terminal fall speed. With animations mapped,
+the controller drives `b2kSpritePlay`/`b2kSpriteFlipH` itself.
+
+| Handler | Purpose |
+|---------|---------|
+| `b2kPlayerMake x, y, w, h [,sheet]` → control | One call: a capsule body host (`w`×`h` collision box — a visible capsule graphic, or invisible with a bound sprite of `sheet`'s first frame on top), controller armed, input on. Reports the player control. |
+| `b2kPlayerAttach ctrl` | Adopt an existing control (or sprite) as the player. A capsule body is added if it has none (then the controller also sets low friction); a body you made yourself keeps your material. Also sets fixed rotation + sleep-off and arms input. |
+| `b2kPlayerAnims idle, run, jump [,fall] [,land]` | Map states to the art's animation names (`fall` defaults to `jump`). `land` is an optional non-looping touch-down flourish, held for its own duration. The art is the player control itself if it is a sprite, else the first sprite `b2kSpriteBind`-pinned to it. |
+| `b2kPlayerSet key, value` / `b2kPlayerGet(key)` | Tuning knobs (table below). Settable any time; `b2kClear` keeps them (config, like input bindings), `b2kTeardown`/`b2kPlayerRemove` wipe them. |
+| `b2kPlayerOnGround()` | Grounded this frame (post-tick; false on the frame a jump launches). |
+| `b2kPlayerState()` | `idle` / `run` / `jump` / `fall`, plus `land` for exactly one frame on touch-down (dust puffs, sounds — read it in `on b2kFrame`). |
+| `b2kPlayerFacing()` | 1 right / -1 left — the last horizontal intent. |
+| `b2kPlayerJump [speed]` | Programmatic jump (springs, double-jump powerups): the same launch as a pressed jump but **without** the grounded/coyote gate — the caller decides when it is allowed. |
+| `b2kPlayerControl flag` | `false` = the controller only observes (state/ground/facing stay fresh) and writes neither velocity nor animations — cutscenes, knockback, hit poses. The `maxFall` clamp stays live. `true` re-asserts the state animation. |
+| `b2kPlayer()` / `b2kPlayerSprite()` | The player control / the art control the controller animates. |
+| `b2kPlayerRemove` | Tear down the controller (tuning included). The body and sprite remain yours — remove them with `b2kRemove` / `b2kSpriteRemove`. |
+
+**Tuning keys** (`b2kPlayerSet`), with defaults for a 32×48 px player at
+scale 40: `moveSpeed` 220 px/s · `accel` 1800 px/s² · `airAccel` 1100 px/s² ·
+`jumpSpeed` 460 px/s · `jumpCut` 0.45 (velocity multiplier on early release) ·
+`coyoteMs` 90 · `bufferMs` 110 · `maxFall` 900 px/s · `maxSlopeDeg` 50
+(steeper than this is a wall, not ground).
+
+```
+-- a playable character in four lines (after b2kQuickStart + sheet load):
+b2kPlayerMake 200, 100, 32, 48, "chars"
+put the result into gHero
+b2kPlayerAnims "idle", "walk", "jump", "jump"
+b2kCamFollow gHero
+```
+
+One player at a time: attaching a new player replaces the old controller
+state (the old body/sprite stay). The platformer example adopts its own
+invisible body host with `b2kPlayerAttach` — its entire movement,
+ground-probe and animation code is these four calls.
 
 ## Camera (scrolling levels)
 

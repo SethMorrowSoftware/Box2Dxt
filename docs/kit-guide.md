@@ -628,6 +628,61 @@ platformer example wires all of it together: an atlas-driven hero, spinning
 coin pickups, a bee on a flight path, and a saw hazard that triggers the
 hit-then-respawn chain.
 
+**Not a Kenney sheet? Every layout loads.** Grids with borders or gutters
+pass them straight in (`b2kSheetLoad "run", tPath, 32, 48, 0, 2, 1` —
+2px margin, 1px spacing). A packed sheet with no XML at all loads with
+frame size 0 (no grid) and you name each region yourself:
+
+```livecode
+b2kSheetLoad "boss", tPath, 0, 0          -- source only, no grid
+b2kSheetAddFrame "boss", "idle", 0, 0, 96, 80
+b2kSheetAddFrame "boss", "roar", 96, 0, 128, 80
+b2kAnimDef "boss", "wake", "idle,roar", 4, false
+```
+
+`b2kSheetFrameNames("chars")` lists every frame key of a sheet you didn't
+make — the quickest way to find what an atlas calls things.
+
+### The player controller (`b2kPlayerMake`)
+
+Everything the input and sprite snippets above hand-roll — and the parts
+everyone gets wrong the first time — exists as one module. A *player* is a
+vertical capsule with fixed rotation, sleep disabled and low friction; every
+frame the controller reads the axis `moveX` and the action `jump`,
+accelerates vx toward `axis × moveSpeed`, probes the ground with three short
+rays (a hit counts only while its surface normal is within `maxSlopeDeg` of
+straight up, so slopes walk and walls don't), and picks the matching
+animation. Jump *feel* is built in: **coyote time** (a jump still fires
+~90 ms after running off a ledge), **jump buffering** (pressed just before
+touchdown fires on landing), and **jump-cut** (tap = hop, hold = full
+height).
+
+```livecode
+on openCard
+   b2kQuickStart
+   b2kSheetLoadAtlas "chars", tFolder & "/spritesheet-characters-default.png"
+   b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
+   b2kAnimDef "chars", "walk", "character_beige_walk_a,character_beige_walk_b", 6, true
+   b2kAnimDef "chars", "jump", "character_beige_jump", 1, true
+   b2kPlayerMake 200, 100, 32, 48, "chars"   -- body + sprite + controller
+   put the result into gHero
+   b2kPlayerAnims "idle", "walk", "jump", "jump"
+   b2kFrameTarget the long id of me
+end openCard
+```
+
+That is a complete, well-tuned character — arrows/WASD run, space jumps.
+Feel lives in `b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`,
+`jumpSpeed`, `jumpCut`, `coyoteMs`, `bufferMs`, `maxFall`, `maxSlopeDeg`);
+read the character back with `b2kPlayerState()` (`idle`/`run`/`jump`/`fall`,
+plus `land` for exactly one frame on touch-down — perfect for dust and
+sound), `b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body
+or sprite? `b2kPlayerAttach` adopts it instead of making one. Springs and
+powerups call `b2kPlayerJump 700`. For cutscenes, hit poses, and knockback,
+`b2kPlayerControl false` makes the controller *observe only* — your code
+owns velocity and animations until you hand control back. The platformer
+example's whole movement system is the four lines above.
+
 ---
 
 ## 13. Sensors (trigger zones)
@@ -944,7 +999,8 @@ Optional arguments are in `[…]`.
 `b2kSetBounce ctrl,0..1` · `b2kSetFriction ctrl,0..1` · `b2kSetDensity ctrl,d` ·
 `b2kSetBullet ctrl,flag` · `b2kSetFixedRotation ctrl,flag` ·
 `b2kSetGravityScale ctrl,s` · `b2kSetDamping ctrl,lin [,ang]` ·
-`b2kWake ctrl` · `b2kSleep ctrl` · `b2kSetSleepThreshold ctrl,pxPerSec` ·
+`b2kWake ctrl` · `b2kSleep ctrl` · `b2kSetSleepEnabled ctrl,flag` ·
+`b2kSetSleepThreshold ctrl,pxPerSec` ·
 `b2kSetStatic ctrl` · `b2kSetDynamic ctrl` · `b2kSetKinematic ctrl` ·
 `b2kSetType ctrl,name` · `b2kDisable ctrl` · `b2kEnable ctrl`
 
@@ -979,6 +1035,42 @@ Optional arguments are in `[…]`.
 
 ### Drag
 `b2kGrab(x,y)` `[f]` · `b2kRelease`
+
+### Input (keyboard)
+`b2kInputOn` · `b2kInputOff` · `b2kInputIsOn()` `[f]` · `b2kKeyIsDown(key)` `[f]` ·
+`b2kKeyPressed(key)` `[f]` · `b2kKeyReleased(key)` `[f]` · `b2kKeysHeld()` `[f]` ·
+`b2kBindAction name,keys` · `b2kActionIsDown(name)` `[f]` ·
+`b2kActionPressed(name)` `[f]` · `b2kActionReleased(name)` `[f]` ·
+`b2kBindAxis name,negKeys,posKeys` · `b2kAxis(name)` `[f]` ·
+`b2kKeyCodes(key)` `[f]` · `b2kKeyName(code)` `[f]` · `b2kFrameMS()` `[f]`
+
+### Sprites & sheets
+`b2kSheetLoad name,path,fw,fh [,n,margin,spacing]` · `b2kSheetLoadAtlas name,png [,xml]` ·
+`b2kSheetFromImage name,img,fw,fh [,n,margin,spacing]` ·
+`b2kSheetAddFrame sheet,frame,x,y,w,h` · `b2kSheetFrames(name)` `[f]` ·
+`b2kSheetHasFrame(name,frame)` `[f]` · `b2kSheetFrameNames(name)` `[f]` ·
+`b2kSheetScale name,factor` ·
+`b2kSheetFrameSize(name,frame)` `[f]` · `b2kAnimDef sheet,anim,frames,fps [,loop]` ·
+`b2kSpriteNew sheet [,frame,x,y]` · `b2kSpriteFromGIF path [,x,y]` ·
+`b2kSpritePlay spr,anim [,restart]` · `b2kSpriteStop spr` · `b2kSpriteAnim(spr)` `[f]` ·
+`b2kSpriteSetFrame spr,f` · `b2kSpriteFrame(spr)` `[f]` · `b2kSpriteFPS spr,fps` ·
+`b2kSpriteFlipH spr,flag` · `b2kSpriteFlipped(spr)` `[f]` ·
+`b2kSpriteOnFinish spr,msg` · `b2kSpriteMoveTo spr,x,y` ·
+`b2kSpriteBind spr,bodyCtrl [,dx,dy]` · `b2kSpriteUnbind spr` · `b2kSpriteRemove spr`
+
+### Player (the platformer controller)
+`b2kPlayerMake x,y,w,h [,sheet]` · `b2kPlayerAttach ctrl` ·
+`b2kPlayerAnims idle,run,jump [,fall] [,land]` · `b2kPlayerSet key,value` ·
+`b2kPlayerGet(key)` `[f]` · `b2kPlayerOnGround()` `[f]` · `b2kPlayerState()` `[f]` ·
+`b2kPlayerFacing()` `[f]` · `b2kPlayerJump [speed]` · `b2kPlayerControl flag` ·
+`b2kPlayer()` `[f]` · `b2kPlayerSprite()` `[f]` · `b2kPlayerRemove`
+
+### Camera
+`b2kCamOn [rect]` · `b2kCamOff` · `b2kCamIsOn()` `[f]` · `b2kCamGroup()` `[f]` ·
+`b2kCamAdopt ctrl` · `b2kCamFollow ctrl [,lerp]` · `b2kCamUnfollow` ·
+`b2kCamDeadzone w,h` · `b2kCamBounds x1,y1,x2,y2` · `b2kCamGoto x,y` ·
+`b2kCamPos()` `[f]` · `b2kCamShake ampPx,ms` · `b2kCamStatus()` `[f]` ·
+`b2kCamLocSemantics()` `[f]` · `b2kCamMouseX()` `[f]` · `b2kCamMouseY()` `[f]`
 
 ### Events (handlers you write)
 `on b2kFrame` · `on b2kContact pA,pB` · `on b2kEndContact pA,pB` ·

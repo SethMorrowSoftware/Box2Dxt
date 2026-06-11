@@ -59,7 +59,7 @@
 -- BODY    b2kSetBullet ctrl,flag · b2kSetFixedRotation ctrl,flag ·
 --         b2kSetGravityScale ctrl,s · b2kSetDamping ctrl,lin[,ang] · b2kWake ctrl ·
 --         b2kSetType ctrl,name · b2kSetStatic/Dynamic/Kinematic ctrl ·
---         b2kEnable/Disable ctrl
+--         b2kEnable/Disable ctrl · b2kSetSleepEnabled ctrl,flag
 -- ACT     b2kPush ctrl,dvx,dvy · b2kImpulse ctrl,ix,iy · b2kForce ctrl,fx,fy ·
 --         b2kSetVelocity ctrl,vx,vy · b2kSpin ctrl,deg/s · b2kSpinBy ctrl,deg/s ·
 --         b2kTorque ctrl,t · b2kAngularImpulse ctrl,imp · b2kMoveTo ctrl,x,y[,deg] ·
@@ -82,14 +82,22 @@
 --         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
 --         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
--- SPRITE  b2kSheetLoad name,path,fw,fh[,n] · b2kSheetLoadAtlas name,png[,xml] ·
---         b2kSheetFromImage name,img,fw,fh · b2kSheetFrames(name) ·
+-- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] · b2kSheetLoadAtlas name,png[,xml] ·
+--         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] · b2kSheetFrames(name) ·
+--         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) ·
+--         b2kSheetFrameNames(name) · b2kSheetHasFrame(name,frame) ·
 --         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
 --         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
 --         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
 --         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
 --         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
 --         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
+-- PLAYER  b2kPlayerMake x,y,w,h[,sheet] · b2kPlayerAttach ctrl ·
+--         b2kPlayerAnims idle,run,jump,fall[,land] · b2kPlayerSet key,value ·
+--         b2kPlayerGet(key) · b2kPlayerOnGround() · b2kPlayerState() ·
+--         b2kPlayerFacing() · b2kPlayerJump [speed] · b2kPlayerControl flag ·
+--         b2kPlayer() · b2kPlayerSprite() · b2kPlayerRemove
+--         (drives axis "moveX" + action "jump"; rebind those to remap)
 -- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
 --         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
 --         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
@@ -172,6 +180,22 @@ local sCamNote       -- empty = healthy; else why the camera is degraded
 local sCamLocVisual  -- true when this engine reports grouped locs SCROLL-ADJUSTED
 local sCamCurH, sCamCurV -- the scroll actually applied this frame (cached)
 local sInCam         -- ctrlRef -> true when the Kit placed it inside the viewport
+local sPlayRef       -- the player's control (empty = no player controller)
+local sPlayArt       -- the sprite whose anims the controller drives
+local sPlayTune      -- tuning key -> value (b2kPlayerSet; defaults fill gaps)
+local sPlayAnims     -- state -> animation name (idle/run/jump/fall/land)
+local sPlayState     -- idle | run | jump | fall | land (land lasts one tick)
+local sPlayFacing    -- 1 right / -1 left (last horizontal intent)
+local sPlayGrounded  -- this frame's ray-probe verdict
+local sPlayGroundMS  -- when last grounded (the coyote window)
+local sPlayPressMS   -- when jump was last pressed (the buffer window)
+local sPlayJumping   -- a controller jump is still ascending (cut-eligible)
+local sPlayControl   -- false = observe only: no velocity or anim writes
+local sPlayOwnBody   -- true when the controller created the body
+local sPlayHalfW, sPlayHalfH -- capsule half-extents in px (probe geometry)
+local sPlayAnimNow   -- last animation written (redundancy suppression)
+local sPlayFlipNow   -- last flip written
+local sPlayHoldMS    -- suppress anim switches until then (land flourish)
 
 constant kPI = 3.14159265358979
 
@@ -219,6 +243,7 @@ command b2kTeardown
    put the milliseconds & random(9999) into sGen
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
+   b2kPlayerForget true   -- full: a teardown wipes the tuning too
    b2kSheetsWipe   -- sprites first: their stored long ids include the group
    b2kCamOff       -- ...then dissolve the viewport (survivors go to the card)
    b2kResetTables
@@ -305,6 +330,7 @@ end b2kWall
 command b2kClear
    local tRef, tList, d
    b2kSpritesClear
+   b2kPlayerForget false   -- the player is world state; its tuning is config
    put empty into tList
    repeat for each key tRef in sBody
       if sStatic[tRef] is not true then put tRef & cr after tList
@@ -851,6 +877,17 @@ command b2kSleep pControl
    if b is empty then exit b2kSleep
    b2SetAwake b, false
 end b2kSleep
+
+-- Allow or forbid THIS body ever falling asleep (vs b2kEnableSleeping,
+-- which switches the whole world). The player controller forbids it: a
+-- character must respond to input even after standing still for minutes.
+command b2kSetSleepEnabled pControl, pFlag
+   local b
+   put sBody[the long id of pControl] into b
+   if b is empty then exit b2kSetSleepEnabled
+   b2EnableSleep b, (pFlag is true)
+   if pFlag is not true then b2SetAwake b, true
+end b2kSetSleepEnabled
 
 -- Below this speed (pixels/sec) a body may fall asleep. Lower = stays awake
 -- longer; higher = sleeps sooner (saves CPU).
@@ -2030,25 +2067,70 @@ end b2kFrameMS
 -- Sheets persist until b2kTeardown; sprites are Kit-created controls, so
 -- b2kClear removes them like everything else the Kit spawned.
 
--- Register an image FILE as a uniform grid of pFW x pFH frames (no spacing),
--- numbered 1..N left-to-right, top-to-bottom. Reports the frame count.
-command b2kSheetLoad pName, pPath, pFW, pFH, pCount
+-- Register an image FILE as a uniform grid of pFW x pFH frames, numbered
+-- 1..N left-to-right, top-to-bottom. Reports the frame count. Sheets that
+-- are not edge-to-edge take pMargin (outer border px) and pSpacing (gap
+-- between cells px). Pass pFW/pFH 0 (or empty) to register the image with
+-- NO grid and name regions yourself with b2kSheetAddFrame -- the path for
+-- packed sheets that have no Kenney-style XML.
+command b2kSheetLoad pName, pPath, pFW, pFH, pCount, pMargin, pSpacing
    local tRef
    put b2kSheetSourceFromFile(pName, pPath) into tRef
    if tRef is empty then return 0
-   b2kSheetGridRegions pName, pFW, pFH, pCount
+   b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoad
 
 -- Register an image already in the stack (e.g. base64-embedded art) as a
 -- grid sheet. The image is used in place and never deleted by the Kit.
-command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount
+-- Same grid arguments as b2kSheetLoad (margin/spacing; 0x0 = no grid).
+command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount, pMargin, pSpacing
    b2kSheetForget pName
    put the long id of pImgRef into sSheetSrc[pName]
    put false into sSheetOwned[pName]
-   b2kSheetGridRegions pName, pFW, pFH, pCount
+   b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
    return the number of lines of sSheetKeys[pName]
 end b2kSheetFromImage
+
+-- Name one region of a loaded sheet yourself: the no-XML path for packed
+-- sheets in any layout. Load the source first (b2kSheetLoad/FromImage with
+-- frame size 0 for no grid), then add each frame by name; regions may be
+-- any size and position and can also be added on top of a grid or atlas.
+-- Redefining a name re-bakes its slice on next use.
+command b2kSheetAddFrame pSheet, pFrame, pX, pY, pW, pH
+   local tId
+   if sSheetSrc[pSheet] is empty then exit b2kSheetAddFrame
+   if pFrame is empty then exit b2kSheetAddFrame
+   if pX is not a number or pY is not a number then exit b2kSheetAddFrame
+   if pW is not a number or pH is not a number then exit b2kSheetAddFrame
+   if pW < 1 or pH < 1 then exit b2kSheetAddFrame
+   if sSheetRegion[pSheet][pFrame] is empty then
+      if sSheetKeys[pSheet] is empty then
+         put pFrame into sSheetKeys[pSheet]
+      else
+         put cr & pFrame after sSheetKeys[pSheet]
+      end if
+   else
+      -- redefined: drop any stale slices so the new region re-bakes lazily
+      put sSheetIcon[pSheet][pFrame] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+      delete variable sSheetIcon[pSheet][pFrame]
+      put sSheetFlip[pSheet][pFrame] into tId
+      if tId is not empty then
+         try
+            delete image id tId
+         catch tErr
+         end try
+      end if
+      delete variable sSheetFlip[pSheet][pFrame]
+   end if
+   put round(pX) & comma & round(pY) & comma & round(pW) & comma & round(pH) into sSheetRegion[pSheet][pFrame]
+end b2kSheetAddFrame
 
 -- Register a packed atlas: a PNG plus the TextureAtlas XML that names its
 -- regions (<SubTexture name=".." x=".." y=".." width=".." height=".."/> --
@@ -2091,6 +2173,12 @@ end b2kSheetFrames
 function b2kSheetHasFrame pName, pFrame
    return (sSheetRegion[pName][pFrame] is not empty)
 end b2kSheetHasFrame
+
+-- Every frame key of a sheet, one per line, in definition order --
+-- introspect an atlas you didn't make ("what is this frame called?").
+function b2kSheetFrameNames pName
+   return sSheetKeys[pName]
+end b2kSheetFrameNames
 
 -- Display scale for a sheet's frames (default 1). Frames slice lazily, so
 -- set this right after loading the sheet, BEFORE creating sprites or anims:
@@ -2564,20 +2652,28 @@ function b2kSheetSourceFromFile pName, pPath
    return sSheetSrc[pName]
 end b2kSheetSourceFromFile
 
--- Internal: register grid regions over the current source image.
-command b2kSheetGridRegions pName, pFW, pFH, pCount
+-- Internal: register grid regions over the current source image. Margin =
+-- outer border (left AND top, assumed symmetric), spacing = gap between
+-- cells; both default 0 (edge-to-edge, the common case). A frame size of
+-- 0/empty registers NO grid -- the caller names regions with
+-- b2kSheetAddFrame instead.
+command b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
    local tCols, tRows, tMax, i, tC, tR
    if sSheetSrc[pName] is empty then exit b2kSheetGridRegions
+   if b2kNumberOr(pFW, 0) < 1 or b2kNumberOr(pFH, 0) < 1 then exit b2kSheetGridRegions
    put b2kClamp(pFW, 1, 4096) into pFW
    put b2kClamp(pFH, 1, 4096) into pFH
-   put (the width of sSheetSrc[pName]) div pFW into tCols
-   put (the height of sSheetSrc[pName]) div pFH into tRows
+   put round(b2kClamp(pMargin, 0, 2048)) into pMargin
+   put round(b2kClamp(pSpacing, 0, 2048)) into pSpacing
+   put ((the width of sSheetSrc[pName]) - 2 * pMargin + pSpacing) div (pFW + pSpacing) into tCols
+   put ((the height of sSheetSrc[pName]) - 2 * pMargin + pSpacing) div (pFH + pSpacing) into tRows
+   if tCols < 1 or tRows < 1 then exit b2kSheetGridRegions
    put tCols * tRows into tMax
    if pCount is a number and pCount > 0 and pCount < tMax then put pCount into tMax
    repeat with i = 1 to tMax
       put (i - 1) mod tCols into tC
       put (i - 1) div tCols into tR
-      put (tC * pFW) & comma & (tR * pFH) & comma & pFW & comma & pFH into sSheetRegion[pName][i]
+      put (pMargin + tC * (pFW + pSpacing)) & comma & (pMargin + tR * (pFH + pSpacing)) & comma & pFW & comma & pFH into sSheetRegion[pName][i]
       put i & cr after sSheetKeys[pName]
    end repeat
    if the last char of sSheetKeys[pName] is cr then delete the last char of sSheetKeys[pName]
@@ -2743,6 +2839,424 @@ command b2kSpritesTick
       if tRef is not empty then b2kSpriteForget tRef
    end repeat
 end b2kSpritesTick
+
+-- =====================================================================
+-- Player: a platformer character controller (input -> motion + anims)
+-- =====================================================================
+-- ONE keyboard-driven player (spec section 6): a vertical capsule with
+-- fixed rotation, sleep disabled and low friction, steered by a per-frame
+-- tick that reads the Input module's axis "moveX" and action "jump"
+-- (rebind those names to remap the controls). Horizontal motion is
+-- velocity-driven -- vx is accelerated toward axis * moveSpeed, so
+-- stopping needs no friction and walls can't glue the character.
+-- Grounding is decided by short downward rays whose surface normal must
+-- point sufficiently up, which makes walkable-slope vs wall one cosine
+-- compare. The feel features platformers expect are built in: coyote
+-- time, jump buffering, release jump-cut (tap = hop, hold = full jump),
+-- a terminal fall speed, and a one-tick "land" state for dust and sound.
+-- With b2kPlayerAnims set, the controller drives b2kSpritePlay/FlipH on
+-- the player's art -- the player control itself when it IS a sprite, or
+-- the first sprite b2kSpriteBind-pinned to it (the invisible-body
+-- pattern). Tuning lives in b2kPlayerSet/Get; b2kClear keeps it (it is
+-- config, like input bindings); b2kTeardown and b2kPlayerRemove wipe it.
+
+-- One call: an invisible capsule host (or a visible capsule graphic when
+-- no sheet is given), the body, the controller, input armed. With pSheet,
+-- a sprite showing the sheet's first frame is created and bound on top --
+-- so the collision size (pW x pH) is independent of the art size.
+-- Reports the player control (give that to b2kCamFollow, sensors, etc).
+command b2kPlayerMake pX, pY, pW, pH, pSheet
+   local tName, tRef, tArt
+   if sWorld is empty then return empty
+   if pW is empty then put 32 into pW
+   if pH is empty then put 48 into pH
+   put b2kClamp(pW, 4, 10000) into pW
+   put b2kClamp(pH, 4, 10000) into pH
+   put b2kNumberOr(pX, sOriginX) into pX
+   put b2kNumberOr(pY, sOriginY) into pY
+   put "b2kspawn_" & the milliseconds & "_" & random(1000000) into tName
+   if sCamGroup is empty then
+      create graphic (tName)
+   else
+      create graphic (tName) in group "b2kcam_view"
+   end if
+   put the long id of graphic (tName) into tRef
+   if sCamGroup is not empty then put true into sInCam[tRef]
+   set the style of tRef to "rectangle"
+   set the filled of tRef to true
+   set the foregroundColor of tRef to "20,20,24"
+   set the backgroundColor of tRef to "70,130,220"
+   set the width of tRef to pW
+   set the height of tRef to pH
+   set the loc of tRef to round(pX - b2kCamShiftX(tRef)) & "," & round(pY - b2kCamShiftY(tRef))
+   put true into sSpawned[tRef]
+   if pSheet is not empty and sSheetKeys[pSheet] is not empty then
+      set the visible of tRef to false       -- the graphic is only the body host
+      b2kSpriteNew pSheet, empty, pX, pY
+      put the result into tArt
+      if tArt is not empty then
+         b2kSpriteBind tArt, tRef
+      else
+         set the visible of tRef to true     -- sprite failed: stay visible
+      end if
+   end if
+   b2kPlayerAttach tRef   -- adds the capsule (tall rect -> vertical pill)
+   return tRef
+end b2kPlayerMake
+
+-- Adopt an existing control (or sprite) as the player. A capsule body is
+-- added if it has none -- then the controller also sets its material (low
+-- friction); a body you made yourself is left exactly as you tuned it.
+command b2kPlayerAttach pCtrl
+   local tRef
+   if sWorld is empty then exit b2kPlayerAttach
+   put the long id of pCtrl into tRef
+   put false into sPlayOwnBody
+   if sBody[tRef] is empty then
+      b2kAddCapsule tRef
+      if sBody[tRef] is empty then exit b2kPlayerAttach   -- zero-sized control
+      put true into sPlayOwnBody
+      b2kSetFriction tRef, 0.08   -- low: walls must not glue the capsule
+   end if
+   put tRef into sPlayRef
+   b2kSetFixedRotation tRef, true
+   b2kSetSleepEnabled tRef, false   -- a player must always respond
+   put (the width of tRef) / 2 into sPlayHalfW
+   put (the height of tRef) / 2 into sPlayHalfH
+   put "idle" into sPlayState
+   put 1 into sPlayFacing
+   put false into sPlayGrounded
+   put 0 into sPlayGroundMS
+   put 0 into sPlayPressMS
+   put false into sPlayJumping
+   put true into sPlayControl
+   put 0 into sPlayHoldMS
+   put empty into sPlayAnimNow
+   put empty into sPlayFlipNow
+   b2kPlayerResolveArt
+   b2kInputOn   -- arms the sampler; starter bindings fill empty slots only
+end b2kPlayerAttach
+
+-- Internal: which control's animations the controller drives -- the
+-- player itself when it is a sprite, else the first sprite bound to it.
+command b2kPlayerResolveArt
+   local tRef
+   put empty into sPlayArt
+   if sPlayRef is empty then exit b2kPlayerResolveArt
+   if sSprSheet[sPlayRef] is not empty then
+      put sPlayRef into sPlayArt
+      exit b2kPlayerResolveArt
+   end if
+   repeat for each line tRef in sSprRefs
+      if sSprBind[tRef] is sPlayRef then
+         put tRef into sPlayArt
+         exit b2kPlayerResolveArt
+      end if
+   end repeat
+end b2kPlayerResolveArt
+
+-- Tuning knobs (pixels, px/s, ms, degrees). Keys: moveSpeed, accel,
+-- airAccel, jumpSpeed, jumpCut, coyoteMs, bufferMs, maxFall, maxSlopeDeg.
+-- Settable any time, before or after the player exists; unknown keys are
+-- stored verbatim for your own use.
+command b2kPlayerSet pKey, pValue
+   put pValue into sPlayTune[toLower(pKey)]
+end b2kPlayerSet
+
+function b2kPlayerGet pKey
+   local tDef
+   put toLower(pKey) into pKey
+   put b2kPlayerDefault(pKey) into tDef
+   if sPlayTune[pKey] is empty then return tDef
+   -- known keys are numeric: a garbage value must not break the tick
+   if tDef is not empty then return b2kNumberOr(sPlayTune[pKey], tDef)
+   return sPlayTune[pKey]
+end b2kPlayerGet
+
+-- Internal: the defaults (spec section 6 -- a 32x48 px player, scale 40).
+function b2kPlayerDefault pKey
+   switch pKey
+      case "movespeed"
+         return 220
+      case "accel"
+         return 1800
+      case "airaccel"
+         return 1100
+      case "jumpspeed"
+         return 460
+      case "jumpcut"
+         return 0.45
+      case "coyotems"
+         return 90
+      case "bufferms"
+         return 110
+      case "maxfall"
+         return 900
+      case "maxslopedeg"
+         return 50
+   end switch
+   return empty
+end b2kPlayerDefault
+
+-- Map the controller's states to the art's animations (empty leaves that
+-- state alone; pFall defaults to pJump). pLand is an optional non-looping
+-- touch-down flourish: the controller holds it for its own duration, then
+-- idle/run resume. NOTE: a finishing land animation dispatches the art's
+-- b2kSpriteOnFinish message like any non-looping animation would.
+command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand
+   put pIdle into sPlayAnims["idle"]
+   put pRun into sPlayAnims["run"]
+   put pJump into sPlayAnims["jump"]
+   if pFall is empty then
+      put pJump into sPlayAnims["fall"]
+   else
+      put pFall into sPlayAnims["fall"]
+   end if
+   put pLand into sPlayAnims["land"]
+   put empty into sPlayAnimNow   -- re-assert on the next tick
+   if sPlayArt is empty then b2kPlayerResolveArt
+end b2kPlayerAnims
+
+function b2kPlayer
+   return sPlayRef
+end b2kPlayer
+
+-- The art control the controller animates (empty = none resolved yet).
+function b2kPlayerSprite
+   return sPlayArt
+end b2kPlayerSprite
+
+-- Grounded this frame (post-tick; false on the frame a jump launches).
+function b2kPlayerOnGround
+   return (sPlayGrounded is true)
+end b2kPlayerOnGround
+
+-- idle | run | jump | fall, plus "land" for exactly one frame on
+-- touch-down from jump/fall (dust puffs, landing sounds). Empty = no player.
+function b2kPlayerState
+   return sPlayState
+end b2kPlayerState
+
+function b2kPlayerFacing
+   if sPlayFacing is -1 then return -1
+   return 1
+end b2kPlayerFacing
+
+-- Programmatic jump (springs, double-jump powerups): the same launch as a
+-- pressed jump but WITHOUT the grounded/coyote gate -- the caller decides
+-- when it is allowed. Uses the jumpSpeed knob unless given a speed.
+command b2kPlayerJump pSpeed
+   local tVel
+   if sPlayRef is empty or sBody[sPlayRef] is empty then exit b2kPlayerJump
+   if pSpeed is empty then put b2kPlayerGet("jumpSpeed") into pSpeed
+   set the itemDelimiter to comma
+   put b2kVelocity(sPlayRef) into tVel
+   b2kSetVelocity sPlayRef, item 1 of tVel, 0 - pSpeed
+   put true into sPlayJumping
+   put 0 into sPlayGroundMS   -- consume coyote: no free second jump
+   put 0 into sPlayPressMS    -- ...and any buffered press
+end b2kPlayerJump
+
+-- false = the controller only OBSERVES: ground/state/facing stay fresh
+-- but it writes neither velocity nor animations (the maxFall clamp stays
+-- live -- it is the character's terminal velocity). For cutscenes,
+-- knockback, hit poses, scripted deaths; physics and the Kit run on.
+command b2kPlayerControl pFlag
+   put (pFlag is not false) into sPlayControl
+   -- returning control must re-assert the state anim over any manual pose
+   if sPlayControl then put empty into sPlayAnimNow
+end b2kPlayerControl
+
+-- Tear down the controller, tuning included. The body and sprite remain
+-- yours: remove them with b2kRemove / b2kSpriteRemove as usual.
+command b2kPlayerRemove
+   b2kPlayerForget true
+end b2kPlayerRemove
+
+-- Internal: drop controller state. b2kClear passes false (tuning is
+-- config and survives, like input bindings); teardown/remove pass true.
+command b2kPlayerForget pFull
+   put empty into sPlayRef
+   put empty into sPlayArt
+   put empty into sPlayAnims
+   put empty into sPlayState
+   put false into sPlayGrounded
+   put false into sPlayJumping
+   put true into sPlayControl
+   put 1 into sPlayFacing
+   put 0 into sPlayGroundMS
+   put 0 into sPlayPressMS
+   put 0 into sPlayHoldMS
+   put empty into sPlayAnimNow
+   put empty into sPlayFlipNow
+   if pFull is true then put empty into sPlayTune
+end b2kPlayerForget
+
+-- Internal: 3 short rays cast down from the capsule's bottom; ground is
+-- any hit whose surface normal points up within maxSlopeDeg. The rays
+-- start inside our own capsule, which Box2D structurally never reports
+-- (Phase 0, S7) -- self-hits are impossible. Sets the grounded flag and
+-- refreshes the coyote clock. While OUR jump is still ascending the
+-- probe is skipped outright: it would otherwise re-ground on the launch
+-- frame and report phantom landings while rising THROUGH a one-way
+-- chain (the bridge route). Plain upward motion is NOT skipped -- running
+-- up a slope moves the capsule upward while genuinely grounded.
+command b2kPlayerProbe pVY
+   local tPos, tX, tY, tReach, tSpread, tOffsets, tOff, tCos
+   put false into sPlayGrounded
+   if sPlayJumping is true and pVY < 0 then exit b2kPlayerProbe
+   set the itemDelimiter to comma
+   put b2kPosition(sPlayRef) into tPos
+   put item 1 of tPos into tX
+   put item 2 of tPos into tY
+   put sPlayHalfH + 4 into tReach
+   put max(2, sPlayHalfW * 0.6) into tSpread
+   put (0 - tSpread) & comma & 0 & comma & tSpread into tOffsets
+   put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into tCos
+   repeat for each item tOff in tOffsets
+      get b2kRayHit(tX + tOff, tY, tX + tOff, tY + tReach)
+      if sRayNY is not empty and sRayNY <= 0 - tCos then
+         put true into sPlayGrounded
+         put the milliseconds into sPlayGroundMS
+         exit b2kPlayerProbe
+      end if
+   end repeat
+end b2kPlayerProbe
+
+-- Internal: the per-frame controller. Loop order: input -> PLAYER ->
+-- sprites -> camera, so it reads this frame's edges and the sprite tick
+-- applies the anim it picks. Exits in one compare when unused.
+command b2kPlayerTick
+   local tNow, tDT, tVel, tVX, tVY, tAxis, tTarget, tAcc, tStep
+   local tPrevState, tMaxFall, tWrite
+   if sPlayRef is empty then exit b2kPlayerTick
+   if sBody[sPlayRef] is empty then exit b2kPlayerTick
+   put the milliseconds into tNow
+   -- present velocity, screen-oriented px/s (positive vy = falling)
+   set the itemDelimiter to comma
+   put b2kVelocity(sPlayRef) into tVel
+   put item 1 of tVel into tVX
+   put item 2 of tVel into tVY
+   b2kPlayerProbe tVY
+   put false into tWrite
+   if sPlayControl is true then
+      -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
+      put sFrameMS / 1000 into tDT
+      if tDT <= 0 then put 1 / 60 into tDT
+      if tDT > 0.05 then put 0.05 into tDT
+      put b2kAxis("moveX") into tAxis
+      if tAxis is not 0 then
+         if tAxis < 0 then
+            put -1 into sPlayFacing
+         else
+            put 1 into sPlayFacing
+         end if
+      end if
+      put tAxis * b2kPlayerGet("moveSpeed") into tTarget
+      if sPlayGrounded then
+         put b2kPlayerGet("accel") into tAcc
+      else
+         put b2kPlayerGet("airAccel") into tAcc
+      end if
+      put tAcc * tDT into tStep
+      if tVX < tTarget then
+         put min(tTarget, tVX + tStep) into tVX
+      else
+         put max(tTarget, tVX - tStep) into tVX
+      end if
+      put true into tWrite
+      -- jump: a buffered press fires while grounded-or-coyote
+      if b2kActionPressed("jump") then put tNow into sPlayPressMS
+      if sPlayPressMS > 0 and tNow - sPlayPressMS <= b2kPlayerGet("bufferMs") then
+         if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= b2kPlayerGet("coyoteMs")) then
+            put 0 - b2kPlayerGet("jumpSpeed") into tVY
+            put true into sPlayJumping
+            put false into sPlayGrounded   -- airborne from this frame on
+            put 0 into sPlayGroundMS       -- consume coyote
+            put 0 into sPlayPressMS        -- consume the buffer
+         end if
+      end if
+      -- jump-cut: releasing while still rising from OUR jump shortens it
+      if sPlayJumping and tVY < 0 and b2kActionReleased("jump") then
+         put tVY * b2kPlayerGet("jumpCut") into tVY
+         put false into sPlayJumping
+      end if
+   end if
+   if sPlayJumping and tVY >= 0 then put false into sPlayJumping   -- apex
+   put b2kPlayerGet("maxFall") into tMaxFall
+   if tVY > tMaxFall then
+      put tMaxFall into tVY
+      put true into tWrite
+   end if
+   if tWrite then b2kSetVelocity sPlayRef, tVX, tVY
+   -- the state machine (land = exactly one tick on touch-down)
+   put sPlayState into tPrevState
+   if sPlayGrounded is true then
+      if tPrevState is "jump" or tPrevState is "fall" then
+         put "land" into sPlayState
+      else
+         if abs(tVX) < 8 then
+            put "idle" into sPlayState
+         else
+            put "run" into sPlayState
+         end if
+      end if
+   else
+      if tVY < 0 then
+         put "jump" into sPlayState
+      else
+         put "fall" into sPlayState
+      end if
+   end if
+   -- animations: only while controlling (manual poses own the art when
+   -- control is off), and never let a vanished art control abort the
+   -- frame -- the loop's ticks share one try block
+   if sPlayControl is not true then exit b2kPlayerTick
+   if sPlayAnims["idle"] is empty and sPlayAnims["run"] is empty then exit b2kPlayerTick
+   try
+      if sPlayArt is empty then b2kPlayerResolveArt
+      if sPlayArt is not empty then b2kPlayerShowState tNow, tVX
+   catch tErr
+      put empty into sPlayArt   -- art gone; re-resolve next tick
+   end try
+end b2kPlayerTick
+
+-- Internal: drive the art's animation and facing from the current state.
+command b2kPlayerShowState pNow, pVX
+   local tWant, tAnim, tAKey, tFPS, tFlip
+   put sPlayState into tWant
+   if pNow < sPlayHoldMS and tWant is not "jump" and tWant is not "fall" then
+      put empty into tAnim   -- mid land-flourish: leave it playing
+   else
+      if tWant is "land" and sPlayAnims["land"] is empty then
+         -- no flourish mapped: land straight into idle or run, by speed
+         if abs(pVX) < 8 then
+            put "idle" into tWant
+         else
+            put "run" into tWant
+         end if
+      end if
+      put sPlayAnims[tWant] into tAnim
+   end if
+   if tAnim is not empty and tAnim is not sPlayAnimNow then
+      b2kSpritePlay sPlayArt, tAnim, (tWant is "land")
+      put tAnim into sPlayAnimNow
+      if tWant is "land" then
+         -- hold the flourish for its own length (frames / fps)
+         put sSprSheet[sPlayArt] & "|" & tAnim into tAKey
+         put sAnimFPS[tAKey] into tFPS
+         if tFPS is empty or tFPS <= 0 then put 8 into tFPS
+         put pNow + (the number of lines of sAnimList[tAKey]) * 1000 / tFPS into sPlayHoldMS
+      else
+         put 0 into sPlayHoldMS
+      end if
+   end if
+   put (sPlayFacing < 0) into tFlip
+   if tFlip is not sPlayFlipNow then
+      b2kSpriteFlipH sPlayArt, tFlip
+      put tFlip into sPlayFlipNow
+   end if
+end b2kPlayerShowState
 
 -- =====================================================================
 -- Camera: a clipped viewport group the loop scrolls (proven in spike S9)
@@ -3106,6 +3620,7 @@ on b2kStep pGen
       try
          b2kSyncBodies         -- lock-free; this frame's single lock is held here
          b2kInputTick          -- keyboard sample, so b2kFrame sees this frame's edges
+         b2kPlayerTick         -- reads the fresh edges, steers, picks the anim
          b2kSpritesTick        -- bound sprites follow bodies; animations advance
          b2kCamTick            -- viewport chases its target over the fresh locs
          b2kDispatchContacts
@@ -3142,6 +3657,7 @@ command b2kStepOnce
    try
       b2kSyncBodies
       b2kInputTick
+      b2kPlayerTick
       b2kSpritesTick
       b2kCamTick
       b2kDispatchContacts
