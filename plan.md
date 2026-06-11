@@ -100,14 +100,14 @@ and report; Phase 2 (sprites, icon-button backend) starts on the green light.
 
 ## Phase 2 — Sprite module (M/L)
 
-**Status: built (2026-06-10) — awaiting the OXT pass.** Built on the
-icon-button backend per the spike verdict, extended with a **TextureAtlas
-XML loader** for the Kenney-format `Spritesheets/` pack the project now
-ships (named frames like `character_beige_walk_a`), lazy slicing/mirroring,
-and `b2kSpriteBind` for art-bigger-than-collision characters. The platformer
-example is the test vehicle (banner checklist); it loads the real atlases
-from a remembered folder and falls back to embedded placeholder art if the
-folder dialog is cancelled.
+**Status: shipped and user-verified (2026-06-11), together with Phase 4.**
+Built on the icon-button backend per the spike verdict, extended with a
+**TextureAtlas XML loader** for the Kenney-format `Spritesheets/` pack
+(named frames like `character_beige_walk_a`), per-sheet display **scaling**
+(`b2kSheetScale`), lazy slicing/mirroring, `b2kSpriteBind`, and
+`b2kSpriteMoveTo`. The platformer example became the **release-candidate
+demo** — scrolling camera, win dialogue, checkpoint, riding Thwomp, two
+slimes, hazard fly, plate-gate puzzle, confetti — see the decision log.
 
 - **Build:** sheet registry (`b2kSheetLoad/FromImage/Frames`), `b2kAnimDef`,
   sprite factory (`b2kSpriteNew`, clipped-group mechanism), `b2kSpritesTick`,
@@ -218,5 +218,10 @@ user-confirmed in OXT before the next begins.
 | 2026-06-10 | **Phase 0 CLOSED.** S3/S4 visuals: no artifact/trail reports across four runs (and the icon backend doesn't clip at all); final eyes-on confirmation rides the Phase 2 example rather than a fifth spike pass. The spike stays in `examples/` as the acceptance harness for new platforms (macOS/Linux open, risk R1). | All spike passes |
 | 2026-06-10 | **Phase 1 built:** Kit Input module (18 handlers), paced loop (`in max(1, 16 − elapsed)`), `b2kFrameMS`, and `examples/box2dxt-platformer.livecodescript` (axis run, edge jump + release-cut, ray grounded check, one-way ledge). Statically verified; awaiting the OXT pass. | Phase 1 commit |
 | 2026-06-10 | **User shipped the asset pack** — Kenney-format atlases (`Spritesheets/`, PNG + TextureAtlas XML, named non-grid regions at 1px pitch, 1x and 2x variants) merged to main. Consequence: Phase 2 gains a first-class **atlas loader with named frames** (`b2kSheetLoadAtlas`) alongside grid sheets; animations reference frame names. | main merge c95e401 |
-| 2026-06-10 | **Phase 4 (camera) pulled forward of Phase 3, by user request,** to ship a scrolling showcase level. Built: the full `b2kCam*` surface from spec §7 (viewport group, follow/lerp/deadzone/bounds/shake, world-px mouse mapping, spawn auto-routing into the view, teardown integration, sweep-safe). The platformer became a 3072px level with a spike pit, pressure-plate + crate gate puzzle, patrolling stompable slime, and goal flag — pressure plates and enemy behaviours stay example-level patterns until Phase 5, per plan. Phase 3 (player controller) is next. | This commit; user request | (a) file sheets now load as image CONTENT (binfile), not filename references — referenced images size lazily when hidden, which broke the slicer stride; (b) per-sheet **display scaling** added (`b2kSheetScale`, engine-resampled at slice time) so any frame size fits any game; (c) **orphan sweep** on teardown kills ghost sprites after a stack reopen; (d) the example became a polished Kenney scene (backdrop, tiled terrain, bridge ledge, goal flag, win state) with on-screen load diagnostics and per-item fallbacks. | OXT runs + user reports |
+| 2026-06-10 | **Phase 4 (camera) pulled forward of Phase 3, by user request,** to ship a scrolling showcase level. Built: the full `b2kCam*` surface from spec §7 (viewport group, follow/lerp/deadzone/bounds/shake, world-px mouse mapping, spawn auto-routing into the view, teardown integration, sweep-safe). | Phase 4 commit; user request |
+| 2026-06-10 | **Phase 2 hardening from first OXT runs:** (a) file sheets load as image CONTENT (binfile), not filename references — referenced images size lazily when hidden, which broke the slicer stride; (b) per-sheet **display scaling** (`b2kSheetScale`); (c) **orphan sweep** on teardown kills ghost sprites after a stack reopen; (d) per-item art fallbacks + on-screen load diagnostics. | OXT runs + user reports |
 | 2026-06-10 | **Phase 2 built:** Kit Sprite module (~26 handlers) on the icon-button backend — lazy region slicing, shared frame images, lazy mirroring, `b2kAnimDef` names/ranges, `b2kSpriteOnFinish`, `b2kSpriteBind` (invisible body + bound art = collision independent of art size), GIF backend, `b2kClear`/`b2kTeardown` lifecycle. Platformer example v2: atlas hero (idle/walk/jump/hit), coin sensors, bee path sprite, saw hazard with hit-then-respawn chain; placeholder fallback keeps it runnable without the asset folder. Statically verified; awaiting the OXT pass. | Phase 2 commit |
+| 2026-06-11 | **The camera's hardest bug: grouped-loc semantics.** Symptom: the hero "sped up past the middle" and outran a scrolling view. Cause: OXT reports/sets grouped locs SCROLL-ADJUSTED, so per-frame world-coordinate writes cancelled the pan. Fix: `b2kCamOn` probes the model; every in-viewport write compensates (`b2kCamShiftX/Y`); `b2kSpriteMoveTo` for manual moves. Also fixed along the way: bounds-clamp write-back, no compositor scrolling cache (GPU surface limits froze the picture past ~2048px content), level-spanning anchor, never-offscreen snap + real-scroll failsafe, centre-locked follow. CLAUDE.md gotcha #12. | User runs, camera rounds 1–6 |
+| 2026-06-11 | **Compile gotchas found by OXT, now gated/documented:** the dangling else (single-line `if` before a bare `else` — checker gate added; CLAUDE.md #10) and `local` declarations nested in control blocks breaking the whole script (CLAUDE.md #11 — broke the intro-pan rework, which was reverted). | OXT compiles |
+| 2026-06-11 | **Teardown order fixed:** sprites must be wiped BEFORE the viewport dissolves (their stored long ids embed the group path); sprite removal made stale-ref-proof; example `b2kClear`s spawned bodies pre-teardown and guards re-entrant restarts. Fixed Reset/Play-again breakage. | User report |
+| 2026-06-11 | **The demo is the release candidate.** Win dialogue (all coins + flag: time, falls, confetti, Play again), checkpoint flag, riding Thwomp (underside-kill, head rideable, slow kinematic rise), second slime, hazard fly, two-cloud bonus route, splash, R/ESC keys. The opening camera pan was CUT (the rework broke an OXT compile; reverted) — the demo opens with a splash beat. **Phase 3 (player controller) is next.** | This commit |
