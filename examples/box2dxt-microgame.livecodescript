@@ -444,6 +444,10 @@ command mgBuild pLevel
    b2kCamGoto gSpawnX, gSpawnY
       b2kPlayerControl false   -- menus own the keys; mgBegin hands them over
       b2kFrameTarget the long id of me
+      -- sensor + contact MESSAGES dispatch to the CONTACT target - this
+      -- line missing meant every coin/spike/door event fired into the
+      -- void while solids worked fine ("no collisions with sensors")
+      b2kContactTarget the long id of me
    catch tBuildErr
    end try
    mgChromeFront

@@ -35,6 +35,7 @@
 -- =====================================================================
 
 local gRep, gPass, gFail, gFellCount, gRunning
+local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
 
@@ -158,8 +159,11 @@ command stNewWorld pName
    b2kTeardown
    stWipe
    put 0 into gFellCount
+   put 0 into gMsgEnters
+   put 0 into gMsgContacts
    b2kSetup
    b2kFrameTarget the long id of me
+   b2kContactTarget the long id of me
    b2kStart
    b2kPause
    stOut pName
@@ -201,6 +205,17 @@ end stSlab
 on b2kFell pCtrl
    add 1 to gFellCount
 end b2kFell
+
+-- message-path receivers: the harness must prove DISPATCH works, not
+-- just the polling accessors (a game that forgets b2kContactTarget gets
+-- silence - the micro-game shipped with exactly that bug)
+on b2kSensorEnter pSensorCtrl, pVisitorCtrl
+   add 1 to gMsgEnters
+end b2kSensorEnter
+
+on b2kContact pA, pB
+   add 1 to gMsgContacts
+end b2kContact
 
 function stX pCtrl
    set the itemDelimiter to comma
@@ -263,6 +278,8 @@ command stTestEvents
    stAssert "sensor fired exactly one exit (got " & tExits & ")", (tExits is 1)
    stAssert "never two enters in a frame", (tDupes is 0)
    stAssert "landing produced contact begins", (tBegins >= 1)
+   stAssert "the MESSAGE path delivered on b2kSensorEnter (got " & gMsgEnters & ")", (gMsgEnters is 1)
+   stAssert "the MESSAGE path delivered on b2kContact", (gMsgContacts >= 1)
    -- resting: 30 more frames must produce NOTHING new (the old 0-step
    -- duplication bug re-fired the last step's events while idle)
    put 0 into tEnters

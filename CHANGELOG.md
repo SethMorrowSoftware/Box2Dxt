@@ -39,6 +39,16 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **The micro-game's actual bug: it never set `b2kContactTarget`.**
+  Sensor and contact *messages* dispatch to the contact target; the
+  micro-game only set the frame target, so every coin/spike/door event
+  fired into the void on every build — solids, player, camera and
+  visuals all worked, which made it look like "collision" breakage.
+  One line fixes it. The self-test had a matching blind spot — its
+  sensor test used the polling accessors, which need no target — so the
+  events test now also asserts the **message path** delivers
+  (`on b2kSensorEnter` / `on b2kContact` received exactly once /
+  at-least-once via a registered contact target).
 - **Self-test round 4: ground-snap + wake-on-SetVelocity.** The
   instrumented land test measured the truth: after a hard landing the
   contact solver's push-out launches a real ~7px hop (24 frames of
