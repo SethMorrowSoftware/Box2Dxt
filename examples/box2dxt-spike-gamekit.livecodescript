@@ -1453,7 +1453,8 @@ end spikeNewGroup
 -- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
 --         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
 -- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen points)
--- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
+-- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapMoving x1,y1,x2,y2 (presence:
+--         statics filtered out) · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
 -- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
 -- TUNE    b2kSetRestitutionThreshold px/s · b2kSetContactTuning hz,damp,pushPx ·
 --         b2kSetJointTuning hz,damp · b2kSetMaxSpeed px/s · b2kEnableWarmStarting f ·
@@ -3118,10 +3119,30 @@ command b2kAddChain pControl, pPoints, pLoop
 end b2kAddChain
 
 -- Controls whose body overlaps a screen RECT (newline-separated long ids).
+-- NOTE: this asks the BROADPHASE, whose boxes are fattened (~0.1m = a few
+-- px) -- a region touching the floor reports the floor. For presence
+-- checks (plates, buttons) use b2kOverlapMoving.
 function b2kOverlap pX1, pY1, pX2, pY2
    if sWorld is empty then return empty
    return b2kQueryToControls(b2OverlapAABB(sWorld, b2kToWorldX(pX1), b2kToWorldY(pY1), b2kToWorldX(pX2), b2kToWorldY(pY2)))
 end b2kOverlap
+
+-- Controls of MOVING (non-static) bodies overlapping a screen RECT --
+-- THE presence poll for pressure plates and buttons. A pad region must
+-- sit on its floor, and the broadphase's fattened boxes make the floor
+-- itself overlap it forever; filtering statics asks what a plate means:
+-- "is some THING on me?" (Dynamic and kinematic bodies count; sleeping
+-- ones still register.)
+function b2kOverlapMoving pX1, pY1, pX2, pY2
+   local tLine, tOut
+   put empty into tOut
+   repeat for each line tLine in b2kOverlap(pX1, pY1, pX2, pY2)
+      if tLine is empty then next repeat
+      if sStatic[tLine] is true then next repeat
+      put tLine & cr after tOut
+   end repeat
+   return tOut
+end b2kOverlapMoving
 
 -- Controls whose body overlaps a screen circle.
 function b2kOverlapCircle pX, pY, pRadiusPx

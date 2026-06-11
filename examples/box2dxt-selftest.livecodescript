@@ -38,7 +38,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "7"   -- bump on EVERY harness change: the report
+constant kStHarnessV = "8"   -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -345,6 +345,13 @@ command stTestPresence
    stStep 60
    stAssert "overlap finds the resting crate", \
          (b2kOverlap(380, 450, 420, 505) is not empty)
+   stAssert "overlapMoving finds it too", \
+         (b2kOverlapMoving(380, 450, 420, 505) is not empty)
+   -- the pressure-plate trap: a region hugging BARE floor must read
+   -- empty through the moving filter (the raw broadphase query sees the
+   -- fattened floor box and may not - that is why plates use Moving)
+   stAssert "overlapMoving over bare floor is EMPTY", \
+         (b2kOverlapMoving(550, 480, 600, 502) is empty)
    -- let it fall asleep (sleep time ~0.5s = 30 steps; allow plenty)
    put false into tAsleep
    repeat with i = 1 to 240
@@ -355,8 +362,8 @@ command stTestPresence
       end if
    end repeat
    stAssert "the crate fell asleep", (tAsleep is true)
-   stAssert "overlap STILL finds it asleep (the pressure-plate guarantee)", \
-         (b2kOverlap(380, 450, 420, 505) is not empty)
+   stAssert "overlapMoving STILL finds it asleep (the pressure-plate guarantee)", \
+         (b2kOverlapMoving(380, 450, 420, 505) is not empty)
    stAssert "empty region reports empty", (b2kOverlap(50, 50, 90, 90) is empty)
 end stTestPresence
 
@@ -941,7 +948,8 @@ end stTestPlayerSlopes
 -- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
 --         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
 -- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen points)
--- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
+-- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapMoving x1,y1,x2,y2 (presence:
+--         statics filtered out) · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
 -- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
 -- TUNE    b2kSetRestitutionThreshold px/s · b2kSetContactTuning hz,damp,pushPx ·
 --         b2kSetJointTuning hz,damp · b2kSetMaxSpeed px/s · b2kEnableWarmStarting f ·
@@ -2606,10 +2614,30 @@ command b2kAddChain pControl, pPoints, pLoop
 end b2kAddChain
 
 -- Controls whose body overlaps a screen RECT (newline-separated long ids).
+-- NOTE: this asks the BROADPHASE, whose boxes are fattened (~0.1m = a few
+-- px) -- a region touching the floor reports the floor. For presence
+-- checks (plates, buttons) use b2kOverlapMoving.
 function b2kOverlap pX1, pY1, pX2, pY2
    if sWorld is empty then return empty
    return b2kQueryToControls(b2OverlapAABB(sWorld, b2kToWorldX(pX1), b2kToWorldY(pY1), b2kToWorldX(pX2), b2kToWorldY(pY2)))
 end b2kOverlap
+
+-- Controls of MOVING (non-static) bodies overlapping a screen RECT --
+-- THE presence poll for pressure plates and buttons. A pad region must
+-- sit on its floor, and the broadphase's fattened boxes make the floor
+-- itself overlap it forever; filtering statics asks what a plate means:
+-- "is some THING on me?" (Dynamic and kinematic bodies count; sleeping
+-- ones still register.)
+function b2kOverlapMoving pX1, pY1, pX2, pY2
+   local tLine, tOut
+   put empty into tOut
+   repeat for each line tLine in b2kOverlap(pX1, pY1, pX2, pY2)
+      if tLine is empty then next repeat
+      if sStatic[tLine] is true then next repeat
+      put tLine & cr after tOut
+   end repeat
+   return tOut
+end b2kOverlapMoving
 
 -- Controls whose body overlaps a screen circle.
 function b2kOverlapCircle pX, pY, pRadiusPx
