@@ -31,8 +31,9 @@ and degrees** the whole way.
 17. [Tuning and performance](#17-tuning-and-performance)
 18. [Dropping to the core `b2…` API](#18-dropping-to-the-core-b2-api)
 19. [A complete worked example: a little car](#19-a-complete-worked-example-a-little-car)
-20. [xTalk gotchas worth knowing](#20-xtalk-gotchas-worth-knowing)
-21. [Complete API index](#21-complete-api-index)
+20. [Building a whole game (the micro-game pattern)](#20-building-a-whole-game-the-micro-game-pattern)
+21. [xTalk gotchas worth knowing](#21-xtalk-gotchas-worth-knowing)
+22. [Complete API index](#22-complete-api-index)
 
 ---
 
@@ -983,7 +984,64 @@ joints, smooth chain terrain, and a per-frame motor driven by the keyboard.
 
 ---
 
-## 20. xTalk gotchas worth knowing
+## 20. Building a whole game (the micro-game pattern)
+
+`examples/box2dxt-microgame.livecodescript` is a complete game — start
+screen, two levels, a win screen — in a few hundred lines of card logic,
+with nothing to install beyond the extension (the hero sheet is embedded
+base64; every sound is `b2kToneMake`d). It is the file to copy when you
+start your own game. Its skeleton is four ideas:
+
+**1. A game-state machine, gated by `b2kPlayerControl`.** One `gMode`
+local (`menu` / `play` / `won`) decides what clicks and keys mean. The
+world is built and *running* behind the menu — the hero idles, sweepers
+patrol — but `b2kPlayerControl false` means the keys do nothing until
+`mgBegin` hands them over. Hit poses and the win screen reuse the same
+switch.
+
+**2. Levels are data; the interpreter is yours.** Each level is a few
+lines of text, one verb per line:
+
+```
+bounds 1024,640
+spawn 110,500
+slab 0,576,1024,640
+ledge 620,860,420
+coin 460,448
+spike 250,330,560
+door 945,478
+```
+
+…and `mgBuild` is a ~100-line `switch` that tears the world down
+(`b2kClear` + `b2kTeardown`), interprets the lines, then makes the player
+and hands the camera its bounds. Verbs are cheap — when your game needs a
+new object, add a `case` and a line format. This is the Kit's intended
+scene pattern: the *format* belongs to your game, the heavy lifting
+(bodies, sprites, camera, controller) is already API. Two details worth
+stealing: the `ledge` verb ghost-pads its chain automatically (see §15),
+and `door` is just a sensor plus a `gDoorOpen` flag the frame hook flips
+when the coin count is full.
+
+**3. One call makes the player.** `b2kPlayerMake gSpawnX, gSpawnY, 32,
+56, "hero"` creates the capsule body host, the bound sprite, the
+controller, and arms input. After it: map the anims, set two tuning
+knobs, `b2kCamFollow`. The micro-game's whole "character system" is six
+lines.
+
+**4. Game events ride the hooks you already have.** Coins/spikes/door are
+sensors (`on b2kSensorEnter`); landing and jump sounds key off
+`b2kPlayerState()` in `on b2kFrame`; respawn is a non-looping `hit`
+animation whose `b2kSpriteOnFinish` message teleports the hero home. No
+new machinery — a game is the Kit's events plus your rules.
+
+Play order: `openCard` builds level 1 and shows the menu → click →
+`mgBegin` → door (all coins) → `mgAdvance` → level 2 → door → `mgShowWin`
+→ click → back to level 1. `R` rebuilds the current level, `ESC` pauses,
+`M` mutes.
+
+---
+
+## 21. xTalk gotchas worth knowing
 
 A few things that trip up LiveCode/OpenXTalk users specifically:
 
@@ -1005,7 +1063,7 @@ A few things that trip up LiveCode/OpenXTalk users specifically:
 
 ---
 
-## 21. Complete API index
+## 22. Complete API index
 
 Every public handler, grouped. `[f]` marks a **function** (returns a value — call
 it with `()` / `get` / `put`); everything else is a **command** (a statement).

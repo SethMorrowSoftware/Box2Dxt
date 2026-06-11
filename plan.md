@@ -193,15 +193,24 @@ separately, each PR-sized, in rough value order:
   sine-path hazards: bee/fly/sweeping saw), `pfMakeThwomp` (arm/fall/
   rest/rise lifecycle, rideable, draggable). Promote to `b2k` API once a
   second example repeats them (the micro-game below is that test).
-- **Scenes/levels (next):** load/save level layouts (seed: the builder's
-  `serializeText` record format); `b2kSceneLoad/Save/Reset`; win/lose hooks
-  (the ROADMAP §4.1 goal-zone work and this converge here).
+- **Scenes/levels — DESIGN PROBE BUILT (2026-06-11) inside the micro-game.**
+  Levels are data: one `verb args` line per object (`slab`, `ledge`, `coin`,
+  `spike`, `sweep`, `door`, `text`, `spawn`, `bounds`), interpreted by a
+  ~100-line example-side `mgBuild`; the `ledge` verb ghost-pads its chain
+  automatically. Win/lose hooks ride sensors + the frame hook. Whether this
+  is promoted to `b2kScene*` API (and merged with the builder's
+  `serializeText` lineage) gets decided from how the pattern holds up in use.
 - **Builder cross-pollination:** animated sprite parts and the player as a
   placeable "kind" inside the contraption builder (its §3/§4 roadmap), making
   the builder the level editor — the long-game payoff.
-- **Exit:** a complete micro-game (start screen → 2 levels → win screen) as
-  `examples/` — built on `b2kPlayerMake` (the green-field path the platformer
-  doesn't exercise) — and the "build a game" chapter of the kit guide.
+- **Exit — BUILT (2026-06-11), awaiting the OXT pass:** the micro-game
+  (`examples/box2dxt-microgame.livecodescript`): start screen → 2 levels →
+  win screen, on `b2kPlayerMake` (the green-field path the platformer
+  doesn't exercise), hero sheet embedded as base64, all sounds synthesized
+  — paste one file, click, play. Plus the kit guide's new "Building a whole
+  game" chapter (§20) walking its four ideas: the mode machine gated by
+  `b2kPlayerControl`, levels-as-data, the one-call player, and
+  rules-as-hooks.
 
 ---
 
@@ -266,3 +275,5 @@ user-confirmed in OXT before the next begins.
 | 2026-06-11 | **Stomp detection moved off velocity onto controller state.** Contacts dispatch after the physics step, when the solver has already absorbed a clean stomp's impact — `vy > 40` read ~0 and hurt the hero instead of squashing. Now: squash when this frame's or last frame's player state is land/fall (velocity kept as fallback) + the existing above-the-slime position gate. General lesson: judge gameplay intent from controller state, not post-solve velocities. | User OXT runs |
 | 2026-06-11 | **Thwomps re-arm in place** (user direction): the rise ends with set-static at the CURRENT x — no teleport home (it read as vanish/reappear and undid drag-repositioning). `gBlockHomeX` removed. | User direction |
 | 2026-06-11 | **Optimization round:** sprite tick skips inert sprites (no bind + no anim) before the try/catch — the ~100 static tiles now cost two array reads each per frame; sounds persist across `b2kTeardown` (resets skip ~0.25s of tone re-synthesis; clips are KBs); mover tick reads the clock once. Declined as not-worth-it: caching `b2kPlayerGet` lookups (µs), reducing ground tiles (visual cost), rendering-config changes (not statically verifiable). | This commit |
+| 2026-06-11 | **Phase 5 exit built: the micro-game** (start → 2 levels → win, one pasteable file, zero external assets) + the guide's "Building a whole game" chapter. The scenes/levels design shipped as the micro-game's example-side data format (verb-per-line text + a small interpreter) rather than Kit API — per the promote-once-repeated rule, `b2kScene*` waits until a second game wants the same format. `b2kPlayerMake` gets its first real exercise (the platformer adopts; this creates). Statically verified; awaiting the OXT pass. | Phase 5 exit commit |
+| 2026-06-11 | **Loop hardening found by the micro-game design: `b2kStep` now reschedules with ITS OWN generation (pGen), not the live sGen.** A world rebuild from inside a frame (the door sensor advancing a level) changes sGen mid-frame; rescheduling with the new value would clone the loop and double-step forever. With pGen the stale instance dies at the guard. The micro-game still defers its rebuild out of the frame (`send … in 80 ms`) — belt and braces, and the door chime gets its beat. | Micro-game design review |

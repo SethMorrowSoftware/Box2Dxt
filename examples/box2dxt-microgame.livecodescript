@@ -1,1364 +1,605 @@
 -- =====================================================================
--- box2dxt-spike-gamekit.livecodescript  ·  Game Kit Phase 0 runtime spike
+-- box2dxt-microgame.livecodescript  ·  "build a game" in one file
 --
--- PURPOSE: answer the "(verify in OXT)" questions in docs/game-engine-spec.md
--- on real OXT hardware BEFORE any Game Kit module is built. See plan.md
--- Phase 0 for the S0-S10 test table this implements.
+-- The Game Kit Phase 5 exit artifact: a COMPLETE micro-game - start
+-- screen, two levels, a win screen - in a few hundred lines of card
+-- logic, with NOTHING to install beyond the box2dxt extension. No
+-- asset folder: the hero spritesheet is embedded as base64 and every
+-- sound is synthesized (b2kToneMake). This file is also the teaching
+-- companion for the kit guide's "Building a whole game" chapter; if
+-- you are starting your own game, start by copying this.
+--
+-- What it demonstrates that the big platformer demo does not:
+--   * b2kPlayerMake - the ONE-CALL player (body host + capsule +
+--     sprite + controller + input), vs the platformer's adopt path.
+--   * Levels as DATA: each level is a few lines of text ("slab ...",
+--     "coin ...", "door ..."), interpreted by ~100 lines of mgBuild.
+--     Add verbs as your game needs them - this is the example-level
+--     scene pattern the plan's Phase 5 calls for.
+--   * A game-state machine (menu / play / won) gated with
+--     b2kPlayerControl, so the world runs behind the menus.
 --
 -- HOW TO RUN
---   1. In OXT, make a new stack. Put this whole file into the STACK script.
---   2. Make sure the box2dxt extension is loaded (S7-S10 need it; S0-S6 run
---      without it). Close and reopen the stack.
---   3. Click the test buttons top to bottom. Follow the STATUS box; some
---      tests judge themselves, some ask your eyes. Press STOP between tests.
---   4. When done, click "Copy report" and paste the report back to the
---      developer/assistant. Every line matters, including the ENV lines.
+--   1. In OXT, make a new stack. Put this whole file into the STACK
+--      script. Make sure the box2dxt extension is loaded.
+--   2. Close and reopen the stack. Click to start. That is all.
 --
--- The stage rebuilds itself per test; STOP tears down and wipes it. This
--- file is throwaway scaffolding - it is not an example of Kit style.
+-- CONTROLS  arrows / A-D run · SPACE / UP / W jumps (tap = hop, hold =
+--           full) · R restarts the level · ESC pauses · M mutes
+--
+-- WHAT TO VERIFY (OXT pass)
+--   1. Paste-and-play with NO asset folder: embedded hero art animates,
+--      synthesized sounds play, click starts level 1.
+--   2. b2kPlayerMake feel: run/jump/coyote/buffer/jump-cut all behave
+--      like the platformer demo (same controller, green-field path).
+--   3. The door stays GREY until every coin is taken, then turns green
+--      with a chime; touching it open advances L1 -> L2 -> win screen.
+--   4. Spikes and the patrolling SWEEPER hurt and respawn you at the
+--      level spawn; falls count on the HUD.
+--   5. Level 2 scrolls (1536px world); the camera follows centre-lock.
+--   6. Win screen shows time + falls; click restarts at level 1; R
+--      restarts a level mid-run; ESC pauses; M mutes; reopen = clean.
 -- =====================================================================
 
-local gSpikeGen, gSpikeTest, gExtOK, gEnvDone, gReportN
-local gProbeN, gProbeLast, gProbeSum, gProbeMax
-local gS1MaxChord, gS1Seen, gS1RawDown, gS1RawUp
-local gSheetData, gSheetAlpha
-local gS3Frame, gS3Tick, gS4Motion, gS4On, gS4Ang
-local gS5Made
-local gS8Phase, gS8T0, gS8MinY, gS8Tail, gS8Ball
-local gS9Hero, gS9Logged
-local gS10T0, gS10Logged, gS10Mode, gS10First, gSpFrame, gSpNext, gSpAng, gSpCX, gSpCY
-local gFrameData, gFrIcon
-local gFpsN, gFpsT0, gFpsLast, gFpsMin, gFpsSum, gFpsSamples
-local gFpsWarmMin, gFpsWarmSum, gFpsWarmN
+local gMode             -- menu | play | won (the game-state machine)
+local gLevel, gCoins, gCoinsTotal, gFalls, gRunStart, gWinSecs
+local gHero, gHeroSpr, gDoor, gDoorOpen, gSpawnX, gSpawnY
+local gHudLast, gHurtLock, gBuilding, gPrevState, gWorldW, gWorldH
+local gSwpN, gSwpRef, gSwpC, gSwpA, gSwpP, gSwpY, gSwpW, gSwpH
 
-constant kSpikeDeg = 0.0174532925
--- 4-frame 32x32 animated GIF (red/green/blue/yellow, 2px black border, 250 ms
--- per frame, loops forever). Generated offline; used by S5.
-constant kSpikeGifB64 = "R0lGODlhIAAgAIEAAOZGRgAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAGQAAACwAAAAAIAAgAAAIbAADCBxIsKDBgwgTKlwIoKHDhxAjSiQosaLFhxQvaoyYcaNHAB0/agwp0iLJkhMHohypcqXJli5TCoxZ8SRNkDBvOrRJk2dMny6BrhSKkmhJoyKRflTqkelGpyxn6sSYcyrUi1dfLtzKtWvXgAAh+QQBGQACACwCAAIAHAAcAIFGyHgAAAAAAAAAAAAIMAABCBxIsKDBgwgTKlzIsKHDhxAjSpxIsaLFixgzatzIsaPHjyBDihxJsqTJkwQDAgAh+QQBGQACACwCAAIAHAAcAIFQgv8AAAAAAAAAAAAIMAABCBxIsKDBgwgTKlzIsKHDhxAjSpxIsaLFixgzatzIsaPHjyBDihxJsqTJkwQDAgAh+QQBGQACACwCAAIAHAAcAIHwyEYAAAAAAAAAAAAIMAABCBxIsKDBgwgTKlzIsKHDhxAjSpxIsaLFixgzatzIsaPHjyBDihxJsqTJkwQDAgA7"
+constant kMgUIVersion = "1"
+constant kMgHeroB64 = "iVBORw0KGgoAAAANSUhEUgAAAYAAAAEACAYAAAC6d6FnAAAI/ElEQVR42u3dPVLjShgFUJlyxCJwTOqVQEDORojYCDkBrMSpY7EIUl4knixjj9vqH7V0TtVUYaZLvhZPffUZ3tA0AAAAAAAAAAAAAAAAAAAAAAAAAABAHquxB3h7ufsZe4zn16+VLwVAJQUQY+OfQhEosLKcf6ioAIYX7NPDdnSI989d9gtagdWfWxFAxgLoX7QxNv5zRZDqYlZgZTfQuZx/WFQBpN78c5SAAiu7gc7h/MPiCiDX5p/yQlZg886uBCDcTcjiHJt/iufJWWD948d8mybHa6g5e+rXAIssgO4iyrX5Dy/kmBexAiu7gdZ6/sEEUCkFVvZ55nT+YVEFUOridRHbQAETQJWbp03U+QcFgA0UmKx1rAPdbj8OHn/vHqOuB2CCBTDczLvPndrUQ9fnoMDKcv6hwgIYXoibzf3vx227P7owQ9eX2HwUmPMPS3AT88Ltb+bd4/6a0PUlNp/N5v73z6mNJmR9yQ001nrnHxTA7N92UGAfzj8oABQYoAAAUABDw2+6te3+6HF/Teh6ACY8Afy1qXd//trMQ9enpMDKcv6h8gL468I89blr1+fehBSY8w9LsE51Icden3oTCvm5+ND1ObP3N/VTG2jIeucfFMDi3o5QYM4/KAAUGDBLfgwUQAEAoAAAUAAAKAAAFAAACgAABQCAAgBAAQCgAACoowCeX79WTdM075+7IuG65+1yhJJf/jH5wQQAwDILoNRdXKy7N/nld5lDhAkg10Wc6nnklx8ILID+XVTqi6t//Fh3b/LLD4yYAHJcxCkvXvnlBw4FXyRvL3c/5/7+6WE7ekRPefHKLz9wZQFcchHHulMstQnJLz8sgR8DBVio6L8U/pI7sJR3gPLLD5gAAFAAACgAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAksop5sBi/q/WS3wmbivzyyy//kvKvphK85BdCfvnll3+J+Vcxgz89bEcHf//cZftCyC+//PIvOf8qRvgYwc+9kBRfBPnll1/+pee/mWL44XFjj0jyyy+//PJfUQA5wqf8Isgvv/zyyz9iAsgRPmdDyi+//PIvMX9QAXQtkiv88EWMbWH55ZdffvkjTAAA1O3iAijVXrFaWH755Zdf/sP8JgAAEwAAS7JOcdDb7cfB4+/dY9T1qckvv/zyLyH/Terwpz537frcJ19++eWXf6751ynDbzb3vx+37f6omULX5z758ssvv/xzzn+TI3z3uL8mdH3Jky+//PLLP8f8vgkMsFAKAEABAKAArjD8hkPb7o8e99eErk9Nfvnll39p+dexX0T/Gw/9UH+FCV2f44sgv/zyy7+U/DcpXsQln7t2fe4mll9++eWfa/51rhcRc32JL4L88ssv/9zy+yYwwEIpAAAFAIACAEABAKAAAFAAACgAABQAAAoAAAUAgAIAoL4CeH79WjVN07x/7ooE7Z63yxFKfvnll1/+w/wmAAATwHRbbGz7yi+//PLLf5z/ZuxBc4Wv5bjyyy+//LXkDy6AfoukfhH9449tX/nll19++SNMADleRIqTL7/88ssv//9GvbC3l7ufc3//9LAdPaLEPvnyyy+//PJHKIBLXkSspiz1RZBffvnln2t+PwYKsFDrlAe/pIFSNqD88ssvv/yFCoDpyzHmgv9+FzgB+A8Q59/5Y7rn3/cAABZKAQAAAAAAAAAAAAAAAABM3CT+OWj/OzpARQWQ4l/RUwQAEy6A4cZ/yW+t+Zfhb7XJWQQmGEABBG6WMTb+c0WQelM1wQAKYCKbf64SmNsEA5C0AHJt/qlLYE4TDMBYQf8cdI7NP9Xz5Cix/nGn/KvmAC4qgG4jy7X5DzfTGBtpzglGCQCznABqV/MEA5C1AErd/cecAuYwwQCYAABQAFO++zcFADVYxzrQ7fbj4PH37jHqegAmOAEMN/NTn7t2PQATnACGG/dmc//7cdvuj+7sQ9fnYoIBTACRNv/ucX9N6PpSm78JBjABLMBcJhiArBPAnDf/miYYAAUAQJ4CGL7d0bb7o8f9NaHrAUhn9PcAvnePB2979Df1vzbz0PUATHAC+NdGH2t9KiYYwASQqARirk9ZAiYYwASwULVOMACTmADmWAI1TDAAJgAAFAAACgAABQCAAgBAAQAoAAAUAAAKAAAFAIACAEABAKAAAFAAACgAABQAAAoAgCkXwPPr16ppmub9c1ckXPe8XY5QtecHMAEAkL8ASt1Fx7p7rj0/wCQmgFybaKrnqT0/QPYC6N/Fpt7c+sePdfdce36AohNAjk005eZZe36A2II3qbeXu59L1j09bM9ukJdu1rHVnh+gWAGEbqTX3qWnVnt+gLGu/jHQlG/R5FB7foCx1jk32BR33fIDZJ4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJZgNfYAby93P2OP8fz6tfKlAKikAGJs/IoAoKICGG78Tw/b0SHeP3fFisAEAyiAwM0yxsZ/rghSb6omGEABTGTzz1UCc5tgAJIWQK7NP3UJzGmCARjrJmRxjs0/1fPkKLH+cVO8xQSQtQC6jSzX5j/cTGNspDknGCUAzHICqF3NEwxA1gIodfcfcwqYwwQDYAIAQAFM+e7fFADUYB3rQLfbj4PH37vHqOsBmOAEMNzMT33u2vUATHACGG7cm83978dtuz+6sw9dn4sJBjABRNr8u8f9NaHrS23+JhjABLAAc5lgALJOAHPe/GuaYAAUAAB5CmD4dkfb7o8e99eErgcgndHfA/jePR687dHf1P/azEPXAzDBCeBfG32s9amYYAATQKISiLk+ZQmYYAATwELVOsEATGICmGMJ1DDBAJgAAFAAACgAABQAAAoAAAUAoAAAUAAALLwAnl+/Vk3TNO+fuyLhuuftcoSqPT+ACQCA/AVQ6i461t1z7fkBJjEB5NpEUz1P7fkBshdA/y429ebWP36su+fa8wMUnQBybKIpN8/a8wPEdvEm9fZy93Pq754etlE2zXOb9li15weILcrvA6j9PW/v2QNL5MdAAUwA1xvzVse5t2ZyqT0/gAkAAAUAgAIAQAEA0PkPK875jF7ESN4AAAAASUVORK5CYII="
 
 -- =====================================================================
 -- Lifecycle
 -- =====================================================================
 on openCard
-   -- the S11 check doubles as a UI version guard: pasting a newer spike over
-   -- an old stack rebuilds the chrome on next open
-   if there is no button "skbtn_S12" then buildSpikeUI
-   if gEnvDone is not true then
-      put true into gEnvDone
-      put 0 into gReportN
-      put the milliseconds & "_" & random(100000) into gSpikeGen
-      spikeLog "=== Box2Dxt Game Kit spike (Phase 0) ==="
-      spikeLog "Run the buttons top to bottom; STOP between tests; Copy report when done."
-      spikeEnvReport
-   end if
+   if the uMgUIVersionTag of this stack is not kMgUIVersion then buildMgUI
+   mgBuild 1
+   mgShowMenu
    pass openCard
 end openCard
 
 on closeCard
-   spikeStopTest true
+   b2kStop
    pass closeCard
 end closeCard
 
 -- =====================================================================
--- UI (built once, programmatically, like the examples do)
+-- Chrome (version-tagged; rebuilds once when a newer file is pasted in)
 -- =====================================================================
-command buildSpikeUI
-   local tTop, tNames, tLabels, i, tName
-   spikeWipeControls "skbtn_"
-   if there is a field "skStatus" then delete field "skStatus"
-   if there is a field "skReport" then delete field "skReport"
-   set the width of this stack to 980
-   set the height of this stack to 700
+command buildMgUI
+   if there is a field "mgTitle" then delete field "mgTitle"
+   if there is a field "mgHud" then delete field "mgHud"
+   if there is a field "mgBigText" then delete field "mgBigText"
+   if there is a graphic "mgShade" then delete graphic "mgShade"
+   set the width of this stack to 1024
+   set the height of this stack to 640
    set the loc of this stack to the screenLoc
-   put "S0,S1,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,stop,copy" into tNames
-   put "S0 env + timer|S1+S2 keyboard|S3 sprite scroll|S4 accel + motion|S5 gif frames|S6 flip image|S7 rays (Kit)|S8 one-way (Kit)|S9 camera (Kit)|S10 perf (Kit)|S11 syntax probe|S12 icon sprites|STOP test|Copy report" into tLabels
-   put 10 into tTop
-   set the itemDelimiter to comma
-   repeat with i = 1 to the number of items of tNames
-      put item i of tNames into tName
-      create button ("skbtn_" & tName)
-      set the rect of it to 10, tTop, 170, tTop + 26
-      set the itemDelimiter to "|"
-      set the label of it to item i of tLabels
-      set the itemDelimiter to comma
-      set the traversalOn of it to false
-      set the autoHilite of it to true
-      add 32 to tTop
-   end repeat
-   create field "skStatus"
-   set the rect of it to 190, 10, 960, 108
+   try
+      set the title of this stack to "Box2Dxt - Micro-game"
+   catch tErr
+   end try
+   create field "mgTitle"
+   set the rect of it to 20, 6, 1004, 26
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 13
+   set the text of it to "Box2Dxt micro-game - a whole game on the Kit (b2kPlayerMake + data levels + tones)"
+   create field "mgHud"
+   set the rect of it to 20, 612, 1004, 636
    set the lockText of it to true
    set the traversalOn of it to false
    set the textSize of it to 12
-   create field "skReport"
-   set the rect of it to 190, 560, 960, 690
+   -- one overlay pair serves the menu AND the win screen
+   create graphic "mgShade"
+   set the style of it to "rectangle"
+   set the rect of it to 0, 0, 1024, 640
+   set the filled of it to true
+   set the backgroundColor of it to "16,18,26"
+   set the blendLevel of it to 35
+   create field "mgBigText"
+   set the rect of it to 112, 160, 912, 440
    set the lockText of it to true
    set the traversalOn of it to false
-   set the textSize of it to 11
-   set the vScrollbar of it to true
-   spikeStatus "Ready. Click S0 first, then work down the column."
+   set the textAlign of it to "center"
+   set the textSize of it to 20
+   set the textStyle of it to "bold"
+   set the opaque of it to false
+   set the showBorder of it to false
+   set the textColor of it to "245,245,250"
+   set the uMgUIVersionTag of this stack to kMgUIVersion
+end buildMgUI
+
+command mgChromeFront
+   local tN
+   put the number of controls of this card into tN
+   if there is a graphic "mgShade" then set the layer of graphic "mgShade" to tN - 1
+   if there is a field "mgBigText" then set the layer of field "mgBigText" to tN
+   if there is a field "mgTitle" then set the layer of field "mgTitle" to tN
+   if there is a field "mgHud" then set the layer of field "mgHud" to tN
+end mgChromeFront
+
+-- =====================================================================
+-- The game-state machine: menu -> play -> won -> (again)
+-- =====================================================================
+command mgShowMenu
+   put "menu" into gMode
+   set the text of field "mgBigText" to "B O X 2 D X T   M I C R O - G A M E" & cr & cr & "two levels - collect EVERY coin to open the door" & cr & cr & "arrows / A-D run  ·  SPACE jumps (tap = hop, hold = full)" & cr & "R restarts the level  ·  ESC pauses  ·  M mutes" & cr & cr & "C L I C K   T O   S T A R T"
+   set the visible of graphic "mgShade" to true
+   set the visible of field "mgBigText" to true
+   mgChromeFront
+end mgShowMenu
+
+command mgBegin
+   put "play" into gMode
+   set the visible of graphic "mgShade" to false
+   set the visible of field "mgBigText" to false
+   put 0 into gFalls
+   put the milliseconds into gRunStart
+   b2kPlayerControl true   -- the world was already running behind the menu
+   b2kSound "start"
+end mgBegin
+
+command mgAdvance
+   if gLevel is 1 then
+      -- rebuild OUTSIDE this physics frame: we are inside the sensor
+      -- dispatch right now, and tearing the world down mid-frame is
+      -- asking for trouble. The short beat also lets the door chime ring.
+      send "mgGoNext" to me in 80 milliseconds
+      exit mgAdvance
+   end if
+   mgShowWin
+end mgAdvance
+
+on mgGoNext
+   if gMode is not "play" then exit mgGoNext
+   mgBuild 2
+   b2kPlayerControl true   -- straight into level 2, clocks keep running
+end mgGoNext
+
+command mgShowWin
+   local tMsg
+   put "won" into gMode
+   put (the milliseconds - gRunStart) div 1000 into gWinSecs
+   b2kPlayerControl false
+   set the itemDelimiter to comma
+   b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
+   b2kSound "win"
+   put "Y O U   W I N !" & cr & cr into tMsg
+   put "both levels, every coin" & cr after tMsg
+   put "time " & format("%d:%02d", gWinSecs div 60, gWinSecs mod 60) & "      falls " & gFalls & cr & cr after tMsg
+   if gFalls is 0 then put "flawless - not a single tumble" & cr & cr after tMsg
+   put "C L I C K   T O   P L A Y   A G A I N" after tMsg
+   set the text of field "mgBigText" to tMsg
+   set the visible of graphic "mgShade" to true
+   set the visible of field "mgBigText" to true
+   mgChromeFront
+end mgShowWin
+
+-- =====================================================================
+-- Sounds: all synthesized, built once (they survive b2kTeardown)
+-- =====================================================================
+command mgMakeSounds
+   if b2kSoundIsLoaded("start") then exit mgMakeSounds
+   b2kToneMake "start", "392,523,659", 70, 55
+   b2kToneMake "jump", "392,587", 40, 55
+   b2kToneMake "coin", "1319,1760", 36, 45
+   b2kToneMake "hurt", "220,156,110", 55, 65
+   b2kToneMake "land", "98", 26, 40, "sine"
+   b2kToneMake "door", "523,784", 80, 55, "sine"
+   b2kToneMake "win", "523,659,784,1047,1319", 110, 65
+end mgMakeSounds
+
+-- =====================================================================
+-- Levels as DATA. One verb per line; coordinates are world pixels.
+-- Verbs: bounds w,h · spawn x,y · text x,y,label (no commas in label) ·
+-- slab l,t,r,b · ledge x1,x2,y (one-way) · spike l,r,y · coin x,y ·
+-- sweep l,t,r,b,minx,maxx,period (patrolling proximity hazard) ·
+-- door x,y. Add your own verbs in mgBuild's switch - that IS the
+-- pattern: levels are text, the interpreter is the engine of YOUR game.
+-- =====================================================================
+function mgLevelText pLevel
+   local t
+   put empty into t
+   if pLevel is 1 then
+      put "bounds 1024,640" & cr after t
+      put "spawn 110,500" & cr after t
+      put "text 512,140,LEVEL 1 - grab ALL the coins to open the door" & cr after t
+      put "text 300,300,SPACE jumps: tap = hop / hold = full" & cr after t
+      put "slab 0,576,1024,640" & cr after t
+      put "spike 250,330,560" & cr after t
+      put "slab 380,488,560,512" & cr after t
+      put "ledge 620,860,420" & cr after t
+      put "coin 170,520" & cr after t
+      put "coin 460,448" & cr after t
+      put "coin 740,372" & cr after t
+      put "slab 880,512,1010,576" & cr after t
+      put "door 945,478" & cr after t
+   else
+      put "bounds 1536,640" & cr after t
+      put "spawn 90,500" & cr after t
+      put "text 512,140,LEVEL 2 - hop the pillars... and time the SWEEPER" & cr after t
+      put "text 1250,330,every coin - then the door" & cr after t
+      put "slab 0,576,360,640" & cr after t
+      put "spike 360,1060,624" & cr after t
+      put "slab 470,544,560,640" & cr after t
+      put "slab 670,512,760,640" & cr after t
+      put "slab 870,544,960,640" & cr after t
+      put "slab 1060,576,1536,640" & cr after t
+      put "coin 240,515" & cr after t
+      put "coin 515,496" & cr after t
+      put "coin 715,464" & cr after t
+      put "coin 915,496" & cr after t
+      put "coin 1180,520" & cr after t
+      put "sweep 1080,512,1144,544,1080,1420,900" & cr after t
+      put "slab 1430,512,1530,576" & cr after t
+      put "door 1480,478" & cr after t
+   end if
+   return t
+end mgLevelText
+
+-- =====================================================================
+-- The level interpreter: tear down, parse, build, hand over the keys
+-- =====================================================================
+command mgBuild pLevel
+   local tLine, tVerb, tArgs, tRef, tName, tPts
+   if gBuilding is true then exit mgBuild
+   put true into gBuilding
+   put pLevel into gLevel
+   put false into gHurtLock
+   put false into gDoorOpen
+   put empty into gDoor
+   put empty into gPrevState
+   put 0 into gCoins
+   put 0 into gCoinsTotal
+   put 0 into gSwpN
+   put empty into gSwpRef
+   put empty into gSwpC
+   put empty into gSwpA
+   put empty into gSwpP
+   put empty into gSwpY
+   put empty into gSwpW
+   put empty into gSwpH
    try
-      focus on nothing
+      b2kClear
    catch tErr
    end try
-end buildSpikeUI
-
--- One dispatcher for every button (the buttons carry no scripts).
-on mouseUp
-   local tName
-   put the short name of the target into tName
-   if char 1 to 6 of tName is "skbtn_" then
-      switch tName
-         case "skbtn_S0"
-            runS0
+   b2kTeardown
+   mgWipeStage
+   b2kSetup
+   b2kSetScale 60
+   mgMakeSounds
+   -- the hero sheet rides INSIDE this file: a hidden image fed from
+   -- base64, registered as a 48x64 grid (teardown wiped the registry;
+   -- re-registering is cheap, frames re-slice lazily)
+   if there is no image "mgHeroSheet" then
+      create image "mgHeroSheet"
+      set the visible of it to false
+      set the text of image "mgHeroSheet" to base64Decode(kMgHeroB64)
+      set the lockLoc of it to true   -- AFTER the content, so it auto-sized
+   end if
+   b2kSheetFromImage "hero", the long id of image "mgHeroSheet", 48, 64
+   b2kAnimDef "hero", "idle", "1-4", 4, true
+   b2kAnimDef "hero", "walk", "9-16", 10, true
+   b2kAnimDef "hero", "jump", "17", 1, true
+   b2kAnimDef "hero", "hit", "19", 2, false
+   lock screen
+   b2kCamOn
+   set the itemDelimiter to comma
+   put 1024 into gWorldW
+   put 640 into gWorldH
+   put 110 into gSpawnX
+   put 500 into gSpawnY
+   repeat for each line tLine in mgLevelText(pLevel)
+      if tLine is empty then next repeat
+      put word 1 of tLine into tVerb
+      put word 2 to -1 of tLine into tArgs
+      switch tVerb
+         case "bounds"
+            put item 1 of tArgs into gWorldW
+            put item 2 of tArgs into gWorldH
             break
-         case "skbtn_S1"
-            runS1
+         case "spawn"
+            put item 1 of tArgs into gSpawnX
+            put item 2 of tArgs into gSpawnY
             break
-         case "skbtn_S3"
-            runS3
+         case "text"
+            put "mg_txt" & the milliseconds & random(100000) into tName
+            create field tName
+            set the lockText of it to true
+            set the traversalOn of it to false
+            set the opaque of it to false
+            set the showBorder of it to false
+            set the textAlign of it to "center"
+            set the textSize of it to 14
+            set the textColor of it to "60,70,90"
+            set the rect of it to (item 1 of tArgs) - 220, (item 2 of tArgs) - 16, (item 1 of tArgs) + 220, (item 2 of tArgs) + 16
+            set the text of it to item 3 to -1 of tArgs
+            b2kCamAdopt the long id of field tName
             break
-         case "skbtn_S4"
-            runS4
+         case "slab"
+            put "mg_slab" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "rectangle"
+            set the rect of it to item 1 of tArgs, item 2 of tArgs, item 3 of tArgs, item 4 of tArgs
+            set the filled of it to true
+            set the backgroundColor of it to "104,114,130"
+            set the foregroundColor of it to "70,78,92"
+            b2kCamAdopt the long id of graphic tName
+            b2kAddStatic the long id of graphic tName
             break
-         case "skbtn_S5"
-            runS5
+         case "ledge"
+            -- one-way platform: solid from above, jump through from
+            -- below. GHOST RULE: the chain runs one tile past each end.
+            put ((item 2 of tArgs) + 64) & comma & (item 3 of tArgs) & cr into tPts
+            put (item 2 of tArgs) & comma & (item 3 of tArgs) & cr after tPts
+            put (item 1 of tArgs) & comma & (item 3 of tArgs) & cr after tPts
+            put ((item 1 of tArgs) - 64) & comma & (item 3 of tArgs) after tPts
+            b2kSmoothGround tPts
+            put "mg_ledge" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "line"
+            set the points of it to (item 1 of tArgs) & comma & (item 3 of tArgs) & cr & (item 2 of tArgs) & comma & (item 3 of tArgs)
+            set the lineSize of it to 5
+            set the foregroundColor of it to "80,180,110"
+            b2kCamAdopt the long id of graphic tName
             break
-         case "skbtn_S6"
-            runS6
+         case "spike"
+            put "mg_spike" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "rectangle"
+            set the rect of it to item 1 of tArgs, item 3 of tArgs, item 2 of tArgs, (item 3 of tArgs) + 16
+            set the filled of it to true
+            set the backgroundColor of it to "205,70,70"
+            put the long id of graphic tName into tRef
+            set the uMgHazard of tRef to true
+            b2kCamAdopt tRef
+            b2kAddSensor tRef, "box"
             break
-         case "skbtn_S7"
-            runS7
+         case "coin"
+            put "mg_coin" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "oval"
+            set the rect of it to (item 1 of tArgs) - 14, (item 2 of tArgs) - 14, (item 1 of tArgs) + 14, (item 2 of tArgs) + 14
+            set the filled of it to true
+            set the backgroundColor of it to "242,200,70"
+            set the foregroundColor of it to "180,140,30"
+            put the long id of graphic tName into tRef
+            set the uMgCoin of tRef to true
+            b2kCamAdopt tRef
+            b2kAddSensor tRef, "ball"
+            add 1 to gCoinsTotal
             break
-         case "skbtn_S8"
-            runS8
+         case "sweep"
+            -- a patrolling proximity hazard: pure geometry, no body
+            -- (the platformer's mover pattern with a plain graphic)
+            put "mg_sweep" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "rectangle"
+            set the rect of it to item 1 of tArgs, item 2 of tArgs, item 3 of tArgs, item 4 of tArgs
+            set the filled of it to true
+            set the backgroundColor of it to "190,70,90"
+            b2kCamAdopt the long id of graphic tName
+            add 1 to gSwpN
+            put the long id of graphic tName into gSwpRef[gSwpN]
+            put ((item 5 of tArgs) + (item 6 of tArgs)) / 2 into gSwpC[gSwpN]
+            put ((item 6 of tArgs) - (item 5 of tArgs)) / 2 into gSwpA[gSwpN]
+            put max(1, item 7 of tArgs) into gSwpP[gSwpN]
+            put ((item 2 of tArgs) + (item 4 of tArgs)) / 2 into gSwpY[gSwpN]
+            put ((item 3 of tArgs) - (item 1 of tArgs)) / 2 + 22 into gSwpW[gSwpN]
+            put ((item 4 of tArgs) - (item 2 of tArgs)) / 2 + 30 into gSwpH[gSwpN]
             break
-         case "skbtn_S9"
-            runS9
-            break
-         case "skbtn_S10"
-            if gSpikeTest is "S10" then
-               s10NextMode
-            else
-               runS10
-            end if
-            break
-         case "skbtn_S11"
-            runS11
-            break
-         case "skbtn_S12"
-            runS12
-            break
-         case "skbtn_stop"
-            spikeStopTest false
-            break
-         case "skbtn_copy"
-            spikeCopyReport
+         case "door"
+            put "mg_door" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "roundrect"
+            set the rect of it to (item 1 of tArgs) - 24, (item 2 of tArgs) - 32, (item 1 of tArgs) + 24, (item 2 of tArgs) + 32
+            set the filled of it to true
+            set the backgroundColor of it to "120,120,128"   -- locked
+            put the long id of graphic tName into gDoor
+            set the uMgDoor of gDoor to true
+            b2kCamAdopt gDoor
+            b2kAddSensor gDoor, "box"
             break
       end switch
-      exit mouseUp
+   end repeat
+   -- world edges + camera
+   b2kWall 0, 0, 0, gWorldH
+   b2kWall gWorldW, 0, gWorldW, gWorldH
+   b2kWall 0, 0, gWorldW, 0
+   b2kCamBounds 0, 0, gWorldW, gWorldH
+   b2kCamDeadzone 0, 0
+   -- THE player: one call builds the body host, the capsule, the
+   -- sprite (first frame of "hero"), the controller, and arms input
+   b2kPlayerMake gSpawnX, gSpawnY, 32, 56, "hero"
+   put the result into gHero
+   put b2kPlayerSprite() into gHeroSpr
+   b2kPlayerAnims "idle", "walk", "jump", "jump"
+   b2kPlayerSet "moveSpeed", 250
+   b2kPlayerSet "jumpSpeed", 460
+   if gHeroSpr is not empty then
+      b2kSpriteBind gHeroSpr, gHero, 0, -4   -- art baseline sits 4px high
+      b2kSpriteOnFinish gHeroSpr, "mgHurtDone"
    end if
-   if gSpikeTest is "S9" or gSpikeTest is "S10" then
-      try
-         b2kRelease
-      catch tErr
-      end try
-   end if
-end mouseUp
+   b2kCamFollow gHero, 1
+   b2kCamGoto gSpawnX, gSpawnY
+   b2kPlayerControl false   -- menus own the keys; mgBegin hands them over
+   b2kFrameTarget the long id of me
+   mgChromeFront
+   unlock screen
+   put empty into gHudLast
+   b2kStart
+   put false into gBuilding
+end mgBuild
 
--- Grab test during S9/S10: world coords = mouse + the viewport's scroll
--- (this is exactly the b2kCamMouse mapping the camera module will own).
-on mouseDown
-   local tName, tScroll
-   put the short name of the target into tName
-   if char 1 to 6 of tName is "skbtn_" then exit mouseDown
-   if gSpikeTest is "S9" then
-      if the mouseLoc is within the rect of group "sk_cam" then
-         put the hScroll of group "sk_cam" into tScroll
-         get b2kGrab(the mouseH + tScroll, the mouseV)
-         if it is not empty then
-            spikeLogOnce "s9grab", "S9 grab with scroll-corrected coords: WORKS (camera mouse mapping confirmed)"
-         end if
-      end if
-      exit mouseDown
-   end if
-   if gSpikeTest is "S10" then
-      get b2kGrab(the mouseH, the mouseV)
-   end if
-end mouseDown
-
--- S1 intel: raw event counts reveal this platform's auto-repeat behaviour.
-on rawKeyDown pKeyCode
-   if gSpikeTest is "S1" then
-      add 1 to gS1RawDown
-      put 1 into gS1Seen[pKeyCode]
-   end if
-   pass rawKeyDown
-end rawKeyDown
-
-on rawKeyUp pKeyCode
-   if gSpikeTest is "S1" then
-      add 1 to gS1RawUp
-   end if
-   pass rawKeyUp
-end rawKeyUp
-
--- =====================================================================
--- Report helpers
--- =====================================================================
-command spikeLog pLine
-   add 1 to gReportN
-   put gReportN & ". " & pLine & cr after field "skReport"
-   set the vScroll of field "skReport" to 100000
-end spikeLog
-
-command spikeLogOnce pKey, pLine
-   if gS1Seen["once_" & pKey] is 1 then exit spikeLogOnce
-   put 1 into gS1Seen["once_" & pKey]
-   spikeLog pLine
-end spikeLogOnce
-
-command spikeStatus pText
-   set the text of field "skStatus" to pText
-end spikeStatus
-
-command spikeCopyReport
-   try
-      set the clipboardData["text"] to the text of field "skReport"
-      spikeStatus "Report copied to the clipboard - paste it back to the developer."
-   catch tErr
-      spikeStatus "Could not reach the clipboard; select the report text and copy by hand."
-   end try
-end spikeCopyReport
-
--- =====================================================================
--- Start/stop plumbing
--- =====================================================================
-function spikeBeginTest pId, pNeedsExt
-   spikeStopTest true
-   if pNeedsExt is true and gExtOK is not true then
-      spikeLog pId & " SKIPPED - box2dxt extension not loaded"
-      spikeStatus pId & " needs the box2dxt extension. Load it and reopen the stack."
-      return false
-   end if
-   put pId into gSpikeTest
-   put the milliseconds & "_" & random(100000) into gSpikeGen
-   spikeFpsReset
-   return true
-end spikeBeginTest
-
-command spikeStopTest pQuiet
-   local tWas
-   put the milliseconds & "_" & random(100000) into gSpikeGen
-   put gSpikeTest into tWas
-   put empty into gSpikeTest
-   if gFpsSamples > 0 then
-      if tWas is "S9" or tWas is "S10" or tWas is "S12" then
-         spikeLog tWas & " fps: last " & gFpsLast & ", min " & gFpsMin & ", avg " & round(gFpsSum / gFpsSamples * 10) / 10 & " over " & gFpsSamples & " s"
-         if gFpsWarmN > 0 then
-            spikeLog tWas & " fps warm (after 3 s): min " & gFpsWarmMin & ", avg " & round(gFpsWarmSum / gFpsWarmN * 10) / 10 & " - judge against the send-in-16 ceiling from S0"
-         end if
-      end if
-   end if
-   if tWas is "S1" then s1LogSummary
-   try
-      b2kTeardown
-   catch tErr
-   end try
-   try
-      set the acceleratedRendering of this stack to false
-   catch tErr
-   end try
-   spikeWipeControls "sk_"
-   put false into gS4Motion
-   put false into gS4On
-   put false into gS5Made
-   if pQuiet is not true then
-      spikeStatus "Stopped. Pick the next test."
-      spikeLog "-- test stopped --"
-   end if
-end spikeStopTest
-
--- Delete every stage control (names start "sk_"); UI uses skbtn_/skStatus/
--- skReport so it survives. Restart the scan after each delete because
--- removing a group takes its children with it.
-command spikeWipeControls pPrefix
-   local tAgain, i, tName, tLen
-   put the number of chars of pPrefix into tLen
+-- Remove every level control (all are "mg_" prefixed; chrome is "mgX").
+command mgWipeStage
+   local tAgain, i, tName
    put true into tAgain
    repeat while tAgain
       put false into tAgain
       repeat with i = 1 to the number of controls of this card
          put the short name of control i of this card into tName
-         if char 1 to tLen of tName is pPrefix then
+         if char 1 to 3 of tName is "mg_" then
             delete control i of this card
             put true into tAgain
             exit repeat
          end if
       end repeat
    end repeat
-end spikeWipeControls
-
-command spikeFpsReset
-   put 0 into gFpsN
-   put empty into gFpsT0
-   put empty into gFpsLast
-   put empty into gFpsMin
-   put 0 into gFpsSum
-   put 0 into gFpsSamples
-   put empty into gFpsWarmMin
-   put 0 into gFpsWarmSum
-   put 0 into gFpsWarmN
-end spikeFpsReset
-
--- Count b2kFrame dispatches; once a second fold them into last/min/avg and
--- repaint the live readout line (plus the native step time from b2kProfile).
-command spikeFpsTick
-   local tNow, tLine
-   put the milliseconds into tNow
-   add 1 to gFpsN
-   if gFpsT0 is empty then
-      put tNow into gFpsT0
-      exit spikeFpsTick
-   end if
-   if tNow - gFpsT0 >= 1000 then
-      put round(gFpsN * 1000 / (tNow - gFpsT0) * 10) / 10 into gFpsLast
-      if gFpsMin is empty or gFpsLast < gFpsMin then put gFpsLast into gFpsMin
-      add gFpsLast to gFpsSum
-      add 1 to gFpsSamples
-      -- "warm" stats skip the first 3 one-second samples: scene building and
-      -- the compositor's first uploads belong to startup, not steady state
-      if gFpsSamples > 3 then
-         if gFpsWarmMin is empty or gFpsLast < gFpsWarmMin then put gFpsLast into gFpsWarmMin
-         add gFpsLast to gFpsWarmSum
-         add 1 to gFpsWarmN
-      end if
-      put 0 into gFpsN
-      put tNow into gFpsT0
-      put "fps " & gFpsLast & "   min " & gFpsMin & "   avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 into tLine
-      try
-         set the itemDelimiter to comma
-         put "   |   native step " & item 1 of b2kProfile() & " ms" after tLine
-      catch tErr
-      end try
-      put tLine into line 5 of field "skStatus"
-   end if
-end spikeFpsTick
+end mgWipeStage
 
 -- =====================================================================
--- S0 - environment + send-in-16 timer cadence (spec 2.6 pacing baseline)
--- =====================================================================
-command runS0
-   get spikeBeginTest("S0", false)
-   spikeEnvReport
-   spikeStatus "S0 logs the environment and measures 60 idle send-in-16-ms ticks." & cr & "Wait ~1 second; the cadence line appears in the report."
-end runS0
-
-command spikeEnvReport
-   spikeLog "ENV platform=" & the platform & "  system=" & the systemVersion & "  engine=" & the version
-   spikeLog "ENV screen=" & the screenRect & "  stack=" & the rect of this stack
-   try
-      spikeLog "ENV box2dxt ABI=" & b2Version() & " (extension loaded)"
-      put true into gExtOK
-   catch tErr
-      put false into gExtOK
-      spikeLog "ENV box2dxt extension NOT LOADED - S7-S10 will be skipped"
-   end try
-   put 0 into gProbeN
-   put 0 into gProbeSum
-   put empty into gProbeMax
-   put the milliseconds into gProbeLast
-   send ("spikeProbeTick " & gSpikeGen) to me in 16 milliseconds
-end spikeEnvReport
-
-command spikeProbeTick pGen
-   local tNow, tDelta
-   if pGen is not gSpikeGen then exit spikeProbeTick
-   put the milliseconds into tNow
-   put tNow - gProbeLast into tDelta
-   put tNow into gProbeLast
-   add 1 to gProbeN
-   -- the first ticks absorb window-open / first-paint noise; discard them
-   if gProbeN > 5 then
-      add tDelta to gProbeSum
-      if gProbeMax is empty or tDelta > gProbeMax then put tDelta into gProbeMax
-   end if
-   if gProbeN >= 65 then
-      spikeLog "S0 send-in-16 cadence: avg " & round(gProbeSum / 60 * 10) / 10 & " ms, max " & gProbeMax & " ms over 60 ticks (first 5 discarded; 16 = ideal)"
-      exit spikeProbeTick
-   end if
-   send ("spikeProbeTick " & pGen) to me in 16 milliseconds
-end spikeProbeTick
-
--- =====================================================================
--- S1 + S2 - the keysDown poll: held keys, chords, case-shift, raw repeat
--- =====================================================================
-command runS1
-   if spikeBeginTest("S1", false) is false then exit runS1
-   put 0 into gS1MaxChord
-   put 0 into gS1RawDown
-   put 0 into gS1RawUp
-   put empty into gS1Seen
-   send ("spikePollKeys " & gSpikeGen) to me in 60 milliseconds
-end runS1
-
-command spikePollKeys pGen
-   local tHeld, tNames, tK, tN
-   if pGen is not gSpikeGen then exit spikePollKeys
-   if gSpikeTest is not "S1" then exit spikePollKeys
-   put the keysDown into tHeld
-   set the itemDelimiter to comma
-   if tHeld is not empty then
-      put the number of items of tHeld into tN
-      if tN > gS1MaxChord then put tN into gS1MaxChord
-      repeat for each item tK in tHeld
-         put 1 into gS1Seen[tK]
-      end repeat
-   end if
-   put empty into tNames
-   repeat for each item tK in tHeld
-      put spikeKeyName(tK) & " " after tNames
-   end repeat
-   spikeStatus "S1/S2 KEYBOARD - the held list must always match your fingers." & cr & "Do: 1) hold LEFT+UP+SPACE together  2) tap w  3) hold SHIFT and tap w  4) press STOP to log" & cr & "held codes: " & tHeld & cr & "held names: " & tNames & cr & "max chord " & gS1MaxChord & "   rawKeyDown " & gS1RawDown & "   rawKeyUp " & gS1RawUp
-   send ("spikePollKeys " & pGen) to me in 60 milliseconds
-end spikePollKeys
-
-command s1LogSummary
-   local tArrows
-   spikeLog "S1 max simultaneous keys seen: " & gS1MaxChord & " (3 or more = PASS for chords)"
-   put empty into tArrows
-   if gS1Seen[65361] is 1 then put "left " after tArrows
-   if gS1Seen[65362] is 1 then put "up " after tArrows
-   if gS1Seen[65363] is 1 then put "right " after tArrows
-   if gS1Seen[65364] is 1 then put "down " after tArrows
-   if gS1Seen[32] is 1 then put "space " after tArrows
-   spikeLog "S1 keys seen during test: " & tArrows
-   if gS1Seen[119] is 1 and gS1Seen[87] is 1 then
-      spikeLog "S2 case-shift CONFIRMED: w=119 and W=87 both observed (Kit must bind both)"
-   else
-      spikeLog "S2 case-shift: saw w(119)=" & (gS1Seen[119] is 1) & " W(87)=" & (gS1Seen[87] is 1) & " (do step 3 next time if both false)"
-   end if
-   spikeLog "S1 raw events while polling: down " & gS1RawDown & ", up " & gS1RawUp & " (auto-repeat behaviour intel)"
-end s1LogSummary
-
-function spikeKeyName pCode
-   switch pCode
-      case 65361
-         return "left"
-      case 65362
-         return "up"
-      case 65363
-         return "right"
-      case 65364
-         return "down"
-      case 32
-         return "space"
-      case 65293
-         return "return"
-      case 65307
-         return "esc"
-      case 65289
-         return "tab"
-      case 65505
-      case 65506
-         return "shift"
-      case 65507
-      case 65508
-         return "ctrl"
-      case 65513
-      case 65514
-         return "alt"
-   end switch
-   if pCode >= 97 and pCode <= 122 then return numToChar(pCode)
-   if pCode >= 65 and pCode <= 90 then return numToChar(pCode)
-   if pCode >= 48 and pCode <= 57 then return numToChar(pCode)
-   return pCode
-end spikeKeyName
-
--- =====================================================================
--- S3 - spritesheet via clipped group + scroll (the chosen mechanism)
--- S4 - the same while the stack composites with acceleratedRendering and
---      the sprite group is a moving dynamic layer
--- =====================================================================
-command runS3
-   if spikeBeginTest("S3", false) is false then exit runS3
-   spikeEnsureSheet
-   get spikeMakeSprite("sk_spr", 320, 240)
-   if it is empty then
-      spikeStatus "S3 ABORTED - could not build a group from script (see report)."
-      put empty into gSpikeTest
-      exit runS3
-   end if
-   put 1 into gS3Frame
-   put 0 into gS3Tick
-   put 0 into gS4Ang
-   spikeStatus "S3 SPRITE SCROLL - the strip at top right is the whole sheet; the square below" & cr & "is one clipped 64px cell, cycling red->green->blue->yellow at ~10 fps." & cr & "PASS if: exactly ONE cell shows, black border intact on all 4 sides (no neighbour" & cr & "bleed), no scrollbars appear, colours cycle. Then click S4."
-   send ("spikeAnimTick " & gSpikeGen) to me in 33 milliseconds
-end runS3
-
-command runS4
-   if gSpikeTest is not "S3" then
-      spikeStatus "Run S3 first - S4 toggles compositing + motion on the S3 sprite."
-      exit runS4
-   end if
-   if gS4On is true then
-      put false into gS4On
-      put false into gS4Motion
-      try
-         set the acceleratedRendering of this stack to false
-         set the layerMode of group "sk_spr" to "static"
-      catch tErr
-         spikeLog "S4 toggle-off errored: " & tErr
-      end try
-      spikeLog "S4 toggled OFF (back to plain rendering)"
-      exit runS4
-   end if
-   put true into gS4On
-   put true into gS4Motion
-   try
-      set the acceleratedRendering of this stack to true
-      set the layerMode of group "sk_spr" to "dynamic"
-      spikeLog "S4 acceleratedRendering=true, sprite layerMode=dynamic, orbit motion on"
-   catch tErr
-      spikeLog "S4 FAIL enabling compositor: " & tErr
-   end try
-   spikeStatus "S4 ACCEL + MOTION - the animating cell now orbits the stage under the GPU" & cr & "compositor. PASS if: still one clean cell, no trails/smears, motion smooth," & cr & "animation keeps cycling. Click S4 again to toggle off; STOP to finish and log."
-end runS4
-
-command spikeAnimTick pGen
-   if pGen is not gSpikeGen then exit spikeAnimTick
-   if gSpikeTest is not "S3" then exit spikeAnimTick
-   add 1 to gS3Tick
-   if gS3Tick mod 3 = 0 then
-      put (gS3Frame mod 4) + 1 into gS3Frame
-      set the hScroll of group "sk_spr" to (gS3Frame - 1) * 64
-   end if
-   if gS4Motion is true then
-      add 4 to gS4Ang
-      set the loc of group "sk_spr" to round(500 + 170 * cos(gS4Ang * kSpikeDeg)), round(330 + 140 * sin(gS4Ang * kSpikeDeg))
-   end if
-   send ("spikeAnimTick " & pGen) to me in 33 milliseconds
-end spikeAnimTick
-
--- =====================================================================
--- S5 - animated GIF: frameCount / currentFrame / repeatCount control
--- =====================================================================
-command runS5
-   local tN
-   if gS5Made is not true then
-      if spikeBeginTest("S5", false) is false then exit runS5
-      put true into gS5Made
-      create image "sk_gif"
-      set the topLeft of it to 420, 200
-      set the text of image "sk_gif" to base64Decode(kSpikeGifB64)
-      put the frameCount of image "sk_gif" into tN
-      spikeLog "S5 gif frameCount=" & tN & " (expect 4)"
-      try
-         set the repeatCount of image "sk_gif" to -1
-      catch tErr
-         spikeLog "S5 set repeatCount -1 errored: " & tErr
-      end try
-      spikeStatus "S5 GIF - the small square should animate red->green->blue->yellow on its own" & cr & "(engine playback, ~4 fps). Click S5 again to STOP playback and step frames by hand."
-      exit runS5
-   end if
-   try
-      if the repeatCount of image "sk_gif" is not 0 then
-         set the repeatCount of image "sk_gif" to 0
-         spikeLog "S5 playback stopped (repeatCount 0); further clicks step currentFrame"
-         spikeStatus "S5 GIF manual mode - each S5 click advances one frame. PASS if the colour" & cr & "steps exactly once per click, in order, wrapping after yellow."
-         exit runS5
-      end if
-      set the currentFrame of image "sk_gif" to (the currentFrame of image "sk_gif" mod the frameCount of image "sk_gif") + 1
-      spikeLog "S5 stepped to frame " & the currentFrame of image "sk_gif"
-   catch tErr
-      spikeLog "S5 FAIL manual frame control: " & tErr
-   end try
-end runS5
-
--- =====================================================================
--- S6 - flip image horizontal (mirrored-sheet strategy), self-judging
--- =====================================================================
-command runS6
-   local tData, tRed
-   if spikeBeginTest("S6", false) is false then exit runS6
-   spikeEnsureSheet
-   try
-      clone image "sk_sheet"
-      set the name of it to "sk_flip"
-      set the topLeft of image "sk_flip" to 420, 190
-      flip image "sk_flip" horizontal
-      put the imageData of image "sk_flip" into tData
-      -- pixel (4,4) sits inside frame 1 (red, R=230) on the original; after a
-      -- horizontal flip it must show frame 4 (yellow, R=240)
-      put byteToNum(byte ((4 * 256 + 4) * 4 + 2) of tData) into tRed
-      if tRed >= 235 and tRed <= 245 then
-         spikeLog "S6 PASS flip image horizontal works (mirror pixel check R=" & tRed & ")"
-      else
-         spikeLog "S6 CHECK flip ran but mirror pixel R=" & tRed & " (expected ~240) - eyeball the two strips"
-      end if
-      spikeStatus "S6 FLIP - two strips at top right: the lower one must be the upper one" & cr & "mirrored left-right (yellow first). The report line gives the byte-level verdict."
-   catch tErr
-      spikeLog "S6 FAIL flip image errored: " & tErr & " (Kit will fall back to imageData row-mirroring)"
-      spikeStatus "S6 flip errored - see report. The Kit has a scripted fallback, so this is" & cr & "informational, not fatal."
-   end try
-end runS6
-
--- =====================================================================
--- S7 - ray semantics for the player ground probe (needs the Kit + world)
--- =====================================================================
-command runS7
-   local tShort, tLong, tAll, tVerdict, tFirst
-   if spikeBeginTest("S7", true) is false then exit runS7
-   b2kSetup
-   create graphic "sk_s7ground"
-   set the style of it to "rectangle"
-   set the rect of it to 200, 500, 600, 540
-   set the filled of it to true
-   set the backgroundColor of it to "120,120,130"
-   b2kAddStatic the long id of graphic "sk_s7ground"
-   create graphic "sk_s7cap"
-   set the style of it to "rectangle"
-   set the rect of it to 380, 300, 420, 380
-   set the filled of it to true
-   set the backgroundColor of it to "240,170,70"
-   b2kAddCapsule the long id of graphic "sk_s7cap"
-   -- ray A starts AND ends inside the capsule: Box2D should report nothing
-   put b2kRayHit(400, 340, 400, 360) into tShort
-   if tShort is empty then
-      spikeLog "S7 ray fully inside own capsule: no hit (self ignored) - as designed"
-   else
-      spikeLog "S7 CHECK ray inside own capsule hit: " & the short name of tShort
-   end if
-   -- ray B starts inside the capsule and reaches the ground: the ground probe
-   put b2kRayHit(400, 340, 400, 560) into tLong
-   if tLong is empty then
-      spikeLog "S7 FAIL downward ray hit nothing (expected the ground)"
-   else
-      spikeLog "S7 downward ray hit: " & the short name of tLong & ", dist " & b2kRayDist() & " px (expect ~160), normalY " & b2kRayHitNormalY() & " (expect ~ -1)"
-      if the short name of tLong is "sk_s7ground" then
-         put "S7 PASS self-skip: ray from inside the player reports the ground" into tVerdict
-      else
-         put "S7 FAIL ray reported " & the short name of tLong & " instead of the ground (fallback: b2kRayHitAll + skip self)" into tVerdict
-      end if
-      spikeLog tVerdict
-   end if
-   put b2kRayHitAll(400, 340, 400, 560) into tAll
-   if tAll is empty then
-      spikeLog "S7 ray-all returned 0 hits"
-   else
-      put line 1 of tAll into tFirst
-      spikeLog "S7 ray-all returned " & the number of lines of tAll & " hit(s); first = " & the short name of tFirst
-   end if
-   spikeStatus "S7 RAYS ran and judged itself - read the three report lines. The orange" & cr & "rectangle is the player capsule, grey is the ground. STOP when done."
-end runS7
-
--- =====================================================================
--- S8 - one-way platforms: b2kWall both windings, then a chain. The ball is
--- pushed up THROUGH the line, then falls back; each phase judges itself.
--- =====================================================================
-command runS8
-   if spikeBeginTest("S8", true) is false then exit runS8
-   put "chain" into gS8Phase
-   s8Build
-   spikeStatus "S8 ONE-WAY - watch the ball: it should rise THROUGH the line, then land ON it." & cr & "Three automatic phases: GREEN chain first (the open question), then blue wall" & cr & "(L-to-R winding), then red wall (R-to-L). Each phase logs a built line and, after" & cr & "~5 s, its verdict. STOP after the third verdict."
-end runS8
-
-command s8Build
-   local tPts
-   try
-      try
-         b2kTeardown
-      catch tErr
-      end try
-      spikeWipeControls "sk_s8"
-      b2kSetup
-      b2kFrameTarget the long id of me
-      create graphic "sk_s8wall"
-      set the style of it to "line"
-      set the points of it to "250,330" & cr & "550,330"
-      set the lineSize of it to 3
-      switch gS8Phase
-         case "wallLR"
-            set the foregroundColor of graphic "sk_s8wall" to "70,130,255"
-            b2kWall 250, 330, 550, 330
-            break
-         case "wallRL"
-            set the foregroundColor of graphic "sk_s8wall" to "230,80,80"
-            b2kWall 550, 330, 250, 330
-            break
-         case "chain"
-            set the foregroundColor of graphic "sk_s8wall" to "60,180,90"
-            -- top surface listed right-to-left = solid side up; outer points
-            -- are ghost vertices, so the collidable span is 550 -> 250.
-            -- Statement call + the result: function syntax on a command is
-            -- exactly what S11 probes, so the spike must not depend on it.
-            put "650,330" & cr & "550,330" & cr & "250,330" & cr & "150,330" into tPts
-            b2kSmoothGround tPts
-            break
-      end switch
-      create graphic "sk_s8ball"
-      set the style of it to "oval"
-      set the rect of it to 382, 542, 418, 578
-      set the filled of it to true
-      set the backgroundColor of it to "240,170,70"
-      put the long id of graphic "sk_s8ball" into gS8Ball
-      b2kAddBall gS8Ball
-      b2kPush gS8Ball, 0, -620
-      put the milliseconds into gS8T0
-      put 99999 into gS8MinY
-      put empty into gS8Tail
-      b2kStart
-      spikeLog "S8 phase " & gS8Phase & ": scene built, ball launched"
-   catch tErr
-      spikeLog "S8 ERROR building phase " & gS8Phase & ": " & tErr
-      put empty into gSpikeTest
-   end try
-end s8Build
-
-command s8Frame
-   local tY, tWentAbove, tResting, tSum, tMin, tMax, tLine, tAvg, tVerdict
-   try
-      set the itemDelimiter to comma
-      put item 2 of b2kPosition(gS8Ball) into tY
-      if tY is empty then exit s8Frame
-      if tY < gS8MinY then put tY into gS8MinY
-      put tY & cr after gS8Tail
-      if the number of lines of gS8Tail > 20 then delete line 1 of gS8Tail
-      if the milliseconds - gS8T0 < 4500 and tY < 900 then exit s8Frame
-      -- judge this phase
-      put (gS8MinY < 308) into tWentAbove
-      put 0 into tSum
-      put empty into tMin
-      put empty into tMax
-      repeat for each line tLine in gS8Tail
-         add tLine to tSum
-         if tMin is empty or tLine < tMin then put tLine into tMin
-         if tMax is empty or tLine > tMax then put tLine into tMax
-      end repeat
-      put tSum / max(1, the number of lines of gS8Tail) into tAvg
-      put (tMax - tMin < 4 and tAvg > 304 and tAvg < 322) into tResting
-      if tWentAbove and tResting then
-         put "ONE-WAY OK (rose through, landed on top)" into tVerdict
-      else
-         if tWentAbove then
-            put "NOT one-way: passed up through AND fell back through" into tVerdict
-         else
-            if gS8MinY > 330 and gS8MinY < 380 then
-               put "blocked from below (solid both ways or solid-down winding)" into tVerdict
-            else
-               put "inconclusive (minY " & round(gS8MinY) & ", restingAvg " & round(tAvg) & ")" into tVerdict
-            end if
-         end if
-      end if
-      spikeLog "S8 phase " & gS8Phase & ": " & tVerdict
-      switch gS8Phase
-         case "chain"
-            put "wallLR" into gS8Phase
-            s8Build
-            break
-         case "wallLR"
-            put "wallRL" into gS8Phase
-            s8Build
-            break
-         default
-            spikeLog "S8 done - all three phases judged"
-            b2kStop
-            put empty into gSpikeTest
-      end switch
-   catch tErr
-      spikeLogOnce "err_s8f", "S8 ERROR in frame logic: " & tErr
-   end try
-end s8Frame
-
--- =====================================================================
--- S9 - camera: a clipped viewport group scrolled to follow a hero while
--- 20 bodies tumble. Also proves the Kit draw path inside a scrolled group
--- and the scroll-corrected mouse grab. (needs the Kit)
--- =====================================================================
-command runS9
-   local i, tX, tY, tSize, tRef
-   if spikeBeginTest("S9", true) is false then exit runS9
-   b2kSetup
-   b2kFrameTarget the long id of me
-   get spikeNewGroup("sk_cam", 220, 140)
-   if it is empty then
-      spikeStatus "S9 ABORTED - could not build a group from script (see report)."
-      put empty into gSpikeTest
-      exit runS9
-   end if
-   -- world floor: one solid slab, 2000 px wide (the level is ~3 cards wide)
-   create graphic "sk_s9ground" in group "sk_cam"
-   set the style of it to "rectangle"
-   set the rect of it to 220, 500, 2220, 540
-   set the filled of it to true
-   set the backgroundColor of it to "90,90,100"
-   b2kAddStatic the long id of graphic "sk_s9ground"
-   -- level bounds (invisible segments)
-   b2kWall 220, 140, 220, 540
-   b2kWall 2220, 140, 2220, 540
-   b2kWall 220, 140, 2220, 140
-   -- 20 tumbling boxes spread along the level
-   repeat with i = 1 to 20
-      put 260 + i * 93 into tX
-      put 180 + (i mod 3) * 50 into tY
-      put 28 + (i mod 4) * 8 into tSize
-      create graphic ("sk_s9box" & i) in group "sk_cam"
-      set the style of it to "rectangle"
-      set the rect of it to tX, tY, tX + tSize, tY + tSize
-      set the filled of it to true
-      set the backgroundColor of it to (120 + i * 6) & ",80," & (220 - i * 7)
-      put the long id of it into tRef
-      try
-         set the layerMode of it to "dynamic"
-      catch tErr
-      end try
-      b2kAddBox tRef
-      b2kPush tRef, random(240) - 120, 0 - random(120)
-   end repeat
-   -- the hero: a ball driven rightward; the camera follows it
-   create graphic "sk_s9hero" in group "sk_cam"
-   set the style of it to "oval"
-   set the rect of it to 260, 280, 300, 320
-   set the filled of it to true
-   set the backgroundColor of it to "250,210,60"
-   put the long id of it into gS9Hero
-   try
-      set the layerMode of it to "dynamic"
-   catch tErr
-   end try
-   b2kAddBall gS9Hero
-   -- freeze the viewport: clip to a 600x400 window onto the 2000px world
-   set the lockLoc of group "sk_cam" to true
-   set the rect of group "sk_cam" to 220, 140, 820, 540
-   set the hScroll of group "sk_cam" to 0
-   try
-      set the acceleratedRendering of this stack to true
-      set the layerMode of group "sk_cam" to "scrolling"
-      spikeLog "S9 compositor: acceleratedRendering true, viewport layerMode=scrolling"
-   catch tErr
-      spikeLog "S9 compositor setup errored: " & tErr & " (running unaccelerated)"
-   end try
-   put false into gS9Logged
-   b2kStart
-   spikeStatus "S9 CAMERA - a 600x400 window onto a 2000px level; the yellow ball runs right" & cr & "and the view follows (teleports back at the end, forever). PASS if: scroll is smooth," & cr & "nothing draws outside the window, boxes tumble normally. CLICK a box to test the" & cr & "scroll-corrected grab. LET IT RUN ~20 s (steady state); STOP logs the summary."
-end runS9
-
-command s9Frame
-   local tHX, tTarget, tCur, tVel
-   try
-      set the itemDelimiter to comma
-      -- keep the hero moving right at 200 px/s without touching its vertical speed
-      put b2kVelocity(gS9Hero) into tVel
-      b2kSetVelocity gS9Hero, 200, item 2 of tVel
-      put item 1 of b2kPosition(gS9Hero) into tHX
-      if tHX > 2160 then b2kMoveTo gS9Hero, 280, 300
-      -- camera: centre the hero, lerped, clamped to the level
-      put trunc(tHX - 220 - 300) into tTarget
-      if tTarget < 0 then put 0 into tTarget
-      if tTarget > 1400 then put 1400 into tTarget
-      put the hScroll of group "sk_cam" into tCur
-      set the hScroll of group "sk_cam" to round(tCur + 0.2 * (tTarget - tCur))
-      if gS9Logged is not true and gFpsSamples >= 15 then
-         put true into gS9Logged
-         spikeLog "S9 after 15 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / gFpsSamples * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10
-      end if
-   catch tErr
-      spikeLogOnce "err_s9f", "S9 ERROR in frame logic: " & tErr
-   end try
-end s9Frame
-
--- =====================================================================
--- S10 - the combined budget scene: 25 group-scroll sprites animating and
--- orbiting + 25 dynamic bodies + input polling, all in the Kit loop.
--- (needs the Kit)
--- =====================================================================
-command runS10
-   local i, tCol, tRow, tX, tY, tRef
-   if spikeBeginTest("S10", true) is false then exit runS10
-   put the milliseconds into gS10T0   -- build-time measurement starts here
-   spikeEnsureSheet
-   b2kSetup
-   b2kFrameTarget the long id of me
-   -- arena: keep the action inside a walled box right of the button column
-   b2kWall 200, 120, 200, 560
-   b2kWall 960, 120, 960, 560
-   b2kWall 200, 560, 960, 560
-   b2kWall 200, 120, 960, 120
-   try
-      set the acceleratedRendering of this stack to true
-   catch tErr
-   end try
-   try
-      repeat with i = 1 to 25
-         put (i - 1) mod 5 into tCol
-         put (i - 1) div 5 into tRow
-         put 250 + tCol * 130 into tX
-         put 140 + tRow * 80 into tY
-         get spikeMakeSprite("sk_sp" & i, tX, tY)
-         if it is empty then
-            spikeStatus "S10 ABORTED - could not build a sprite group (see report)."
-            put empty into gSpikeTest
-            exit runS10
-         end if
-         put 1 into gSpFrame[i]
-         put the milliseconds + i * 13 into gSpNext[i]
-         put i * 29 into gSpAng[i]
-         put tX into gSpCX[i]
-         put tY into gSpCY[i]
-      end repeat
-   catch tErr
-      spikeLog "S10 ERROR building sprite " & i & ": " & tErr
-      put empty into gSpikeTest
-      exit runS10
-   end try
-   -- spawn via statement + the result: the documented-safe calling form
-   -- (S11 probes whether the function-syntax alternative works at all)
-   repeat with i = 1 to 25
-      try
-         if i mod 2 = 0 then
-            b2kSpawnBox 220 + random(700), 130 + random(70), 30 + random(20), 30 + random(20), "orange"
-         else
-            b2kSpawnBall 220 + random(700), 130 + random(70), 26 + random(18), "purple"
-         end if
-         put the result into tRef
-         if tRef is not empty then set the layerMode of tRef to "dynamic"
-      catch tErr
-         spikeLogOnce "err_s10spawn", "S10 ERROR spawning body " & i & ": " & tErr
-      end try
-   end repeat
-   spikeLog "S10 built: 25 sprites + 25 bodies in " & (the milliseconds - gS10T0) & " ms"
-   put the milliseconds into gS10T0
-   put false into gS10Logged
-   put 1 into gS10Mode
-   put false into gS10First
-   b2kStart
-   spikeStatus "S10 PERF mode 1/3 (anim + orbit + bodies) - 25 sprites + 25 bodies + key polling." & cr & "Give each mode ~10 s, then CLICK S10 AGAIN to cycle: 1 full -> 2 no orbit -> 3 bodies" & cr & "only. Each switch logs the mode's warm fps, isolating what the sprites cost." & cr & "STOP logs the final summary."
-end runS10
-
--- Re-clicking S10 cycles the load mode so the report attributes cost:
--- mode 1 = anim + orbit + bodies, 2 = anim + bodies, 3 = bodies only.
-command s10NextMode
-   s10LogModeStats
-   add 1 to gS10Mode
-   if gS10Mode > 3 then put 1 into gS10Mode
-   spikeFpsReset
-   put the milliseconds into gS10T0
-   put false into gS10Logged
-   put false into gS10First
-   spikeLog "S10 switched to mode " & gS10Mode & " (" & s10ModeName(gS10Mode) & ")"
-   spikeStatus "S10 PERF mode " & gS10Mode & "/3 (" & s10ModeName(gS10Mode) & ")." & cr & "Give it ~10 s, then click S10 again for the next mode; STOP for the final summary."
-end s10NextMode
-
-command s10LogModeStats
-   if gFpsWarmN > 0 then
-      spikeLog "S10 mode " & gS10Mode & " (" & s10ModeName(gS10Mode) & "): warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / gFpsWarmN * 10) / 10
-   else
-      if gFpsSamples > 0 then
-         spikeLog "S10 mode " & gS10Mode & " (" & s10ModeName(gS10Mode) & "): avg " & round(gFpsSum / gFpsSamples * 10) / 10 & " (short run)"
-      end if
-   end if
-end s10LogModeStats
-
-function s10ModeName pMode
-   switch pMode
-      case 1
-         return "anim + orbit + bodies"
-      case 2
-         return "anim + bodies, no orbit"
-      case 3
-         return "bodies only, no sprite work"
-   end switch
-   return pMode
-end s10ModeName
-
-command s10Frame
-   local i, tNow, tJunk
-   put the milliseconds into tNow
-   if gS10First is not true then
-      put true into gS10First
-      spikeLog "S10 first frame " & (tNow - gS10T0) & " ms after start (compositor/scene warm-up)"
-   end if
-   try
-      put the keysDown into tJunk   -- include the input module's per-frame cost
-      if gS10Mode <= 2 then
-         repeat with i = 1 to 25
-            if gS10Mode = 1 then
-               add 3 to gSpAng[i]
-               set the loc of group ("sk_sp" & i) to round(gSpCX[i] + 24 * cos(gSpAng[i] * kSpikeDeg)), round(gSpCY[i] + 24 * sin(gSpAng[i] * kSpikeDeg))
-            end if
-            if tNow >= gSpNext[i] then
-               put (gSpFrame[i] mod 4) + 1 into gSpFrame[i]
-               set the hScroll of group ("sk_sp" & i) to (gSpFrame[i] - 1) * 64
-               put tNow + 100 into gSpNext[i]
-            end if
-         end repeat
-      end if
-   catch tErr
-      spikeLogOnce "err_s10f", "S10 ERROR in frame logic: " & tErr
-   end try
-   if gS10Logged is not true and tNow - gS10T0 > 12000 then
-      put true into gS10Logged
-      spikeLog "S10 mode " & gS10Mode & " after 12 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10
-   end if
-end s10Frame
-
--- =====================================================================
--- S11 - calling-syntax probe. The Kit's docs show calling spawn COMMANDS
--- with function syntax (get b2kSpawnBall(...)); the v1 spike's two silent
--- failures (S8 chain, S10) were exactly its two get-on-a-command sites.
--- This settles whether that syntax works in this engine at all.
--- =====================================================================
-command runS11
-   local tRef
-   if spikeBeginTest("S11", true) is false then exit runS11
-   b2kSetup
-   -- form 1: statement call + the result (the documented-safe form).
-   -- X11-safe colour names only: CSS-only names like "teal" throw in LC,
-   -- which is what v2 accidentally proved here.
-   try
-      b2kSpawnBall 320, 220, 44, "orange"
-      put the result into tRef
-      if tRef is empty then
-         spikeLog "S11 statement + the result: ran but result EMPTY (unexpected)"
-      else
-         spikeLog "S11 statement + the result: OK (" & the short name of tRef & ")"
-      end if
-   catch tErr
-      spikeLog "S11 statement + the result THREW: " & tErr & " (very unexpected)"
-   end try
-   -- form 2: function syntax on the same command (the kit header's pattern)
-   try
-      get b2kSpawnBall(400, 220, 44, "yellow")
-      if it is empty then
-         spikeLog "S11 get-command syntax: ran but returned EMPTY"
-      else
-         spikeLog "S11 get-command syntax: WORKS (" & the short name of it & ")"
-      end if
-   catch tErr
-      spikeLog "S11 get-command syntax THREW: " & tErr & " -> kit docs/examples must use statement + the result"
-   end try
-   spikeStatus "S11 done - two report lines decide how commands may be called." & cr & "One or two balls now sit frozen on the stage (no loop running). STOP to clean up."
-end runS11
-
--- =====================================================================
--- S12 - the icon-button sprite backend (spec plan B): the 4 frames sliced
--- into standalone hidden images, and 25 transparent BUTTONS whose icon
--- flips per anim tick. Same scene, grid, motion and rates as S10 mode 1,
--- so the warm fps numbers are directly comparable - this one number picks
--- the Phase 2 primary sprite mechanism.
--- =====================================================================
-command runS12
-   local i, tCol, tRow, tX, tY, tRef
-   if spikeBeginTest("S12", true) is false then exit runS12
-   put the milliseconds into gS10T0   -- reuse the S10 timers; tests are exclusive
-   spikeEnsureFrames
-   if gFrIcon[1] is empty then
-      spikeStatus "S12 ABORTED - could not build the frame images (see report)."
-      put empty into gSpikeTest
-      exit runS12
-   end if
-   b2kSetup
-   b2kFrameTarget the long id of me
-   b2kWall 200, 120, 200, 560
-   b2kWall 960, 120, 960, 560
-   b2kWall 200, 560, 960, 560
-   b2kWall 200, 120, 960, 120
-   try
-      set the acceleratedRendering of this stack to true
-   catch tErr
-   end try
-   try
-      repeat with i = 1 to 25
-         put (i - 1) mod 5 into tCol
-         put (i - 1) div 5 into tRow
-         put 250 + tCol * 130 into tX
-         put 140 + tRow * 80 into tY
-         create button ("sk_b" & i)
-         set the style of it to "transparent"
-         set the showName of it to false
-         set the traversalOn of it to false
-         set the autoHilite of it to false
-         set the rect of it to tX - 32, tY - 32, tX + 32, tY + 32
-         set the icon of it to gFrIcon[1]
-         try
-            set the layerMode of it to "dynamic"
-         catch tErr
-         end try
-         put 1 into gSpFrame[i]
-         put the milliseconds + i * 13 into gSpNext[i]
-         put i * 29 into gSpAng[i]
-         put tX into gSpCX[i]
-         put tY into gSpCY[i]
-      end repeat
-   catch tErr
-      spikeLog "S12 ERROR building sprite buttons: " & tErr
-      put empty into gSpikeTest
-      exit runS12
-   end try
-   repeat with i = 1 to 25
-      try
-         if i mod 2 = 0 then
-            b2kSpawnBox 220 + random(700), 130 + random(70), 30 + random(20), 30 + random(20), "orange"
-         else
-            b2kSpawnBall 220 + random(700), 130 + random(70), 26 + random(18), "purple"
-         end if
-         put the result into tRef
-         if tRef is not empty then set the layerMode of tRef to "dynamic"
-      catch tErr
-         spikeLogOnce "err_s12spawn", "S12 ERROR spawning body " & i & ": " & tErr
-      end try
-   end repeat
-   spikeLog "S12 built: 25 icon-button sprites + 25 bodies in " & (the milliseconds - gS10T0) & " ms (compare S10's build line)"
-   put the milliseconds into gS10T0
-   put false into gS10Logged
-   put false into gS10First
-   b2kStart
-   spikeStatus "S12 ICON SPRITES - same scene as S10 mode 1, but each sprite is a transparent" & cr & "button flipping its icon between 4 shared frame images (no scroll groups, no" & cr & "per-sprite pixel copies). Let it run ~12 s for the auto fps line, then STOP." & cr & "Compare warm avg directly against S10 mode 1."
-end runS12
-
-command s12Frame
-   local i, tNow, tJunk
-   put the milliseconds into tNow
-   if gS10First is not true then
-      put true into gS10First
-      spikeLog "S12 first frame " & (tNow - gS10T0) & " ms after start (compare S10 mode 1's stall)"
-   end if
-   try
-      put the keysDown into tJunk
-      repeat with i = 1 to 25
-         add 3 to gSpAng[i]
-         set the loc of button ("sk_b" & i) to round(gSpCX[i] + 24 * cos(gSpAng[i] * kSpikeDeg)), round(gSpCY[i] + 24 * sin(gSpAng[i] * kSpikeDeg))
-         if tNow >= gSpNext[i] then
-            put (gSpFrame[i] mod 4) + 1 into gSpFrame[i]
-            set the icon of button ("sk_b" & i) to gFrIcon[gSpFrame[i]]
-            put tNow + 100 into gSpNext[i]
-         end if
-      end repeat
-   catch tErr
-      spikeLogOnce "err_s12f", "S12 ERROR in frame logic: " & tErr
-   end try
-   if gS10Logged is not true and tNow - gS10T0 > 12000 then
-      put true into gS10Logged
-      spikeLog "S12 after 12 s: fps min " & gFpsMin & ", avg " & round(gFpsSum / max(1, gFpsSamples) * 10) / 10 & "; warm min " & gFpsWarmMin & ", warm avg " & round(gFpsWarmSum / max(1, gFpsWarmN) * 10) / 10 & " (vs S10 mode 1)"
-   end if
-end s12Frame
-
--- Slice the strip's 4 frames into standalone hidden 64x64 images; their ids
--- feed `the icon of` the sprite buttons. The pixel data is cached across
--- runs; the images are rebuilt per run (STOP wipes sk_* controls).
-command spikeEnsureFrames
-   local f
-   if there is an image "sk_fr1" of this card then exit spikeEnsureFrames
-   repeat with f = 1 to 4
-      if gFrameData[f] is empty then put spikeFrameData(64, 64, f) into gFrameData[f]
-      create image ("sk_fr" & f)
-      set the lockLoc of it to true
-      set the rect of it to 10, 600, 74, 664
-      set the imageData of image ("sk_fr" & f) to gFrameData[f]
-      set the alphaData of image ("sk_fr" & f) to spikeOpaque(64 * 64)
-      set the visible of image ("sk_fr" & f) to false
-      put the id of image ("sk_fr" & f) into gFrIcon[f]
-   end repeat
-end spikeEnsureFrames
-
--- One 64x64 frame of the test strip: solid colour + 2px black border.
-function spikeFrameData pW, pH, pF
-   local tColors, tBorderPx, tBodyPx, tBorderRow, tBodyRow, tData, tRGB, x, y
-   put "230,70,70" & cr & "70,200,120" & cr & "80,130,255" & cr & "240,200,70" into tColors
-   put numToByte(255) & numToByte(0) & numToByte(0) & numToByte(0) into tBorderPx
-   put empty into tBorderRow
-   repeat with x = 1 to pW
-      put tBorderPx after tBorderRow
-   end repeat
-   set the itemDelimiter to comma
-   put line pF of tColors into tRGB
-   put numToByte(255) & numToByte(item 1 of tRGB) & numToByte(item 2 of tRGB) & numToByte(item 3 of tRGB) into tBodyPx
-   put tBorderPx & tBorderPx into tBodyRow
-   repeat with x = 1 to pW - 4
-      put tBodyPx after tBodyRow
-   end repeat
-   put tBorderPx & tBorderPx after tBodyRow
-   put empty into tData
-   repeat with y = 1 to pH
-      if y <= 2 or y > pH - 2 then
-         put tBorderRow after tData
-      else
-         put tBodyRow after tData
-      end if
-   end repeat
-   return tData
-end spikeFrameData
-
--- =====================================================================
--- Kit frame router (the spike card is the b2kFrameTarget for S8-S10/S12)
+-- The per-frame game logic
 -- =====================================================================
 on b2kFrame
-   switch gSpikeTest
-      case "S8"
-         s8Frame
-         break
-      case "S9"
-         s9Frame
-         spikeFpsTick
-         break
-      case "S10"
-         s10Frame
-         spikeFpsTick
-         break
-      case "S12"
-         s12Frame
-         spikeFpsTick
-         break
-   end switch
+   local tHud, tSecs, tState
+   if gHero is empty then exit b2kFrame
+   set the itemDelimiter to comma
+   -- kill plane: off the bottom = a fall
+   if gHurtLock is not true and (item 2 of b2kPosition(gHero)) > gWorldH + 120 then mgHurt
+   mgTickSweeps
+   -- the door unlocks itself the moment the last coin is taken
+   if gDoorOpen is not true and gDoor is not empty and gCoinsTotal > 0 and gCoins >= gCoinsTotal then
+      put true into gDoorOpen
+      try
+         set the backgroundColor of gDoor to "90,200,110"
+      catch tErr
+      end try
+      b2kSound "door"
+   end if
+   put b2kPlayerState() into tState
+   if tState is "land" then b2kSound "land"
+   if tState is "jump" and gPrevState is not "jump" and gHurtLock is not true then b2kSound "jump"
+   put tState into gPrevState
+   if gMode is "play" then
+      put (the milliseconds - gRunStart) div 1000 into tSecs
+   else
+      put 0 into tSecs
+   end if
+   put "Level " & gLevel & "   coins " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   |   " & tState & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   if b2kSoundStatus() is not empty then put "   [audio: " & b2kSoundStatus() & "]" after tHud
+   if b2kSoundMuted() then put "   [muted]" after tHud
+   if tHud is not gHudLast then
+      put tHud into gHudLast
+      set the text of field "mgHud" to tHud
+   end if
 end b2kFrame
 
--- =====================================================================
--- Stage helpers: the generated sheet, sprite groups, group creation ladder
--- =====================================================================
-
--- A 4-frame 64x64 strip (256x64) built pixel-by-pixel in script: solid
--- red/green/blue/yellow cells, each with a 2px black border so any clipping
--- bleed or scaling is instantly visible. Cached - building costs ~a second.
-command spikeEnsureSheet
-   if there is an image "sk_sheet" of this card then exit spikeEnsureSheet
-   if gSheetData is empty then
-      put spikeSheetData(64, 64, 4) into gSheetData
-      put spikeOpaque(256 * 64) into gSheetAlpha
-   end if
-   create image "sk_sheet"
-   set the lockLoc of it to true
-   set the rect of it to 420, 112, 676, 176
-   set the imageData of image "sk_sheet" to gSheetData
-   set the alphaData of image "sk_sheet" to gSheetAlpha
-end spikeEnsureSheet
-
-function spikeSheetData pW, pH, pFrames
-   local tColors, tBorderPx, tBodyPx, tBorderRow, tBody, tData, tRGB, f, x, y
-   put "230,70,70" & cr & "70,200,120" & cr & "80,130,255" & cr & "240,200,70" into tColors
-   put numToByte(255) & numToByte(0) & numToByte(0) & numToByte(0) into tBorderPx
-   put empty into tBorderRow
-   repeat with x = 1 to pW
-      put tBorderPx after tBorderRow
-   end repeat
+command mgTickSweeps
+   local i, tMS, tX, tHX, tHY, tPos
+   if gSwpN is 0 or gSwpN is empty then exit mgTickSweeps
    set the itemDelimiter to comma
-   repeat with f = 1 to pFrames
-      put line f of tColors into tRGB
-      put numToByte(255) & numToByte(item 1 of tRGB) & numToByte(item 2 of tRGB) & numToByte(item 3 of tRGB) into tBodyPx
-      put tBorderPx & tBorderPx into tBody[f]
-      repeat with x = 1 to pW - 4
-         put tBodyPx after tBody[f]
-      end repeat
-      put tBorderPx & tBorderPx after tBody[f]
+   put the milliseconds into tMS
+   put b2kPosition(gHero) into tPos
+   put item 1 of tPos into tHX
+   put item 2 of tPos into tHY
+   repeat with i = 1 to gSwpN
+      if gSwpRef[i] is empty then next repeat
+      put gSwpC[i] + gSwpA[i] * sin(tMS / gSwpP[i]) into tX
+      b2kSpriteMoveTo gSwpRef[i], tX, gSwpY[i]
+      if gHurtLock is not true and gMode is "play" then
+         if abs(tHX - tX) < gSwpW[i] and abs(tHY - gSwpY[i]) < gSwpH[i] then mgHurt
+      end if
    end repeat
-   put empty into tData
-   repeat with y = 1 to pH
-      repeat with f = 1 to pFrames
-         if y <= 2 or y > pH - 2 then
-            put tBorderRow after tData
-         else
-            put tBody[f] after tData
-         end if
-      end repeat
-   end repeat
-   return tData
-end spikeSheetData
-
-function spikeOpaque pCount
-   local tS
-   put numToByte(255) into tS
-   repeat while the number of bytes in tS < pCount
-      put tS & tS into tS
-   end repeat
-   return byte 1 to pCount of tS
-end spikeOpaque
-
--- A sprite: a frame-sized clipped group holding its own copy of the sheet.
--- Frame N shows via: set the hScroll of the group to (N-1) * frameW.
--- v2 measured the script-side imageData copy at ~250 ms per sprite on a
--- modest machine, so v3 tries an engine-side `copy ... to group` first and
--- falls back to the imageData path; the report logs which path ran and the
--- first sprite's build cost (Phase 2 needs this to pick the instancing
--- strategy).
-function spikeMakeSprite pName, pX, pY
-   local tG, tT0, tCopied
-   spikeEnsureSheet
-   put the milliseconds into tT0
-   put spikeNewGroup(pName, pX, pY) into tG
-   if tG is empty then return empty
-   put false into tCopied
-   try
-      copy image "sk_sheet" of this card to group pName
-      set the name of image "sk_sheet" of group pName to (pName & "_img")
-      set the lockLoc of image (pName & "_img") to true
-      set the rect of image (pName & "_img") to pX, pY, pX + 256, pY + 64
-      put true into tCopied
-      spikeLogOnce "sprcopy", "sprite build path: engine copy-to-group works"
-   catch tErr
-      put false into tCopied
-   end try
-   if not tCopied then
-      create image (pName & "_img") in group pName
-      set the lockLoc of it to true
-      set the rect of it to pX, pY, pX + 256, pY + 64
-      set the imageData of image (pName & "_img") to gSheetData
-      set the alphaData of image (pName & "_img") to gSheetAlpha
-      spikeLogOnce "sprdata", "sprite build path: script imageData copy (copy-to-group failed)"
-   end if
-   set the lockLoc of group pName to true
-   set the rect of group pName to pX, pY, pX + 64, pY + 64
-   set the hScroll of group pName to 0
-   spikeLogOnce "sprms", "sprite build cost: " & (the milliseconds - tT0) & " ms (first sprite)"
-   return tG
-end spikeMakeSprite
-
--- Group-from-script ladder. Plan A: create an empty group directly. Plan B:
--- group two temporary graphics and rename. Either way the group keeps a 1px
--- invisible anchor at the content's top-left (so it can never become empty,
--- and the content bounds start exactly where the viewport expects). Logs
--- which plan worked - Phase 4 needs to know.
-function spikeNewGroup pName, pLeft, pTop
-   local tOk, tG
-   put false into tOk
-   try
-      create group pName
-      put true into tOk
-      spikeLogOnce "grpA", "group creation: plan A (create group) works"
-   catch tErr
-      put false into tOk
-   end try
-   if not tOk then
-      try
-         create graphic "sk_gtmpa"
-         set the rect of it to pLeft, pTop, pLeft + 8, pTop + 8
-         create graphic "sk_gtmpb"
-         set the rect of it to pLeft + 10, pTop, pLeft + 18, pTop + 8
-         select graphic "sk_gtmpa" and graphic "sk_gtmpb"
-         group
-         put line 1 of the selectedObject into tG
-         set the name of tG to pName
-         select empty
-         put true into tOk
-         spikeLogOnce "grpB", "group creation: plan B (select + group + rename) works"
-      catch tErr
-         spikeLog "GROUP FAIL: neither creation plan worked: " & tErr
-         return empty
-      end try
-   end if
-   set the margins of group pName to 0
-   set the showBorder of group pName to false
-   set the hScrollbar of group pName to false
-   set the vScrollbar of group pName to false
-   create graphic (pName & "_anch") in group pName
-   set the rect of it to pLeft, pTop, pLeft + 1, pTop + 1
-   set the visible of it to false
-   if there is a graphic "sk_gtmpa" then delete graphic "sk_gtmpa"
-   if there is a graphic "sk_gtmpb" then delete graphic "sk_gtmpb"
-   return the long id of group pName
-end spikeNewGroup
+end mgTickSweeps
 
 -- =====================================================================
--- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py -
--- do not edit between the sentinels)
+-- Events: pickups, hazards, the door
+-- =====================================================================
+on b2kSensorEnter pSensorCtrl, pVisitorCtrl
+   if pSensorCtrl is empty then exit b2kSensorEnter
+   if pVisitorCtrl is not gHero then exit b2kSensorEnter
+   if the uMgCoin of pSensorCtrl is true then
+      add 1 to gCoins
+      b2kSound "coin"
+      try
+         b2kRemove pSensorCtrl   -- frees the sensor body
+      catch tErr
+      end try
+      try
+         delete pSensorCtrl      -- ...and the example-made oval
+      catch tErr
+      end try
+      exit b2kSensorEnter
+   end if
+   if the uMgHazard of pSensorCtrl is true then mgHurt
+   if the uMgDoor of pSensorCtrl is true and gDoorOpen is true and gMode is "play" then mgAdvance
+end b2kSensorEnter
+
+command mgHurt
+   if gHurtLock is true or gMode is not "play" then exit mgHurt
+   put true into gHurtLock
+   add 1 to gFalls
+   b2kSound "hurt"
+   b2kCamShake 6, 240
+   b2kPlayerControl false
+   set the itemDelimiter to comma
+   b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
+   if gHeroSpr is not empty then
+      b2kSpritePlay gHeroSpr, "hit", true   -- non-loop; OnFinish respawns
+   else
+      mgHurtDone empty, empty               -- no art: respawn immediately
+   end if
+end mgHurt
+
+on mgHurtDone pSprite, pAnim
+   b2kMoveTo gHero, gSpawnX, gSpawnY
+   b2kSetVelocity gHero, 0, 0
+   put false into gHurtLock
+   b2kPlayerControl true   -- re-asserts the state anim over the hit pose
+end mgHurtDone
+
+-- =====================================================================
+-- Mouse + keys
+-- =====================================================================
+on mouseUp
+   if gMode is "menu" then
+      mgBegin
+      exit mouseUp
+   end if
+   if gMode is "won" then
+      mgBuild 1
+      mgBegin
+   end if
+end mouseUp
+
+-- R restarts the level, ESC pauses, M mutes; RETURN also starts from
+-- the menu. Raw events, so they work even while paused.
+on rawKeyDown pKeyCode
+   if pKeyCode is 65293 and gMode is "menu" then
+      mgBegin
+      exit rawKeyDown
+   end if
+   if pKeyCode is 65307 and gMode is "play" then
+      if b2kIsRunning() then
+         b2kPause
+      else
+         b2kResume
+      end if
+      exit rawKeyDown
+   end if
+   if pKeyCode is 114 or pKeyCode is 82 then
+      mgBuild gLevel
+      if gMode is "play" then
+         b2kPlayerControl true
+      else
+         if gMode is "menu" then mgShowMenu
+         if gMode is "won" then mgShowWin
+      end if
+      exit rawKeyDown
+   end if
+   if pKeyCode is 109 or pKeyCode is 77 then
+      b2kSoundMute (not b2kSoundMuted())
+      exit rawKeyDown
+   end if
+   pass rawKeyDown
+end rawKeyDown
+
+-- =====================================================================
+-- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py
+-- - do not edit between the sentinels)
 -- =====================================================================
 -- >>> BEGIN EMBEDDED KIT >>>
 -- =====================================================================

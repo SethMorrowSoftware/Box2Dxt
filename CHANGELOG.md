@@ -39,6 +39,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **The micro-game (Game Kit Phase 5 exit artifact):**
+  `examples/box2dxt-microgame.livecodescript` — a COMPLETE game in one
+  pasteable file: start screen → two levels → win screen, with nothing
+  to install beyond the extension (the hero sheet is embedded base64,
+  every sound is `b2kToneMake`d). It is the "copy this to start your own
+  game" example and the companion to the kit guide's new **"Building a
+  whole game"** chapter (§20). What it adds over the platformer
+  showcase: the **one-call player** (`b2kPlayerMake` — the green-field
+  path the platformer's adopt-flow doesn't exercise), **levels as
+  data** (each level is a dozen lines of `verb args` text — `slab`,
+  `ledge`, `coin`, `spike`, `sweep`, `door`… — interpreted by a ~100
+  line `mgBuild`; the `ledge` verb ghost-pads its chain automatically),
+  and a **game-state machine** (menu/play/won) gated by
+  `b2kPlayerControl`, so the world runs live behind the menus. The
+  coins-unlock-the-door rule, sweeper hazards, kill-plane respawns and
+  the win screen's time/falls stats are all sensor + frame-hook
+  patterns, no new Kit surface. This is also the plan's scenes/levels
+  design probe: the level format lives at example level first;
+  promotion to `b2kScene*` API gets decided from how it holds up.
 - **Kit Sound module (Game Kit Phase 5 begins).** Named sounds over
   **audioClips** — the one LC sound path with no external media-layer
   dependency — with `b2kSoundLoad` (import a WAV/AIFF/AU file) and

@@ -3875,13 +3875,18 @@ on b2kStep pGen
    -- "timer cadence (~16.5 ms) plus frame cost", measured at ~50 fps under
    -- load in the Phase 0 spike. Clamp to 1..16 so a heavy frame reschedules
    -- immediately and an idle one never busy-loops.
+   -- Reschedule with pGen (OUR generation), never the live sGen: if a user
+   -- handler inside this frame tore the world down and restarted it (a
+   -- level change from a sensor event), sGen is already the NEW loop's --
+   -- rescheduling with it would clone the loop and double-step forever.
+   -- With pGen, this stale instance's next tick fails the guard and dies.
    if sPaused is true then
-      send ("b2kStep " & sGen) to me in 16 milliseconds
+      send ("b2kStep " & pGen) to me in 16 milliseconds
    else
       put 16 - (the milliseconds - tNow) into tNext
       if tNext < 1 then put 1 into tNext
       if tNext > 16 then put 16 into tNext
-      send ("b2kStep " & sGen) to me in tNext milliseconds
+      send ("b2kStep " & pGen) to me in tNext milliseconds
    end if
 end b2kStep
 

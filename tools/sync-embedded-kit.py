@@ -29,6 +29,7 @@ EXAMPLES = [
     ROOT / "examples" / "box2dxt-contraption-builder.livecodescript",
     ROOT / "examples" / "box2dxt-spike-gamekit.livecodescript",
     ROOT / "examples" / "box2dxt-platformer.livecodescript",
+    ROOT / "examples" / "box2dxt-microgame.livecodescript",
 ]
 
 BEGIN = "-- >>> BEGIN EMBEDDED KIT >>>"
