@@ -146,7 +146,7 @@ dynamic/static where a handler takes an optional `dyn` flag.
 | `b2kImpulse ctrl, ix, iy` | One-shot impulse, mass-aware (heavier bodies move less). |
 | `b2kTorque ctrl, torque` | Continuous turning force (call each frame); +/- sets direction. |
 | `b2kAngularImpulse ctrl, imp` | One-shot turning impulse, mass-aware (the angular partner of `b2kImpulse`). |
-| `b2kSetVelocity ctrl, vx, vy` | Set linear velocity (px/s). |
+| `b2kSetVelocity ctrl, vx, vy` | Set linear velocity (px/s). **Wakes the body** — setting a velocity means "move" (raw `b2SetVelocity` does not wake, which once froze a sleeping kinematic gate). |
 | `b2kSpin ctrl, degPerSec` | Set angular velocity. |
 | `b2kSpinBy ctrl, degPerSec` | Add to the current angular velocity. |
 | `b2kMoveTo ctrl, x, y [,deg]` | Teleport a body. |
@@ -356,6 +356,16 @@ One player at a time: attaching a new player replaces the old controller
 state (the old body/sprite stay). The platformer example adopts its own
 invisible body host with `b2kPlayerAttach` — its entire movement,
 ground-probe and animation code is these four calls.
+
+**Feel guarantees** (all asserted by the self-test): the coyote/buffer
+windows run on **sim time** (frame-coherent on slow machines); bodies the
+controller creates get **zero restitution** and low friction (landings are
+dead, walls don't glue); a touchdown is a `land` only after real airtime
+(**landing hysteresis** — solver blips can't double-fire it); and a
+**ground-snap** removes the solver's post-landing rebound on flat ground —
+slopes are exempt via the surface normal, and *external boosts must use
+`b2kPlayerJump`* (a raw upward `b2kSetVelocity` on a grounded player is
+treated as solver noise and snapped).
 
 ## Camera (scrolling levels)
 

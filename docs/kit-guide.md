@@ -678,11 +678,16 @@ Feel lives in `b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`,
 read the character back with `b2kPlayerState()` (`idle`/`run`/`jump`/`fall`,
 plus `land` for exactly one frame on touch-down — perfect for dust and
 sound), `b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body
-or sprite? `b2kPlayerAttach` adopts it instead of making one. Springs and
-powerups call `b2kPlayerJump 700`. For cutscenes, hit poses, and knockback,
+or sprite? `b2kPlayerAttach` adopts it instead of making one. Springs,
+bounces and powerups call `b2kPlayerJump 700` — always use it for external
+boosts: a raw upward `b2kSetVelocity` on a grounded player is treated as
+solver rebound and snapped flat. For cutscenes, hit poses, and knockback,
 `b2kPlayerControl false` makes the controller *observe only* — your code
-owns velocity and animations until you hand control back. The platformer
-example's whole movement system is the four lines above.
+owns velocity and animations until you hand control back. Under the hood
+the controller guarantees consistent feel (sim-time reaction windows,
+dead landings, hysteresis against solver blips) — all of it asserted by
+the self-test harness. The platformer example's whole movement system is
+the four lines above.
 
 ### Sound effects (`b2kToneMake`, `b2kSound`)
 
@@ -1159,6 +1164,7 @@ Optional arguments are in `[…]`.
 `b2kBindAction name,keys` · `b2kActionIsDown(name)` `[f]` ·
 `b2kActionPressed(name)` `[f]` · `b2kActionReleased(name)` `[f]` ·
 `b2kBindAxis name,negKeys,posKeys` · `b2kAxis(name)` `[f]` ·
+`b2kInputInject keys` · `b2kInputInjectOff` ·
 `b2kKeyCodes(key)` `[f]` · `b2kKeyName(code)` `[f]` · `b2kFrameMS()` `[f]`
 
 ### Sprites & sheets

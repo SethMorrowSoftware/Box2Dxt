@@ -128,7 +128,14 @@ slimes, hazard fly, plate-gate puzzle, confetti — see the decision log.
 
 ## Phase 3 — Player controller (M/L) ← the headline feature
 
-**Status: built (2026-06-11) — awaiting the OXT pass.** The full surface
+**Status: shipped and user-verified (2026-06-11).** Verified twice over:
+the platformer's feel checklist on real hardware, and the self-test's
+player contract (run accel, grounded probe, tap-vs-held apex, coyote and
+buffer windows on the sim clock, single land tick, slope climb, maxFall,
+ground-snap, kill-floor exemption) — all green. As-built additions beyond
+the spec: sim-time feel windows, landing hysteresis, ground-snap with
+slope exemption, zero-restitution owned bodies, `b2kPlayerJump` as the
+required path for external boosts. Originally: The full surface
 below landed in the Kit (loop order: input → player → sprites → camera),
 and the platformer demo's hand-rolled movement layer (~53 lines: velocity
 tick, jump press/release, two-ray ground probe) collapsed into four calls —
@@ -177,7 +184,7 @@ below; run it in OXT and report.
 Phase 4 is real, so the design work is unblocked. The chunks land
 separately, each PR-sized, in rough value order:
 
-- **Audio — BUILT (2026-06-11), awaiting the OXT pass.** `b2kSound*` over
+- **Audio — SHIPPED and user-verified (2026-06-11).** `b2kSound*` over
   imported audioClips (`play audioClip`: the one LC sound path with no
   external media dependency; one clip at a time, documented) plus
   `b2kToneMake`, a pure-script WAV synthesizer (square/sine, note lists,
@@ -193,7 +200,7 @@ separately, each PR-sized, in rough value order:
   sine-path hazards: bee/fly/sweeping saw), `pfMakeThwomp` (arm/fall/
   rest/rise lifecycle, rideable, draggable). Promote to `b2k` API once a
   second example repeats them (the micro-game below is that test).
-- **Scenes/levels — DESIGN PROBE BUILT (2026-06-11) inside the micro-game.**
+- **Scenes/levels — design probe SHIPPED and user-verified inside the micro-game.**
   Levels are data: one `verb args` line per object (`slab`, `ledge`, `coin`,
   `spike`, `sweep`, `door`, `text`, `spawn`, `bounds`), interpreted by a
   ~100-line example-side `mgBuild`; the `ledge` verb ghost-pads its chain
@@ -203,7 +210,7 @@ separately, each PR-sized, in rough value order:
 - **Builder cross-pollination:** animated sprite parts and the player as a
   placeable "kind" inside the contraption builder (its §3/§4 roadmap), making
   the builder the level editor — the long-game payoff.
-- **Exit — BUILT (2026-06-11), awaiting the OXT pass:** the micro-game
+- **Exit — SHIPPED and user-verified (2026-06-11):** the micro-game
   (`examples/box2dxt-microgame.livecodescript`): start screen → 2 levels →
   win screen, on `b2kPlayerMake` (the green-field path the platformer
   doesn't exercise), hero sheet embedded as base64, all sounds synthesized
@@ -277,6 +284,7 @@ user-confirmed in OXT before the next begins.
 | 2026-06-11 | **Optimization round:** sprite tick skips inert sprites (no bind + no anim) before the try/catch — the ~100 static tiles now cost two array reads each per frame; sounds persist across `b2kTeardown` (resets skip ~0.25s of tone re-synthesis; clips are KBs); mover tick reads the clock once. Declined as not-worth-it: caching `b2kPlayerGet` lookups (µs), reducing ground tiles (visual cost), rendering-config changes (not statically verifiable). | This commit |
 | 2026-06-11 | **Phase 5 exit built: the micro-game** (start → 2 levels → win, one pasteable file, zero external assets) + the guide's "Building a whole game" chapter. The scenes/levels design shipped as the micro-game's example-side data format (verb-per-line text + a small interpreter) rather than Kit API — per the promote-once-repeated rule, `b2kScene*` waits until a second game wants the same format. `b2kPlayerMake` gets its first real exercise (the platformer adopts; this creates). Statically verified; awaiting the OXT pass. | Phase 5 exit commit |
 | 2026-06-11 | **Loop hardening found by the micro-game design: `b2kStep` now reschedules with ITS OWN generation (pGen), not the live sGen.** A world rebuild from inside a frame (the door sensor advancing a level) changes sGen mid-frame; rescheduling with the new value would clone the loop and double-step forever. With pGen the stale instance dies at the guard. The micro-game still defers its rebuild out of the frame (`send … in 80 ms`) — belt and braces, and the door chime gets its beat. | Micro-game design review |
+| 2026-06-11 | **FINAL GREEN BOARD (harness v7, ~93 assertions, all pass; both games user-verified).** Phases 0–5 closed on Win32 except builder cross-pollination (deferred to the content phase, where sprite parts arrive naturally). Docs swept current; the spec marked implemented; `docs/expansion-prep.md` created — the intake plan for the Kenney asset dump and the enemy/player-action expansion. Content phase is GO. | This commit |
 | 2026-06-11 | **Green board (user): self-test all-pass, platformer good, micro-game plays both levels.** Harness then doubled (user direction: more robustness vs LC/OXT surprises): +6 suites/~40 asserts — engine contracts (mod/bytes/strides/chunks/relayer-id/playLoudness…), materials+joints, filtering (incl. named-layers regression), queries, sheet extras (scale/margin/AddFrame/mirror images), player slopes+maxFall+kill-floor exemption. Content phase (Kenney pack) is GO on the next all-pass. | User report; this commit |
 | 2026-06-11 | **The micro-game mystery solved: a missing `b2kContactTarget`.** Sensor/contact MESSAGES go to the contact target; the micro-game set only the frame target — every sensor event fired into the void (coins, spikes, door dead; solids fine) across every build tested. The harness missed it because its sensor test polls (no target needed): the events test now asserts the message path too. Lesson: the harness must cover every DELIVERY mechanism, not just every event source. | User reports; code audit |
 | 2026-06-11 | **Self-test round 4: the double land was the SOLVER's push-out hop, measured** (instrumented test: land at vy 460 falling, then 24 frames later at vy 61 — a real ~7px rebound with restitution 0). Fix = GROUND-SNAP in the controller: grounded + flat (probe |normalX| < 0.1; slopes exempt) + rising + not jumping ⇒ vy zeroed. External boosts go through `b2kPlayerJump` (stomp bounce converted). Plus `b2kSetVelocity` now wakes (raw SetVelocity never did — a sleeping parked kinematic gate with one cached write stayed frozen = "plate flaky again"). Doctrine reinforced twice over: windows/polls over instantaneous reads; setting a velocity means move, so wake. | Fourth self-test run (user) |

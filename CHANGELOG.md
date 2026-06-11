@@ -39,6 +39,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Documentation sweep + the expansion plan (the green-board close).**
+  With the self-test at v7/all-pass and both games user-verified, every
+  doc now states the as-built truth: the game-engine spec is marked
+  **implemented** (deltas live in plan.md's decision log), plan.md flips
+  Phase 3 / audio / scenes / the micro-game exit to *shipped and
+  user-verified*, the Kit reference documents the player's **feel
+  guarantees** (sim-time windows, dead landings, hysteresis,
+  ground-snap + the `b2kPlayerJump` rule) and `b2kSetVelocity`'s
+  wake-on-write, README points new platforms at the self-test first,
+  and CLAUDE.md codifies the campaign's doctrine as gotchas #14–16
+  (contact-target wiring, the chain ghost rule, windows/polls over
+  instantaneous reads) plus the harness workflow (assert + bump
+  `kStHarnessV` with every Kit change). New: **`docs/expansion-prep.md`**
+  — the intake plan for the upcoming asset dump and the content phase:
+  delivery format, the measure-before-placing rule, a player-actions
+  roadmap (drop-through, wall-jump, dash, double-jump, platform carry —
+  each with tuning keys and a self-test sketch), an enemy archetype
+  roadmap mapped to the known Kenney frames, the rules of engagement,
+  and a six-wave order ending in builder cross-pollination.
 - **The harness doubles its reach (engine-surprise insurance).** Six new
   suites, ~40 new assertions, aimed squarely at "the LC engine OXT
   inherited is full of surprises": **engine contracts** (fractional
