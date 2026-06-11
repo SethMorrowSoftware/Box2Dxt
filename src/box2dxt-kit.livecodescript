@@ -194,6 +194,11 @@ local sPlayMoveSpd, sPlayAccelG, sPlayAccelA, sPlayJumpSpd, sPlayJumpCut
 local sPlayCoyote, sPlayBuffer, sPlayMaxFall, sPlayCosSlope
 local sPlayProbeOffs -- the 3 probe x-offsets, precomputed at attach
 local sPlayReach     -- probe ray length (halfH + 4), precomputed
+local sPlayClock     -- the player's SIM-TIME clock: summed frame ms.
+                     -- Wall-clock would shrink the coyote/buffer windows
+                     -- on slow machines (90ms = fewer frames); sim time
+                     -- keeps them frame-coherent everywhere and makes
+                     -- hand-stepped tests deterministic.
 local sSndClip       -- sound name -> audioClip short name ("b2ksnd_...")
 local sSndMute       -- true = swallow play calls (a user preference; survives teardown)
 local sSndDead       -- true after a play failure: degrade to silence, never errors
@@ -2450,7 +2455,11 @@ command b2kSpriteStop pCtrl
 end b2kSpriteStop
 
 function b2kSpriteAnim pCtrl
-   return sSprAnim[the long id of pCtrl]
+   try
+      return sSprAnim[the long id of pCtrl]
+   catch tErr
+      return empty   -- a removed control is a stale ref, not an error
+   end try
 end b2kSpriteAnim
 
 -- Show one frame by name/index (stops any running animation first).
@@ -2471,7 +2480,11 @@ command b2kSpriteSetFrame pCtrl, pFrame
 end b2kSpriteSetFrame
 
 function b2kSpriteFrame pCtrl
-   return sSprFrameKey[the long id of pCtrl]
+   try
+      return sSprFrameKey[the long id of pCtrl]
+   catch tErr
+      return empty
+   end try
 end b2kSpriteFrame
 
 -- Per-sprite speed override (empty = use each animation's own fps).
@@ -2495,7 +2508,11 @@ command b2kSpriteFlipH pCtrl, pFlag
 end b2kSpriteFlipH
 
 function b2kSpriteFlipped pCtrl
-   return (sSprFlip[the long id of pCtrl] is true)
+   try
+      return (sSprFlip[the long id of pCtrl] is true)
+   catch tErr
+      return false
+   end try
 end b2kSpriteFlipped
 
 -- When a NON-looping animation finishes, send pMessage to the frame target
@@ -3016,6 +3033,7 @@ command b2kPlayerAttach pCtrl
    put false into sPlayJumping
    put true into sPlayControl
    put 0 into sPlayHoldMS
+   put 0 into sPlayClock
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
    b2kPlayerTuneCache   -- bake the knobs + probe geometry for the tick
@@ -3192,6 +3210,7 @@ command b2kPlayerForget pFull
    put 0 into sPlayGroundMS
    put 0 into sPlayPressMS
    put 0 into sPlayHoldMS
+   put 0 into sPlayClock
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
    if pFull is true then put empty into sPlayTune
@@ -3219,7 +3238,7 @@ command b2kPlayerProbe pBody, pVY
       get b2kRayHit(tX + tOff, tY, tX + tOff, tY + sPlayReach)
       if sRayNY is not empty and sRayNY <= 0 - sPlayCosSlope then
          put true into sPlayGrounded
-         put the milliseconds into sPlayGroundMS
+         put sPlayClock into sPlayGroundMS   -- the sim clock, not wall time
          exit b2kPlayerProbe
       end if
    end repeat
@@ -3234,7 +3253,11 @@ command b2kPlayerTick
    if sPlayRef is empty then exit b2kPlayerTick
    put sBody[sPlayRef] into tB
    if tB is empty then exit b2kPlayerTick
-   put the milliseconds into tNow
+   -- the controller's clock is SIM time: the coyote/buffer windows must
+   -- mean the same number of frames on every machine (and stand still
+   -- while paused/hand-stepped) -- wall-clock would not
+   put sPlayClock + b2kClamp(sFrameMS, 0, 100) into sPlayClock
+   put sPlayClock into tNow
    -- present velocity, screen-oriented px/s (positive vy = falling).
    -- Raw reads with the cached handle: this runs every frame, so skip
    -- the wrapper's ref lookup and "vx,vy" string round-trip (same math

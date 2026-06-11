@@ -39,6 +39,18 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **First self-test run: two real Kit bugs found and fixed.** The
+  harness's first hardware run (35 passes) exposed: (1) **the player's
+  coyote/buffer timers ran on wall-clock time** — on a slow machine the
+  90/110 ms windows silently shrink to fewer frames than designed; they
+  now run on a **sim-time clock** (summed frame ms — identical under
+  the live loop, frame-coherent everywhere, deterministic under
+  hand-stepping); (2) **`b2kSpriteAnim`/`b2kSpriteFrame`/
+  `b2kSpriteFlipped` threw on a removed control** instead of honouring
+  the Kit's stale-ref tolerance — they now return empty/false. Three
+  failures were the harness's own arithmetic (jump arcs at scale 40
+  take ~138 frames; tests now run full arcs, settle between phases, and
+  isolate each test so one throw cannot abort the suite).
 - **The Kit self-test harness** —
   `examples/box2dxt-selftest.livecodescript`: one click in OXT, ~30
   seconds, a PASS/FAIL report. There is no headless OXT, so this stack
