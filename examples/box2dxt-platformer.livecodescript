@@ -71,7 +71,7 @@ local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
-local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel
+local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
@@ -293,6 +293,7 @@ command pfStartGame
    put 0 into gLands
    put 0 into gHudNextMS
    put empty into gGateVel
+   put 0 into gAirMS
    put the milliseconds into gRunStart
    put 0 into gCoins
    if there is a graphic "pfWinShade" then set the visible of graphic "pfWinShade" to false
@@ -947,6 +948,9 @@ on b2kFrame
    if b2kPlayerState() is "jump" and gPrevState is not "jump" and gHurtLock is not true then
       b2kSound "jump"   -- also chirps on the slime-stomp bounce: earned
    end if
+   if b2kPlayerState() is "jump" or b2kPlayerState() is "fall" then
+      put the milliseconds into gAirMS   -- "was airborne recently", for the stomp window
+   end if
    put b2kPlayerState() into gPrevState
    pfTickGate
    pfTickSlimes
@@ -1245,9 +1249,15 @@ on b2kContact pA, pB
    if tWhich is empty then exit b2kContact
    put gSlimeB[tWhich] into tFoe
    set the itemDelimiter to comma
+   -- "falling onto" = airborne within the last quarter second. A dynamic
+   -- slime SINKS under the hero, so the probe grounds a few frames before
+   -- the contact event arrives - by then the instantaneous state has left
+   -- land/fall. A window cannot be outrun; walking in sideways still
+   -- hurts (no recent airtime).
    put b2kPlayerState() into tState
    put (tState is "land" or tState is "fall" \
          or gPrevState is "land" or gPrevState is "fall" \
+         or (gAirMS > 0 and the milliseconds - gAirMS < 250) \
          or (item 2 of b2kVelocity(gHero)) > 40) into tStomp
    if gSlimeKind[tWhich] is not "spike" and tStomp and \
          (item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(tFoe)) - 16 then
@@ -4933,12 +4943,18 @@ end b2kCamGroup
 -- Move an existing control (IDE-designed levels) into the viewport.
 command b2kCamAdopt pCtrl
    if sCamGroup is empty then exit b2kCamAdopt
-   put true into sInCam[the long id of pCtrl]
    try
       relayer pCtrl to front of group "b2kcam_view"
    catch tErr
       -- no script relayer on this engine: the control stays on the card.
       -- Physics is unaffected; only its drawing will not scroll.
+   end try
+   -- mark AFTER the move: a long id embeds the group path, so the key
+   -- must be the post-relayer id or the camera's write-compensation
+   -- (b2kCamShiftX/Y) never recognises adopted controls
+   try
+      put true into sInCam[the long id of pCtrl]
+   catch tErr
    end try
 end b2kCamAdopt
 

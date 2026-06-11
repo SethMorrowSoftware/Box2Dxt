@@ -3569,12 +3569,18 @@ end b2kCamGroup
 -- Move an existing control (IDE-designed levels) into the viewport.
 command b2kCamAdopt pCtrl
    if sCamGroup is empty then exit b2kCamAdopt
-   put true into sInCam[the long id of pCtrl]
    try
       relayer pCtrl to front of group "b2kcam_view"
    catch tErr
       -- no script relayer on this engine: the control stays on the card.
       -- Physics is unaffected; only its drawing will not scroll.
+   end try
+   -- mark AFTER the move: a long id embeds the group path, so the key
+   -- must be the post-relayer id or the camera's write-compensation
+   -- (b2kCamShiftX/Y) never recognises adopted controls
+   try
+      put true into sInCam[the long id of pCtrl]
+   catch tErr
    end try
 end b2kCamAdopt
 

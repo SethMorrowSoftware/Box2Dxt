@@ -388,7 +388,7 @@ command stTestPlayerRun
 end stTestPlayerRun
 
 command stTestPlayerJumps
-   local tRef, tHeld, tTap, i, tLands
+   local tRef, tHeld, tTap, i, tLands, tLandAt
    stNewWorld "player: tap vs held jump + one land tick"
    stSlab "st_ground", 50, 500, 800, 560
    b2kPlayerMake 300, 470, 32, 48
@@ -399,14 +399,18 @@ command stTestPlayerJumps
    b2kInputInject "space"
    put 9999 into tHeld
    put 0 into tLands
+   put empty into tLandAt
    repeat with i = 1 to 220
       b2kStepOnce
       if stY(tRef) < tHeld then put stY(tRef) into tHeld
-      if b2kPlayerState() is "land" then add 1 to tLands
+      if b2kPlayerState() is "land" then
+         add 1 to tLands
+         put i & "@y" & round(stY(tRef)) & "/vy" & round(stVY(tRef)) & space after tLandAt
+      end if
    end repeat
    b2kInputInject ""
    stStep 10
-   stAssert "land state fired exactly once (got " & tLands & ")", (tLands is 1)
+   stAssert "land fired exactly once (got " & tLands & ": " & tLandAt & ")", (tLands is 1)
    -- settle fully on the ground before the tap phase (no overlap with
    -- the held arc -- that was this test's own first-run bug)
    repeat with i = 1 to 120
@@ -4093,12 +4097,18 @@ end b2kCamGroup
 -- Move an existing control (IDE-designed levels) into the viewport.
 command b2kCamAdopt pCtrl
    if sCamGroup is empty then exit b2kCamAdopt
-   put true into sInCam[the long id of pCtrl]
    try
       relayer pCtrl to front of group "b2kcam_view"
    catch tErr
       -- no script relayer on this engine: the control stays on the card.
       -- Physics is unaffected; only its drawing will not scroll.
+   end try
+   -- mark AFTER the move: a long id embeds the group path, so the key
+   -- must be the post-relayer id or the camera's write-compensation
+   -- (b2kCamShiftX/Y) never recognises adopted controls
+   try
+      put true into sInCam[the long id of pCtrl]
+   catch tErr
    end try
 end b2kCamAdopt
 
