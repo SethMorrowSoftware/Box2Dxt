@@ -38,6 +38,9 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
+constant kStHarnessV = "7"   -- bump on EVERY harness change: the report
+                             -- header prints it, so a stale paste is
+                             -- visible at a glance
 
 on openCard
    if the uStUIVersionTag of this stack is not kStUIVersion then buildStUI
@@ -93,7 +96,7 @@ command stRunAll
    put empty into gRep
    put 0 into gPass
    put 0 into gFail
-   stOut "Box2Dxt Kit self-test - " & the long date && the time
+   stOut "Box2Dxt Kit self-test v" & kStHarnessV & " - " & the long date && the time
    stOut "engine ABI " & b2Version() & "   (every test builds its own world)"
    stRun "stTestWorld"
    stRun "stTestEvents"
@@ -647,7 +650,7 @@ end stTestCamScrolledWrite
 -- The LC/OXT behaviours the Kit silently RELIES on. When an engine
 -- update or a new platform breaks one, this names it in plain text.
 command stTestEngineContracts
-   local tPath, tData, i, tRef, tVol
+   local tPath, tData, i, tRef, tVol, tOwn, tErr
    stNewWorld "engine contracts: the behaviours the Kit relies on"
    stAssert "fractional mod (the tone synth)", (4.5 mod 2 is 0.5)
    stAssert "numToByte round-trips", (byteToNum(numToByte(200)) is 200)
@@ -686,11 +689,21 @@ command stTestEngineContracts
    create graphic "st_reparent"
    put the long id of graphic "st_reparent" into tRef
    b2kCamAdopt tRef
-   -- (long ids are ID-based -- 'of group id N' -- so check the OWNER'S
-   -- NAME; merely evaluating `the owner of tRef` also proves the stale
-   -- pre-relayer id still resolves)
-   stAssert "stale long id re-resolves into the group", \
-         (the short name of the owner of tRef is "b2kcam_view")
+   -- self-diagnosing: report WHAT we saw -- the owner's name, or the
+   -- exact error if resolving the stale pre-relayer id threw. (Long ids
+   -- are ID-based, so we check the owner's NAME, not the id string.)
+   put empty into tErr
+   put empty into tOwn
+   try
+      put the short name of the owner of tRef into tOwn
+   catch tErr
+   end try
+   if tErr is empty then
+      stAssert "stale long id re-resolves into the group (owner: " & tOwn & ")", \
+            (tOwn is "b2kcam_view")
+   else
+      stAssert "stale long id re-resolves into the group (read threw: " & line 1 of tErr & ")", false
+   end if
    set the uStProbe of tRef to true
    stAssert "custom-property booleans round-trip", (the uStProbe of tRef is true)
    -- the engine-global volume the sound module wraps
