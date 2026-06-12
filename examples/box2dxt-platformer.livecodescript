@@ -2631,7 +2631,8 @@ local sPlayHurtUntil -- sim-clock ms when hurt control restores unconditionally
 local sPlayHurtHalfMS -- ...or earlier, on the first landing after this clock
 local sPlayInvulnUntil -- sim-clock ms until which b2kPlayerHurt no-ops
 local sPlayDropMs, sPlayClimbSpd -- TuneCache: drop window / climb px-per-sec
-local sPlayHurtMs, sPlayInvulnMs, sPlayHurtPopX, sPlayHurtPopY -- TuneCache: hurt arc
+local sPlayHurtMs, sPlayHurtHalfMs, sPlayInvulnMs, sPlayHurtPopX, sPlayHurtPopY -- TuneCache: hurt arc
+local sPlayJumpExitCodes -- jump keycodes that are NOT also moveY codes, pre-built at bind time
 local sSndClip       -- sound name -> audioClip short name ("b2ksnd_...")
 local sSndMute       -- true = swallow play calls (a user preference; survives teardown)
 local sSndDead       -- true after a play failure: degrade to silence, never errors
@@ -4558,6 +4559,7 @@ end b2kKeysHeld
 command b2kBindAction pName, pKeyList
    put pKeyList into sKeyActions[pName]
    put b2kKeyListCodes(pKeyList) into sKeyActionsC[pName]
+   if pName is "jump" then b2kPlayerRebuildJumpExit
 end b2kBindAction
 
 -- Internal: a friendly key list -> every matching keycode, comma list.
@@ -4606,6 +4608,7 @@ command b2kBindAxis pName, pNegKeys, pPosKeys
    put pPosKeys into sAxisPos[pName]
    put b2kKeyListCodes(pNegKeys) into sAxisNegC[pName]
    put b2kKeyListCodes(pPosKeys) into sAxisPosC[pName]
+   if pName is "moveY" then b2kPlayerRebuildJumpExit
 end b2kBindAxis
 
 function b2kAxis pName
@@ -5602,6 +5605,7 @@ command b2kPlayerTuneCache
    put b2kPlayerGet("dropMs") into sPlayDropMs
    put b2kPlayerGet("climbSpeed") into sPlayClimbSpd
    put b2kPlayerGet("hurtMs") into sPlayHurtMs
+   put sPlayHurtMs / 2 into sPlayHurtHalfMs
    put b2kPlayerGet("invulnMs") into sPlayInvulnMs
    put b2kPlayerGet("hurtPopX") into sPlayHurtPopX
    put b2kPlayerGet("hurtPopY") into sPlayHurtPopY
@@ -5767,8 +5771,12 @@ command b2kPlayerHurt pFromX
       end if
    end if
    -- the away-pop rides the jump path's exemptions: the jump flag keeps
-   -- the rising arc clear of the ground probe and the ground-snap
-   b2kSetVelocity sPlayRef, tDir * sPlayHurtPopX, 0 - sPlayHurtPopY
+   -- the rising arc clear of the ground probe and the ground-snap.
+   -- Raw b2SetVelocity (tB in hand): skip wrapper's ref lookup and
+   -- "vx,vy" string round-trip. y-flip: screen up = positive in Box2D
+   -- (gotcha 9). b2SetAwake pairs it (wrapper always wakes the body).
+   b2SetVelocity tB, (tDir * sPlayHurtPopX) / sScale, sPlayHurtPopY / sScale
+   b2SetAwake tB, true
    put true into sPlayJumping
    put false into sPlayGrounded
    put 0 into sPlayGroundMS
@@ -5776,7 +5784,7 @@ command b2kPlayerHurt pFromX
    put false into sPlayControl
    put true into sPlayHurtCtl
    put sPlayClock + sPlayHurtMs into sPlayHurtUntil
-   put sPlayClock + (sPlayHurtMs / 2) into sPlayHurtHalfMS
+   put sPlayClock + sPlayHurtHalfMs into sPlayHurtHalfMS
    put sPlayClock + sPlayInvulnMs into sPlayInvulnUntil
    put "hurt" into sPlayState
    -- the hurt pose is written HERE: with control off the tick will not
@@ -5822,24 +5830,12 @@ command b2kPlayerClearLadders
    b2kPlayerClimbEnd   -- nothing left to climb
 end b2kPlayerClearLadders
 
--- Internal: is the point inside any registered ladder zone?
-function b2kPlayerInLadder pX, pY
-   local tL
-   if sPlayLadders is empty then return false
-   set the itemDelimiter to comma
-   repeat for each line tL in sPlayLadders
-      if tL is empty then next repeat
-      if pX >= item 1 of tL and pX <= item 3 of tL and \
-            pY >= item 2 of tL and pY <= item 4 of tL then return true
-   end repeat
-   return false
-end b2kPlayerInLadder
-
--- Internal: the TOP edge of the zone containing the point (empty when
--- outside). The grounded up-entry rule needs it: grabbing requires
--- ladder above the head, or standing on a ledge the zone reaches would
--- re-grab on every jump press.
-function b2kPlayerLadderTop pX, pY
+-- Internal: scan the zone list for the point. Returns the zone's TOP
+-- y-coordinate (screen px) when inside a zone, or empty when outside.
+-- One pass serves both callers: "inside?" = (result is not empty);
+-- "zone top" = result directly. Replaces the old separate
+-- b2kPlayerInLadder / b2kPlayerLadderTop with one repeat loop.
+function b2kPlayerZoneScan pX, pY
    local tL
    if sPlayLadders is empty then return empty
    set the itemDelimiter to comma
@@ -5849,6 +5845,15 @@ function b2kPlayerLadderTop pX, pY
             pY >= item 2 of tL and pY <= item 4 of tL then return item 2 of tL
    end repeat
    return empty
+end b2kPlayerZoneScan
+
+-- Public aliases kept for backwards compatibility (games / harness call them).
+function b2kPlayerInLadder pX, pY
+   return (b2kPlayerZoneScan(pX, pY) is not empty)
+end b2kPlayerInLadder
+
+function b2kPlayerLadderTop pX, pY
+   return b2kPlayerZoneScan(pX, pY)
 end b2kPlayerLadderTop
 
 -- Internal: leave the climb state, restoring gravity. Safe to call when
@@ -5920,12 +5925,12 @@ command b2kPlayerDropEnd
    end try
 end b2kPlayerDropEnd
 
--- Internal: a pressed-edge on the jump action's NON-directional keys.
--- The platformer binds jump to "space,up,w" while UP also climbs --
--- subtracting the moveY axis keys means SPACE hops off a ladder but
--- holding or tapping UP keeps climbing (the classic split). Runs only
--- while climbing, so the small string scan stays off the hot path.
-function b2kPlayerJumpExitPressed
+-- Internal: rebuild the jump-exit keycode list -- keycodes that are in the
+-- "jump" action but NOT in either moveY direction. Pre-built at bind time
+-- so the per-frame pressed-edge check is two b2kCodesInSet calls, not a
+-- loop. Called automatically by b2kBindAction("jump",...) and
+-- b2kBindAxis("moveY",...); also called by b2kInputOn (starter defaults).
+command b2kPlayerRebuildJumpExit
    local tC, tCodes
    put empty into tCodes
    set the itemDelimiter to comma
@@ -5933,12 +5938,23 @@ function b2kPlayerJumpExitPressed
       if tC is empty then next repeat
       if (comma & sAxisNegC["moveY"] & comma) contains (comma & tC & comma) then next repeat
       if (comma & sAxisPosC["moveY"] & comma) contains (comma & tC & comma) then next repeat
-      put tC & comma after tCodes
+      if tCodes is empty then
+         put tC into tCodes
+      else
+         put comma & tC after tCodes
+      end if
    end repeat
-   if tCodes is empty then return false
-   put char 1 to -2 of tCodes into tCodes
-   if not b2kCodesInSet(sKeysNow, tCodes) then return false
-   return not b2kCodesInSet(sKeysPrev, tCodes)
+   put tCodes into sPlayJumpExitCodes
+end b2kPlayerRebuildJumpExit
+
+-- Internal: a pressed-edge on any jump key that is NOT also a moveY key.
+-- The platformer binds jump to "space,up,w" while UP also climbs --
+-- the pre-built cache means SPACE hops off a ladder but holding UP keeps
+-- climbing (the classic split) with zero per-frame string work.
+function b2kPlayerJumpExitPressed
+   if sPlayJumpExitCodes is empty then return false
+   if not b2kCodesInSet(sKeysNow, sPlayJumpExitCodes) then return false
+   return not b2kCodesInSet(sKeysPrev, sPlayJumpExitCodes)
 end b2kPlayerJumpExitPressed
 
 -- Tear down the controller, tuning included. The body and sprite remain
@@ -6091,7 +6107,8 @@ command b2kPlayerTick
       -- platformer binds space,up,w -- so exit listens only to jump
       -- keys that are not also moveY keys; holding UP keeps climbing)
       if sPlayClimb is true then
-         if not b2kPlayerInLadder(tPX, tPY) then
+         -- b2kPlayerZoneScan: one loop over sPlayLadders for in+top at once
+         if b2kPlayerZoneScan(tPX, tPY) is empty then
             b2kPlayerClimbEnd
          else
             if sPlayGrounded is true and tMoveY > 0 then
@@ -6116,13 +6133,13 @@ command b2kPlayerTick
          -- (drop through the deck or walk off, then hold DOWN to catch
          -- the ladder -- grounded DOWN means duck).
          if tMoveY is not 0 and sPlayHurtCtl is not true then
+            put b2kPlayerZoneScan(tPX, tPY) into tLadTop   -- empty = outside any zone
             if tMoveY < 0 then
-               put b2kPlayerLadderTop(tPX, tPY) into tLadTop
                if tLadTop is not empty and tLadTop < tPY - 40 then
                   put true into sPlayClimb
                end if
             else
-               if sPlayGrounded is not true and b2kPlayerInLadder(tPX, tPY) then
+               if sPlayGrounded is not true and tLadTop is not empty then
                   put true into sPlayClimb
                end if
             end if
