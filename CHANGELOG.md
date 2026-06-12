@@ -71,6 +71,20 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     thick side slabs PLUS two-sided wall segments at the exact edges
     PLUS the ceiling, kill floor, and the camera clamped to the same
     box. Boundary bugs now have exactly one home.
+  - **Polish round** (user: "much better shape now"): every level
+    lengthened with a second act — GREEN HILLS to 3712px/12 coins (two
+    more slimes + a rest cloud), THE WORKS to 2816px/8 (a breather
+    cloud with its own bee before the wall), FROZEN CITADEL to
+    3520px/10 (the glacier run: a second always-on sweeping saw under
+    a snow cloud). The left-edge escape died twice over: the L1 spring
+    host now sits FLUSH against the wall (the 14px slot between them
+    was a solver-squeeze ejector) and the boundary slabs grew to 256px
+    thick, plus a per-frame edge failsafe rides the kill-plane check.
+    Brick debris no longer hitches or "appears offscreen": the
+    `brick_brown` icon is PRE-WARMED at build (lazy slicing cost
+    ~250ms × 3 at first smash — physics outran the freeze, so the
+    chunks seemed to pop in far away). Ice strengthened to ~15%
+    accel/brake (a full-speed stop slides ~300px).
   - **The scroll-shifted-build regression, found and fixed** ("level 1
     is fundamentally broken"): the restructure briefly called
     `b2kCamGoto` before any camera bounds existed; an unbounded goto

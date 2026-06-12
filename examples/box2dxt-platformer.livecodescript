@@ -25,26 +25,30 @@
 --           M mutes the (synthesized) sound
 --
 -- THE THREE LEVELS (every beat holds a coin; the flag advances):
---   LEVEL 1  GREEN HILLS (2880px) - movement + the iconic toys: the
---            SPRINGBOARD hugging the left wall (sky coin above it), the
---            BONK ROW (headbutt ?-boxes for coins, SMASH bricks into
---            debris), the one-way BRIDGE over a spike slime, a stompable
---            slime, the slope MOUND, two one-way CLOUD steps with the
---            fly, the bee, the SPIKE PIT (coin in its air), flag.
---   LEVEL 2  THE WORKS (2208px) - the machines: drag the CRATE onto the
---            yellow BUTTON to open the gate (coin in the gateway), the
---            red CHECKPOINT, the saw LEVER (STAND at it to power the
---            sweeping saw down - running past never flips it), both
---            SAWS, THWOMP ALLEY (chained weights: ride the second one's
---            head to the top coin; grab the YELLOW KEY between them),
---            and the WALLED DOOR - a stone curtain to the ceiling, so
---            the stone steps, three coins and the FLAG behind it are
+--   LEVEL 1  GREEN HILLS (3712px, 12 coins) - movement + the toys: the
+--            SPRINGBOARD flush against the left wall (sky coin above),
+--            the BONK ROW (headbutt ?-boxes for coins, SMASH bricks
+--            into debris), the one-way BRIDGE over a spike slime, the
+--            slope MOUND, one-way CLOUDS with the fly, the bee, the
+--            SPIKE PIT - then the second act: two more slimes and a
+--            rest cloud on the long run to the flag.
+--   LEVEL 2  THE WORKS (2816px, 8 coins) - the machines: drag the
+--            CRATE onto the yellow BUTTON to open the gate (coin in
+--            the gateway), the red CHECKPOINT, the saw LEVER (STAND at
+--            it to power the sweeping saw down - running past never
+--            flips it), both SAWS, THWOMP ALLEY (chained weights: ride
+--            the second one's head to the top coin; grab the YELLOW
+--            KEY between them), a breather cloud with its bee, and the
+--            WALLED DOOR - a stone curtain to the ceiling, so the
+--            stone steps, three coins and the FLAG behind it are
 --            reachable ONLY through the door.
---   LEVEL 3  FROZEN CITADEL (2880px) - everything at once, on ICE
---            (quarter-strength acceleration: momentum rules): spring
---            over the first spiked pit, a bonk row, the sweeping saw, a
---            second spiked pit, a checkpoint, a thwomp guarding the RED
---            key, the red walled door, snow steps, the final flag.
+--   LEVEL 3  FROZEN CITADEL (3520px, 10 coins) - everything at once,
+--            on ICE (~15% acceleration: momentum rules): spring over
+--            the first spiked pit, a bonk row, the first sweeping saw,
+--            a second spiked pit, a checkpoint, a thwomp guarding the
+--            RED key, the glacier run (a SECOND always-on saw under a
+--            snow cloud), the red walled door, snow steps, the final
+--            flag.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -824,6 +828,11 @@ command pfMakeBonk pKind, pCX
       add 1 to gCoinsTotal   -- a ?-box pays one coin when headbutted
    else
       put "bricks_brown" into tFrame
+      -- PRE-WARM the debris frame: icon slicing is lazy and costs
+      -- ~250ms per new frame - paid here at build, never as a mid-game
+      -- hitch on the first smash (which also made the debris seem to
+      -- pop in far from the brick: physics had outrun the freeze)
+      b2kSheetEnsureIcon "tiles", "brick_brown"
    end if
    b2kSpriteNew "tiles", tFrame, pCX, 416
    put the result into gBonkSpr[gBonkN]
@@ -891,8 +900,11 @@ end pfMakeKeyDoor
 -- level - boundary bugs get fixed in exactly one place.
 command pfBounds pW
    put pW into gLevelW
-   pfSlab "pf_wallL", -64, -200, 0, 700
-   pfSlab "pf_wallR", pW, -200, pW + 64, 700
+   -- 256px-THICK side slabs: a solver squeeze (wedged against scenery)
+   -- can eject a capsule a few px through a thin wall's far side, but
+   -- never through a quarter-screen of stone
+   pfSlab "pf_wallL", -256, -200, 0, 700
+   pfSlab "pf_wallR", pW, -200, pW + 256, 700
    b2kWall 0, -200, 0, 640
    b2kWall pW, -200, pW, 640
    b2kWall 0, 0, pW, 0
@@ -1009,9 +1021,9 @@ end pfMakeGoal
 command pfL1Scene
    local tX
    put "GREEN HILLS" into gLevelName
-   pfBounds 2880
+   pfBounds 3712
    pfSlab "pf_ground1", 0, 576, 2304, 640
-   pfSlab "pf_ground2", 2496, 576, 2880, 640
+   pfSlab "pf_ground2", 2496, 576, 3712, 640
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
       repeat with tX = 0 to 2240 step 64
          if tX >= 1248 and tX <= 1568 then
@@ -1021,12 +1033,27 @@ command pfL1Scene
             pfTile "terrain_grass_block_top", tX, 576
          end if
       end repeat
-      repeat with tX = 2496 to 2816 step 64
+      repeat with tX = 2496 to 3648 step 64
          pfTile "terrain_grass_block_top", tX, 576
       end repeat
       pfShowSlabs false
    else
       pfShowSlabs true
+   end if
+   -- the post-pit meadow (the level's second act): a one-way cloud rest
+   -- over the long run home (chain ghost-padded a tile past the art)
+   b2kSmoothGround "3136,448" & cr & "3072,448" & cr & "2880,448" & cr & "2816,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
+      pfTile "terrain_grass_cloud_left", 2880, 448
+      pfTile "terrain_grass_cloud_middle", 2944, 448
+      pfTile "terrain_grass_cloud_right", 3008, 448
+   else
+      create graphic "pf_cloudledgeC"
+      set the style of it to "line"
+      set the points of it to "2880,448" & cr & "3072,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeC"
    end if
    pfMakeSpikes 2304, 2496
    -- the one-way bridge (GHOST RULE: the chain runs one tile past the
@@ -1094,8 +1121,11 @@ command pfL1Scene
    end if
    if gToysOK is true then
       -- the spring hugs the left wall BEHIND the spawn: a discovery toy
-      -- in plain view that blocks nobody's first steps
-      pfMakeSpring 40
+      -- in plain view that blocks nobody's first steps. At 26 its host
+      -- sits FLUSH against the wall (0..52) - a gap thinner than the
+      -- capsule would be a solver-squeeze slot that can eject the hero
+      -- through the wall (the "glitch out of the left of the screen")
+      pfMakeSpring 26
       pfMakeBonk "brick", 384
       pfMakeBonk "box", 448
       pfMakeBonk "brick", 512
@@ -1111,7 +1141,10 @@ command pfL1Cast
    pfMakeCoin 1440, 460     -- on the mound plateau
    pfMakeCoin 2080, 264     -- on the high cloud (mind the fly)
    pfMakeCoin 2400, 440     -- mid-air over the spike pit: grab it mid-jump
-   if gToysOK is true then pfMakeCoin 40, 230   -- the sky coin (spring up)
+   pfMakeCoin 2620, 500     -- the second act's slime beat
+   pfMakeCoin 2976, 392     -- on the rest cloud
+   pfMakeCoin 3360, 500     -- the last slime's beat, before the flag
+   if gToysOK is true then pfMakeCoin 26, 230   -- the sky coin (spring up)
    -- the bee tours the mound (harmless); the fly guards the cloud coin
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 1320, 300
@@ -1131,7 +1164,9 @@ command pfL1Cast
    end if
    pfMakeSlime 1, "spike", 880, 760, 1000, 576
    pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
-   pfMakeGoal 2780, 544
+   pfMakeSlime 3, "normal", 2620, 2560, 2680, 576
+   pfMakeSlime 4, "normal", 3360, 3300, 3420, 576
+   pfMakeGoal 3580, 544
 end pfL1Cast
 
 -- =====================================================================
@@ -1142,29 +1177,44 @@ end pfL1Cast
 command pfL2Scene
    local tX, tRef
    put "THE WORKS" into gLevelName
-   pfBounds 2208
-   pfSlab "pf_ground1", 0, 576, 2208, 640
-   pfSlab "pf_plat1", 1824, 512, 2016, 576
-   pfSlab "pf_plat2", 2016, 448, 2144, 576
+   pfBounds 2816
+   pfSlab "pf_ground1", 0, 576, 2816, 640
+   pfSlab "pf_plat1", 2432, 512, 2624, 576
+   pfSlab "pf_plat2", 2624, 448, 2752, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 2144 step 64
-         if tX >= 1824 then
+      repeat with tX = 0 to 2752 step 64
+         if tX >= 2432 then
             -- the finale plays in STONE past the walled door
             pfTile "terrain_stone_block_top", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
       end repeat
-      pfTile "terrain_stone_block_top_left", 1824, 512
-      pfTile "terrain_stone_block_top", 1888, 512
-      pfTile "terrain_stone_block_top_right", 1952, 512
-      pfTile "terrain_stone_block_top", 2016, 448
-      pfTile "terrain_stone_block_top", 2080, 448
-      pfTile "terrain_stone_block_center", 2016, 512
-      pfTile "terrain_stone_block_center", 2080, 512
+      pfTile "terrain_stone_block_top_left", 2432, 512
+      pfTile "terrain_stone_block_top", 2496, 512
+      pfTile "terrain_stone_block_top_right", 2560, 512
+      pfTile "terrain_stone_block_top", 2624, 448
+      pfTile "terrain_stone_block_top", 2688, 448
+      pfTile "terrain_stone_block_center", 2624, 512
+      pfTile "terrain_stone_block_center", 2688, 512
       pfShowSlabs false
    else
       pfShowSlabs true
+   end if
+   -- the breather between the alley and the wall: a one-way cloud rest
+   -- (chain ghost-padded a tile past the art on each side)
+   b2kSmoothGround "1920,448" & cr & "1856,448" & cr & "1664,448" & cr & "1600,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
+      pfTile "terrain_grass_cloud_left", 1664, 448
+      pfTile "terrain_grass_cloud_middle", 1728, 448
+      pfTile "terrain_grass_cloud_right", 1792, 448
+   else
+      create graphic "pf_cloudledgeA"
+      set the style of it to "line"
+      set the points of it to "1664,448" & cr & "1856,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeA"
    end if
    pfMakeGate 400, 500
    -- the crate that holds the plate down (drag or push it). It wears
@@ -1185,7 +1235,7 @@ command pfL2Scene
    end if
    if gToysOK is true then
       pfMakeLever 690         -- stand here to power the sweep saw down
-      pfMakeKeyDoor 1300, 500, 1600, "yellow"
+      pfMakeKeyDoor 1300, 500, 2208, "yellow"
    end if
 end pfL2Scene
 
@@ -1193,9 +1243,20 @@ command pfL2Cast
    local tRef
    pfMakeCoin 1000, 448     -- above the sweeping saw: time the hop
    pfMakeCoin 1400, 64      -- ride the second thwomp's head to the top
-   pfMakeCoin 1956, 448     -- over the first stone step
-   pfMakeCoin 2030, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 1648, 510   -- inside the door passage
+   pfMakeCoin 1760, 392     -- on the breather cloud (the bee patrols it)
+   pfMakeCoin 2000, 500     -- on the run-up to the wall
+   pfMakeCoin 2564, 448     -- over the first stone step
+   pfMakeCoin 2638, 392     -- over the top step, by the flag
+   if gToysOK is true then pfMakeCoin 2256, 510   -- inside the door passage
+   -- the bee patrols the breather cloud
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
+      b2kSpriteNew "foes", "bee_a", 1760, 310
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "buzz"
+         pfAddMover tRef, 1760, 310, 80, 850, 24, 400, 0, 0, true
+      end if
+   end if
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
       b2kSpriteNew "foes", "saw_a", 800, 544
@@ -1229,11 +1290,11 @@ command pfL2Cast
          put tRef into gSawSpr
       end if
    end if
-   pfMakeSlime 1, "normal", 1910, 1860, 1996, 512
+   pfMakeSlime 1, "normal", 2518, 2468, 2604, 512
    pfMakeThwomp 1, 1200
    pfMakeThwomp 2, 1400
    pfMakeCheckpoint 610
-   pfMakeGoal 2100, 416
+   pfMakeGoal 2708, 416
 end pfL2Cast
 
 -- =====================================================================
@@ -1246,12 +1307,12 @@ end pfL2Cast
 command pfL3Scene
    local tX
    put "FROZEN CITADEL (icy!)" into gLevelName
-   pfBounds 2880
+   pfBounds 3520
    pfSlab "pf_ground1", 0, 576, 768, 640
    pfSlab "pf_ground2", 960, 576, 1664, 640
-   pfSlab "pf_ground3", 1856, 576, 2880, 640
-   pfSlab "pf_plat1", 2400, 512, 2592, 576
-   pfSlab "pf_plat2", 2592, 448, 2720, 576
+   pfSlab "pf_ground3", 1856, 576, 3520, 640
+   pfSlab "pf_plat1", 3040, 512, 3232, 576
+   pfSlab "pf_plat2", 3232, 448, 3360, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_block_top") then
       repeat with tX = 0 to 704 step 64
          pfTile "terrain_snow_block_top", tX, 576
@@ -1259,47 +1320,65 @@ command pfL3Scene
       repeat with tX = 960 to 1600 step 64
          pfTile "terrain_snow_block_top", tX, 576
       end repeat
-      repeat with tX = 1856 to 2816 step 64
+      repeat with tX = 1856 to 3456 step 64
          pfTile "terrain_snow_block_top", tX, 576
       end repeat
-      pfTile "terrain_snow_block_top_left", 2400, 512
-      pfTile "terrain_snow_block_top", 2464, 512
-      pfTile "terrain_snow_block_top_right", 2528, 512
-      pfTile "terrain_snow_block_top", 2592, 448
-      pfTile "terrain_snow_block_top", 2656, 448
-      pfTile "terrain_snow_block_center", 2592, 512
-      pfTile "terrain_snow_block_center", 2656, 512
+      pfTile "terrain_snow_block_top_left", 3040, 512
+      pfTile "terrain_snow_block_top", 3104, 512
+      pfTile "terrain_snow_block_top_right", 3168, 512
+      pfTile "terrain_snow_block_top", 3232, 448
+      pfTile "terrain_snow_block_top", 3296, 448
+      pfTile "terrain_snow_block_center", 3232, 512
+      pfTile "terrain_snow_block_center", 3296, 512
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
    pfMakeSpikes 768, 960
    pfMakeSpikes 1664, 1856
+   -- the glacier run (the level's second act): a snow cloud rest above
+   -- the second sweeping saw's stretch
+   b2kSmoothGround "2880,448" & cr & "2816,448" & cr & "2624,448" & cr & "2560,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_cloud_left") then
+      pfTile "terrain_snow_cloud_left", 2624, 448
+      pfTile "terrain_snow_cloud_middle", 2688, 448
+      pfTile "terrain_snow_cloud_right", 2752, 448
+   else
+      create graphic "pf_cloudledgeD"
+      set the style of it to "line"
+      set the points of it to "2624,448" & cr & "2816,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "200,220,240"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeD"
+   end if
    if gToysOK is true then
       pfMakeSpring 700        -- arcs you clean over the first pit
       pfMakeBonk "brick", 1232
       pfMakeBonk "box", 1296
       pfMakeBonk "brick", 1360
       pfMakeBonk "box", 1424
-      pfMakeKeyDoor 2140, 500, 2240, "red"
+      pfMakeKeyDoor 2140, 500, 2880, "red"
    end if
 end pfL3Scene
 
 command pfL3Cast
    local tRef
-   -- ICE: the hero accelerates and brakes at a quarter strength -
-   -- momentum rules every jump (the knobs reset with each rebuild)
-   b2kPlayerSet "accel", 420
-   b2kPlayerSet "airAccel", 650
+   -- ICE: starts and stops at ~15% strength - a full-speed stop slides
+   -- about 300px, and every jump carries its momentum (knobs reset
+   -- with each rebuild, so only this level skates)
+   b2kPlayerSet "accel", 260
+   b2kPlayerSet "airAccel", 480
    pfMakeCoin 1300, 500     -- under the bonk row
-   pfMakeCoin 1550, 448     -- above the sweeping saw
+   pfMakeCoin 1550, 448     -- above the first sweeping saw
    pfMakeCoin 1760, 440     -- mid-air over the second pit
    pfMakeCoin 1985, 500     -- the snow slime's beat
-   pfMakeCoin 2530, 448     -- over the first snow step
-   pfMakeCoin 2625, 392     -- over the top step, by the flag
+   pfMakeCoin 2480, 448     -- above the SECOND sweeping saw (no lever here)
+   pfMakeCoin 2720, 392     -- on the snow cloud
+   pfMakeCoin 3170, 448     -- over the first snow step
+   pfMakeCoin 3265, 392     -- over the top step, by the flag
    if gToysOK is true then
       pfMakeCoin 864, 300   -- over the first pit: ride the spring's arc
-      pfMakeCoin 2288, 510  -- inside the red door's passage
+      pfMakeCoin 2928, 510  -- inside the red door's passage
    end if
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
       b2kSpriteNew "foes", "saw_a", 1550, 548
@@ -1311,10 +1390,19 @@ command pfL3Cast
          put tRef into gSawSpr
       end if
    end if
+   -- the glacier run's saw: always on (the lever stayed in level 2)
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
+      b2kSpriteNew "foes", "saw_a", 2480, 548
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "sawspin"
+         pfAddMover tRef, 2480, 548, 96, 1000, 0, 1, 38, 42, false
+      end if
+   end if
    pfMakeSlime 1, "normal", 1985, 1950, 2020, 576
    pfMakeThwomp 1, 2080     -- it guards the red key
    pfMakeCheckpoint 1920
-   pfMakeGoal 2680, 416
+   pfMakeGoal 3320, 416
 end pfL3Cast
 
 
@@ -1376,7 +1464,7 @@ end pfWipeStage
 -- The game tick
 -- =====================================================================
 on b2kFrame
-   local tHud
+   local tHud, tPos
    if gHero is empty then exit b2kFrame
    if gIntroPan > 0 then
       -- no camera pan (cut for reliability): just a splash beat over the
@@ -1388,10 +1476,16 @@ on b2kFrame
          put the milliseconds into gRunStart
       end if
    end if
-   -- kill plane: anything that slips every other check still respawns
+   -- kill plane: anything that slips every other check still respawns.
+   -- Plus the EDGE FAILSAFE: a solver squeeze must never leave the hero
+   -- beyond a wall (with the thick slabs it should never fire; when it
+   -- does not, it costs one position read and two compares)
    if gHurtLock is not true then
       set the itemDelimiter to comma
-      if (item 2 of b2kPosition(gHero)) > 780 then pfHurt
+      put b2kPosition(gHero) into tPos
+      if item 2 of tPos > 780 then pfHurt
+      if item 1 of tPos < 16 then b2kMoveTo gHero, 28, item 2 of tPos
+      if item 1 of tPos > gLevelW - 16 then b2kMoveTo gHero, gLevelW - 28, item 2 of tPos
    end if
    -- centre-screen banners (pfNotice) expire here
    if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then
