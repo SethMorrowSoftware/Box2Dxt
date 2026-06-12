@@ -1,19 +1,17 @@
 -- =====================================================================
 -- box2dxt-platformer.livecodescript  ·  Game Kit Phases 1+2+3+4 showcase
 --
--- A collect-them-ALL puzzle platformer (4608px scrolling world in a
--- 1024px viewport) that exercises most of the engine: the Kit's PLAYER
--- CONTROLLER (b2kPlayerAttach drives movement, jumping, grounding, state
--- and animations -- this file holds no movement code of its own), atlas
--- spritesheets with named animations and scaling, and the camera
--- (follow + bounds + shake). Fifteen coins, each one reachable and most
--- of them a little puzzle; the flag only wins once you hold them all.
--- WAVE 1 (the iconic-feel base) lives here: springboards, ?-boxes,
--- breakable bricks with debris, a button-faced pressure plate, a saw
--- power lever, a key-and-lock door, chained-weight thwomps, real spike
--- tips and a stone-biome finale - all on existing Kit mechanisms.
--- Anything without sheet art falls back to plain graphics, so the level
--- runs even with no asset folder (frozen at the original 12 coins).
+-- A THREE-LEVEL collect-them-all platformer (each level its own
+-- scrolling world in a 1024px viewport) that exercises everything
+-- built so far: the Kit's PLAYER CONTROLLER (b2kPlayerAttach drives
+-- movement, jumping, grounding, state and animations - this file holds
+-- no movement code of its own), atlas spritesheets with named
+-- animations and scaling, the camera (follow + bounds + shake),
+-- synthesized sound, and the full Wave 1 toy box. Collect EVERY coin
+-- on a level (the goal flag turns GOLD), touch the flag, and the next
+-- level builds; level 3's flag is the win. Anything without sheet art
+-- falls back to plain graphics, so all three levels run even with no
+-- asset folder (the coin totals count themselves as each level builds).
 --
 -- HOW TO RUN
 --   1. In OXT, make a new stack. Put this whole file into the STACK script.
@@ -22,32 +20,31 @@
 --      stack property; Shift+Reset re-asks; Cancel = placeholder shapes).
 --
 -- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
---           full) · the MOUSE DRAGS the crate (onto the button - part
---           of the puzzle; chained weights are NOT draggable) ·
---           R restarts · ESC pauses · M mutes the (synthesized) sound
+--           full) · the MOUSE DRAGS the crate (chained weights are NOT
+--           draggable) · R restarts the CURRENT level · ESC pauses ·
+--           M mutes the (synthesized) sound
 --
--- THE LEVEL, left to right (every beat holds a coin):
---           meadow: the SPRINGBOARD hugging the left wall behind the
---           spawn (boing - a sky coin floats high above it; it blocks
---           no path) and the BONK ROW (brick, ?-box, brick, ?-box:
---           headbutt the boxes for coins, SMASH the bricks to debris) -
---           one-way BRIDGE over a spike slime (never stomp it!) - the
---           slope MOUND - two CLOUD steps with the fly - the SPIKE PIT
---           (coin hangs mid-air over it) - CRATE onto the yellow BUTTON
---           opens the gate (a coin waits inside the gateway) - red
---           CHECKPOINT - the saw LEVER (STAND at it to power the
---           sweeping saw down; running past never flips it) -
---           saw + SWEEPING saw - THWOMP ALLEY (chained weights: ride
---           the second one's head to the top coin, and GRAB THE KEY
---           floating between them - the weights themselves cannot be
---           dragged or shoved) - THE WALL: a stone curtain up to the
---           ceiling with a LOCKED DOOR at its foot (the key opens it
---           on approach; a coin waits inside the passage) - and behind
---           the door the STONE finale: step platforms, two more coins,
---           the FLAG. All 15 coins win - and THREE of them live behind
---           the door, so the flag can never end the game early: the
---           progression is collect 12 + key, open the door, sweep the
---           finale (the flag turns GOLD on the last coin), then win.
+-- THE THREE LEVELS (every beat holds a coin; the flag advances):
+--   LEVEL 1  GREEN HILLS (2880px) - movement + the iconic toys: the
+--            SPRINGBOARD hugging the left wall (sky coin above it), the
+--            BONK ROW (headbutt ?-boxes for coins, SMASH bricks into
+--            debris), the one-way BRIDGE over a spike slime, a stompable
+--            slime, the slope MOUND, two one-way CLOUD steps with the
+--            fly, the bee, the SPIKE PIT (coin in its air), flag.
+--   LEVEL 2  THE WORKS (2208px) - the machines: drag the CRATE onto the
+--            yellow BUTTON to open the gate (coin in the gateway), the
+--            red CHECKPOINT, the saw LEVER (STAND at it to power the
+--            sweeping saw down - running past never flips it), both
+--            SAWS, THWOMP ALLEY (chained weights: ride the second one's
+--            head to the top coin; grab the YELLOW KEY between them),
+--            and the WALLED DOOR - a stone curtain to the ceiling, so
+--            the stone steps, three coins and the FLAG behind it are
+--            reachable ONLY through the door.
+--   LEVEL 3  FROZEN CITADEL (2880px) - everything at once, on ICE
+--            (quarter-strength acceleration: momentum rules): spring
+--            over the first spiked pit, a bonk row, the sweeping saw, a
+--            second spiked pit, a checkpoint, a thwomp guarding the RED
+--            key, the red walled door, snow steps, the final flag.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -74,9 +71,8 @@
 --      dragged or shoved by the player); it rises and re-arms in place.
 --   6. HUD "lands" rises by exactly 1 per touchdown; stand still 2+ min
 --      (never ASLEEP); hurt/win cut control then respawn restores it.
---   7. Camera follows smoothly over the full 4608px; build time after
---      Reset stays tolerable (~100 tiles + 8 synthesized sounds now);
---      ms/frame stays ~16-18.
+--   7. Camera follows smoothly over each level's full width; build time
+--      per level stays tolerable; ms/frame stays ~16-18.
 --   8. SOUND (Phase 5 audio, all b2kToneMake - zero asset files): cues
 --      for jump, land, coin, stomp, hurt, checkpoint, gate, win. M
 --      mutes/unmutes; an engine with no audio stays SILENT, no errors
@@ -101,13 +97,19 @@
 --      steps or the flag without the door; the crate wears the
 --      empty-box face but still drags; spike tips show in the pit; the
 --      steps past the door are STONE biome.
---  11. WIN-STATE CLARITY: collecting the LAST coin turns the goal flag
---      GOLD with a banner + chime ("go touch it to WIN"); touching the
---      flag short of the total BUZZES and banners how many coins
---      remain (throttled; the HUD repeats the hint). Three coins live
---      behind the door, so the GOLD moment always lands inside the
---      finale, in sight of the flag. The red flag at the checkpoint
---      only marks respawn - it never wins.
+--  11. WIN-STATE CLARITY: collecting a level's LAST coin turns its goal
+--      flag GOLD with a banner + chime; touching the flag short of the
+--      total BUZZES and banners how many coins remain (throttled; the
+--      HUD repeats the hint). On the walled-door levels the last coins
+--      live behind the door, so the GOLD moment lands in sight of the
+--      flag. The red checkpoint flag only marks respawn - never a win.
+--  12. THE LEVEL FLOW: flag on L1/L2 banners "LEVEL N CLEAR!" and the
+--      next level builds ~1.2s later (outside the physics frame); R
+--      restarts only the CURRENT level; the final dialog shows TOTAL
+--      time and falls across all three; Play again is a fresh L1 run.
+--      The boundaries audit rides pfBounds: every level gets thick
+--      side slabs PLUS edge wall segments PLUS the matching camera
+--      clamp - check you cannot leave the world on any level.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -115,6 +117,10 @@ local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
+-- the three-level game: which level, its width/name, and the banked
+-- totals carried across level clears for the final win screen
+local gLevel, gLevelW, gLevelName, gTotalFalls, gSecsBank
+local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
@@ -135,7 +141,6 @@ local gGoalSpr, gNoticeUntil, gFlagNoteMS
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
 constant kPfUIVersion = "6"
-constant kLevelW = 4608
 constant kHeroSheetB64 = "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"
 
 -- =====================================================================
@@ -146,6 +151,9 @@ on openCard
    if gStarted is true then
       b2kStart
    else
+      put 1 into gLevel
+      put 0 into gTotalFalls
+      put 0 into gSecsBank
       pfStartGame
    end if
    pass openCard
@@ -431,19 +439,11 @@ command pfStartGame
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
    -- Wave 1 toys need the tiles atlas (spring/box/brick/lever/key/door
-   -- art); without it the fallback level stays frozen at its 12 coins
+   -- art); without it each level builds its frozen plain-shape fallback
    put (gAssetsOK is true and b2kSheetHasFrame("tiles", "spring_out")) into gToysOK
-   put 12 into gCoinsTotal
-   if gToysOK is true then put 15 into gCoinsTotal   -- + sky coin, 2 ?-boxes
-   if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts, ESC pauses, M mutes - and the MOUSE DRAGS" & cr & "the box-crate onto the yellow button (chained weights do NOT drag). All " & gCoinsTotal & " coins are reachable." & cr & "Spring up, BONK ?-boxes, smash bricks, STAND at the lever to stop the saw, KEY opens the door. GOLD flag = WIN."
-   else
-      if gAssetsOK is true then
-         set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
-      else
-         set the text of field "pfHelp" to "PLACEHOLDER ART - the atlas load failed: " & gLoadNote & cr & "Press Shift+Reset to pick the Spritesheets folder again (it must contain the" & cr & "spritesheet-*-default.png and .xml files)."
-      end if
-   end if
+   -- the coin total COUNTS ITSELF: pfMakeCoin and every "?-box" add one
+   -- as they are built, so totals can never drift from the layout
+   put 0 into gCoinsTotal
    lock screen
    -- ===== far backdrop: static panels on the CARD (they do not scroll) ====
    if gAssetsOK is true and b2kSheetHasFrame("bg", "background_color_hills") then
@@ -461,234 +461,25 @@ command pfStartGame
    -- ===== the camera: everything Kit-made from here lives in the view ====
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
-   b2kCamBounds 0, 0, kLevelW, 640
-   -- regular-platformer camera: the hero is LOCKED to screen centre and the
-   -- world scrolls 1:1 (he only approaches the edges where the bounds stop
-   -- the view, at the very start and end of the level)
+   -- regular-platformer camera: the hero is LOCKED to screen centre and
+   -- the world scrolls 1:1; the bounds are set per level by pfBounds
    b2kCamDeadzone 0, 0
    b2kCamGoto 120, 480   -- open on the spawn point, no startup slide
-   -- level bounds: THICK invisible slabs outside the play space (a
-   -- capsule driven into a thin segment can jitter or creep; a 48px box
-   -- gives the solver a clean stop), a segment ceiling, and a KILL FLOOR
-   -- so anything shoved into a pit is destroyed instead of falling
-   -- forever (the hero is exempt - his 780px kill plane respawns him)
-   pfSlab "pf_wallL", -48, -640, 0, 640
-   pfSlab "pf_wallR", kLevelW, -640, kLevelW + 48, 640
-   b2kWall 0, 0, kLevelW, 0
-   b2kKillFloor 820
-   -- ===== terrain: invisible physics slabs + tile art ====
-   -- The world, left to right (kLevelW = 4608, ~4.5 screens):
-   --   meadow - one-way bridge (spike slime guards the low road) - slope
-   --   mound - cloud steps (fly) - SPIKE PIT - crate/plate/gate - check-
-   --   point - saw gauntlet - thwomp alley - slime fields & steps - FLAG
-   pfSlab "pf_ground1", 0, 576, 2304, 640
-   pfSlab "pf_ground2", 2496, 576, kLevelW, 640
-   pfSlab "pf_plat1", 4224, 512, 4416, 576
-   pfSlab "pf_plat2", 4416, 448, 4544, 576
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 2240 step 64
-         if tX >= 1248 and tX <= 1568 then
-            -- under the mound: plain dirt, so the hill reads as one mass
-            pfTile "terrain_grass_block_center", tX, 576
-         else
-            pfTile "terrain_grass_block_top", tX, 576
-         end if
-      end repeat
-      repeat with tX = 2496 to 4544 step 64
-         if tX >= 4224 then
-            -- the finale plays in STONE: the steps rise just past the
-            -- locked door (same tile grammar, different skin)
-            pfTile "terrain_stone_block_top", tX, 576
-         else
-            pfTile "terrain_grass_block_top", tX, 576
-         end if
-      end repeat
-      pfTile "terrain_stone_block_top_left", 4224, 512
-      pfTile "terrain_stone_block_top", 4288, 512
-      pfTile "terrain_stone_block_top_right", 4352, 512
-      pfTile "terrain_stone_block_top", 4416, 448
-      pfTile "terrain_stone_block_top", 4480, 448
-      pfTile "terrain_stone_block_center", 4416, 512
-      pfTile "terrain_stone_block_center", 4480, 512
-      pfShowSlabs false
-   else
-      pfShowSlabs true
-   end if
-   -- ===== the spike pit (the slabs leave a gap at 2304-2496) ====
-   -- real spike strips: the art's alpha is the BOTTOM 34px of the 64px
-   -- cell (measured), so cells at y=576 put the tips at 606 with the
-   -- base flush on the stage floor; the hurt sensor (592+) fires first
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
-      pfTile "spikes", 2304, 576
-      pfTile "spikes", 2368, 576
-      pfTile "spikes", 2432, 576
-   else
-      create graphic "pf_spikes"
-      set the style of it to "rectangle"
-      set the rect of it to 2304, 600, 2496, 640
-      set the filled of it to true
-      set the backgroundColor of it to "200,60,60"
-      b2kCamAdopt the long id of graphic "pf_spikes"
-   end if
-   create graphic "pf_spikesens"
-   set the style of it to "rectangle"
-   set the rect of it to 2304, 592, 2496, 644
-   set the visible of it to false
-   put the long id of graphic "pf_spikesens" into tRef
-   set the uPfHazardFlag of tRef to true
-   b2kAddSensor tRef, "box"
-   -- ===== the one-way bridge (chain, solid side up; coin on the deck) ====
-   -- GHOST RULE: an open chain's outer two points anchor, they don't
-   -- collide -- so every chain here runs one tile PAST its art/surface
-   -- on each side. The deck is 752-1008; the chain reaches 688-1072.
-   b2kSmoothGround "1072,440" & cr & "1008,440" & cr & "752,440" & cr & "688,440"
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bridge") then
-      repeat with tX = 752 to 944 step 64
-         pfTile "bridge", tX, 424
-      end repeat
-   else
-      create graphic "pf_ledge"
-      set the style of it to "line"
-      set the points of it to "752,440" & cr & "1008,440"
-      set the lineSize of it to 4
-      set the foregroundColor of it to "70,190,110"
-      b2kCamAdopt the long id of graphic "pf_ledge"
-   end if
-   -- ===== the slope mound (walkable 26.6-degree ramps) ====
-   -- one chain, top surface listed right-to-left like the bridges; the
-   -- player's maxSlopeDeg (50) decides it counts as ground, not wall.
-   -- Six points: the outer two are the chain's non-colliding ghost
-   -- anchors (flat tails on the ground the slab already covers), so all
-   -- three REAL segments -- down-ramp, plateau, up-ramp -- are solid.
-   -- Kenney's grass ramps DESCEND left-to-right as drawn (ramp_long_a is
-   -- the upper half of the diagonal, ramp_long_b the lower half), so the
-   -- ascent side shows them MIRRORED; the plateau is plain block_top.
-   b2kSmoothGround "1696,576" & cr & "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576" & cr & "1184,576"
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_ramp_long_a") then
-      pfTile "terrain_grass_ramp_long_b", 1248, 512, true
-      pfTile "terrain_grass_ramp_long_a", 1312, 512, true
-      pfTile "terrain_grass_block_top", 1376, 512
-      pfTile "terrain_grass_block_top", 1440, 512
-      pfTile "terrain_grass_ramp_long_a", 1504, 512
-      pfTile "terrain_grass_ramp_long_b", 1568, 512
-   else
-      create graphic "pf_mound"
-      set the style of it to "polygon"
-      set the points of it to "1248,576" & cr & "1376,512" & cr & "1504,512" & cr & "1632,576" & cr & "1248,576"
-      set the filled of it to true
-      set the backgroundColor of it to "90,170,90"
-      b2kCamAdopt the long id of graphic "pf_mound"
-   end if
-   -- ===== the cloud steps (one-way chains; the high one holds a coin) ====
-   -- ghost-padded one tile beyond the cloud art on each side, so the
-   -- WHOLE cloud is solid (art: 1696-1888 and 1984-2176)
-   b2kSmoothGround "1952,448" & cr & "1888,448" & cr & "1696,448" & cr & "1632,448"
-   b2kSmoothGround "2240,320" & cr & "2176,320" & cr & "1984,320" & cr & "1920,320"
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
-      pfTile "terrain_grass_cloud_left", 1696, 448
-      pfTile "terrain_grass_cloud_middle", 1760, 448
-      pfTile "terrain_grass_cloud_right", 1824, 448
-      pfTile "terrain_grass_cloud_left", 1984, 320
-      pfTile "terrain_grass_cloud_middle", 2048, 320
-      pfTile "terrain_grass_cloud_right", 2112, 320
-   else
-      create graphic "pf_cloudledgeA"
-      set the style of it to "line"
-      set the points of it to "1696,448" & cr & "1888,448"
-      set the lineSize of it to 4
-      set the foregroundColor of it to "70,190,110"
-      b2kCamAdopt the long id of graphic "pf_cloudledgeA"
-      create graphic "pf_cloudledgeB"
-      set the style of it to "line"
-      set the points of it to "1984,320" & cr & "2176,320"
-      set the lineSize of it to 4
-      set the foregroundColor of it to "70,190,110"
-      b2kCamAdopt the long id of graphic "pf_cloudledgeB"
-   end if
-   -- ===== plate + gate puzzle (a coin waits INSIDE the gateway) ====
-   pfMakeCoin 2932, 540   -- made before the gate, so the closed gate hides it
-   -- the plate is a PURE GRAPHIC: its pressed state is POLLED from the
-   -- physics world each frame (pfTickGate), not counted from sensor
-   -- enter/exit events. Counting drifts - Box2D sensor begin/end around
-   -- settling and SLEEPING bodies is exactly the edge a pressure plate
-   -- lives on - while an overlap poll is stateless and the broadphase
-   -- still includes sleeping bodies (a parked crate never "evaporates").
-   create graphic "pf_plate"
-   set the style of it to "rectangle"
-   set the rect of it to 2772, 560, 2828, 576
-   set the filled of it to true
-   set the backgroundColor of it to "220,180,60"
-   b2kCamAdopt the long id of graphic "pf_plate"
-   -- Wave 1: the plate wears button art (switch alpha is bottom-anchored
-   -- in its cell, so centre y 544 plants it on the ground line); the
-   -- coloured rect survives underneath as the frozen no-asset fallback
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "switch_yellow") then
-      set the visible of graphic "pf_plate" to false
-      b2kSpriteNew "tiles", "switch_yellow", 2800, 544
-      put the result into gPlateSpr
-   end if
-   create graphic "pf_gate"
-   set the style of it to "rectangle"
-   set the rect of it to 2900, 448, 2964, 576
-   set the filled of it to true
-   set the backgroundColor of it to "190,70,70"
-   put the long id of graphic "pf_gate" into gGate
-   b2kAddBox gGate
-   b2kSetKinematic gGate
-   put empty into gGateSprA
-   put empty into gGateSprB
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_red") then
-      set the visible of graphic "pf_gate" to false
-      b2kSpriteNew "tiles", "block_red", 2932, 480
-      put the result into gGateSprA
-      if gGateSprA is not empty then b2kSpriteBind gGateSprA, gGate, 0, -32
-      b2kSpriteNew "tiles", "block_red", 2932, 544
-      put the result into gGateSprB
-      if gGateSprB is not empty then
-         b2kSpriteBind gGateSprB, gGate, 0, 32
-      end if
-   else
-      b2kCamAdopt gGate
-   end if
-   -- the crate that holds the plate down (drag or push it). It wears the
-   -- empty-box face - the same box the ?-row turns into when headbutted -
-   -- over an invisible spawned body (sprite-only policy); fixed rotation,
-   -- because bound art does not spin and a sliding box reads better than
-   -- a tumbling one anyway. The orange box stays as the frozen fallback.
-   b2kSpawnBox 2640, 520, 56, 56, "orange"
-   put the result into tRef
-   if tRef is not empty then
-      b2kSetFriction tRef, 0.6
-      put tRef into gCrateB
-      if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_empty") then
-         set the visible of tRef to false
-         b2kSetFixedRotation tRef, true
-         b2kSpriteNew "tiles", "block_empty", 2640, 520
-         put the result into gCrateSpr
-         if gCrateSpr is not empty then b2kSpriteBind gCrateSpr, tRef
-      end if
-   end if
-   -- ===== Wave 1: the iconic toys (springboard, bonk row, lever, ====
-   -- key + locked door). Invisible static HOSTS carry the physics,
-   -- atlas sprites carry the faces, and every verdict is POLLED
-   -- geometry (pfTickSpring/Bonks/Lever/Door) - nothing depends on
-   -- contact events with statics. Built BEFORE the hero on purpose:
-   -- later controls draw on top, so scenery made after him would
-   -- COVER him - the hero must walk IN FRONT of the open door, never
-   -- vanish behind it. Skipped wholesale without the atlas: the
-   -- no-asset fallback level stays frozen at its original 12 coins.
-   if gToysOK is true then
-      -- the spring hugs the left wall BEHIND the spawn: a discovery toy
-      -- in plain view that blocks nobody's first steps (at 240 it was a
-      -- hull squatting on the only path out of the spawn)
-      pfMakeSpring 40
-      pfMakeBonk "brick", 384
-      pfMakeBonk "box", 448
-      pfMakeBonk "brick", 512
-      pfMakeBonk "box", 576
-      pfMakeLever 3000      -- past the gateway; the sweep saw is in view
-      pfMakeKeyDoor
-   end if
+   -- ===== LEVEL SCENERY (terrain, machines, Wave 1 toys) =====
+   -- Built BEFORE the hero so every piece of it layers BEHIND him (he
+   -- must walk in front of doors and levers, never vanish). Each level
+   -- is a builder pair: ...Scene here, ...Cast after the hero exists.
+   switch gLevel
+      case 2
+         pfL2Scene
+         break
+      case 3
+         pfL3Scene
+         break
+      default
+         put 1 into gLevel
+         pfL1Scene
+   end switch
    -- ===== the hero ====
    if gAssetsOK is true then
       b2kSheetScale "chars", 0.75
@@ -722,123 +513,30 @@ command pfStartGame
    b2kPlayerSet "moveSpeed", kMoveSpeed
    b2kPlayerSet "jumpSpeed", kJumpSpeed
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
-   -- ===== set dressing (pure decor sprites; skipped without the atlas) ====
-   if gAssetsOK is true then
-      if b2kSheetHasFrame("tiles", "bush") then
-         pfTile "bush", 480, 512
-         pfTile "bush", 3056, 512
-      end if
-      if b2kSheetHasFrame("tiles", "fence") then
-         pfTile "fence", 544, 512
-         pfTile "fence_broken", 608, 512
-      end if
-      if b2kSheetHasFrame("tiles", "mushroom_red") then
-         pfTile "mushroom_red", 2560, 512
-         pfTile "mushroom_brown", 4288, 448
-      end if
-   end if
-   -- ===== pickups: every coin is reachable; several are little puzzles ====
-   pfMakeCoin 360, 496      -- the freebie on the path
-   pfMakeCoin 880, 396      -- on the bridge deck (the high road)
-   pfMakeCoin 1440, 460     -- on the mound plateau
-   pfMakeCoin 2080, 264     -- on the high cloud (mind the fly)
-   pfMakeCoin 2400, 440     -- mid-air over the spike pit: grab it mid-jump
-   pfMakeCoin 3400, 448     -- above the sweeping saw: time the hop
-   pfMakeCoin 3800, 64      -- ride the second thwomp's head to the top
-   pfMakeCoin 4048, 510     -- inside the door passage: opening it pays at once
-   pfMakeCoin 1130, 500     -- in the meadow slime's beat (past the bridge)
-   pfMakeCoin 4356, 448     -- over the first step (its slime objects)
-   pfMakeCoin 4430, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 40, 230   -- the sky coin (spring up)
-   -- ===== enemies, traps & critters ====
-   put empty into tRef
-   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
-      b2kSpriteNew "foes", "saw_a", 3200, 544
-      put the result into tRef
-      if tRef is not empty then
-         set the uPfHazardFlag of tRef to true
-         b2kSpritePlay tRef, "sawspin"
-         b2kAddSensor tRef, "ball"
+   -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
+   switch gLevel
+      case 2
+         pfL2Cast
+         break
+      case 3
+         pfL3Cast
+         break
+      default
+         pfL1Cast
+   end switch
+   -- help + the level banner on the splash (visible through the intro
+   -- beat); gCoinsTotal counted itself during the build above
+   if gAssetsOK is true and gLoadNote is empty then
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts the level, ESC pauses, M mutes - the MOUSE" & cr & "DRAGS the box-crate (chained weights never drag). LEVEL " & gLevel & " of 3: " & gLevelName & "." & cr & "Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag to advance. Three levels to win."
+   else
+      if gAssetsOK is true then
+         set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
+      else
+         set the text of field "pfHelp" to "PLACEHOLDER ART - the atlas load failed: " & gLoadNote & cr & "Press Shift+Reset to pick the Spritesheets folder again (it must contain the" & cr & "spritesheet-*-default.png and .xml files)."
       end if
    end if
-   if tRef is empty then
-      create graphic "pf_saw"
-      set the style of it to "oval"
-      set the rect of it to 3176, 520, 3224, 568
-      set the filled of it to true
-      set the backgroundColor of it to "210,60,60"
-      put the long id of graphic "pf_saw" into tRef
-      set the uPfHazardFlag of tRef to true
-      b2kCamAdopt tRef
-      b2kAddSensor tRef, "ball"
-   end if
-   -- its restless twin SWEEPS the ground past it: a bodiless mover, pure
-   -- per-frame geometry like the fly, so it needs no sensor at all
-   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
-      b2kSpriteNew "foes", "saw_a", 3400, 548
-      put the result into tRef
-      if tRef is not empty then
-         b2kSpritePlay tRef, "sawspin"
-         pfAddMover tRef, 3400, 548, 96, 1100, 0, 1, 38, 42, false
-         put gMovN into gSawMov   -- the Wave 1 lever powers THIS mover
-         put tRef into gSawSpr
-      end if
-   end if
-   -- the bee tours the mound (harmless); the fly guards the cloud coin
-   if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
-      b2kSpriteNew "foes", "bee_a", 1320, 300
-      put the result into tRef
-      if tRef is not empty then
-         b2kSpritePlay tRef, "buzz"
-         pfAddMover tRef, 1320, 300, 90, 900, 26, 430, 0, 0, true
-      end if
-   end if
-   if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
-      b2kSpriteNew "foes", "fly_a", 1930, 390
-      put the result into tRef
-      if tRef is not empty then
-         b2kSpritePlay tRef, "flit"
-         pfAddMover tRef, 1930, 390, 70, 700, 60, 450, 36, 44, true
-      end if
-   end if
-   -- slimes: the SPIKE one guards the low road under the bridge and never
-   -- squashes - go over it. The others stomp like always.
-   pfMakeSlime 1, "spike", 880, 760, 1000, 576
-   -- slime 2 patrols the bridge-mound gap (it used to guard the door
-   -- approach, where its reach overlapped the unlock threshold - a hurt
-   -- at the exact moment of arrival read as "the door never opens")
-   pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
-   pfMakeSlime 3, "normal", 4310, 4260, 4396, 512
-   -- thwomp alley: dodge the first; the second is the ELEVATOR - bait its
-   -- slam, hop on the head, ride the slow rise to the top coin. Chained
-   -- weights are NOT player-movable (they rest static; grabs filter them).
-   pfMakeThwomp 1, 3600
-   pfMakeThwomp 2, 3800
-   pfMakeCheckpoint
-   -- ===== the goal flag (BLUE while locked; GOLD once every coin =====
-   -- is held - pfGainCoin swaps it, so "ready to win" is visible from
-   -- across the level, and the red checkpoint can't be mistaken for it)
-   put empty into tRef
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
-      b2kSpriteNew "tiles", "flag_blue_a", 4500, 416
-      put the result into tRef
-      if tRef is not empty then
-         set the uPfGoalFlag of tRef to true
-         b2kSpritePlay tRef, "wave"
-         b2kAddSensor tRef, "ball"
-         put tRef into gGoalSpr
-      end if
-   end if
-   if tRef is empty then
-      create graphic "pf_flag"
-      set the style of it to "rectangle"
-      set the rect of it to 4484, 384, 4516, 448
-      set the filled of it to true
-      set the backgroundColor of it to "70,110,230"
-      put the long id of graphic "pf_flag" into tRef
-      set the uPfGoalFlag of tRef to true
-      b2kCamAdopt tRef
-      b2kAddSensor tRef, "box"
+   if there is a field "pfSplash" then
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 3" & cr & gLevelName
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -901,7 +599,7 @@ end pfSlab
 command pfShowSlabs pFlag
    local tC
    set the itemDelimiter to comma
-   repeat for each item tC in "pf_ground1,pf_ground2,pf_plat1,pf_plat2"
+   repeat for each item tC in "pf_ground1,pf_ground2,pf_ground3,pf_plat1,pf_plat2"
       if there is a graphic tC then
          set the visible of graphic tC to pFlag
          if pFlag is true then b2kCamAdopt the long id of graphic tC
@@ -939,6 +637,7 @@ end pfAddMover
 
 command pfMakeCoin pX, pY
    local tRef
+   add 1 to gCoinsTotal   -- the total counts itself as the level builds
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "coin_gold") then
       b2kSpriteNew "tiles", "coin_gold", pX, pY
@@ -1052,13 +751,14 @@ command pfMakeThwomp pIdx, pX
    put 0 into gBlockT[pIdx]
 end pfMakeThwomp
 
--- The checkpoint flag just past the gate: touch it once and respawns
--- restart there (the off flag hoists red).
-command pfMakeCheckpoint
+-- The checkpoint flag at pX: touch it once and respawns restart there
+-- (the off flag hoists red).
+command pfMakeCheckpoint pX
    local tRef
    put empty into gCheckSpr
+   put pX into gCheckX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_off") then
-      b2kSpriteNew "tiles", "flag_off", 3072, 544
+      b2kSpriteNew "tiles", "flag_off", pX, 544
       put the result into tRef
       if tRef is not empty then
          set the uPfCheckFlag of tRef to true
@@ -1105,6 +805,7 @@ command pfMakeBonk pKind, pCX
    put the long id of graphic tName into gBonkHost[gBonkN]
    if pKind is "box" then
       put "block_coin" into tFrame
+      add 1 to gCoinsTotal   -- a ?-box pays one coin when headbutted
    else
       put "bricks_brown" into tFrame
    end if
@@ -1125,19 +826,22 @@ command pfMakeLever pCX
    put pCX into gLeverX
 end pfMakeLever
 
--- The key (floating in thwomp alley at walking height, so crossing the
--- alley collects it) and the WALLED DOOR: a stone curtain from the
--- ceiling to the door's lintel with a locked two-tile door at its
--- foot. The wall exists because a 192px free-standing column was
--- BYPASSABLE - the thwomp-ride arc sailed clean over it, so the flag
--- could end the game with the door never used. Now the steps, their
--- coins and the FLAG are reachable only through the door: the gate is
--- structural, and the level reads "find the key" at a glance. The key
--- is a one-shot SENSOR (event doctrine); the unlock is a proximity
--- POLL; only the door's 128px passage clears - the wall is forever.
-command pfMakeKeyDoor
-   local tRef, tY
-   b2kSpriteNew "tiles", "key_yellow", 3700, 500
+-- The key (a one-shot SENSOR at pKeyX,pKeyY - place it at walking
+-- height somewhere dangerous) and the WALLED DOOR at pWallX: a stone
+-- curtain from the ceiling to the door's lintel with a locked
+-- two-tile door at its foot, in pColour (yellow/red/green/blue art
+-- exists). The wall exists because a free-standing column was
+-- BYPASSABLE - a thwomp-ride arc sailed clean over it and the flag
+-- ended the game with the door never used. Everything past the wall
+-- is reachable ONLY through the door: the gate is structural, and the
+-- level reads "find the key" at a glance. The unlock is a proximity
+-- POLL; only the door's 128px passage ever clears - the wall stays.
+command pfMakeKeyDoor pKeyX, pKeyY, pWallX, pColour
+   local tRef, tY, tCX
+   put pWallX + 32 into tCX
+   put tCX into gDoorX
+   put pColour into gDoorWord
+   b2kSpriteNew "tiles", "key_" & pColour, pKeyX, pKeyY
    put the result into tRef
    if tRef is not empty then
       set the uPfKeyFlag of tRef to true
@@ -1145,24 +849,458 @@ command pfMakeKeyDoor
    end if
    create graphic "pf_doorWall"
    set the style of it to "rectangle"
-   set the rect of it to 4000, 0, 4064, 448
+   set the rect of it to pWallX, 0, pWallX + 64, 448
    set the visible of it to false
    b2kAddStatic the long id of graphic "pf_doorWall"
    repeat with tY = 0 to 320 step 64
-      pfTile "terrain_stone_block_center", 4000, tY
+      pfTile "terrain_stone_block_center", pWallX, tY
    end repeat
-   b2kSpriteNew "tiles", "lock_yellow", 4032, 416
+   b2kSpriteNew "tiles", "lock_" & pColour, tCX, 416
    put the result into gLockSpr
    create graphic "pf_doorHost"
    set the style of it to "rectangle"
-   set the rect of it to 4000, 448, 4064, 576
+   set the rect of it to pWallX, 448, pWallX + 64, 576
    set the visible of it to false
    b2kAddStatic the long id of graphic "pf_doorHost"
-   b2kSpriteNew "tiles", "door_closed_top", 4032, 480
+   b2kSpriteNew "tiles", "door_closed_top", tCX, 480
    put the result into gDoorSprT
-   b2kSpriteNew "tiles", "door_closed", 4032, 544
+   b2kSpriteNew "tiles", "door_closed", tCX, 544
    put the result into gDoorSprB
 end pfMakeKeyDoor
+
+-- The world box, belt AND braces: thick slabs (the solver's clean
+-- stop) PLUS two-sided wall segments at the exact edges (a second
+-- fence even for a creeping capsule), the segment ceiling, the kill
+-- floor, and the camera clamped to the same box. One helper, every
+-- level - boundary bugs get fixed in exactly one place.
+command pfBounds pW
+   put pW into gLevelW
+   pfSlab "pf_wallL", -64, -200, 0, 700
+   pfSlab "pf_wallR", pW, -200, pW + 64, 700
+   b2kWall 0, -200, 0, 640
+   b2kWall pW, -200, pW, 640
+   b2kWall 0, 0, pW, 0
+   b2kKillFloor 820
+   b2kCamBounds 0, 0, pW, 640
+end pfBounds
+
+-- The button-and-gate machine: a polled pressure plate at pPlateX
+-- (pfTickGate reads gPlateX) drives a kinematic gate whose left edge
+-- is pGateL. The gateway coin is made FIRST so the closed gate hides
+-- it. The plate is a pure region - pressed = b2kOverlapMoving poll.
+command pfMakeGate pPlateX, pGateL
+   local tCX
+   put pGateL + 32 into tCX
+   pfMakeCoin tCX, 540
+   put pPlateX into gPlateX
+   create graphic "pf_plate"
+   set the style of it to "rectangle"
+   set the rect of it to pPlateX - 28, 560, pPlateX + 28, 576
+   set the filled of it to true
+   set the backgroundColor of it to "220,180,60"
+   b2kCamAdopt the long id of graphic "pf_plate"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "switch_yellow") then
+      set the visible of graphic "pf_plate" to false
+      b2kSpriteNew "tiles", "switch_yellow", pPlateX, 544
+      put the result into gPlateSpr
+   end if
+   create graphic "pf_gate"
+   set the style of it to "rectangle"
+   set the rect of it to pGateL, 448, pGateL + 64, 576
+   set the filled of it to true
+   set the backgroundColor of it to "190,70,70"
+   put the long id of graphic "pf_gate" into gGate
+   b2kAddBox gGate
+   b2kSetKinematic gGate
+   put empty into gGateSprA
+   put empty into gGateSprB
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_red") then
+      set the visible of graphic "pf_gate" to false
+      b2kSpriteNew "tiles", "block_red", tCX, 480
+      put the result into gGateSprA
+      if gGateSprA is not empty then b2kSpriteBind gGateSprA, gGate, 0, -32
+      b2kSpriteNew "tiles", "block_red", tCX, 544
+      put the result into gGateSprB
+      if gGateSprB is not empty then
+         b2kSpriteBind gGateSprB, gGate, 0, 32
+      end if
+   else
+      b2kCamAdopt gGate
+   end if
+end pfMakeGate
+
+-- A spike pit between pL and pR (the level's ground slabs leave the
+-- gap). Spike alpha is the BOTTOM 34px of the cell (measured), so
+-- cells at y=576 put the tips at 606, base flush with the floor; the
+-- hurt sensor (592+) fires before the art is even reached.
+command pfMakeSpikes pL, pR
+   local tRef, tX
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
+      repeat with tX = pL to pR - 64 step 64
+         pfTile "spikes", tX, 576
+      end repeat
+   else
+      create graphic ("pf_spikes" & pL)
+      set the style of it to "rectangle"
+      set the rect of it to pL, 600, pR, 640
+      set the filled of it to true
+      set the backgroundColor of it to "200,60,60"
+      b2kCamAdopt the long id of graphic ("pf_spikes" & pL)
+   end if
+   create graphic ("pf_spikesens" & pL)
+   set the style of it to "rectangle"
+   set the rect of it to pL, 592, pR, 644
+   set the visible of it to false
+   put the long id of graphic ("pf_spikesens" & pL) into tRef
+   set the uPfHazardFlag of tRef to true
+   b2kAddSensor tRef, "box"
+end pfMakeSpikes
+
+-- The goal flag: BLUE while coins remain, GOLD (pfGainCoin) when the
+-- level is sweepable - touch it then to clear the level (or win, on
+-- level three).
+command pfMakeGoal pX, pY
+   local tRef
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
+      b2kSpriteNew "tiles", "flag_blue_a", pX, pY
+      put the result into tRef
+      if tRef is not empty then
+         set the uPfGoalFlag of tRef to true
+         b2kSpritePlay tRef, "wave"
+         b2kAddSensor tRef, "ball"
+         put tRef into gGoalSpr
+      end if
+   end if
+   if tRef is empty then
+      create graphic "pf_flag"
+      set the style of it to "rectangle"
+      set the rect of it to pX - 16, pY - 32, pX + 16, pY + 32
+      set the filled of it to true
+      set the backgroundColor of it to "70,110,230"
+      put the long id of graphic "pf_flag" into tRef
+      set the uPfGoalFlag of tRef to true
+      b2kCamAdopt tRef
+      b2kAddSensor tRef, "box"
+   end if
+end pfMakeGoal
+
+-- =====================================================================
+-- LEVEL 1 - "GREEN HILLS" (2880px). Movement and the Wave 1 toys:
+-- springboard + sky coin, the bonk row, the one-way bridge over the
+-- spike slime, the slope mound, two one-way clouds, the spike pit.
+-- =====================================================================
+command pfL1Scene
+   local tX
+   put "GREEN HILLS" into gLevelName
+   pfBounds 2880
+   pfSlab "pf_ground1", 0, 576, 2304, 640
+   pfSlab "pf_ground2", 2496, 576, 2880, 640
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
+      repeat with tX = 0 to 2240 step 64
+         if tX >= 1248 and tX <= 1568 then
+            -- under the mound: plain centre, so the hill reads as one mass
+            pfTile "terrain_grass_block_center", tX, 576
+         else
+            pfTile "terrain_grass_block_top", tX, 576
+         end if
+      end repeat
+      repeat with tX = 2496 to 2816 step 64
+         pfTile "terrain_grass_block_top", tX, 576
+      end repeat
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   pfMakeSpikes 2304, 2496
+   -- the one-way bridge (GHOST RULE: the chain runs one tile past the
+   -- deck on each side - 688..1072 under art 752..1008)
+   b2kSmoothGround "1072,440" & cr & "1008,440" & cr & "752,440" & cr & "688,440"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bridge") then
+      repeat with tX = 752 to 944 step 64
+         pfTile "bridge", tX, 424
+      end repeat
+   else
+      create graphic "pf_ledge"
+      set the style of it to "line"
+      set the points of it to "752,440" & cr & "1008,440"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_ledge"
+   end if
+   -- the slope mound (26.6-degree ramps): six chain points, the outer
+   -- two are non-colliding ghost anchors; ramps mirrored on the ascent
+   b2kSmoothGround "1696,576" & cr & "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576" & cr & "1184,576"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_ramp_long_a") then
+      pfTile "terrain_grass_ramp_long_b", 1248, 512, true
+      pfTile "terrain_grass_ramp_long_a", 1312, 512, true
+      pfTile "terrain_grass_block_top", 1376, 512
+      pfTile "terrain_grass_block_top", 1440, 512
+      pfTile "terrain_grass_ramp_long_a", 1504, 512
+      pfTile "terrain_grass_ramp_long_b", 1568, 512
+   else
+      create graphic "pf_mound"
+      set the style of it to "polygon"
+      set the points of it to "1248,576" & cr & "1376,512" & cr & "1504,512" & cr & "1632,576" & cr & "1248,576"
+      set the filled of it to true
+      set the backgroundColor of it to "90,170,90"
+      b2kCamAdopt the long id of graphic "pf_mound"
+   end if
+   -- the cloud steps (one-way chains, ghost-padded past the art)
+   b2kSmoothGround "1952,448" & cr & "1888,448" & cr & "1696,448" & cr & "1632,448"
+   b2kSmoothGround "2240,320" & cr & "2176,320" & cr & "1984,320" & cr & "1920,320"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
+      pfTile "terrain_grass_cloud_left", 1696, 448
+      pfTile "terrain_grass_cloud_middle", 1760, 448
+      pfTile "terrain_grass_cloud_right", 1824, 448
+      pfTile "terrain_grass_cloud_left", 1984, 320
+      pfTile "terrain_grass_cloud_middle", 2048, 320
+      pfTile "terrain_grass_cloud_right", 2112, 320
+   else
+      create graphic "pf_cloudledgeA"
+      set the style of it to "line"
+      set the points of it to "1696,448" & cr & "1888,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeA"
+      create graphic "pf_cloudledgeB"
+      set the style of it to "line"
+      set the points of it to "1984,320" & cr & "2176,320"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeB"
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
+      pfTile "bush", 480, 512
+      pfTile "fence", 544, 512
+      pfTile "fence_broken", 608, 512
+      pfTile "mushroom_red", 2560, 512
+   end if
+   if gToysOK is true then
+      -- the spring hugs the left wall BEHIND the spawn: a discovery toy
+      -- in plain view that blocks nobody's first steps
+      pfMakeSpring 40
+      pfMakeBonk "brick", 384
+      pfMakeBonk "box", 448
+      pfMakeBonk "brick", 512
+      pfMakeBonk "box", 576
+   end if
+end pfL1Scene
+
+command pfL1Cast
+   local tRef
+   pfMakeCoin 360, 496      -- on the path, under the bonk row
+   pfMakeCoin 880, 396      -- on the bridge deck (the high road)
+   pfMakeCoin 1130, 500     -- the meadow slime's beat
+   pfMakeCoin 1440, 460     -- on the mound plateau
+   pfMakeCoin 2080, 264     -- on the high cloud (mind the fly)
+   pfMakeCoin 2400, 440     -- mid-air over the spike pit: grab it mid-jump
+   if gToysOK is true then pfMakeCoin 40, 230   -- the sky coin (spring up)
+   -- the bee tours the mound (harmless); the fly guards the cloud coin
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
+      b2kSpriteNew "foes", "bee_a", 1320, 300
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "buzz"
+         pfAddMover tRef, 1320, 300, 90, 900, 26, 430, 0, 0, true
+      end if
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
+      b2kSpriteNew "foes", "fly_a", 1930, 390
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "flit"
+         pfAddMover tRef, 1930, 390, 70, 700, 60, 450, 36, 44, true
+      end if
+   end if
+   pfMakeSlime 1, "spike", 880, 760, 1000, 576
+   pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
+   pfMakeGoal 2780, 544
+end pfL1Cast
+
+-- =====================================================================
+-- LEVEL 2 - "THE WORKS" (2208px). The machines: crate + button gate,
+-- the stand-to-flip saw lever, both saws, chained thwomps, the yellow
+-- key and the walled door, stone steps to the flag.
+-- =====================================================================
+command pfL2Scene
+   local tX, tRef
+   put "THE WORKS" into gLevelName
+   pfBounds 2208
+   pfSlab "pf_ground1", 0, 576, 2208, 640
+   pfSlab "pf_plat1", 1824, 512, 2016, 576
+   pfSlab "pf_plat2", 2016, 448, 2144, 576
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
+      repeat with tX = 0 to 2144 step 64
+         if tX >= 1824 then
+            -- the finale plays in STONE past the walled door
+            pfTile "terrain_stone_block_top", tX, 576
+         else
+            pfTile "terrain_grass_block_top", tX, 576
+         end if
+      end repeat
+      pfTile "terrain_stone_block_top_left", 1824, 512
+      pfTile "terrain_stone_block_top", 1888, 512
+      pfTile "terrain_stone_block_top_right", 1952, 512
+      pfTile "terrain_stone_block_top", 2016, 448
+      pfTile "terrain_stone_block_top", 2080, 448
+      pfTile "terrain_stone_block_center", 2016, 512
+      pfTile "terrain_stone_block_center", 2080, 512
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   pfMakeGate 400, 500
+   -- the crate that holds the plate down (drag or push it). It wears
+   -- the empty-box face - the same box the ?-row turns into - over an
+   -- invisible spawned body; fixed rotation (bound art does not spin).
+   b2kSpawnBox 240, 520, 56, 56, "orange"
+   put the result into tRef
+   if tRef is not empty then
+      b2kSetFriction tRef, 0.6
+      put tRef into gCrateB
+      if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_empty") then
+         set the visible of tRef to false
+         b2kSetFixedRotation tRef, true
+         b2kSpriteNew "tiles", "block_empty", 240, 520
+         put the result into gCrateSpr
+         if gCrateSpr is not empty then b2kSpriteBind gCrateSpr, tRef
+      end if
+   end if
+   if gToysOK is true then
+      pfMakeLever 690         -- stand here to power the sweep saw down
+      pfMakeKeyDoor 1300, 500, 1600, "yellow"
+   end if
+end pfL2Scene
+
+command pfL2Cast
+   local tRef
+   pfMakeCoin 1000, 448     -- above the sweeping saw: time the hop
+   pfMakeCoin 1400, 64      -- ride the second thwomp's head to the top
+   pfMakeCoin 1956, 448     -- over the first stone step
+   pfMakeCoin 2030, 392     -- over the top step, by the flag
+   if gToysOK is true then pfMakeCoin 1648, 510   -- inside the door passage
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
+      b2kSpriteNew "foes", "saw_a", 800, 544
+      put the result into tRef
+      if tRef is not empty then
+         set the uPfHazardFlag of tRef to true
+         b2kSpritePlay tRef, "sawspin"
+         b2kAddSensor tRef, "ball"
+      end if
+   end if
+   if tRef is empty then
+      create graphic "pf_saw"
+      set the style of it to "oval"
+      set the rect of it to 776, 520, 824, 568
+      set the filled of it to true
+      set the backgroundColor of it to "210,60,60"
+      put the long id of graphic "pf_saw" into tRef
+      set the uPfHazardFlag of tRef to true
+      b2kCamAdopt tRef
+      b2kAddSensor tRef, "ball"
+   end if
+   -- its restless twin SWEEPS the ground: a bodiless mover the lever
+   -- can power down
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
+      b2kSpriteNew "foes", "saw_a", 1000, 548
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "sawspin"
+         pfAddMover tRef, 1000, 548, 96, 1100, 0, 1, 38, 42, false
+         put gMovN into gSawMov
+         put tRef into gSawSpr
+      end if
+   end if
+   pfMakeSlime 1, "normal", 1910, 1860, 1996, 512
+   pfMakeThwomp 1, 1200
+   pfMakeThwomp 2, 1400
+   pfMakeCheckpoint 610
+   pfMakeGoal 2100, 416
+end pfL2Cast
+
+-- =====================================================================
+-- LEVEL 3 - "FROZEN CITADEL" (2880px). Everything at once, on ICE:
+-- snow ground with quarter-strength player acceleration (momentum!),
+-- the spring arcs over the first spiked pit, a bonk row, the sweeping
+-- saw, a second spiked pit, a thwomp guarding the RED key, the red
+-- walled door, snow steps to the flag.
+-- =====================================================================
+command pfL3Scene
+   local tX
+   put "FROZEN CITADEL (icy!)" into gLevelName
+   pfBounds 2880
+   pfSlab "pf_ground1", 0, 576, 768, 640
+   pfSlab "pf_ground2", 960, 576, 1664, 640
+   pfSlab "pf_ground3", 1856, 576, 2880, 640
+   pfSlab "pf_plat1", 2400, 512, 2592, 576
+   pfSlab "pf_plat2", 2592, 448, 2720, 576
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_block_top") then
+      repeat with tX = 0 to 704 step 64
+         pfTile "terrain_snow_block_top", tX, 576
+      end repeat
+      repeat with tX = 960 to 1600 step 64
+         pfTile "terrain_snow_block_top", tX, 576
+      end repeat
+      repeat with tX = 1856 to 2816 step 64
+         pfTile "terrain_snow_block_top", tX, 576
+      end repeat
+      pfTile "terrain_snow_block_top_left", 2400, 512
+      pfTile "terrain_snow_block_top", 2464, 512
+      pfTile "terrain_snow_block_top_right", 2528, 512
+      pfTile "terrain_snow_block_top", 2592, 448
+      pfTile "terrain_snow_block_top", 2656, 448
+      pfTile "terrain_snow_block_center", 2592, 512
+      pfTile "terrain_snow_block_center", 2656, 512
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   pfMakeSpikes 768, 960
+   pfMakeSpikes 1664, 1856
+   if gToysOK is true then
+      pfMakeSpring 700        -- arcs you clean over the first pit
+      pfMakeBonk "brick", 1232
+      pfMakeBonk "box", 1296
+      pfMakeBonk "brick", 1360
+      pfMakeBonk "box", 1424
+      pfMakeKeyDoor 2140, 500, 2240, "red"
+   end if
+end pfL3Scene
+
+command pfL3Cast
+   local tRef
+   -- ICE: the hero accelerates and brakes at a quarter strength -
+   -- momentum rules every jump (the knobs reset with each rebuild)
+   b2kPlayerSet "accel", 420
+   b2kPlayerSet "airAccel", 650
+   pfMakeCoin 1300, 500     -- under the bonk row
+   pfMakeCoin 1550, 448     -- above the sweeping saw
+   pfMakeCoin 1760, 440     -- mid-air over the second pit
+   pfMakeCoin 1985, 500     -- the snow slime's beat
+   pfMakeCoin 2530, 448     -- over the first snow step
+   pfMakeCoin 2625, 392     -- over the top step, by the flag
+   if gToysOK is true then
+      pfMakeCoin 864, 300   -- over the first pit: ride the spring's arc
+      pfMakeCoin 2288, 510  -- inside the red door's passage
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
+      b2kSpriteNew "foes", "saw_a", 1550, 548
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "sawspin"
+         pfAddMover tRef, 1550, 548, 96, 1100, 0, 1, 38, 42, false
+         put gMovN into gSawMov
+         put tRef into gSawSpr
+      end if
+   end if
+   pfMakeSlime 1, "normal", 1985, 1950, 2020, 576
+   pfMakeThwomp 1, 2080     -- it guards the red key
+   pfMakeCheckpoint 1920
+   pfMakeGoal 2680, 416
+end pfL3Cast
+
 
 -- Every coin (sensor pickup or ?-box payout) lands here. The moment the
 -- LAST one arrives, the goal flag turns GOLD and a banner + chime send
@@ -1277,7 +1415,7 @@ on b2kFrame
    else
       put (the milliseconds - gRunStart) div 1000 into tSecs
    end if
-   put gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   lands " & gLands & "   |   " & b2kPlayerState() & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   lands " & gLands & "   |   " & b2kPlayerState() & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
    if gHasKey is true then put "   [KEY]" after tHud
    if gCamOK is true then
       put "   |   view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
@@ -1317,7 +1455,7 @@ command pfTickGate
    -- and the broadphase's fattened boxes make the GROUND SLAB overlap it
    -- permanently - the plate read pressed from frame one. Moving bodies
    -- only (hero, crate - awake or asleep) is what "pressed" means.
-   put (b2kOverlapMoving(2774, 552, 2826, 576) is not empty) into tOn
+   put (b2kOverlapMoving(gPlateX - 26, 552, gPlateX + 26, 576) is not empty) into tOn
    if tOn then put the milliseconds + 200 into gPlateHoldMS
    if tOn or the milliseconds < gPlateHoldMS then
       put 342 into tTarget
@@ -1657,14 +1795,14 @@ command pfTickDoor
    if gDoorSprB is empty then exit pfTickDoor
    set the itemDelimiter to comma
    put b2kPosition(gHero) into tPos
-   if abs(item 1 of tPos - 4032) >= 80 or item 2 of tPos <= 360 then exit pfTickDoor
+   if abs(item 1 of tPos - gDoorX) >= 80 or item 2 of tPos <= 360 then exit pfTickDoor
    if gHasKey is not true then
       -- keyless at the wall: say WHY the way is shut (shares the deny
       -- throttle with the flag so banners never fight each other)
       if the milliseconds > gFlagNoteMS then
          put the milliseconds + 2600 into gFlagNoteMS
          b2kSound "deny"
-         pfNotice "LOCKED - the yellow KEY is back in thwomp alley", 2400
+         pfNotice "LOCKED - find the " & gDoorWord & " KEY, back along the way", 2400
       end if
       exit pfTickDoor
    end if
@@ -1680,7 +1818,7 @@ command pfTickDoor
    if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
    b2kSpriteSetFrame gDoorSprB, "door_open"
    if there is a graphic "pf_doorHost" then
-      b2kMoveTo the long id of graphic "pf_doorHost", 4032, -2000
+      b2kMoveTo the long id of graphic "pf_doorHost", gDoorX, -2000
       try
          b2kDisable the long id of graphic "pf_doorHost"
       catch tErr
@@ -1704,7 +1842,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
          -- the key rides along, floating off the hero's shoulder
          set the itemDelimiter to comma
          put b2kPosition(gHero) into tKPos
-         b2kSpriteNew "tiles", "key_yellow", item 1 of tKPos - 34, item 2 of tKPos - 34
+         b2kSpriteNew "tiles", "key_" & gDoorWord, item 1 of tKPos - 34, item 2 of tKPos - 34
          put the result into gKeySpr
          if gKeySpr is not empty then b2kSpriteBind gKeySpr, gHero, -34, -34
       end if
@@ -1733,7 +1871,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
    if the uPfCheckFlag of pSensorCtrl is true then
       if gCheckpointOn is not true then
          put true into gCheckpointOn
-         put 3072 into gRespawnX
+         put gCheckX into gRespawnX
          put 470 into gRespawnY
          if gCheckSpr is not empty then b2kSpritePlay gCheckSpr, "checkwave"
          b2kSound "check"
@@ -1744,9 +1882,13 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
    if the uPfHazardFlag of pSensorCtrl is true then pfHurt
    if the uPfGoalFlag of pSensorCtrl is true then
       -- camera-dead fallback clamps play to one screen, so most coins are
-      -- out of reach there: the near flag wins unconditionally instead
+      -- out of reach there: the near flag advances unconditionally instead
       if gCoins >= gCoinsTotal or gCamOK is not true then
-         pfWin
+         if gLevel >= 3 then
+            pfWin
+         else
+            pfLevelClear
+         end if
       else
          -- short of the total: the flag BUZZES and banners the count,
          -- throttled so standing on it does not spam (the HUD line
@@ -1755,7 +1897,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
          if the milliseconds > gFlagNoteMS then
             put the milliseconds + 2600 into gFlagNoteMS
             b2kSound "deny"
-            pfNotice "Locked: " & (gCoinsTotal - gCoins) & " more coin(s) to find - then return here to WIN", 2400
+            pfNotice "Locked: " & (gCoinsTotal - gCoins) & " more coin(s) to find - then return to this flag", 2400
          end if
       end if
    end if
@@ -1879,7 +2021,34 @@ command pfHurt
    b2kSpritePlay gHeroSpr, "hit", true   -- non-loop; OnFinish respawns
 end pfHurt
 
--- All coins + the flag: the celebration dialogue.
+-- All coins + the flag on levels 1-2: bank the stats, banner the clear,
+-- and rebuild the NEXT level outside this frame (sensor dispatch runs
+-- mid-loop; rebuilding the world from inside it is the micro-game
+-- lesson - defer with a send).
+command pfLevelClear
+   if gWinLock is true then exit pfLevelClear
+   put true into gWinLock
+   b2kSound "win"
+   b2kPlayerControl false
+   set the itemDelimiter to comma
+   b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
+   b2kSpritePlay gHeroSpr, "win", true
+   b2kCamShake 4, 300
+   add gFalls to gTotalFalls
+   add (the milliseconds - gRunStart) div 1000 to gSecsBank
+   pfNotice "LEVEL " & gLevel & " CLEAR!", 1400
+   send pfNextLevel to me in 1200 milliseconds
+end pfLevelClear
+
+-- Fires from pfLevelClear's send. If an R-restart beat us here the
+-- rebuild already reset gWinLock - a stale advance must then no-op.
+command pfNextLevel
+   if gWinLock is not true then exit pfNextLevel
+   add 1 to gLevel
+   pfStartGame
+end pfNextLevel
+
+-- All coins + the flag on level 3: the celebration dialogue.
 command pfWin
    local tSecs, tMsg
    if gWinLock is true then exit pfWin
@@ -1888,27 +2057,32 @@ command pfWin
    -- the win dialogue owns the screen: any banner yields immediately
    put 0 into gNoticeUntil
    if there is a field "pfSplash" then set the visible of field "pfSplash" to false
-   put (the milliseconds - gRunStart) div 1000 into tSecs
+   -- the banked clears plus this level = the whole run
+   put gSecsBank + (the milliseconds - gRunStart) div 1000 into tSecs
    put tSecs into gWinSecs
+   add gFalls to gTotalFalls
    b2kSound "win"
    b2kPlayerControl false   -- the win dance owns the art from here
    set the itemDelimiter to comma
    b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
    b2kSpritePlay gHeroSpr, "win", true
    b2kCamShake 5, 400
-   -- physics confetti: a burst of little balls from the flag
-   local i, tC
+   -- physics confetti: a burst of little balls around the hero (he is
+   -- standing at the flag, wherever this level put it)
+   local i, tC, tHX, tHY
+   put item 1 of b2kPosition(gHero) into tHX
+   put item 2 of b2kPosition(gHero) into tHY
    repeat with i = 1 to 12
       put item ((i mod 5) + 1) of "gold,orange,red,purple,white" into tC
-      b2kSpawnBall 4500 + random(81) - 41, 360 + random(41) - 21, 10 + random(8), tC
+      b2kSpawnBall tHX + random(81) - 41, tHY - 120 + random(41) - 21, 10 + random(8), tC
       put the result into tC
       if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
    end repeat
-   put "LEVEL COMPLETE!" & cr & cr into tMsg
-   put "All " & gCoinsTotal & " coins collected" & cr after tMsg
-   put "Time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gFalls & cr & cr after tMsg
-   if gFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
-   put "Press R or Play again to run it back." after tMsg
+   put "ALL THREE LEVELS CLEAR!" & cr & cr into tMsg
+   put "Every coin on every level collected" & cr after tMsg
+   put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
+   if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
+   put "Press Play again for a fresh run from level 1." after tMsg
    set the text of field "pfWinText" to tMsg
    set the visible of graphic "pfWinShade" to true
    set the visible of field "pfWinText" to true
@@ -1964,6 +2138,10 @@ on mouseUp
          pfTogglePause
          break
       case "pfbtn_again"
+         -- a fresh run: back to level 1, the banked totals cleared
+         put 1 into gLevel
+         put 0 into gTotalFalls
+         put 0 into gSecsBank
          pfStartGame
          break
       default

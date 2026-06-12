@@ -171,17 +171,19 @@ to Kit API (`b2kFoe…`).
    breakable bricks + debris, buttons/levers with art, key+lock+door; the
    platformer re-skinned sprite-only (real thwomp art, spike tiles, biome
    ground). *The "it looks like the classics now" wave.*
-   **BUILT 2026-06-11** in the platformer (statically verified; first
-   OXT feedback folded in): springboard + sky coin, the bonk row
-   (?-boxes pay coins, bricks shatter into kill-floor-swept debris),
-   the plate wears pressed/idle button art, a stand-to-flip saw power
-   lever, a key + a WALLED door (a floor-to-ceiling stone curtain whose
-   door gates the steps, three coins and the flag itself — the win
-   provably requires it; keyless touches banner where the key is),
-   thwomps as chained weights — static at rest, **not player-movable**
-   — the crate wearing the empty-box face, and win-state clarity (the
-   goal flag turns GOLD on the last coin; early flag touches buzz with
-   a remaining-count banner). Harness **v9** adds the door-clearing
+   **BUILT 2026-06-11/12** (statically verified; five OXT feedback
+   rounds folded in): the platformer is now a **three-level game** —
+   L1 GREEN HILLS (movement + the toys: springboard, bonk row, one-way
+   bridge, mound, clouds, spike pit), L2 THE WORKS (button gate, saw
+   lever, thwomps, yellow key + the walled door), L3 FROZEN CITADEL
+   (everything on ICE, snow biome, red key + door). Springboards,
+   ?-boxes paying coins, brick debris swept by the kill floor, button
+   art on the polled plate, stand-to-flip lever, chained-weight
+   thwomps (static at rest, **not player-movable**), walled doors
+   whose gates are STRUCTURAL (floor-to-ceiling; the flag and last
+   coins behind them, so wins provably pass through), GOLD-flag
+   win-state clarity with banners, self-counting coin totals, and
+   one-helper world bounds. Harness **v9** adds the door-clearing
    assertions (user-confirmed all-pass).
    All POLLED geometry + windows (no static-contact events); **zero Kit
    changes, so no harness bump**. Art note: Wave 1 ships in the

@@ -39,6 +39,38 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **The platformer is now a THREE-LEVEL game** (user direction: "we
+  need three distinct levels for this demo to show off all features").
+  Touching a level's gold flag banners "LEVEL N CLEAR!" and builds the
+  next level outside the physics frame (the micro-game's deferred-
+  rebuild lesson); level 3's flag is the win, with TOTAL time and
+  falls banked across clears. R restarts only the current level; Play
+  again is a fresh run. The world build split into per-level builder
+  pairs (`pfL<N>Scene` before the hero — scenery must never cover the
+  actors — and `pfL<N>Cast` after), with the shared machines factored
+  into parameterized makers (`pfMakeGate`, `pfMakeKeyDoor` with a
+  colour, `pfMakeSpikes`, `pfMakeGoal`, `pfMakeCheckpoint`,
+  `pfBounds`). Coin totals **count themselves** as each level builds,
+  so totals can never drift from the layout (and the no-asset
+  fallback's smaller totals fall out for free):
+  - **Level 1 — GREEN HILLS** (2880px): movement + the Wave 1 toys —
+    springboard + sky coin, the bonk row, the one-way bridge over the
+    spike slime, the slope mound, two one-way clouds, bee/fly movers,
+    the spike pit. 9 coins.
+  - **Level 2 — THE WORKS** (2208px): the machines — crate onto the
+    button gate, checkpoint, the stand-to-flip saw lever, both saws,
+    chained thwomps, the yellow key and the walled door gating stone
+    steps and the flag. 6 coins.
+  - **Level 3 — FROZEN CITADEL** (2880px): everything at once on ICE
+    (quarter-strength `accel`/`airAccel` — momentum rules), snow
+    biome, spring over a spiked pit, bonk row, sweeping saw, second
+    pit, a thwomp guarding the RED key, the red walled door, snow
+    steps. 10 coins.
+  - **Boundary hardening** (user report: walking past the world's
+    edges): every level's box is built by one `pfBounds` helper —
+    thick side slabs PLUS two-sided wall segments at the exact edges
+    PLUS the ceiling, kill floor, and the camera clamped to the same
+    box. Boundary bugs now have exactly one home.
 - **Wave 1 — the iconic-feel base: the platformer learns the classics.**
   Springboards, ?-boxes, breakable bricks, a saw power lever and a
   key-and-lock door land in the platformer — entirely on existing Kit
