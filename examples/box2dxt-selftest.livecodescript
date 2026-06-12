@@ -38,7 +38,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "8"   -- bump on EVERY harness change: the report
+constant kStHarnessV = "9"   -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -117,6 +117,7 @@ command stRunAll
    stRun "stTestMaterialsJoints"
    stRun "stTestFiltering"
    stRun "stTestQueries"
+   stRun "stTestDoorClears"
    stRun "stTestPlayerSlopes"
    stRun "stTestTeardown"
    try
@@ -377,6 +378,43 @@ command stTestKillFloor
    stAssert "b2kFell was dispatched (got " & gFellCount & ")", (gFellCount is 1)
    stAssert "the body is gone", (b2kBodyCount() is 0)
 end stTestKillFloor
+
+-- The platformer's locked-door mechanic, distilled: a solid static must
+-- STOP blocking when disabled, and when parked far off-world with
+-- b2kMoveTo (the unlock fires both). If an installed extension build
+-- predates the disable binding, the b2kDisable call THROWS - this test
+-- then fails with that exact message, which is the diagnosis.
+command stTestDoorClears
+   local tBall, tSlab, tY
+   stNewWorld "door mechanics: disabled/parked statics stop blocking"
+   set the itemDelimiter to comma
+   stSlab "st_doorSlab", 180, 400, 320, 440
+   put the long id of graphic "st_doorSlab" into tSlab
+   b2kSpawnBall 250, 300, 30
+   put the result into tBall
+   stStep 90
+   put item 2 of b2kPosition(tBall) into tY
+   stAssert "ball rests ON the slab first (y " & tY & ")", (tY > 340 and tY < 400)
+   stAssert "the slab reports enabled", (b2kIsEnabled(tSlab) is true)
+   b2kDisable tSlab
+   stAssert "b2kDisable flips b2kIsEnabled", (b2kIsEnabled(tSlab) is false)
+   b2kWake tBall   -- a rested ball may be asleep; make the fall deterministic
+   stStep 90
+   put item 2 of b2kPosition(tBall) into tY
+   stAssert "ball FALLS THROUGH the disabled slab (y " & tY & ")", (tY > 440)
+   -- barrel two: parking the (re-enabled) slab far away must also clear
+   b2kEnable tSlab
+   b2kSpawnBall 250, 300, 30
+   put the result into tBall
+   stStep 90
+   put item 2 of b2kPosition(tBall) into tY
+   stAssert "second ball rests on the re-enabled slab (y " & tY & ")", (tY > 340 and tY < 400)
+   b2kMoveTo tSlab, 250, -2000
+   b2kWake tBall
+   stStep 90
+   put item 2 of b2kPosition(tBall) into tY
+   stAssert "ball falls once the slab is PARKED off-world (y " & tY & ")", (tY > 440)
+end stTestDoorClears
 
 command stTestInput
    stNewWorld "input: injected keys, axes, exact edges"

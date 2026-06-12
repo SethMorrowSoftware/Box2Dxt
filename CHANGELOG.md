@@ -39,6 +39,159 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 1 closed (user-verified 2026-06-12); Wave 2 designed.** The
+  three-level platformer is the wave's verified exit. Wave 2 — player
+  actions I (drop-through, ladder climb, duck, the hurt-knockback
+  standard, optional alien skins in the micro-game) — is fully
+  designed in `docs/expansion-prep.md` §9, including the Kit surface,
+  tuning keys, harness v10 assertions, art inventory, and the open
+  chain-filter ABI question to resolve first.
+- **The platformer is now a THREE-LEVEL game** (user direction: "we
+  need three distinct levels for this demo to show off all features").
+  Touching a level's gold flag banners "LEVEL N CLEAR!" and builds the
+  next level outside the physics frame (the micro-game's deferred-
+  rebuild lesson); level 3's flag is the win, with TOTAL time and
+  falls banked across clears. R restarts only the current level; Play
+  again is a fresh run. The world build split into per-level builder
+  pairs (`pfL<N>Scene` before the hero — scenery must never cover the
+  actors — and `pfL<N>Cast` after), with the shared machines factored
+  into parameterized makers (`pfMakeGate`, `pfMakeKeyDoor` with a
+  colour, `pfMakeSpikes`, `pfMakeGoal`, `pfMakeCheckpoint`,
+  `pfBounds`). Coin totals **count themselves** as each level builds,
+  so totals can never drift from the layout (and the no-asset
+  fallback's smaller totals fall out for free):
+  - **Level 1 — GREEN HILLS** (2880px): movement + the Wave 1 toys —
+    springboard + sky coin, the bonk row, the one-way bridge over the
+    spike slime, the slope mound, two one-way clouds, bee/fly movers,
+    the spike pit. 9 coins.
+  - **Level 2 — THE WORKS** (2208px): the machines — crate onto the
+    button gate, checkpoint, the stand-to-flip saw lever, both saws,
+    chained thwomps, the yellow key and the walled door gating stone
+    steps and the flag. 6 coins.
+  - **Level 3 — FROZEN CITADEL** (2880px): everything at once on ICE
+    (quarter-strength `accel`/`airAccel` — momentum rules), snow
+    biome, spring over a spiked pit, bonk row, sweeping saw, second
+    pit, a thwomp guarding the RED key, the red walled door, snow
+    steps. 10 coins.
+  - **Boundary hardening** (user report: walking past the world's
+    edges): every level's box is built by one `pfBounds` helper —
+    thick side slabs PLUS two-sided wall segments at the exact edges
+    PLUS the ceiling, kill floor, and the camera clamped to the same
+    box. Boundary bugs now have exactly one home.
+  - **Final pass**: brick debris became a six-slot POOL built at level
+    build (parked static off-world; a smash only moves and flings the
+    chunks, a tick re-parks them before the kill floor) — mid-game
+    control creation under accelerated rendering was the remaining
+    hitch, and the frozen frame was why chunks "never showed up". The
+    spring returned to mid-meadow (the corner bounce hugged the window
+    edge). Hot path: ONE hero position/state snapshot per frame feeds
+    the kill plane, edge failsafe, sound cues and all the pf ticks
+    (~8 FFI round-trips per frame replaced by one), and the bonk
+    rising-test now reads the controller's jump state instead of a
+    per-frame velocity fetch.
+  - **Polish round** (user: "much better shape now"): every level
+    lengthened with a second act — GREEN HILLS to 3712px/12 coins (two
+    more slimes + a rest cloud), THE WORKS to 2816px/8 (a breather
+    cloud with its own bee before the wall), FROZEN CITADEL to
+    3520px/10 (the glacier run: a second always-on sweeping saw under
+    a snow cloud). The left-edge escape died twice over: the L1 spring
+    host now sits FLUSH against the wall (the 14px slot between them
+    was a solver-squeeze ejector) and the boundary slabs grew to 256px
+    thick, plus a per-frame edge failsafe rides the kill-plane check.
+    Brick debris no longer hitches or "appears offscreen": the
+    `brick_brown` icon is PRE-WARMED at build (lazy slicing cost
+    ~250ms × 3 at first smash — physics outran the freeze, so the
+    chunks seemed to pop in far away). Ice strengthened to ~15%
+    accel/brake (a full-speed stop slides ~300px).
+  - **The scroll-shifted-build regression, found and fixed** ("level 1
+    is fundamentally broken"): the restructure briefly called
+    `b2kCamGoto` before any camera bounds existed; an unbounded goto
+    scrolls the empty viewport (centring x=120 means scroll −392), and
+    the entire level then builds INTO a scrolled group — art lands
+    ~400px from its physics (gotcha #12, again). Order law now in the
+    code: build at scroll 0, set bounds (`pfBounds`), only THEN goto.
+    Stale per-level machine refs (the gate, plate, door, checkpoint)
+    are also reset on every rebuild so no tick ever chases a deleted
+    control from the previous level.
+- **Wave 1 — the iconic-feel base: the platformer learns the classics.**
+  Springboards, ?-boxes, breakable bricks, a saw power lever and a
+  key-and-lock door land in the platformer — entirely on existing Kit
+  mechanisms and the already-shipped 64px tiles atlas. **Zero Kit
+  changes** (so no harness bump: the Kit's contract is untouched) and
+  zero new asset dependencies; the no-asset fallback level stays frozen
+  at its original 12 coins.
+  - **Springboard** (`spring`/`spring_out`): feet in its band relaunch
+    every 420ms — you cannot stand on a springboard — reaching a new
+    sky coin ~320px up. The boost is `b2kPlayerJump 620`, the canonical
+    use of the API jump (a raw upward set-velocity on a grounded player
+    is ground-snapped away as solver rebound).
+  - **The bonk row** (brick, ?-box, brick, ?-box over the meadow):
+    headbutts are judged by POLLED geometry plus a 160ms rising window,
+    because the solver has already zeroed the upward velocity on the
+    very frame the head meets the tile (the stomp lesson, applied
+    upward — no contact events on statics anywhere in Wave 1). ?-boxes
+    pay one coin each (pop animation, then the `block_empty` face);
+    bricks shatter into three `brick_brown` chunks (32×24, measured)
+    riding invisible spawned balls — the kill floor destroys them and
+    `b2kFell` sweeps the bound art. Debris no-collides with the hero.
+  - **Button art on the plate**: the polled pressure plate now wears
+    `switch_yellow` / `switch_yellow_pressed` faces in step with its
+    polled state (the coloured-rect fallback survives, frozen).
+  - **The saw lever** (`lever_left/right`): STANDING at it (grounded,
+    near-zero vx — running past never flips it; a leave-the-band latch
+    re-arms it) powers the sweeping saw down: spin stopped, ghosted,
+    hurt box off. Standing again powers it back up.
+  - **Key + the WALLED door — the finale's mandatory gate.** A key
+    floats in thwomp alley (one-shot sensor pickup, per doctrine),
+    rides the hero's shoulder as a bound sprite and shows `[KEY]` on
+    the HUD. The gate itself is a **stone wall from the ceiling to the
+    ground with a locked two-tile door at its foot**: the steps, two
+    step coins, a coin inside the passage, and **the flag itself** sit
+    behind it, so the win provably requires the door (three of the
+    fifteen coins are back there) and the flag can never end the game
+    with content unseen. With the key, the door opens FOR GOOD on
+    approach (~20px before face contact; the lock tile dissolves into
+    the wall; the passage body is `b2kMoveTo`-parked off-world first,
+    then `b2kDisable`d in its own try); keyless, it buzzes and banners
+    where the key is. Respawns walk back through.
+    (The OXT saga, each round a recorded lesson: a slime guarded the
+    unlock threshold — relocated; a flush-against-the-step column made
+    the open door a jump shaft — moved to the flat; door art created
+    after the hero drew over him — scenery builds first now; the
+    disable-then-park ordering let a swallowed throw kill the park —
+    park runs first now, and harness v9's `stTestDoorClears` asserts
+    both clearing paths; and finally the free-standing 192px column
+    was simply BYPASSABLE — the thwomp-ride arc sailed over it, which
+    is why "the door never works" survived every physics fix. A gate
+    must be structural: wall to the ceiling, prizes behind it.)
+  - **Re-skinned, sprite-only**: thwomps are now chained weights
+    (`weight` + `chain` tiles; the chain stays at the perch while the
+    weight falls) — and a weight on a chain is **not the player's to
+    move**: it rests STATIC (unpushable; `b2kGrab` refuses statics by
+    design) and `mouseDown` filters the brief dynamic fall out of the
+    grab, so only the crate drags. The old drag-a-thwomp coin became
+    the doorway crown coin. The crate itself wears the empty-box face
+    (`block_empty`, the same box a headbutted ?-box turns into) over an
+    invisible fixed-rotation host. The spike pit grew real `spikes`
+    tips (placed from measured alpha: tips at y 606, base flush with
+    the stage floor), and the level crosses a biome seam at the locked
+    door into a STONE finale.
+  - **Win-state clarity** (user report: "the flag win state is
+    confusing"): every coin lands in one `pfGainCoin`; the LAST one
+    turns the goal flag **GOLD** (`flag_yellow` wave) with a banner +
+    chime — "ready to win" is visible from across the level — and
+    touching the flag short of the total now **buzzes** and banners
+    exactly how many coins remain (throttled; the HUD line repeats
+    it). The red checkpoint flag can no longer be confused with the
+    goal.
+  - **Layout audit** (jump math, v=430/g=600 → 154px apex; spring 620
+    → 320px): all 15 coins verified reachable, every beat passable.
+    One fix fell out: the springboard squatted on the only path out of
+    the spawn — it now hugs the left wall behind the spawn, a
+    discovery toy that blocks nothing.
+  - Fifteen coins now (sky coin + two box coins); six new synthesized
+    cues (spring, smash, key, unlock, lever, deny) — still zero asset
+    files for audio.
 - **Wave 0: the asset pack catalogued; the content roadmap expanded.**
   The uploaded Kenney platformer family (~900 frames, three compatible
   sets) is fully inventoried in `docs/expansion-prep.md`: six 70px
