@@ -196,9 +196,12 @@ to Kit API (`b2kFoe…`).
    its 70px grid (Waves 2-3).
 2. **Wave 2 — player actions I:** drop-through, climb (ladders), duck,
    hurt-knockback standard; alien skins selectable in the micro-game.
-   **Design prepared — see §9.** This is the first KIT-TOUCHING wave
-   of the content phase (controller states), so rule 2 applies in
-   full: harness assertions + a `kStHarnessV` bump ride every change.
+   **BUILT 2026-06-12 (statically verified; awaiting the OXT rounds)
+   — design in §9, as-built record in plan.md's decision log.** The
+   first KIT-TOUCHING wave of the content phase landed with harness
+   **v10** (4 new tests) per rule 2; the §9 ABI question resolved to
+   NO ABI CHANGE (the shim's pending shape-def filter already covers
+   chain creation).
 3. **Wave 3 — bestiary I:** shelled (kickable!), ghost, bat, mimic,
    pipe plant, crusher-with-faces — into a platformer "haunted" section.
 4. **Wave 4 — liquids:** swim zones + lava + pit dwellers + collapsing
@@ -244,11 +247,16 @@ games + docs, statically verified, then the OXT rounds.
 - **Kit surface:** `dropMs` tuning key; internal state `drop`
   (renders as `fall`). `b2kChain`/`b2kSmoothGround` tag their chains
   with the reserved bit.
-- **OPEN QUESTION (resolve first, in the shim):** can a chain's
-  filter be set through the current ABI? If `b2lc` chain creation
-  takes no filter, this wave carries the content phase's first ABI
-  addition (chain filter args + `LC_ABI_VERSION` bump + a
-  `smoke_test.c` assertion). Budget for it.
+- **RESOLVED (2026-06-12): no ABI change needed.** `b2lc_chain_create`
+  already honors the pending shape-def filter (`b2ShapeDefFilter` →
+  `s_sd` → `cd.filter`), so the Kit tags chains at creation through
+  the existing surface. The reserved bit is 2³¹ (nameable as the
+  `oneway` layer; `b2kDefineLayer` now stops at 2³⁰ = 31 user layers,
+  and `b2kSetMask` ORs the bit in automatically). One subtlety found
+  in the build: the window's restore must wait until the capsule has
+  CLEARED the deck (one-sided chain contacts judge by centroid — a
+  timer-only restore snaps a straddling player back on top); a 4×
+  hard deadline covers drops blocked by something below.
 - **Grounding interplay:** during the window the ground probe must
   ignore one-way chains too, or the controller re-grounds mid-drop
   (the phantom-ground lesson from Phase 3, in reverse).
@@ -270,7 +278,10 @@ games + docs, statically verified, then the OXT rounds.
   zero physics objects.
 - **Kit surface:** `b2kPlayerAddLadder`, `climbSpeed` key, `climb`
   anim slot in `b2kPlayerAnims` (optional: falls back to the jump
-  pose - the beige hero has no climb frames; the ALIENS do).
+  pose). CORRECTION (build finding): the beige hero HAS climb frames
+  (`character_beige_climb_a/b` in the default chars sheet) - the
+  platformer climbs fully-frame'd; the aliens remain the micro-game's
+  showcase.
 - **Art:** `ladder_bottom/middle/top` (old tiles sheet, 64px) as pure
   decor tiles over the zone; alien `climb1/2` for skins that have it.
 - **Where it lands:** L2 - a ladder up to a new bonus ledge above the

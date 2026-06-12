@@ -39,6 +39,74 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 2 — player actions I (statically verified; awaiting the OXT
+  pass).** Four controller abilities land in the Kit, asserted by
+  harness **v10** (four new tests, ~20 assertions) and consumed by both
+  games:
+  - **Drop-through:** every `b2kChain`/`b2kSmoothGround` chain now
+    carries a reserved one-way collision category (bit 2³¹, nameable as
+    the `oneway` layer; `b2kDefineLayer` stops at 2³⁰ — 31 user layers —
+    and `b2kSetMask` ORs the bit in automatically so custom-masked
+    bodies still stand on terrain). DOWN+JUMP while standing on a chain
+    masks the bit off the player for `dropMs` (~260 ms); the probe
+    ignores one-way ground during the window (no phantom re-ground),
+    and the mask restores only once the capsule has CLEARED the deck it
+    dropped through (a straddling restore would snap it back on top —
+    chain contacts are one-sided, judged by the centroid), with a 4×
+    hard deadline. On solid ground DOWN+JUMP just ducks, and the press
+    is eaten. **No ABI change was needed** — `b2lc_chain_create`
+    already honors the pending shape-def filter (§9's open question,
+    resolved).
+  - **Ladder climb:** `b2kPlayerAddLadder x1,y1,x2,y2` registers polled
+    ZONES (flat numeric arrays, zero physics objects; world state —
+    `b2kClear` wipes them). In-zone UP (or DOWN while airborne) enters
+    `climb`: gravity scale parks at 0 (the body's own scale is saved
+    and restored), y runs at `climbSpeed` off the moveY axis (0 =
+    hang), x at half speed; JUMP exits with a normal jump; climbing
+    down onto ground steps off. The ground-snap is climb-exempt (rising
+    off a grounded ladder base is real motion).
+  - **Duck:** DOWN while grounded brakes to a stop at the normal decel
+    and shows the new `duck` state/anim. No hitbox change this wave
+    (capsule reshape is Wave 5).
+  - **Hurt-knockback standard:** `b2kPlayerHurt [fromX]` — an away-pop
+    (`hurtPopX`/`hurtPopY`, riding the jump flag so the ground-snap
+    can't swallow it), the `hurt` state, input suppressed until
+    `hurtMs` or the first landing after half of it (whichever is
+    LATER), then an `invulnMs` mercy window during which repeat hurts
+    no-op and `b2kPlayerHurtIs()` answers true. An explicit
+    `b2kPlayerControl` call cancels a knockback in flight (respawn
+    flows take over cleanly, no mercy granted).
+  - **Kit surface:** `b2kPlayerAnims` grows optional `duck`/`climb`/
+    `hurt` slots (old five-argument calls unchanged; sensible pose
+    fallbacks); new tuning keys `dropMs`, `climbSpeed`, `hurtPopX/Y`,
+    `hurtMs`, `invulnMs`; `b2kPlayerState()` adds `duck`/`climb`/
+    `hurt`. All new tick paths idle at one compare per frame, knobs
+    cached at set-time, and the probe's one-way classification rides
+    the body handle `b2kRayHit` already fetched — zero added FFI in
+    the steady state.
+  - **Platformer:** the knockback-vs-respawn SPLIT — slime sides, saw
+    brushes, spike tips, thwomp undersides and movers now knock back
+    (`pfOuch`, HUD counts "hits"); only pits/kill-plane falls respawn.
+    The beige hero ducks and climbs with REAL frames (the default
+    characters sheet has `duck`/`climb_a/b` — the design doc guessed
+    wrong). L2 gains a LADDER up to a bonus ledge above the gate (one
+    new coin, 9 total); the L1 bridge/clouds drop through as designed.
+    The knockback pose is a LOOPING `hurtpose` twin of `hit` — a
+    non-looping pose would fire `b2kSpriteOnFinish` → the respawn
+    mid-knockback (both games gate their `*HurtDone` on the respawn
+    lock for the same reason).
+  - **Micro-game:** the same split (sweeper/spikes knock back; falls
+    respawn; HUD + win screen count hits), a zero-asset `ladder` verb
+    (drawn rails + rungs) up the now-taller L2 exit pillar, and
+    OPTIONAL **alien skins**: when the platformer's remembered
+    Spritesheets folder is present (the game itself never prompts —
+    zero-asset stays zero-asset), the menu offers keys 1–6 (classic +
+    five alien colours from the one `aliens.png` atlas, scaled 0.7);
+    aliens duck/climb/hurt with real frames.
+  - **Hardening found en route:** `b2kChain`/`b2kAddChain` parsed
+    points without setting `itemDelimiter` (gotcha 5 — latent breakage
+    under a tab delimiter); both now set it. `b2kRayHit` stashes the
+    hit body handle it already fetched (`sRayBodyH`).
 - **Wave 1 closed (user-verified 2026-06-12); Wave 2 designed.** The
   three-level platformer is the wave's verified exit. Wave 2 — player
   actions I (drop-through, ladder climb, duck, the hurt-knockback

@@ -672,16 +672,20 @@ on openCard
 end openCard
 ```
 
-That is a complete, well-tuned character — arrows/WASD run, space jumps.
-Feel lives in `b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`,
-`jumpSpeed`, `jumpCut`, `coyoteMs`, `bufferMs`, `maxFall`, `maxSlopeDeg`);
-read the character back with `b2kPlayerState()` (`idle`/`run`/`jump`/`fall`,
-plus `land` for exactly one frame on touch-down — perfect for dust and
-sound), `b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body
-or sprite? `b2kPlayerAttach` adopts it instead of making one. Springs,
+That is a complete, well-tuned character — arrows/WASD run, space jumps,
+DOWN ducks, one-way decks drop through, ladders climb (§21). Feel lives in
+`b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`, `jumpSpeed`,
+`jumpCut`, `coyoteMs`, `bufferMs`, `maxFall`, `maxSlopeDeg`, plus Wave 2's
+`dropMs`, `climbSpeed`, `hurtPopX/Y`, `hurtMs`, `invulnMs`); read the
+character back with `b2kPlayerState()`
+(`idle`/`run`/`jump`/`fall`/`duck`/`climb`/`hurt`, plus `land` for exactly
+one frame on touch-down — perfect for dust and sound),
+`b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body or
+sprite? `b2kPlayerAttach` adopts it instead of making one. Springs,
 bounces and powerups call `b2kPlayerJump 700` — always use it for external
 boosts: a raw upward `b2kSetVelocity` on a grounded player is treated as
-solver rebound and snapped flat. For cutscenes, hit poses, and knockback,
+solver rebound and snapped flat. Contact damage calls `b2kPlayerHurt`
+(the knockback standard, §21); for cutscenes and scripted deaths,
 `b2kPlayerControl false` makes the controller *observe only* — your code
 owns velocity and animations until you hand control back. Under the hood
 the controller guarantees consistent feel (sim-time reaction windows,
@@ -1072,7 +1076,62 @@ Play order: `openCard` builds level 1 and shows the menu → click →
 
 ---
 
-## 21. xTalk gotchas worth knowing
+## 21. Player actions: duck, drop-through, ladders, knockback
+
+Wave 2 builds four standard platformer verbs into the controller. They
+cost nothing until used (each idles at one compare per frame) and they
+compose — a drop-through can fall into a ladder grab; a knockback ends a
+climb and restores gravity itself.
+
+**Duck** needs no setup: DOWN while grounded brakes the player to a stop
+and shows the `duck` anim slot (`b2kPlayerAnims`'s sixth argument; it
+falls back to the idle pose). **The hitbox does not shrink this wave** —
+you cannot duck *under* a saw yet; capsule reshaping is scheduled with
+Wave 5. Say so in your help text if your level dangles something
+head-high.
+
+**Drop-through** works on every `b2kChain`/`b2kSmoothGround` deck
+automatically — chains carry a reserved collision category, and DOWN+JUMP
+while standing on one masks that category off the player for `dropMs`
+(~260 ms), long enough to fall clear; the deck is solid again on the next
+landing. On solid ground the same press just ducks (and is eaten — no
+buffered launch when DOWN releases). Two level-design rules: the deck
+needs **head-room below** (a solid platform parked less than a
+player-height under a one-way deck means the drop can't clear it — the
+mask is restored by a hard deadline and the player may pop back on top),
+and remember the **ghost rule** (§15) so the deck's ends are solid in the
+first place.
+
+**Ladders** are *zones*, not bodies: `b2kPlayerAddLadder x1,y1,x2,y2`
+registers a screen-px rect; presence is a pure per-frame poll (the
+presence doctrine — no sensors, no contacts). In-zone, UP enters the
+`climb` state: gravity parks at 0, y runs at `climbSpeed` off the moveY
+axis (neither held = hang), x at half `moveSpeed`. JUMP exits with a
+normal jump; sliding out of the zone or climbing down onto ground
+restores gravity. DOWN grabs the ladder only while **airborne** — a
+grounded DOWN is a duck — so to descend from a platform top, run the zone
+a little above the platform and walk off its edge holding DOWN. Draw your
+own rungs (a few lines, or the tiles sheet's `ladder_*` frames); zones
+are world state, wiped by `b2kClear` with everything else.
+
+**Knockback** (`b2kPlayerHurt fromX`) is the contact-damage standard the
+games share. It pops the player away from `fromX` (`hurtPopX`/`hurtPopY`,
+exempt from the ground-snap), holds the `hurt` state with input
+suppressed until `hurtMs` *or* the first landing after half of it
+(whichever is later), then opens an `invulnMs` mercy window during which
+`b2kPlayerHurt` no-ops and `b2kPlayerHurtIs()` answers true — gate your
+hazard checks on it. The split that makes games feel right: **contact
+damage knocks back in place; lethal hits (pits, kill planes) keep your
+respawn flow.** Your respawn's `b2kPlayerControl false` call also cancels
+any knockback in flight, so the two paths hand over cleanly when a
+knockback ends in a pit. One art note: if your game uses
+`b2kSpriteOnFinish` on the player's sprite (the respawn-on-finish
+pattern), map a **looping** animation to the `hurt` anim slot — a
+non-looping pose would finish mid-knockback and fire your respawn.
+
+---
+
+## 22. xTalk gotchas worth knowing
 
 A few things that trip up LiveCode/OpenXTalk users specifically:
 
@@ -1094,7 +1153,7 @@ A few things that trip up LiveCode/OpenXTalk users specifically:
 
 ---
 
-## 22. Complete API index
+## 23. Complete API index
 
 Every public handler, grouped. `[f]` marks a **function** (returns a value — call
 it with `()` / `get` / `put`); everything else is a **command** (a statement).
@@ -1185,9 +1244,12 @@ Optional arguments are in `[…]`.
 
 ### Player (the platformer controller)
 `b2kPlayerMake x,y,w,h [,sheet]` · `b2kPlayerAttach ctrl` ·
-`b2kPlayerAnims idle,run,jump [,fall] [,land]` · `b2kPlayerSet key,value` ·
+`b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt]` ·
+`b2kPlayerSet key,value` ·
 `b2kPlayerGet(key)` `[f]` · `b2kPlayerOnGround()` `[f]` · `b2kPlayerState()` `[f]` ·
 `b2kPlayerFacing()` `[f]` · `b2kPlayerJump [speed]` · `b2kPlayerControl flag` ·
+`b2kPlayerAddLadder x1,y1,x2,y2` · `b2kPlayerHurt [fromX]` ·
+`b2kPlayerHurtIs()` `[f]` ·
 `b2kPlayer()` `[f]` · `b2kPlayerSprite()` `[f]` · `b2kPlayerRemove`
 
 ### Camera
