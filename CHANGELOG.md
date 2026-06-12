@@ -39,6 +39,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **New example: the SLINGSHOT** (`examples/box2dxt-slingshot.livecodescript`)
+  — an angry-birds-style tower-knockdown game, and the example that shows
+  the PHYSICS CORE carrying a whole game by itself (the platformer and
+  micro-game showcase the game modules; this one uses no player, no
+  camera, no sprites, and deliberately **no contact events at all**).
+  Drag the red ball out of the slingshot pocket (a tether-clamped pull
+  with live rubber bands and a ballistic aim preview — the dots plot the
+  same `x + v·t + a·t²/2` the world then integrates), release to fire;
+  three towers of columns/planks/crates (plus stone blocks on level 3)
+  topple for real, and the green pigs pop on a **speed poll** — the
+  light body always inherits the impact momentum, so the poll can't be
+  outrun by the solver (the doctrine's answer to post-impact zero
+  reads). Shot budget per level, 50 a block + 500 a pig + 1000 per
+  leftover shot, out-of-ammo retry with score rollback, win screen.
+  Zero assets: all visuals are colored graphics (which is also why —
+  spawned box graphics rotate with their bodies; sprites don't), all
+  sounds synthesized. Hot-path discipline: ammo/bands/dots/pop-rings
+  are pooled at build, block polls only run during a post-shot carnage
+  window, HUD at 4 Hz. Registered in the embedded-Kit sync tool.
 - **Wave 2 — player actions I (statically verified; awaiting the OXT
   pass).** Four controller abilities land in the Kit, asserted by
   harness **v10** (four new tests, ~20 assertions) and consumed by both
