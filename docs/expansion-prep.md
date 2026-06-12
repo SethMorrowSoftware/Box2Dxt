@@ -175,13 +175,14 @@ to Kit API (`b2kFoe…`).
    OXT feedback folded in): springboard + sky coin, the bonk row
    (?-boxes pay coins, bricks shatter into kill-floor-swept debris),
    the plate wears pressed/idle button art, a stand-to-flip saw power
-   lever, key + lock + door on the flat before the stone steps (opens
-   on approach; the body is disabled AND parked off-world; crown coin
-   inside the open doorway), thwomps as chained weights — static at
-   rest, **not player-movable** — the crate wearing the empty-box
-   face, and win-state clarity (the goal flag turns GOLD on the last
-   coin; early flag touches buzz with a remaining-count banner).
-   Harness **v9** adds the door-clearing assertions.
+   lever, a key + a WALLED door (a floor-to-ceiling stone curtain whose
+   door gates the steps, three coins and the flag itself — the win
+   provably requires it; keyless touches banner where the key is),
+   thwomps as chained weights — static at rest, **not player-movable**
+   — the crate wearing the empty-box face, and win-state clarity (the
+   goal flag turns GOLD on the last coin; early flag touches buzz with
+   a remaining-count banner). Harness **v9** adds the door-clearing
+   assertions (user-confirmed all-pass).
    All POLLED geometry + windows (no static-contact events); **zero Kit
    changes, so no harness bump**. Art note: Wave 1 ships in the
    platformer's native 64px family (it has the full switch/spring/

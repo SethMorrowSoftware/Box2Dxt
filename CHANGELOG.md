@@ -67,30 +67,29 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     near-zero vx — running past never flips it; a leave-the-band latch
     re-arms it) powers the sweeping saw down: spin stopped, ghosted,
     hurt box off. Standing again powers it back up.
-  - **Key + locked door**: a key floats in thwomp alley (one-shot
-    sensor pickup, per doctrine), then rides the hero's shoulder as a
-    bound sprite and shows `[KEY]` on the HUD; a lock + two-tile door
-    column on the **flat run-up before the stone steps** opens FOR
-    GOOD on approach (the poll fires ~20px before face contact) and
-    respawns walk back through. The unlock clears the body two
-    independent, already-proven ways — `b2kDisable` (the builder's
-    pick-under path) plus `b2kMoveTo` parking it 2000px above the
-    world (the thwomp re-arm path); nothing is deleted mid-loop — and
-    the open doorway exits onto flat ground, so walking through reads
-    as walking through. It hides its **crown coin**: jump up INSIDE
-    the open door. (OXT rounds, each a recorded lesson: a slime first
-    guarded the unlock threshold — relocated; a column flush against
-    the step made the open door a one-tile jump shaft that read as
-    blocked — moved onto the flat; door art created after the hero
-    drew OVER him — scenery now builds first, actors after; and the
-    "double-barrel" unlock had an ordering bug — `b2kDisable` ran
-    first, so on an extension build lacking that newer binding its
-    swallowed throw killed the `b2kMoveTo` park behind it. The park
-    (proven by the demo's thwomps on every install) now runs FIRST
-    and the disable rides behind it in its own try. Harness v9 adds
-    `stTestDoorClears`, which asserts both clearing paths and — if an
-    installed extension truly lacks the disable binding — fails with
-    that exact throw message, turning a mystery into a diagnosis.)
+  - **Key + the WALLED door — the finale's mandatory gate.** A key
+    floats in thwomp alley (one-shot sensor pickup, per doctrine),
+    rides the hero's shoulder as a bound sprite and shows `[KEY]` on
+    the HUD. The gate itself is a **stone wall from the ceiling to the
+    ground with a locked two-tile door at its foot**: the steps, two
+    step coins, a coin inside the passage, and **the flag itself** sit
+    behind it, so the win provably requires the door (three of the
+    fifteen coins are back there) and the flag can never end the game
+    with content unseen. With the key, the door opens FOR GOOD on
+    approach (~20px before face contact; the lock tile dissolves into
+    the wall; the passage body is `b2kMoveTo`-parked off-world first,
+    then `b2kDisable`d in its own try); keyless, it buzzes and banners
+    where the key is. Respawns walk back through.
+    (The OXT saga, each round a recorded lesson: a slime guarded the
+    unlock threshold — relocated; a flush-against-the-step column made
+    the open door a jump shaft — moved to the flat; door art created
+    after the hero drew over him — scenery builds first now; the
+    disable-then-park ordering let a swallowed throw kill the park —
+    park runs first now, and harness v9's `stTestDoorClears` asserts
+    both clearing paths; and finally the free-standing 192px column
+    was simply BYPASSABLE — the thwomp-ride arc sailed over it, which
+    is why "the door never works" survived every physics fix. A gate
+    must be structural: wall to the ceiling, prizes behind it.)
   - **Re-skinned, sprite-only**: thwomps are now chained weights
     (`weight` + `chain` tiles; the chain stays at the perch while the
     weight falls) — and a weight on a chain is **not the player's to

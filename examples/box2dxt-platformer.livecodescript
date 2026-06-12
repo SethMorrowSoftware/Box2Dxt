@@ -40,10 +40,14 @@
 --           saw + SWEEPING saw - THWOMP ALLEY (chained weights: ride
 --           the second one's head to the top coin, and GRAB THE KEY
 --           floating between them - the weights themselves cannot be
---           dragged or shoved) - the LOCKED DOOR on the flat run-up to
---           the STONE steps (it opens on approach with the key; its
---           crown coin sits above the doorway: jump up INSIDE the open
---           door) - step platforms - the FLAG (all 15 coins to win).
+--           dragged or shoved) - THE WALL: a stone curtain up to the
+--           ceiling with a LOCKED DOOR at its foot (the key opens it
+--           on approach; a coin waits inside the passage) - and behind
+--           the door the STONE finale: step platforms, two more coins,
+--           the FLAG. All 15 coins win - and THREE of them live behind
+--           the door, so the flag can never end the game early: the
+--           progression is collect 12 + key, open the door, sweep the
+--           finale (the flag turns GOLD on the last coin), then win.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -88,19 +92,22 @@
 --      plate; STANDING at the lever (not running past) powers the
 --      sweeping saw down (ghosted, spin stopped, harmless) and a second
 --      stand powers it back up; the key rides the hero's shoulder, the
---      locked door opens on approach (no pressing-in needed; the body
---      is disabled AND parked far off-world, and the doorway exits
---      onto FLAT ground), STAYS open through respawns, and the hero
---      walks through IN FRONT of the open door art (Wave 1 scenery is
---      built before him, so it can never cover him); the hollow
---      doorway hides the crown coin (jump up inside it); the crate
---      wears the empty-box face but still drags; spike tips show in
---      the pit; the steps past the door are STONE biome.
+--      WALL-DOOR opens on approach (no pressing-in needed; the passage
+--      body is parked off-world then disabled, the lock dissolves into
+--      the wall) and STAYS open through respawns; the hero walks
+--      through IN FRONT of the open door art (scenery builds before
+--      him) and the passage coin pays on the way; the wall runs to the
+--      ceiling, so NO route - thwomp-ride arcs included - reaches the
+--      steps or the flag without the door; the crate wears the
+--      empty-box face but still drags; spike tips show in the pit; the
+--      steps past the door are STONE biome.
 --  11. WIN-STATE CLARITY: collecting the LAST coin turns the goal flag
 --      GOLD with a banner + chime ("go touch it to WIN"); touching the
 --      flag short of the total BUZZES and banners how many coins
---      remain (throttled; the HUD repeats the hint). The red flag at
---      the checkpoint only marks respawn - it never wins.
+--      remain (throttled; the HUD repeats the hint). Three coins live
+--      behind the door, so the GOLD moment always lands inside the
+--      finale, in sight of the flag. The red flag at the checkpoint
+--      only marks respawn - it never wins.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -738,7 +745,7 @@ command pfStartGame
    pfMakeCoin 2400, 440     -- mid-air over the spike pit: grab it mid-jump
    pfMakeCoin 3400, 448     -- above the sweeping saw: time the hop
    pfMakeCoin 3800, 64      -- ride the second thwomp's head to the top
-   pfMakeCoin 4032, 340     -- the door's crown: jump up INSIDE the open doorway
+   pfMakeCoin 4048, 510     -- inside the door passage: opening it pays at once
    pfMakeCoin 1130, 500     -- in the meadow slime's beat (past the bridge)
    pfMakeCoin 4356, 448     -- over the first step (its slime objects)
    pfMakeCoin 4430, 392     -- over the top step, by the flag
@@ -1119,29 +1126,38 @@ command pfMakeLever pCX
 end pfMakeLever
 
 -- The key (floating in thwomp alley at walking height, so crossing the
--- alley collects it) and the locked door: a lock tile over a two-tile
--- door, one solid host under all three, standing on the FLAT run-up
--- 160px before the stone steps - so the open doorway exits onto plain
--- walkable ground and the step jump happens later, in the open (a
--- column flush against the step made the open door a one-tile jump
--- shaft that read as blocked). The key is a one-shot SENSOR (event
--- doctrine); the unlock is a proximity POLL; the crown coin above the
--- doorway is grabbed by jumping up INSIDE the open door.
+-- alley collects it) and the WALLED DOOR: a stone curtain from the
+-- ceiling to the door's lintel with a locked two-tile door at its
+-- foot. The wall exists because a 192px free-standing column was
+-- BYPASSABLE - the thwomp-ride arc sailed clean over it, so the flag
+-- could end the game with the door never used. Now the steps, their
+-- coins and the FLAG are reachable only through the door: the gate is
+-- structural, and the level reads "find the key" at a glance. The key
+-- is a one-shot SENSOR (event doctrine); the unlock is a proximity
+-- POLL; only the door's 128px passage clears - the wall is forever.
 command pfMakeKeyDoor
-   local tRef
+   local tRef, tY
    b2kSpriteNew "tiles", "key_yellow", 3700, 500
    put the result into tRef
    if tRef is not empty then
       set the uPfKeyFlag of tRef to true
       b2kAddSensor tRef, "ball"
    end if
-   create graphic "pf_doorHost"
+   create graphic "pf_doorWall"
    set the style of it to "rectangle"
-   set the rect of it to 4000, 384, 4064, 576
+   set the rect of it to 4000, 0, 4064, 448
    set the visible of it to false
-   b2kAddStatic the long id of graphic "pf_doorHost"
+   b2kAddStatic the long id of graphic "pf_doorWall"
+   repeat with tY = 0 to 320 step 64
+      pfTile "terrain_stone_block_center", 4000, tY
+   end repeat
    b2kSpriteNew "tiles", "lock_yellow", 4032, 416
    put the result into gLockSpr
+   create graphic "pf_doorHost"
+   set the style of it to "rectangle"
+   set the rect of it to 4000, 448, 4064, 576
+   set the visible of it to false
+   b2kAddStatic the long id of graphic "pf_doorHost"
    b2kSpriteNew "tiles", "door_closed_top", 4032, 480
    put the result into gDoorSprT
    b2kSpriteNew "tiles", "door_closed", 4032, 544
@@ -1628,42 +1644,47 @@ end pfTickLever
 -- The locked door: holding the key and approaching the door swings it
 -- open FOR GOOD (one-shot world state - respawns walk back through).
 -- The trigger fires ~20px before the hero physically touches the face,
--- so no pressing-into-the-door is ever needed. Clearing the body fires
--- BOTH barrels - b2kDisable (the builder's pick-under path) AND
--- b2kMoveTo parking it 2000px above the world (the thwomp re-arm
--- path) - so the doorway goes hollow even if one path misbehaves on a
--- given engine build; nothing is deleted inside the frame loop. Then
--- jump up inside the doorway for the crown coin.
+-- so no pressing-into-the-door is ever needed. Clearing the passage
+-- body PARKS it 2000px above the world first (b2kMoveTo - the thwomp
+-- re-arm path, proven on every install) and only then tries
+-- b2kDisable in its own try (a missing newer binding must not kill
+-- the park); nothing is deleted inside the frame loop. Only the 128px
+-- passage clears - the wall above is permanent, and the lock tile
+-- dissolves into plain stone so the wall stays visually whole.
 command pfTickDoor
    local tPos
-   if gDoorOpen is true or gHasKey is not true then exit pfTickDoor
+   if gDoorOpen is true then exit pfTickDoor
    if gDoorSprB is empty then exit pfTickDoor
    set the itemDelimiter to comma
    put b2kPosition(gHero) into tPos
-   if abs(item 1 of tPos - 4032) < 80 and item 2 of tPos > 360 then
-      put true into gDoorOpen
-      put false into gHasKey
-      b2kSound "unlock"
-      b2kCamShake 3, 150
-      if gLockSpr is not empty then b2kSpriteRemove gLockSpr
-      put empty into gLockSpr
-      if gKeySpr is not empty then b2kSpriteRemove gKeySpr
-      put empty into gKeySpr
-      if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
-      b2kSpriteSetFrame gDoorSprB, "door_open"
-      if there is a graphic "pf_doorHost" then
-         -- PARK FIRST: b2kMoveTo is the workhorse the demo's thwomps
-         -- prove on every install. b2kDisable rides BEHIND it in its
-         -- own try: if an installed extension build predates the
-         -- disable binding, its throw must not kill the park (exactly
-         -- that ordering bug shipped earlier - disable threw first,
-         -- the park never ran, and the cleared door stayed solid).
-         b2kMoveTo the long id of graphic "pf_doorHost", 4032, -2000
-         try
-            b2kDisable the long id of graphic "pf_doorHost"
-         catch tErr
-         end try
+   if abs(item 1 of tPos - 4032) >= 80 or item 2 of tPos <= 360 then exit pfTickDoor
+   if gHasKey is not true then
+      -- keyless at the wall: say WHY the way is shut (shares the deny
+      -- throttle with the flag so banners never fight each other)
+      if the milliseconds > gFlagNoteMS then
+         put the milliseconds + 2600 into gFlagNoteMS
+         b2kSound "deny"
+         pfNotice "LOCKED - the yellow KEY is back in thwomp alley", 2400
       end if
+      exit pfTickDoor
+   end if
+   put true into gDoorOpen
+   put false into gHasKey
+   b2kSound "unlock"
+   b2kCamShake 3, 150
+   -- the lock dissolves into the wall (removing it would punch a
+   -- see-through hole in front of the still-solid wall host)
+   if gLockSpr is not empty then b2kSpriteSetFrame gLockSpr, "terrain_stone_block_center"
+   if gKeySpr is not empty then b2kSpriteRemove gKeySpr
+   put empty into gKeySpr
+   if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
+   b2kSpriteSetFrame gDoorSprB, "door_open"
+   if there is a graphic "pf_doorHost" then
+      b2kMoveTo the long id of graphic "pf_doorHost", 4032, -2000
+      try
+         b2kDisable the long id of graphic "pf_doorHost"
+      catch tErr
+      end try
    end if
 end pfTickDoor
 
