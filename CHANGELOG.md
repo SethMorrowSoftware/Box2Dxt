@@ -8,6 +8,26 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ## [Unreleased]
 
+### Changed
+
+- **Kit: optimization pass on the Wave 2 hot paths (pre-OXT).**
+  - `b2kPlayerJumpExitPressed`: the "jump keys minus moveY keys" code list
+    is now **pre-built at bind time** (`b2kPlayerRebuildJumpExit`, called
+    automatically by `b2kBindAction "jump"` and `b2kBindAxis "moveY"`).
+    The per-frame pressed-edge check drops from a `repeat` + string-build
+    loop to two `b2kCodesInSet` lookups — zero allocation while climbing.
+  - `b2kPlayerZoneScan`: the old `b2kPlayerInLadder` and
+    `b2kPlayerLadderTop` were separate functions each with their own
+    `repeat for each line tL in sPlayLadders`. A single `b2kPlayerZoneScan`
+    replaces both; the public names are now one-liner wrappers for
+    backwards compatibility.
+  - `sPlayHurtHalfMs`: `hurtMs / 2` pre-cached in `b2kPlayerTuneCache`
+    (computed once at tune time, not per knockback hit).
+  - `b2kPlayerHurt`: the away-pop now calls raw `b2SetVelocity + b2SetAwake`
+    (body handle already in scope) instead of the wrapper's ref-lookup +
+    "vx,vy" string round-trip; y-flip and scale done inline (gotcha 9).
+  - All static gates pass; embedded Kit re-synced; native smoke test 1/1.
+
 ### Added
 
 - **Wave 2 — player actions I (Kit + harness v10 + both games; statically
