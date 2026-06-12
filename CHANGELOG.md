@@ -71,6 +71,17 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     thick side slabs PLUS two-sided wall segments at the exact edges
     PLUS the ceiling, kill floor, and the camera clamped to the same
     box. Boundary bugs now have exactly one home.
+  - **Final pass**: brick debris became a six-slot POOL built at level
+    build (parked static off-world; a smash only moves and flings the
+    chunks, a tick re-parks them before the kill floor) — mid-game
+    control creation under accelerated rendering was the remaining
+    hitch, and the frozen frame was why chunks "never showed up". The
+    spring returned to mid-meadow (the corner bounce hugged the window
+    edge). Hot path: ONE hero position/state snapshot per frame feeds
+    the kill plane, edge failsafe, sound cues and all the pf ticks
+    (~8 FFI round-trips per frame replaced by one), and the bonk
+    rising-test now reads the controller's jump state instead of a
+    per-frame velocity fetch.
   - **Polish round** (user: "much better shape now"): every level
     lengthened with a second act — GREEN HILLS to 3712px/12 coins (two
     more slimes + a rest cloud), THE WORKS to 2816px/8 (a breather

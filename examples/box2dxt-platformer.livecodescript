@@ -26,8 +26,8 @@
 --
 -- THE THREE LEVELS (every beat holds a coin; the flag advances):
 --   LEVEL 1  GREEN HILLS (3712px, 12 coins) - movement + the toys: the
---            SPRINGBOARD flush against the left wall (sky coin above),
---            the BONK ROW (headbutt ?-boxes for coins, SMASH bricks
+--            SPRINGBOARD mid-meadow (sky coin above; a 42px hop for
+--            non-bouncers), the BONK ROW (headbutt ?-boxes, SMASH bricks
 --            into debris), the one-way BRIDGE over a spike slime, the
 --            slope MOUND, one-way CLOUDS with the fly, the bee, the
 --            SPIKE PIT - then the second act: two more slimes and a
@@ -135,10 +135,14 @@ local gCheckSpr, gCheckpointOn, gRespawnX, gRespawnY
 -- Wave 1 (the iconic-feel base): springboard, bonk row, lever, key+door
 local gToysOK, gSpringSpr, gSpringX, gSpringMS, gSpringBackMS
 local gBonkN, gBonkHost, gBonkSpr, gBonkKind, gBonkUsed, gBonkX
-local gBonkMS, gRiseMS, gPlateSpr
+local gBonkMS, gPlateSpr
+-- the per-frame hero snapshot (read ONCE in b2kFrame; every tick
+-- shares it - each b2kPosition/b2kPlayerState is an FFI round-trip)
+local gHeroPX, gHeroPY, gHeroState, gJumpMS
+local gDebrisNext, gDebrisUntil
 local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
 local gHasKey, gKeySpr, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB
-local gDebrisN, gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
+local gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
 local gBlockChainA, gBlockChainB, gBlockFace
 local gGoalSpr, gNoticeUntil, gFlagNoteMS
 
@@ -424,7 +428,6 @@ command pfStartGame
    put empty into gBonkUsed
    put empty into gBonkX
    put 0 into gBonkMS
-   put 0 into gRiseMS
    put empty into gPlateSpr
    put empty into gLeverSpr
    put true into gLeverArmed
@@ -437,9 +440,14 @@ command pfStartGame
    put empty into gLockSpr
    put empty into gDoorSprT
    put empty into gDoorSprB
-   put 0 into gDebrisN
+   put 0 into gDebrisNext
    put empty into gDebrisB
    put empty into gDebrisSpr
+   put empty into gDebrisUntil
+   put 0 into gHeroPX
+   put 0 into gHeroPY
+   put empty into gHeroState
+   put 0 into gJumpMS
    put empty into gCrateB
    put empty into gCrateSpr
    put empty into gBlockChainA
@@ -1120,12 +1128,10 @@ command pfL1Scene
       pfTile "mushroom_red", 2560, 512
    end if
    if gToysOK is true then
-      -- the spring hugs the left wall BEHIND the spawn: a discovery toy
-      -- in plain view that blocks nobody's first steps. At 26 its host
-      -- sits FLUSH against the wall (0..52) - a gap thinner than the
-      -- capsule would be a solver-squeeze slot that can eject the hero
-      -- through the wall (the "glitch out of the left of the screen")
-      pfMakeSpring 26
+      -- the spring mid-meadow: bouncing happens in open air, well away
+      -- from the left corner (flush-to-wall put the bounce against the
+      -- window edge; mid-meadow it is a 42px hop for non-bouncers)
+      pfMakeSpring 240
       pfMakeBonk "brick", 384
       pfMakeBonk "box", 448
       pfMakeBonk "brick", 512
@@ -1144,7 +1150,7 @@ command pfL1Cast
    pfMakeCoin 2620, 500     -- the second act's slime beat
    pfMakeCoin 2976, 392     -- on the rest cloud
    pfMakeCoin 3360, 500     -- the last slime's beat, before the flag
-   if gToysOK is true then pfMakeCoin 26, 230   -- the sky coin (spring up)
+   if gToysOK is true then pfMakeCoin 240, 230   -- the sky coin (spring up)
    -- the bee tours the mound (harmless); the fly guards the cloud coin
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 1320, 300
@@ -1166,6 +1172,7 @@ command pfL1Cast
    pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
    pfMakeSlime 3, "normal", 2620, 2560, 2680, 576
    pfMakeSlime 4, "normal", 3360, 3300, 3420, 576
+   if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
    pfMakeGoal 3580, 544
 end pfL1Cast
 
@@ -1402,6 +1409,7 @@ command pfL3Cast
    pfMakeSlime 1, "normal", 1985, 1950, 2020, 576
    pfMakeThwomp 1, 2080     -- it guards the red key
    pfMakeCheckpoint 1920
+   if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
    pfMakeGoal 3320, 416
 end pfL3Cast
 
@@ -1466,6 +1474,15 @@ end pfWipeStage
 on b2kFrame
    local tHud, tPos
    if gHero is empty then exit b2kFrame
+   -- THE HERO SNAPSHOT, once per frame: position and controller state
+   -- feed the kill plane, edge failsafe, sound cues and every pf tick
+   -- below (one FFI/string round-trip instead of eight)
+   set the itemDelimiter to comma
+   put b2kPosition(gHero) into tPos
+   put item 1 of tPos into gHeroPX
+   put item 2 of tPos into gHeroPY
+   put b2kPlayerState() into gHeroState
+   if gHeroState is "jump" then put the milliseconds into gJumpMS
    if gIntroPan > 0 then
       -- no camera pan (cut for reliability): just a splash beat over the
       -- spawn, then the follow engages and the run clock starts
@@ -1479,13 +1496,11 @@ on b2kFrame
    -- kill plane: anything that slips every other check still respawns.
    -- Plus the EDGE FAILSAFE: a solver squeeze must never leave the hero
    -- beyond a wall (with the thick slabs it should never fire; when it
-   -- does not, it costs one position read and two compares)
+   -- does not, it costs two compares)
    if gHurtLock is not true then
-      set the itemDelimiter to comma
-      put b2kPosition(gHero) into tPos
-      if item 2 of tPos > 780 then pfHurt
-      if item 1 of tPos < 16 then b2kMoveTo gHero, 28, item 2 of tPos
-      if item 1 of tPos > gLevelW - 16 then b2kMoveTo gHero, gLevelW - 28, item 2 of tPos
+      if gHeroPY > 780 then pfHurt
+      if gHeroPX < 16 then b2kMoveTo gHero, 28, gHeroPY
+      if gHeroPX > gLevelW - 16 then b2kMoveTo gHero, gLevelW - 28, gHeroPY
    end if
    -- centre-screen banners (pfNotice) expire here
    if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then
@@ -1495,23 +1510,24 @@ on b2kFrame
    -- the Kit's player controller moved/animated the hero before this
    -- handler ran; the example reads its one-tick land state and the
    -- jump transition for the sound cues
-   if b2kPlayerState() is "land" then
+   if gHeroState is "land" then
       add 1 to gLands
       b2kSound "land"
    end if
-   if b2kPlayerState() is "jump" and gPrevState is not "jump" and gHurtLock is not true then
+   if gHeroState is "jump" and gPrevState is not "jump" and gHurtLock is not true then
       b2kSound "jump"   -- also chirps on the slime-stomp bounce: earned
    end if
-   if b2kPlayerState() is "jump" or b2kPlayerState() is "fall" then
+   if gHeroState is "jump" or gHeroState is "fall" then
       put the milliseconds into gAirMS   -- "was airborne recently", for the stomp window
    end if
-   put b2kPlayerState() into gPrevState
+   put gHeroState into gPrevState
    pfTickGate
    pfTickSlimes
    pfTickThwomps
    pfTickMovers
    pfTickSpring
    pfTickBonks
+   pfTickDebris
    pfTickLever
    pfTickDoor
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
@@ -1644,9 +1660,8 @@ end pfTickSlimes
 command pfTickThwomps
    local i, tHX, tHY, tBX, tBY, tPos, tBody
    set the itemDelimiter to comma
-   put b2kPosition(gHero) into tPos
-   put item 1 of tPos into tHX
-   put item 2 of tPos into tHY
+   put gHeroPX into tHX
+   put gHeroPY into tHY
    repeat with i = 1 to gBlockN
       put gBlockB[i] into tBody
       if tBody is empty then next repeat
@@ -1708,13 +1723,12 @@ end pfTickThwomps
 -- Bodiless patrollers (bee, fly, the sweeping saw): sine paths, facing,
 -- and proximity hurt - pure geometry, no physics.
 command pfTickMovers
-   local i, tHX, tHY, tMX, tMY, tPos, tMS
+   local i, tHX, tHY, tMX, tMY, tMS
    if gMovN is 0 or gMovN is empty then exit pfTickMovers
    set the itemDelimiter to comma
    put the milliseconds into tMS   -- one clock read for the whole pass
-   put b2kPosition(gHero) into tPos
-   put item 1 of tPos into tHX
-   put item 2 of tPos into tHY
+   put gHeroPX into tHX
+   put gHeroPY into tHY
    repeat with i = 1 to gMovN
       if gMovSpr[i] is empty then next repeat
       -- the lever can power the sweeping saw down: parked, no hurt box
@@ -1748,12 +1762,10 @@ end pfBlockUndersideCheck
 -- a grounded player is treated as solver rebound and ground-snapped to
 -- zero (the landing-hop fix); the API jump is exempt by design.
 command pfTickSpring
-   local tPos, tBottom
+   local tBottom
    if gSpringSpr is empty or gHurtLock is true then exit pfTickSpring
-   set the itemDelimiter to comma
-   put b2kPosition(gHero) into tPos
-   put item 2 of tPos + 44 into tBottom
-   if abs(item 1 of tPos - gSpringX) < 28 and tBottom >= 524 and \
+   put gHeroPY + 44 into tBottom
+   if abs(gHeroPX - gSpringX) < 28 and tBottom >= 524 and \
          tBottom <= 560 and the milliseconds > gSpringMS then
       put the milliseconds + 420 into gSpringMS
       b2kPlayerJump 620   -- ~320px apex: comfortably reaches the sky coin
@@ -1768,23 +1780,22 @@ command pfTickSpring
 end pfTickSpring
 
 -- Headbutting the row from below. The hero's HEAD must be in a tile's
--- bottom band while RISING - judged with a 160ms window, because the
--- solver has already zeroed vy on the very frame the head meets the tile
--- (the stomp lesson, applied upward). Nearest unspent tile only, one
--- bonk per 220ms, so a jump between two tiles never pays twice.
+-- bottom band while RISING - judged from the controller's jump state
+-- with a 160ms window, because the solver has already zeroed vy on the
+-- very frame the head meets the tile (the stomp lesson, applied
+-- upward; every rise here IS a jump - springs and stomp bounces go
+-- through b2kPlayerJump). Nearest unspent tile only, one bonk per
+-- 220ms, so a jump between two tiles never pays twice.
 command pfTickBonks
-   local i, tPos, tHX, tHead, tVY, tBest, tBestDX, tDX, tSpr
+   local i, tHX, tHead, tBest, tBestDX, tDX, tSpr
    if gBonkN is 0 or gBonkN is empty then exit pfTickBonks
    if gHurtLock is true then exit pfTickBonks
-   set the itemDelimiter to comma
-   put item 2 of b2kVelocity(gHero) into tVY
-   if tVY < -60 then put the milliseconds into gRiseMS
-   put b2kPosition(gHero) into tPos
-   put item 1 of tPos into tHX
-   put item 2 of tPos - 44 into tHead
+   put gHeroPX into tHX
+   put gHeroPY - 44 into tHead
    if tHead < 440 or tHead > 468 then exit pfTickBonks
    if the milliseconds < gBonkMS then exit pfTickBonks
-   if tVY >= -30 and (gRiseMS is 0 or the milliseconds - gRiseMS > 160) then exit pfTickBonks
+   if gHeroState is not "jump" and (gJumpMS is 0 or gJumpMS is empty or the milliseconds - gJumpMS > 160) then exit pfTickBonks
+   set the itemDelimiter to comma
    put 0 into tBest
    put 9999 into tBestDX
    repeat with i = 1 to gBonkN
@@ -1815,13 +1826,40 @@ command pfTickBonks
    end if
 end pfTickBonks
 
--- A brick shatters: host body and face go, three small brick chunks
--- (brick_brown art riding INVISIBLE Kit-spawned balls - sprite-only
--- policy: the plain graphic is just the physics host) burst out, and
--- the kill floor destroys them below the stage, where b2kFell sweeps
--- the bound art. They no-collide with the hero: debris is set dressing.
+-- Six brick chunks built ONCE per level (cast phase, so the hero
+-- exists for the no-collide pairing): invisible spawned balls wearing
+-- brick_brown art, parked STATIC far left of the world. A smash only
+-- MOVES them: creating controls mid-game under accelerated rendering
+-- is a guaranteed hitch (the spike's dynamic-layer stall in
+-- miniature), and that frozen frame let physics outrun the debris -
+-- "the chunks never showed up". Build once, write on change.
+command pfMakeDebrisPool
+   local i, tRef, tSpr
+   put 0 into gDebrisNext
+   repeat with i = 1 to 6
+      put empty into gDebrisB[i]
+      put empty into gDebrisSpr[i]
+      put 0 into gDebrisUntil[i]
+      b2kSpawnBall -700 + i * 20, 300, 14, "orange"
+      put the result into tRef
+      if tRef is empty then next repeat
+      set the visible of tRef to false
+      b2kNoCollide tRef, gHero
+      b2kSetStatic tRef
+      put tRef into gDebrisB[i]
+      b2kSpriteNew "tiles", "brick_brown", -700 + i * 20, 300
+      put the result into tSpr
+      if tSpr is not empty then
+         b2kSpriteBind tSpr, tRef
+         put tSpr into gDebrisSpr[i]
+      end if
+   end repeat
+end pfMakeDebrisPool
+
+-- A brick shatters: host body and face go, three POOLED chunks fling
+-- out of it. Nothing is created here - see pfMakeDebrisPool.
 command pfSmashBrick pWhich
-   local i, tHost, tRef, tSpr, tX, tDX, tVX
+   local i, tHost, tSlot, tX, tDX, tVX
    put gBonkHost[pWhich] into tHost
    put true into gBonkUsed[pWhich]
    b2kSound "smash"
@@ -1836,22 +1874,32 @@ command pfSmashBrick pWhich
    repeat with i = 1 to 3
       put item i of "-16,16,0" into tDX
       put item i of "-150,150,20" into tVX
-      b2kSpawnBall tX + tDX, 408 + (i mod 2) * 8, 14, "orange"
-      put the result into tRef
-      if tRef is empty then next repeat
-      set the visible of tRef to false
-      b2kNoCollide tRef, gHero
-      b2kPush tRef, tVX, -280 - i * 20
-      b2kSpriteNew "tiles", "brick_brown", tX + tDX, 408
-      put the result into tSpr
-      if tSpr is not empty then
-         b2kSpriteBind tSpr, tRef
-         add 1 to gDebrisN
-         put tRef into gDebrisB[gDebrisN]
-         put tSpr into gDebrisSpr[gDebrisN]
-      end if
+      add 1 to gDebrisNext
+      if gDebrisNext > 6 then put 1 into gDebrisNext
+      put gDebrisNext into tSlot
+      if gDebrisB[tSlot] is empty then next repeat
+      b2kSetDynamic gDebrisB[tSlot]
+      b2kMoveTo gDebrisB[tSlot], tX + tDX, 408 + (i mod 2) * 8
+      b2kSetVelocity gDebrisB[tSlot], tVX, -280 - i * 20
+      put the milliseconds + 1200 into gDebrisUntil[tSlot]
    end repeat
 end pfSmashBrick
+
+-- Flown chunks re-park ~0.5s before the kill floor would eat them: a
+-- destroyed pool slot cannot be refilled without a mid-game create.
+-- Six array reads per frame while nothing is flying.
+command pfTickDebris
+   local i
+   repeat with i = 1 to 6
+      if gDebrisUntil[i] is 0 or gDebrisUntil[i] is empty then next repeat
+      if the milliseconds < gDebrisUntil[i] then next repeat
+      put 0 into gDebrisUntil[i]
+      if gDebrisB[i] is empty then next repeat
+      b2kSetStatic gDebrisB[i]
+      b2kMoveTo gDebrisB[i], -700 + i * 20, 300
+      b2kSpriteMoveTo gDebrisB[i], -700 + i * 20, 300
+   end repeat
+end pfTickDebris
 
 -- The lever: STOP at it (grounded in its band, near-zero vx) to toggle
 -- the sweeping saw's power - running through never flips it, so the
@@ -1859,11 +1907,9 @@ end pfSmashBrick
 -- timer, no strobing. Powered down the saw stops spinning, fades and
 -- stops hurting; the handle mirrors the state (right = on, left = off).
 command pfTickLever
-   local tPos
    if gLeverSpr is empty or gHurtLock is true then exit pfTickLever
    set the itemDelimiter to comma
-   put b2kPosition(gHero) into tPos
-   if abs(item 1 of tPos - gLeverX) >= 30 or abs(item 2 of tPos - 532) >= 50 then
+   if abs(gHeroPX - gLeverX) >= 30 or abs(gHeroPY - 532) >= 50 then
       put true into gLeverArmed   -- left the band: ready for the next flip
       exit pfTickLever
    end if
@@ -1900,12 +1946,9 @@ end pfTickLever
 -- passage clears - the wall above is permanent, and the lock tile
 -- dissolves into plain stone so the wall stays visually whole.
 command pfTickDoor
-   local tPos
    if gDoorOpen is true then exit pfTickDoor
    if gDoorSprB is empty then exit pfTickDoor
-   set the itemDelimiter to comma
-   put b2kPosition(gHero) into tPos
-   if abs(item 1 of tPos - gDoorX) >= 80 or item 2 of tPos <= 360 then exit pfTickDoor
+   if abs(gHeroPX - gDoorX) >= 80 or gHeroPY <= 360 then exit pfTickDoor
    if gHasKey is not true then
       -- keyless at the wall: say WHY the way is shut (shares the deny
       -- throttle with the flag so banners never fight each other)
@@ -2050,7 +2093,7 @@ on b2kFell pCtrl
    end if
    -- brick debris dying at the kill floor: the Kit removes the spawned
    -- ball; we sweep the brick art bound to it
-   repeat with i = 1 to gDebrisN
+   repeat with i = 1 to 6
       if gDebrisB[i] is not empty and pCtrl is gDebrisB[i] then
          if gDebrisSpr[i] is not empty then b2kSpriteRemove gDebrisSpr[i]
          put empty into gDebrisSpr[i]
