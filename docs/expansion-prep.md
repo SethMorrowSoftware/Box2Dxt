@@ -7,10 +7,11 @@ that keep the expansion as reliable as the engine underneath it.
 
 | | |
 |---|---|
-| Baseline | Kit + games user-verified; self-test harness **v9, ~102 assertions, all pass** |
+| Baseline | Kit + games user-verified; self-test harness **v10, ~122 assertions** (v9 all-pass; v10's Wave 2 suites await the OXT run) |
 | Assets | **LANDED (2026-06-11)** — Kenney's iconic platformer family, ~900 frames; Wave 0 catalogue below |
 | Wave 1 | **COMPLETE — user-verified 2026-06-12** (the three-level platformer; see §7) |
-| Next | **Wave 2** (player actions I) — design in **§9** |
+| Wave 2 | **BUILT (2026-06-12)** — statically verified; awaiting harness v10 + the OXT pass (design + as-built notes in **§9**) |
+| Next | Wave 2's OXT verification, then **Wave 3** (bestiary I) |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
@@ -196,9 +197,11 @@ to Kit API (`b2kFoe…`).
    its 70px grid (Waves 2-3).
 2. **Wave 2 — player actions I:** drop-through, climb (ladders), duck,
    hurt-knockback standard; alien skins selectable in the micro-game.
-   **Design prepared — see §9.** This is the first KIT-TOUCHING wave
-   of the content phase (controller states), so rule 2 applies in
-   full: harness assertions + a `kStHarnessV` bump ride every change.
+   **BUILT 2026-06-12 — statically verified; awaiting harness v10 +
+   the OXT pass.** Design + as-built notes in §9. The first
+   KIT-TOUCHING wave of the content phase (controller states), so rule
+   2 applied in full: harness v10 carries four new suites (~20
+   assertions) and every game adopted the knockback/respawn split.
 3. **Wave 3 — bestiary I:** shelled (kickable!), ghost, bat, mimic,
    pipe plant, crusher-with-faces — into a platformer "haunted" section.
 4. **Wave 4 — liquids:** swim zones + lava + pit dwellers + collapsing
@@ -224,7 +227,7 @@ to Kit API (`b2kFoe…`).
 - **Sheet memory:** prefer `-default`/70px sources + scale; the `-double`
   and 128px sets are alternates, not defaults.
 
-## 9. Wave 2 design — player actions I (prepared 2026-06-12)
+## 9. Wave 2 design — player actions I (prepared 2026-06-12; BUILT 2026-06-12)
 
 Four controller abilities plus the alien skins. **This wave edits the
 Kit's player module** — the first Kit-touching wave of the content
@@ -232,6 +235,23 @@ phase — so every change lands with self-test assertions and a
 `kStHarnessV` bump (v9 → v10), and the platformer + micro-game are the
 two consumers that prove the API. One PR: Kit + sync + harness +
 games + docs, statically verified, then the OXT rounds.
+
+> **As-built (2026-06-12):** everything below shipped, statically
+> verified. Deviations from the sketch, all recorded in plan.md's log:
+> the chain-filter ABI question resolved to **no native change** (the
+> staged shapedef filter already covers chain creation); the drop
+> window's close became **geometry-aware** (a pure timer pops a tall
+> capsule back on top of the chain — straddle rays at expiry, hard cap
+> dropMs×4); chains gained a `noDrop` opt-out for hills/slopes (the
+> platformer's mound uses it); the climb's jump-exit listens only to
+> jump keys that are **not** moveY keys (UP climbs, SPACE dismounts,
+> even bound together); grounded UP-grabs need ~40px of zone above the
+> head and DOWN-grabs are air-only; the beige hero turned out to HAVE
+> climb frames (`character_beige_climb_a/b`) — the alien skins are a
+> bonus, not the only climb art; and `b2kSetCategory`/
+> `b2kSetCollisionGroup` were hardened against the engine's 64-bit
+> default-mask read-back (a silent-no-op class found while building
+> the drop's mask flip).
 
 ### 9.1 Drop-through (one-way platforms, downward)
 
@@ -244,11 +264,10 @@ games + docs, statically verified, then the OXT rounds.
 - **Kit surface:** `dropMs` tuning key; internal state `drop`
   (renders as `fall`). `b2kChain`/`b2kSmoothGround` tag their chains
   with the reserved bit.
-- **OPEN QUESTION (resolve first, in the shim):** can a chain's
-  filter be set through the current ABI? If `b2lc` chain creation
-  takes no filter, this wave carries the content phase's first ABI
-  addition (chain filter args + `LC_ABI_VERSION` bump + a
-  `smoke_test.c` assertion). Budget for it.
+- **RESOLVED (no ABI change):** `b2lc_chain_create` already consumes
+  the staged one-shot shapedef filter (`b2lc_shapedef_set_filter`),
+  so `b2kChain` stages the one-way category before creating — ABI
+  stays 4, the smoke test untouched.
 - **Grounding interplay:** during the window the ground probe must
   ignore one-way chains too, or the controller re-grounds mid-drop
   (the phantom-ground lesson from Phase 3, in reverse).

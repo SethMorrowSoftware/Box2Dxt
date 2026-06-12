@@ -674,20 +674,77 @@ end openCard
 
 That is a complete, well-tuned character — arrows/WASD run, space jumps.
 Feel lives in `b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`,
-`jumpSpeed`, `jumpCut`, `coyoteMs`, `bufferMs`, `maxFall`, `maxSlopeDeg`);
-read the character back with `b2kPlayerState()` (`idle`/`run`/`jump`/`fall`,
-plus `land` for exactly one frame on touch-down — perfect for dust and
-sound), `b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body
+`jumpSpeed`, `jumpCut`, `coyoteMs`, `bufferMs`, `maxFall`, `maxSlopeDeg`,
+plus Wave 2's `dropMs`, `climbSpeed`, `hurtMs`, `invulnMs`, `hurtPopX`,
+`hurtPopY`); read the character back with `b2kPlayerState()`
+(`idle`/`run`/`jump`/`fall`/`duck`/`climb`/`hurt`, plus `land` for exactly
+one frame on touch-down — perfect for dust and sound),
+`b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body
 or sprite? `b2kPlayerAttach` adopts it instead of making one. Springs,
 bounces and powerups call `b2kPlayerJump 700` — always use it for external
 boosts: a raw upward `b2kSetVelocity` on a grounded player is treated as
-solver rebound and snapped flat. For cutscenes, hit poses, and knockback,
-`b2kPlayerControl false` makes the controller *observe only* — your code
-owns velocity and animations until you hand control back. Under the hood
-the controller guarantees consistent feel (sim-time reaction windows,
-dead landings, hysteresis against solver blips) — all of it asserted by
-the self-test harness. The platformer example's whole movement system is
-the four lines above.
+solver rebound and snapped flat. For cutscenes, manual hit poses, and
+scripted deaths, `b2kPlayerControl false` makes the controller *observe
+only* — your code owns velocity and animations until you hand control
+back. Under the hood the controller guarantees consistent feel (sim-time
+reaction windows, dead landings, hysteresis against solver blips) — all of
+it asserted by the self-test harness. The platformer example's whole
+movement system is the four lines above.
+
+#### The Wave 2 action verbs: duck, drop-through, climb, hurt
+
+**Duck.** DOWN while grounded enters `duck`: the run target snaps to 0 at
+normal deceleration and the `duck` anim slot plays (it falls back to idle
+if unmapped). Jump presses are swallowed while crouched — on solid ground
+DOWN+JUMP just ducks, per the classics. *No hitbox change yet:* the
+capsule stays full height in this wave (reshaping arrives with Wave 5's
+action pack), so don't design crawl-under gaps or duck-under saws yet.
+
+**Drop-through.** Open chains made by `b2kChain`/`b2kSmoothGround` are
+the Kit's one-way platforms, and they now carry a reserved collision
+category. DOWN+JUMP while standing **on one** opens a `dropMs` window in
+which the player's mask ignores that category — he falls through the
+deck, and the window closes again the moment the chain is clear of the
+capsule (the close is geometry-aware, so a tall capsule at a big scale
+never gets popped back on top). Hills and slopes built from chains should
+pass the new `noDrop` flag — `b2kSmoothGround pPoints, true` — so a duck
+on the mound never sinks the hero into the art.
+
+**Climb.** Ladders are *zones*, not bodies: register a rect with
+`b2kPlayerAddLadder x1,y1,x2,y2` at level-build time (the polled-presence
+doctrine — zero physics objects), and draw any rungs you like over it.
+In-zone, UP enters `climb` (gravity off; the `moveY` axis drives y at
+`climbSpeed`; x still moves at half speed); releasing everything hangs in
+place; a **non-directional jump key** hops off with a real jump. That
+last rule matters when jump is bound to UP as well (the platformer binds
+`space,up,w`): exit listens only to jump keys that are *not* also `moveY`
+keys, so UP climbs while SPACE dismounts. Grab rules keep ledges sane: UP
+only grabs when the zone continues well above the head (standing on the
+deck a ladder pokes through, UP jumps — it never re-grabs), and DOWN only
+grabs in the air (drop through the deck, hold DOWN, catch the ladder).
+Zones are world geometry: `b2kClear`/`b2kTeardown` wipe them, so register
+them in every level build.
+
+**Hurt-knockback.** `b2kPlayerHurt tFromX` is the standard for *contact*
+damage — enemy sides, saw blades, brushed spikes: control off, a pop away
+from the threat's x (`hurtPopX`/`hurtPopY`, ground-snap-exempt like
+`b2kPlayerJump`), the `hurt` anim, control auto-restored at the first
+landing after `hurtMs/2` (or at `hurtMs`, whichever comes first), then an
+invulnerability window — `b2kPlayerHurtIs()` reads true and further hurts
+no-op, so your hazard checks become one gate:
+
+```livecode
+if not b2kPlayerHurtIs() then
+   if tTouchedSaw then b2kPlayerHurt item 1 of b2kPosition(tSaw)
+end if
+```
+
+Keep **lethal** hazards (pits, kill planes, crushers) on your own respawn
+path — `b2kPlayerHurt` deliberately ignores its own invulnerability there,
+and a respawn teleport is a different verb than a knockback. Both shipped
+games use exactly this split; note their `OnFinish` respawn handlers are
+gated by a lock flag, because a non-looping hurt anim fires `OnFinish`
+too.
 
 ### Sound effects (`b2kToneMake`, `b2kSound`)
 
@@ -826,7 +883,16 @@ put "600,380" & cr & "520,360" & cr & "360,420" & cr & "200,360" & cr & "80,400"
 b2kChain tPts               -- an open smooth ground line
 b2kChain tPts, true         -- pass true to close it into a loop (all solid)
 b2kSmoothGround tPts        -- alias for an open chain
+b2kSmoothGround tPts, true  -- noDrop: the player can't DOWN+JUMP through it
 ```
+
+Open chains are **one-sided** (land from above, pass through from below),
+which makes them the Kit's one-way platforms — and they are created
+carrying the reserved one-way collision category, so the player controller
+can **drop through** them with DOWN+JUMP (see "The Wave 2 action verbs"
+under §12's player controller). One-sided *terrain* — hills, slopes,
+anything that reads as solid ground — should pass the trailing `noDrop`
+flag so a crouching player never sinks into it.
 
 To make a chain that **tracks a control** (so you can move/draw the terrain as one
 graphic), give it the control plus the points in the control's own outline:
@@ -1185,9 +1251,12 @@ Optional arguments are in `[…]`.
 
 ### Player (the platformer controller)
 `b2kPlayerMake x,y,w,h [,sheet]` · `b2kPlayerAttach ctrl` ·
-`b2kPlayerAnims idle,run,jump [,fall] [,land]` · `b2kPlayerSet key,value` ·
+`b2kPlayerAnims idle,run,jump [,fall] [,land] [,climb] [,duck] [,hurt]` ·
+`b2kPlayerSet key,value` ·
 `b2kPlayerGet(key)` `[f]` · `b2kPlayerOnGround()` `[f]` · `b2kPlayerState()` `[f]` ·
 `b2kPlayerFacing()` `[f]` · `b2kPlayerJump [speed]` · `b2kPlayerControl flag` ·
+`b2kPlayerHurt [fromX]` · `b2kPlayerHurtIs()` `[f]` ·
+`b2kPlayerAddLadder x1,y1,x2,y2` · `b2kPlayerClearLadders` ·
 `b2kPlayer()` `[f]` · `b2kPlayerSprite()` `[f]` · `b2kPlayerRemove`
 
 ### Camera
@@ -1221,7 +1290,8 @@ Optional arguments are in `[…]`.
 `b2kSetMask ctrl,layers` · `b2kSetCollisionGroup ctrl,n` · `b2kNoCollide a,b` `[f]`
 
 ### Terrain & chains
-`b2kChain points [,loop]` · `b2kSmoothGround points` · `b2kAddChain ctrl,points [,loop]`
+`b2kChain points [,loop] [,noDrop]` · `b2kSmoothGround points [,noDrop]` ·
+`b2kAddChain ctrl,points [,loop] [,noDrop]`
 
 ### Queries
 `b2kOverlap x1,y1,x2,y2` `[f]` · `b2kOverlapMoving x1,y1,x2,y2` `[f]` ·

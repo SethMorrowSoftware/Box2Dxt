@@ -8,7 +8,84 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ## [Unreleased]
 
+### Added
+
+- **Wave 2 — player actions I (Kit + harness v10 + both games; statically
+  verified, awaiting the OXT pass).** The first Kit-touching wave of the
+  content phase. Four controller abilities land in the player module:
+  - **Drop-through.** Open chains (`b2kChain`/`b2kSmoothGround`/
+    `b2kAddChain`) are created carrying a reserved ONE-WAY collision
+    category (bit 31; `b2kDefineLayer` now allocates 30 named layers).
+    DOWN+JUMP while standing on one opens a `dropMs` (260) window that
+    strips the bit from the player's mask — he falls through the deck.
+    The window's close is **geometry-aware**: it never restores the
+    filter while a one-way line is still inside the capsule (a pure
+    timer pops a tall capsule back on top — found at design time, and
+    the reason the close re-checks straddling with two short rays,
+    hard-capped at `dropMs × 4`). The ground probe skips one-way
+    surfaces while dropping (rays ignore shape filters), and chains
+    that read as TERRAIN — hills, slopes — opt out with a new trailing
+    `noDrop` flag (the platformer's mound passes it). **No ABI change
+    was needed**: chain creation already consumes the staged one-shot
+    shape-def filter, resolving the design's open question.
+  - **Ladder climb.** `b2kPlayerAddLadder x1,y1,x2,y2` registers polled
+    climb ZONES (world geometry — wiped by `b2kClear`/`b2kTeardown`;
+    `b2kPlayerClearLadders` drops them early). In-zone + UP/DOWN enters
+    state `climb`: gravity scale 0, the `moveY` axis drives y at
+    `climbSpeed` (160), x at half speed, releasing hangs. A
+    **non-directional jump key** hops off — exit listens only to jump
+    keys that are not also `moveY` keys, so SPACE dismounts while UP
+    keeps climbing even under the platformer's `space,up,w` binding.
+    Grab rules: UP needs ladder well above the head (standing on a
+    ledge the zone pokes through, UP jumps — no re-grab); DOWN grabs
+    only mid-air (drop through the deck, hold DOWN, catch the ladder).
+  - **Duck.** DOWN while grounded: state `duck`, run target 0 at normal
+    decel, jump presses swallowed (down+jump on solid ground just
+    ducks). No hitbox change this wave — documented so nobody designs
+    duck-under gaps yet (capsule reshape is Wave 5).
+  - **The hurt-knockback standard.** `b2kPlayerHurt [fromX]`: control
+    off, an away-pop (`hurtPopX` 220 / `hurtPopY` 320, ground-snap
+    exempt like `b2kPlayerJump`), the `hurt` anim, control restored at
+    the first landing after `hurtMs/2` or at `hurtMs` (700), whichever
+    comes first, then an invulnerability window (`invulnMs` 900) during
+    which further hurts no-op and `b2kPlayerHurtIs()` reads true. An
+    explicit `b2kPlayerControl` call takes ownership from the pending
+    auto-restore (cutscenes never fight the hurt timer).
+  - `b2kPlayerAnims` gains optional `climb`, `duck`, `hurt` slots with
+    sensible fallbacks (jump/idle/fall poses); `b2kPlayerState()` adds
+    `duck`/`climb`/`hurt`; a drop renders as `fall`; hurt landings are
+    silent (no `land` tick).
+  - **Both games adopt the knockback/respawn split**: enemy sides, saws
+    and spikes now knock the hero away in place (no fall counted; the
+    `OnFinish` respawn handlers are gated by the hurt-lock so the
+    controller's non-looping hurt pose can never teleport him); pits,
+    kill planes and the thwomp crush keep the respawn. The platformer
+    gains the L2 **ladder + bonus-ledge** beat (a one-way cloud deck
+    over the plate area, a 9th coin, climb up through the deck, drop
+    back through it) with real `character_beige_climb_a/b` frames; the
+    micro-game's L2 exit door moves onto a **tower no jump reaches** —
+    a `ladder` level-verb climbs it — and an optional **alien skin
+    picker** (S on the menu: embedded hero + five aliens with real
+    climb/duck/hurt frames, loaded from the Spritesheets folder; any
+    failure falls back to the embedded hero silently, so the file
+    stays zero-asset by default).
+  - **Self-test harness v10**: four new suites — drop-through (pierce,
+    land below, chain solid again), climb (grab/hang/ascend/jump-off/
+    ground-out, gravity-scale restored), duck (brake to a stop,
+    down+jump never launches), hurt (away-pop, invuln no-op, control
+    auto-restore) — ~20 new assertions, all self-diagnosing.
+
 ### Fixed
+
+- **Kit: `b2kSetCategory`/`b2kSetCollisionGroup` could silently no-op on
+  fresh shapes.** Box2D v3.1's default shape mask is 64-bit all-ones; the
+  read-modify-write path fed that read-back (≈1.8e19) straight back to
+  the shim, whose numeric gate (2^53) rejects it — making the whole
+  filter write a silent no-op on such builds. Both setters now normalise
+  an out-of-range mask to the Kit's 32-bit all-layers value first
+  (identical collision behaviour — the Kit only mints 32-bit
+  categories). Found while building Wave 2's drop-through, which flips
+  the player's mask through the same machinery.
 
 - **Kit: commands called with function syntax never worked in OXT.** OXT
   cannot invoke a *command* handler with function syntax (`get b2kChain(...)`

@@ -20,9 +20,11 @@
 --      stack property; Shift+Reset re-asks; Cancel = placeholder shapes).
 --
 -- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
---           full) · the MOUSE DRAGS the crate (chained weights are NOT
---           draggable) · R restarts the CURRENT level · ESC pauses ·
---           M mutes the (synthesized) sound
+--           full) · DOWN / S ducks · DOWN+JUMP drops through one-way
+--           platforms (bridge, clouds, the bonus ledge - never hills) ·
+--           UP/DOWN climbs the L2 ladder (SPACE hops off) · the MOUSE
+--           DRAGS the crate (chained weights are NOT draggable) · R
+--           restarts the CURRENT level · ESC pauses · M mutes
 --
 -- THE THREE LEVELS (every beat holds a coin; the flag advances):
 --   LEVEL 1  GREEN HILLS (3712px, 12 coins) - movement + the toys: the
@@ -32,10 +34,12 @@
 --            slope MOUND, one-way CLOUDS with the fly, the bee, the
 --            SPIKE PIT - then the second act: two more slimes and a
 --            rest cloud on the long run to the flag.
---   LEVEL 2  THE WORKS (2816px, 8 coins) - the machines: drag the
+--   LEVEL 2  THE WORKS (2816px, 9 coins) - the machines: drag the
 --            CRATE onto the yellow BUTTON to open the gate (coin in
---            the gateway), the red CHECKPOINT, the saw LEVER (STAND at
---            it to power the sweeping saw down - running past never
+--            the gateway), the LADDER up to the bonus ledge above the
+--            plate (climb with UP, coin on the deck, drop back through
+--            with DOWN+JUMP), the red CHECKPOINT, the saw LEVER (STAND
+--            at it to power the sweeping saw down - running past never
 --            flips it), both SAWS, THWOMP ALLEY (chained weights: ride
 --            the second one's head to the top coin; grab the YELLOW
 --            KEY between them), a breather cloud with its bee, and the
@@ -114,6 +118,18 @@
 --      The boundaries audit rides pfBounds: every level gets thick
 --      side slabs PLUS edge wall segments PLUS the matching camera
 --      clamp - check you cannot leave the world on any level.
+--  13. WAVE 2 PLAYER ACTIONS: DOWN ducks anywhere on the ground (vx
+--      brakes to 0, duck pose); DOWN+JUMP on the L1 bridge or any
+--      cloud DROPS THROUGH it (and the deck is solid again right
+--      after) - on solid ground or the MOUND it just ducks; the L2
+--      LADDER climbs with UP/DOWN (gravity off, hang in place, SPACE
+--      hops off, walking the deck then UP jumps - no re-grab), and
+--      holding DOWN after dropping through the bonus deck re-catches
+--      the ladder mid-fall. HURT SPLIT: enemy sides, saws and spikes
+--      now KNOCK the hero AWAY in place (hurt pose, brief flashing
+--      invulnerability, control back on landing) - no teleport, no
+--      fall counted; pits, the kill plane and a thwomp crush still
+--      respawn at the checkpoint and count a fall.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -291,6 +307,10 @@ function pfLoadSheets
    b2kAnimDef "chars", "walk", "character_beige_walk_a,character_beige_walk_b", 6, true
    b2kAnimDef "chars", "jump", "character_beige_jump", 1, true
    b2kAnimDef "chars", "hit", "character_beige_hit", 2, false
+   -- Wave 2: the sheet carries real climb frames (the duck frame already
+   -- moonlights in "win"); the controller's new anim slots use these
+   b2kAnimDef "chars", "climb", "character_beige_climb_a,character_beige_climb_b", 6, true
+   b2kAnimDef "chars", "duck", "character_beige_duck", 1, true
    b2kAnimDef "foes", "buzz", "bee_a,bee_b", 8, true
    b2kAnimDef "foes", "sawspin", "saw_a,saw_b", 10, true
    b2kAnimDef "foes", "slimewalk", "slime_normal_walk_a,slime_normal_walk_b", 4, true
@@ -342,6 +362,10 @@ command pfEmbedPlaceholder
    b2kAnimDef "chars", "jump", "17", 1, true
    b2kAnimDef "chars", "hit", "19", 2, false
    b2kAnimDef "chars", "win", "1-4", 6, true
+   -- the frozen fallback has no climb/duck art: borrow standing poses so
+   -- the one b2kPlayerAnims call below works for both art paths
+   b2kAnimDef "chars", "climb", "17", 2, true
+   b2kAnimDef "chars", "duck", "1", 1, true
 end pfEmbedPlaceholder
 
 -- =====================================================================
@@ -537,7 +561,10 @@ command pfStartGame
    -- capsule + fixed rotation + sleep-off + low friction in one call;
    -- the bound sprite above is auto-discovered as the art to animate.
    b2kPlayerAttach gHero
-   b2kPlayerAnims "idle", "walk", "jump", "jump"
+   -- Wave 2 slots ride along: climb/duck (defined for both art paths)
+   -- and "hit" as the knockback pose. pfHurtDone gates on gHurtLock, so
+   -- the controller's hurt anim finishing never triggers the respawn.
+   b2kPlayerAnims "idle", "walk", "jump", "jump", empty, "climb", "duck", "hit"
    b2kPlayerSet "moveSpeed", kMoveSpeed
    b2kPlayerSet "jumpSpeed", kJumpSpeed
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
@@ -555,7 +582,7 @@ command pfStartGame
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts the level, ESC pauses, M mutes - the MOUSE" & cr & "DRAGS the box-crate (chained weights never drag). LEVEL " & gLevel & " of 3: " & gLevelName & "." & cr & "Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag to advance. Three levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps, DOWN ducks, DOWN+JUMP drops through one-way decks, UP/DOWN climbs ladders, R restarts," & cr & "ESC pauses, M mutes - the MOUSE DRAGS the box-crate (chained weights never drag). LEVEL " & gLevel & " of 3: " & gLevelName & "." & cr & "Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag to advance. Three levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -1080,8 +1107,10 @@ command pfL1Scene
       b2kCamAdopt the long id of graphic "pf_ledge"
    end if
    -- the slope mound (26.6-degree ramps): six chain points, the outer
-   -- two are non-colliding ghost anchors; ramps mirrored on the ascent
-   b2kSmoothGround "1696,576" & cr & "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576" & cr & "1184,576"
+   -- two are non-colliding ghost anchors; ramps mirrored on the ascent.
+   -- noDrop TRUE: a hill is terrain -- down+jump on its plateau must
+   -- duck, never sink the hero inside the hill art
+   b2kSmoothGround "1696,576" & cr & "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576" & cr & "1184,576", true
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_ramp_long_a") then
       pfTile "terrain_grass_ramp_long_b", 1248, 512, true
       pfTile "terrain_grass_ramp_long_a", 1312, 512, true
@@ -1243,6 +1272,25 @@ command pfL2Scene
    if gToysOK is true then
       pfMakeLever 690         -- stand here to power the sweep saw down
       pfMakeKeyDoor 1300, 500, 2208, "yellow"
+      -- Wave 2: the LADDER up to a bonus ledge over the plate/gate area.
+      -- The deck is a one-way cloud chain (solid 272..464, ghost-padded;
+      -- it ends at 464 so the OPEN gate's rise at 500..564 never pokes
+      -- through it). Climb up THROUGH the deck -- one-sided chains are
+      -- free from below -- exit at the zone top and land on it; DOWN+JUMP
+      -- drops back through (hold DOWN to re-catch the ladder mid-fall).
+      b2kSmoothGround "528,352" & cr & "464,352" & cr & "272,352" & cr & "208,352"
+      pfTile "terrain_grass_cloud_left", 272, 352
+      pfTile "terrain_grass_cloud_middle", 336, 352
+      pfTile "terrain_grass_cloud_right", 400, 352
+      pfTile "ladder_top", 304, 352
+      pfTile "ladder_middle", 304, 416
+      pfTile "ladder_middle", 304, 480
+      pfTile "ladder_bottom", 304, 544
+      -- the climb zone: hero-centre rect, floor to just above the deck
+      -- (top 300: exiting there puts his feet ~8px above the line, so he
+      -- lands ON the deck; standing ON the deck, UP means jump -- the
+      -- grab needs ladder above the head)
+      b2kPlayerAddLadder 314, 300, 358, 600
    end if
 end pfL2Scene
 
@@ -1255,6 +1303,7 @@ command pfL2Cast
    pfMakeCoin 2564, 448     -- over the first stone step
    pfMakeCoin 2638, 392     -- over the top step, by the flag
    if gToysOK is true then pfMakeCoin 2256, 510   -- inside the door passage
+   if gToysOK is true then pfMakeCoin 368, 308    -- on the ladder's bonus ledge
    -- the bee patrols the breather cloud
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 1760, 310
@@ -1740,7 +1789,8 @@ command pfTickMovers
          b2kSpriteFlipH gMovSpr[i], (cos(tMS / gMovPX[i]) < 0)
       end if
       if gMovHurtW[i] > 0 and gHurtLock is not true then
-         if abs(tHX - tMX) < gMovHurtW[i] and abs(tHY - tMY) < gMovHurtH[i] then pfHurt
+         -- mover brushes are contact damage: knock away from the blade
+         if abs(tHX - tMX) < gMovHurtW[i] and abs(tHY - tMY) < gMovHurtH[i] then pfHurtKnock tMX
       end if
    end repeat
 end pfTickMovers
@@ -2032,7 +2082,12 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       end if
       exit b2kSensorEnter
    end if
-   if the uPfHazardFlag of pSensorCtrl is true then pfHurt
+   if the uPfHazardFlag of pSensorCtrl is true then
+      -- contact damage knocks back in place (Wave 2); the hazard's own
+      -- x picks the away direction. Lethal falls still respawn (pfHurt).
+      set the itemDelimiter to comma
+      pfHurtKnock item 1 of b2kPosition(pSensorCtrl)
+   end if
    if the uPfGoalFlag of pSensorCtrl is true then
       -- camera-dead fallback clamps play to one screen, so most coins are
       -- out of reach there: the near flag advances unconditionally instead
@@ -2142,7 +2197,8 @@ on b2kContact pA, pB
                           -- (a raw upward set-velocity on a grounded
                           -- player is treated as solver rebound)
    else
-      pfHurt
+      -- a side/spike touch is contact damage: knock away from the slime
+      pfHurtKnock item 1 of b2kPosition(tFoe)
    end if
 end b2kContact
 
@@ -2160,6 +2216,10 @@ command pfSquashSlime pWhich
    put the milliseconds + 700 into gSlimeGoneAt[pWhich]
 end pfSquashSlime
 
+-- THE RESPAWN PATH (lethal: pits, the kill plane, a thwomp crush).
+-- Counts a fall and teleports home via the hit pose's OnFinish. It
+-- deliberately ignores the knockback invulnerability: falling in a pit
+-- while flashing still respawns.
 command pfHurt
    if gHurtLock is true or gWinLock is true then exit pfHurt
    put true into gHurtLock
@@ -2173,6 +2233,19 @@ command pfHurt
    b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
    b2kSpritePlay gHeroSpr, "hit", true   -- non-loop; OnFinish respawns
 end pfHurt
+
+-- THE KNOCKBACK PATH (Wave 2): contact damage -- slime sides, saws,
+-- spikes brushed -- pops the hero away IN PLACE via the Kit's
+-- b2kPlayerHurt (control off, hurt pose, auto-restore, then an
+-- invulnerability window b2kPlayerHurtIs() reports). No fall counted:
+-- you kept your ground. pFromX = the hazard's x, picks the direction.
+command pfHurtKnock pFromX
+   if gHurtLock is true or gWinLock is true then exit pfHurtKnock
+   if b2kPlayerHurtIs() then exit pfHurtKnock   -- still flashing: no re-hit
+   b2kSound "hurt"
+   b2kCamShake 4, 200
+   b2kPlayerHurt pFromX
+end pfHurtKnock
 
 -- All coins + the flag on levels 1-2: bank the stats, banner the clear,
 -- and rebuild the NEXT level outside this frame (sensor dispatch runs
@@ -2259,6 +2332,10 @@ command pfTogglePause
 end pfTogglePause
 
 on pfHurtDone pSprite, pAnim
+   -- the hero sprite dispatches OnFinish for EVERY non-looping anim --
+   -- including the controller's knockback pose ("hit" again) and the
+   -- win dance. Only the lethal path (gHurtLock) may teleport home.
+   if gHurtLock is not true then exit pfHurtDone
    b2kMoveTo gHero, gRespawnX, gRespawnY
    b2kSetVelocity gHero, 0, 0
    put false into gHurtLock
@@ -2401,11 +2478,16 @@ end rawKeyDown
 --         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
 --         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
 -- PLAYER  b2kPlayerMake x,y,w,h[,sheet] · b2kPlayerAttach ctrl ·
---         b2kPlayerAnims idle,run,jump,fall[,land] · b2kPlayerSet key,value ·
---         b2kPlayerGet(key) · b2kPlayerOnGround() · b2kPlayerState() ·
+--         b2kPlayerAnims idle,run,jump,fall[,land,climb,duck,hurt] ·
+--         b2kPlayerSet key,value · b2kPlayerGet(key) · b2kPlayerOnGround() ·
+--         b2kPlayerState() (idle/run/jump/fall/land/duck/climb/hurt) ·
 --         b2kPlayerFacing() · b2kPlayerJump [speed] · b2kPlayerControl flag ·
+--         b2kPlayerHurt [fromX] (knockback + invuln) · b2kPlayerHurtIs() ·
+--         b2kPlayerAddLadder x1,y1,x2,y2 · b2kPlayerClearLadders ·
 --         b2kPlayer() · b2kPlayerSprite() · b2kPlayerRemove
---         (drives axis "moveX" + action "jump"; rebind those to remap)
+--         (drives axes "moveX"/"moveY" + action "jump"; rebind to remap;
+--         DOWN ducks, DOWN+JUMP drops through one-way chains, UP/DOWN
+--         climbs registered ladder zones)
 -- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
 --         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
 --         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
@@ -2419,9 +2501,12 @@ end rawKeyDown
 --         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
 -- SENSOR  b2kAddSensor ctrl[,shape] · on b2kSensorEnter pSensor,pVisitor ·
 --         on b2kSensorExit pSensor,pVisitor · b2kSensorCount()+EnterSensor/Visitor(i)
--- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
+-- FILTER  b2kDefineLayer name (30 max; bit 31 = the Kit's one-way tag) ·
+--         b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
 --         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
--- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen points)
+-- TERRAIN b2kChain pointList[,loop[,noDrop]] · b2kSmoothGround pointList[,noDrop]
+--         (>=4 screen points; open chains are one-way platforms the player
+--         can drop through -- pass noDrop true for hills/slopes)
 -- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapMoving x1,y1,x2,y2 (presence:
 --         statics filtered out) · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
 -- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
@@ -2534,12 +2619,35 @@ local sPlayClock     -- the player's SIM-TIME clock: summed frame ms.
                      -- on slow machines (90ms = fewer frames); sim time
                      -- keeps them frame-coherent everywhere and makes
                      -- hand-stepped tests deterministic.
+-- Wave 2 player actions: drop-through, ladder climb, duck, hurt-knockback
+local sPlayLadders   -- climb zones, one "x1,y1,x2,y2" rect per line (screen px)
+local sPlayClimb     -- true while the controller is climbing a ladder zone
+local sPlayDropUntil -- sim-clock ms when the drop-through window closes (0 = off)
+local sPlayDropHardUntil -- absolute cap (dropMs x4): restore no matter what
+local sPlayDropCat, sPlayDropMask, sPlayDropGrp -- the player filter to restore
+local sPlayGroundShape -- shape handle under the last grounding probe hit
+local sPlayHurtCtl   -- true while the hurt arc owns the control-off (auto-restores)
+local sPlayHurtUntil -- sim-clock ms when hurt control restores unconditionally
+local sPlayHurtHalfMS -- ...or earlier, on the first landing after this clock
+local sPlayInvulnUntil -- sim-clock ms until which b2kPlayerHurt no-ops
+local sPlayDropMs, sPlayClimbSpd -- TuneCache: drop window / climb px-per-sec
+local sPlayHurtMs, sPlayInvulnMs, sPlayHurtPopX, sPlayHurtPopY -- TuneCache: hurt arc
 local sSndClip       -- sound name -> audioClip short name ("b2ksnd_...")
 local sSndMute       -- true = swallow play calls (a user preference; survives teardown)
 local sSndDead       -- true after a play failure: degrade to silence, never errors
 local sSndNote       -- empty = healthy; else why audio is degraded
 
 constant kPI = 3.14159265358979
+-- The Kit's reserved ONE-WAY collision category (bit 31 of the 32-bit
+-- filter space xTalk's bit math can hold; b2kDefineLayer hands out bits
+-- 1..30 so a user layer can never collide with it). Open chains carry
+-- it; the player's drop-through window strips it from the player's mask.
+constant kOneWayBit = 1073741824
+-- Box2D's default shape mask is 64-bit all-ones, which xTalk bit math
+-- (32-bit) and the shim's numeric gate (2^53) cannot round-trip. The Kit
+-- normalises any read-back mask above this to exactly this value: all 32
+-- bits the Kit can ever mint, so behaviour is identical in practice.
+constant kAllMaskBits = 4294967295
 
 -- =====================================================================
 -- World / lifecycle
@@ -2714,6 +2822,14 @@ function b2kClamp pValue, pLo, pHi
    if tValue > pHi then put pHi into tValue
    return tValue
 end b2kClamp
+
+-- True when pBit (a power of two) is set in pBits. Pure div/mod, no
+-- bitAnd: xTalk's bitwise operators are 32-bit, and filter values read
+-- back from Box2D can exceed that -- arithmetic stays exact to 2^53.
+function b2kHasBit pBits, pBit
+   if pBits is not a number or pBit is not a number or pBit <= 0 then return false
+   return ((pBits div pBit) mod 2) is 1
+end b2kHasBit
 
 command b2kSetScale pPixelsPerMetre
    put b2kClamp(pPixelsPerMetre, 1, 10000) into sScale
@@ -3979,9 +4095,11 @@ end b2kSensorExitVisitor
 command b2kDefineLayer pName
    if sLayers[pName] is not empty then return sLayers[pName]
    if sNextBit is empty or sNextBit < 1 then put 1 into sNextBit
-   -- xTalk's bitOr is 32-bit, so layer 33+ would wrap to a category of 0
-   -- (= collides with nothing). Refuse instead of corrupting filters.
-   if sNextBit > 2147483648 then return 0
+   -- xTalk's bitOr is 32-bit, so high layers would wrap a category to 0
+   -- (= collides with nothing). Bit 31 is the Kit's reserved ONE-WAY
+   -- category (kOneWayBit) and bit 32 sits on the sign-bit edge, so the
+   -- allocator stops at 30 named layers. Refuse instead of corrupting.
+   if sNextBit > 536870912 then return 0
    put sNextBit into sLayers[pName]
    put sNextBit * 2 into sNextBit
    return sLayers[pName]
@@ -4005,11 +4123,20 @@ function b2kLayerBits pLayerList
    return tBits
 end b2kLayerBits
 
+-- NOTE on mask read-backs: a shape that was never given a mask carries
+-- the engine's 64-bit all-ones default, which neither xTalk bit math
+-- (32-bit) nor the shim's numeric gate (2^53) can round-trip -- passing
+-- it back verbatim makes the whole filter write a SILENT no-op on a
+-- v3.1 build. Every read-modify-write here normalises the mask to
+-- kAllMaskBits first (identical behaviour: the Kit only mints 32-bit
+-- categories).
 command b2kSetCategory pControl, pLayerList
-   local s
+   local s, tMask
    put sShapeH[the long id of pControl] into s
    if s is empty then exit b2kSetCategory
-   b2SetShapeFilter s, b2kLayerBits(pLayerList), b2ShapeFilterMask(s), b2ShapeFilterGroup(s)
+   put b2ShapeFilterMask(s) into tMask
+   if tMask is not a number or tMask > kAllMaskBits then put kAllMaskBits into tMask
+   b2SetShapeFilter s, b2kLayerBits(pLayerList), tMask, b2ShapeFilterGroup(s)
 end b2kSetCategory
 
 command b2kSetMask pControl, pLayerList
@@ -4022,10 +4149,12 @@ end b2kSetMask
 -- Group index: bodies sharing a NEGATIVE group never collide; a POSITIVE group
 -- always collide. Overrides category/mask. 0 (default) = use category/mask.
 command b2kSetCollisionGroup pControl, pGroup
-   local s
+   local s, tMask
    put sShapeH[the long id of pControl] into s
    if s is empty then exit b2kSetCollisionGroup
-   b2SetShapeFilter s, b2ShapeFilterCategory(s), b2ShapeFilterMask(s), pGroup
+   put b2ShapeFilterMask(s) into tMask
+   if tMask is not a number or tMask > kAllMaskBits then put kAllMaskBits into tMask
+   b2SetShapeFilter s, b2ShapeFilterCategory(s), tMask, pGroup
 end b2kSetCollisionGroup
 
 -- =====================================================================
@@ -4040,7 +4169,13 @@ end b2kSetCollisionGroup
 -- segment PAST the surface you need on each side (over solid ground the
 -- ghost tails can simply continue flat). A chain whose endpoints sit AT the
 -- platform edges has non-solid ends -- bodies fall straight through them.
-command b2kChain pPoints, pLoop
+-- ONE-WAY TAG: open chains are one-sided (land from above, rise through
+-- from below), so they double as the Kit's one-way platforms -- they are
+-- created carrying the reserved kOneWayBit category, which is what lets
+-- the player controller DROP THROUGH them (down+jump). Pass pNoDrop true
+-- for one-sided terrain the player must never drop through (hills,
+-- slopes); loops are solid enclosures and are never tagged.
+command b2kChain pPoints, pLoop, pNoDrop
    local tBody, p
    if sWorld is empty then return 0
    put b2NewStaticBody(sWorld, 0, 0) into tBody
@@ -4049,13 +4184,19 @@ command b2kChain pPoints, pLoop
       if p is empty then next repeat
       b2ChainAddPoint b2kToWorldX(item 1 of p), b2kToWorldY(item 2 of p)
    end repeat
+   if pLoop is not true and pNoDrop is not true then
+      -- category = default bit 1 (everything that collided still does)
+      -- PLUS the one-way marker; the mask stays "everything the Kit can
+      -- mint" (the staged filter is one-shot: consumed by this create)
+      b2ShapeDefFilter 1 + kOneWayBit, kAllMaskBits, 0
+   end if
    return b2CreateChain(tBody, (pLoop is true), 0.6, 0.1)
 end b2kChain
 
-command b2kSmoothGround pPoints
+command b2kSmoothGround pPoints, pNoDrop
    -- statement call + the result: OXT cannot call commands function-style.
    -- Mind b2kChain's GHOST RULE: the outer two points anchor, not collide.
-   b2kChain pPoints, false
+   b2kChain pPoints, false, pNoDrop
    return the result
 end b2kSmoothGround
 
@@ -4067,7 +4208,8 @@ end b2kSmoothGround
 -- the control's centre, so moving the control moves the terrain with it. pLoop
 -- true closes the outline into a solid blob; false leaves a one-sided ground
 -- line. Great for smooth, rolling, concave terrain a fast body won't catch on.
-command b2kAddChain pControl, pPoints, pLoop
+-- Open outlines carry the one-way tag like b2kChain's; pNoDrop true opts out.
+command b2kAddChain pControl, pPoints, pLoop, pNoDrop
    local tRef, tCx, tCy, tBody, p, lx, ly
    if sWorld is empty then return 0
    put the long id of pControl into tRef
@@ -4081,6 +4223,9 @@ command b2kAddChain pControl, pPoints, pLoop
       put - ((item 2 of p - tCy) / sScale) into ly
       b2ChainAddPoint lx, ly
    end repeat
+   if pLoop is not true and pNoDrop is not true then
+      b2ShapeDefFilter 1 + kOneWayBit, kAllMaskBits, 0
+   end if
    get b2CreateChain(tBody, (pLoop is true), 0.6, 0.1)
    b2kRegister tRef, tBody, true                        -- static, kit-tracked
    put "loc" into sRender[tRef]                          -- static: registered but never synced
@@ -5400,6 +5545,15 @@ command b2kPlayerAttach pCtrl
    put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
+   -- Wave 2 action state starts clean (ladder ZONES are world geometry,
+   -- registered by the level build -- attaching must not wipe them)
+   put false into sPlayClimb
+   put 0 into sPlayDropUntil
+   put 0 into sPlayDropHardUntil
+   put false into sPlayHurtCtl
+   put 0 into sPlayHurtUntil
+   put 0 into sPlayHurtHalfMS
+   put 0 into sPlayInvulnUntil
    b2kPlayerTuneCache   -- bake the knobs + probe geometry for the tick
    b2kPlayerResolveArt
    b2kInputOn   -- arms the sampler; starter bindings fill empty slots only
@@ -5424,7 +5578,8 @@ command b2kPlayerResolveArt
 end b2kPlayerResolveArt
 
 -- Tuning knobs (pixels, px/s, ms, degrees). Keys: moveSpeed, accel,
--- airAccel, jumpSpeed, jumpCut, coyoteMs, bufferMs, maxFall, maxSlopeDeg.
+-- airAccel, jumpSpeed, jumpCut, coyoteMs, bufferMs, maxFall, maxSlopeDeg,
+-- dropMs, climbSpeed, hurtMs, invulnMs, hurtPopX, hurtPopY.
 -- Settable any time, before or after the player exists; unknown keys are
 -- stored verbatim for your own use.
 command b2kPlayerSet pKey, pValue
@@ -5444,6 +5599,12 @@ command b2kPlayerTuneCache
    put b2kPlayerGet("bufferMs") into sPlayBuffer
    put b2kPlayerGet("maxFall") into sPlayMaxFall
    put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into sPlayCosSlope
+   put b2kPlayerGet("dropMs") into sPlayDropMs
+   put b2kPlayerGet("climbSpeed") into sPlayClimbSpd
+   put b2kPlayerGet("hurtMs") into sPlayHurtMs
+   put b2kPlayerGet("invulnMs") into sPlayInvulnMs
+   put b2kPlayerGet("hurtPopX") into sPlayHurtPopX
+   put b2kPlayerGet("hurtPopY") into sPlayHurtPopY
    if sPlayHalfW is not empty and sPlayHalfW > 0 then
       put sPlayHalfH + 4 into sPlayReach
       put (0 - max(2, sPlayHalfW * 0.6)) & comma & 0 & comma & max(2, sPlayHalfW * 0.6) into sPlayProbeOffs
@@ -5481,6 +5642,18 @@ function b2kPlayerDefault pKey
          return 900
       case "maxslopedeg"
          return 50
+      case "dropms"
+         return 260
+      case "climbspeed"
+         return 160
+      case "hurtms"
+         return 700
+      case "invulnms"
+         return 900
+      case "hurtpopx"
+         return 220
+      case "hurtpopy"
+         return 320
    end switch
    return empty
 end b2kPlayerDefault
@@ -5490,7 +5663,11 @@ end b2kPlayerDefault
 -- touch-down flourish: the controller holds it for its own duration, then
 -- idle/run resume. NOTE: a finishing land animation dispatches the art's
 -- b2kSpriteOnFinish message like any non-looping animation would.
-command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand
+-- Wave 2 slots, all optional: pClimb (ladders; falls back to the jump
+-- pose), pDuck (falls back to idle), pHurt (the knockback pose; falls
+-- back to the fall pose). A non-looping hurt anim dispatches OnFinish
+-- when it ends -- guard any respawn logic there with your own lock.
+command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pClimb, pDuck, pHurt
    put pIdle into sPlayAnims["idle"]
    put pRun into sPlayAnims["run"]
    put pJump into sPlayAnims["jump"]
@@ -5500,6 +5677,9 @@ command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand
       put pFall into sPlayAnims["fall"]
    end if
    put pLand into sPlayAnims["land"]
+   put pClimb into sPlayAnims["climb"]
+   put pDuck into sPlayAnims["duck"]
+   put pHurt into sPlayAnims["hurt"]
    put empty into sPlayAnimNow   -- re-assert on the next tick
    if sPlayArt is empty then b2kPlayerResolveArt
 end b2kPlayerAnims
@@ -5518,8 +5698,9 @@ function b2kPlayerOnGround
    return (sPlayGrounded is true)
 end b2kPlayerOnGround
 
--- idle | run | jump | fall, plus "land" for exactly one frame on
--- touch-down from jump/fall (dust puffs, landing sounds). Empty = no player.
+-- idle | run | jump | fall | duck | climb | hurt, plus "land" for exactly
+-- one frame on touch-down from jump/fall (dust puffs, landing sounds).
+-- A drop-through renders as "fall". Empty = no player.
 function b2kPlayerState
    return sPlayState
 end b2kPlayerState
@@ -5536,6 +5717,7 @@ command b2kPlayerJump pSpeed
    local tVel
    if sPlayRef is empty or sBody[sPlayRef] is empty then exit b2kPlayerJump
    if pSpeed is empty then put b2kPlayerGet("jumpSpeed") into pSpeed
+   b2kPlayerClimbEnd   -- a boost mid-climb leaves the ladder (gravity back)
    set the itemDelimiter to comma
    put b2kVelocity(sPlayRef) into tVel
    b2kSetVelocity sPlayRef, item 1 of tVel, 0 - pSpeed
@@ -5550,9 +5732,214 @@ end b2kPlayerJump
 -- knockback, hit poses, scripted deaths; physics and the Kit run on.
 command b2kPlayerControl pFlag
    put (pFlag is not false) into sPlayControl
+   -- an explicit call takes ownership from a pending hurt arc: its
+   -- auto-restore must never overrule the game's own control decision
+   put false into sPlayHurtCtl
    -- returning control must re-assert the state anim over any manual pose
    if sPlayControl then put empty into sPlayAnimNow
 end b2kPlayerControl
+
+-- THE HURT-KNOCKBACK STANDARD (Wave 2): call this when a hazard touches
+-- the player. pFromX is the threat's screen x -- the pop goes AWAY from
+-- it (empty = backwards, away from facing). The controller takes over:
+-- control off, an away-pop of hurtPopX/hurtPopY (jump-style, exempt from
+-- the ground-snap), the hurt anim, control restored at the first landing
+-- after hurtMs/2 or at hurtMs, whichever comes FIRST -- then an
+-- invulnerability window (invulnMs from the hit) during which a second
+-- b2kPlayerHurt is a no-op and b2kPlayerHurtIs() reads true, so games
+-- skip their hazard checks. Use this for CONTACT damage (enemy sides,
+-- saws, spikes); lethal falls keep the game's own respawn path.
+command b2kPlayerHurt pFromX
+   local tB, tDir, tAnim
+   if sPlayRef is empty then exit b2kPlayerHurt
+   put sBody[sPlayRef] into tB
+   if tB is empty then exit b2kPlayerHurt
+   if sPlayClock < sPlayInvulnUntil then exit b2kPlayerHurt   -- still invulnerable
+   b2kPlayerClimbEnd   -- a hit on a ladder knocks the player off it
+   if pFromX is empty then
+      put 0 - sPlayFacing into tDir              -- backwards: away from facing
+   else
+      set the itemDelimiter to comma
+      if b2kToScreenX(b2BodyX(tB)) >= pFromX then
+         put 1 into tDir
+      else
+         put -1 into tDir
+      end if
+   end if
+   -- the away-pop rides the jump path's exemptions: the jump flag keeps
+   -- the rising arc clear of the ground probe and the ground-snap
+   b2kSetVelocity sPlayRef, tDir * sPlayHurtPopX, 0 - sPlayHurtPopY
+   put true into sPlayJumping
+   put false into sPlayGrounded
+   put 0 into sPlayGroundMS
+   put 0 into sPlayPressMS
+   put false into sPlayControl
+   put true into sPlayHurtCtl
+   put sPlayClock + sPlayHurtMs into sPlayHurtUntil
+   put sPlayClock + (sPlayHurtMs / 2) into sPlayHurtHalfMS
+   put sPlayClock + sPlayInvulnMs into sPlayInvulnUntil
+   put "hurt" into sPlayState
+   -- the hurt pose is written HERE: with control off the tick will not
+   -- animate, exactly so this pose (or any manual one) survives
+   try
+      if sPlayArt is empty then b2kPlayerResolveArt
+      if sPlayArt is not empty then
+         put sPlayAnims["hurt"] into tAnim
+         if tAnim is empty then put sPlayAnims["fall"] into tAnim
+         if tAnim is not empty then
+            b2kSpritePlay sPlayArt, tAnim, true
+            put tAnim into sPlayAnimNow
+         end if
+      end if
+   catch tAnim
+      put empty into sPlayArt   -- art gone; re-resolve next tick
+   end try
+end b2kPlayerHurt
+
+-- True from a hurt until its invulnerability window closes -- the
+-- standard gate for a game's hazard checks ("skip while flashing").
+function b2kPlayerHurtIs
+   if sPlayRef is empty then return false
+   return (sPlayClock < sPlayInvulnUntil)
+end b2kPlayerHurtIs
+
+-- Register a LADDER ZONE: a screen rect the player can climb (state
+-- "climb": gravity off, UP/DOWN drive y at climbSpeed, x at half speed,
+-- a non-directional JUMP key hops off). Zones are world geometry --
+-- register them at level build; b2kClear and b2kTeardown wipe them.
+-- Presence is a polled point-in-rect test on the player's centre (the
+-- presence doctrine): zero physics objects. Grab rules: UP enters when
+-- there is ladder above the head (so jumping while standing ON a ledge
+-- the zone pokes through never re-grabs); DOWN enters only in the air
+-- (drop or walk off, then hold DOWN to catch the ladder).
+command b2kPlayerAddLadder pX1, pY1, pX2, pY2
+   put min(pX1, pX2) & comma & min(pY1, pY2) & comma & \
+         max(pX1, pX2) & comma & max(pY1, pY2) & cr after sPlayLadders
+end b2kPlayerAddLadder
+
+command b2kPlayerClearLadders
+   put empty into sPlayLadders
+   b2kPlayerClimbEnd   -- nothing left to climb
+end b2kPlayerClearLadders
+
+-- Internal: is the point inside any registered ladder zone?
+function b2kPlayerInLadder pX, pY
+   local tL
+   if sPlayLadders is empty then return false
+   set the itemDelimiter to comma
+   repeat for each line tL in sPlayLadders
+      if tL is empty then next repeat
+      if pX >= item 1 of tL and pX <= item 3 of tL and \
+            pY >= item 2 of tL and pY <= item 4 of tL then return true
+   end repeat
+   return false
+end b2kPlayerInLadder
+
+-- Internal: the TOP edge of the zone containing the point (empty when
+-- outside). The grounded up-entry rule needs it: grabbing requires
+-- ladder above the head, or standing on a ledge the zone reaches would
+-- re-grab on every jump press.
+function b2kPlayerLadderTop pX, pY
+   local tL
+   if sPlayLadders is empty then return empty
+   set the itemDelimiter to comma
+   repeat for each line tL in sPlayLadders
+      if tL is empty then next repeat
+      if pX >= item 1 of tL and pX <= item 3 of tL and \
+            pY >= item 2 of tL and pY <= item 4 of tL then return item 2 of tL
+   end repeat
+   return empty
+end b2kPlayerLadderTop
+
+-- Internal: leave the climb state, restoring gravity. Safe to call when
+-- not climbing (one compare); tolerant of a vanished body.
+command b2kPlayerClimbEnd
+   if sPlayClimb is not true then exit b2kPlayerClimbEnd
+   put false into sPlayClimb
+   try
+      if sPlayRef is not empty and sBody[sPlayRef] is not empty then
+         b2SetGravityScale sBody[sPlayRef], 1
+      end if
+   catch tErr
+   end try
+end b2kPlayerClimbEnd
+
+-- Internal: open the drop-through window -- strip the one-way category
+-- from the player's mask so one-way chains stop colliding, remembering
+-- the exact filter to restore. Mask values read back above the 32-bit
+-- space are the engine's 64-bit default: normalised to kAllMaskBits
+-- (identical behaviour -- the Kit can only mint 32-bit categories).
+command b2kPlayerDropStart pNow
+   local tS, tMask
+   put sShapeH[sPlayRef] into tS
+   if tS is empty then exit b2kPlayerDropStart
+   put b2ShapeFilterCategory(tS) into sPlayDropCat
+   put b2ShapeFilterMask(tS) into tMask
+   if tMask is not a number or tMask > kAllMaskBits then put kAllMaskBits into tMask
+   put b2ShapeFilterGroup(tS) into sPlayDropGrp
+   put tMask into sPlayDropMask
+   if b2kHasBit(tMask, kOneWayBit) then subtract kOneWayBit from tMask
+   b2SetShapeFilter tS, sPlayDropCat, tMask, sPlayDropGrp
+   put pNow + sPlayDropMs into sPlayDropUntil
+   put pNow + sPlayDropMs * 4 into sPlayDropHardUntil
+end b2kPlayerDropStart
+
+-- Internal: is a one-way surface still inside the capsule's vertical
+-- span? Two short rays from the centre (up and down; self-hits are
+-- structurally impossible). The drop window must not close while this
+-- is true: restoring the filter mid-straddle re-pairs the contact and
+-- the one-sided push-out pops the player back ON TOP -- a 260ms timer
+-- alone clears a 48px capsule at scale 40 but not an 88px one at scale
+-- 60, so expiry is geometry-aware (with b2kPlayerDropStart's hard cap
+-- as the failsafe).
+function b2kPlayerDropStraddles pX, pY
+   local tReach
+   put sPlayHalfH + 6 into tReach
+   get b2kRayHit(pX, pY, pX, pY + tReach)
+   if sRayNY is not empty then
+      if b2kHasBit(b2ShapeFilterCategory(b2RayShape()), kOneWayBit) then return true
+   end if
+   get b2kRayHit(pX, pY, pX, pY - tReach)
+   if sRayNY is not empty then
+      if b2kHasBit(b2ShapeFilterCategory(b2RayShape()), kOneWayBit) then return true
+   end if
+   return false
+end b2kPlayerDropStraddles
+
+-- Internal: close the window, restoring the saved filter verbatim.
+command b2kPlayerDropEnd
+   local tS
+   if sPlayDropUntil is 0 or sPlayDropUntil is empty then exit b2kPlayerDropEnd
+   put 0 into sPlayDropUntil
+   try
+      put sShapeH[sPlayRef] into tS
+      if tS is not empty then
+         b2SetShapeFilter tS, sPlayDropCat, sPlayDropMask, sPlayDropGrp
+      end if
+   catch tErr
+   end try
+end b2kPlayerDropEnd
+
+-- Internal: a pressed-edge on the jump action's NON-directional keys.
+-- The platformer binds jump to "space,up,w" while UP also climbs --
+-- subtracting the moveY axis keys means SPACE hops off a ladder but
+-- holding or tapping UP keeps climbing (the classic split). Runs only
+-- while climbing, so the small string scan stays off the hot path.
+function b2kPlayerJumpExitPressed
+   local tC, tCodes
+   put empty into tCodes
+   set the itemDelimiter to comma
+   repeat for each item tC in sKeyActionsC["jump"]
+      if tC is empty then next repeat
+      if (comma & sAxisNegC["moveY"] & comma) contains (comma & tC & comma) then next repeat
+      if (comma & sAxisPosC["moveY"] & comma) contains (comma & tC & comma) then next repeat
+      put tC & comma after tCodes
+   end repeat
+   if tCodes is empty then return false
+   put char 1 to -2 of tCodes into tCodes
+   if not b2kCodesInSet(sKeysNow, tCodes) then return false
+   return not b2kCodesInSet(sKeysPrev, tCodes)
+end b2kPlayerJumpExitPressed
 
 -- Tear down the controller, tuning included. The body and sprite remain
 -- yours: remove them with b2kRemove / b2kSpriteRemove as usual.
@@ -5562,7 +5949,12 @@ end b2kPlayerRemove
 
 -- Internal: drop controller state. b2kClear passes false (tuning is
 -- config and survives, like input bindings); teardown/remove pass true.
+-- A mid-climb or mid-drop body the game keeps gets its gravity and
+-- collision filter handed back first (otherwise a kept body would stay
+-- weightless or ghost-through-platforms forever).
 command b2kPlayerForget pFull
+   b2kPlayerClimbEnd
+   b2kPlayerDropEnd
    put empty into sPlayRef
    put empty into sPlayArt
    put empty into sPlayAnims
@@ -5578,6 +5970,14 @@ command b2kPlayerForget pFull
    put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
+   put empty into sPlayLadders   -- zones are world state: clear wipes them
+   put false into sPlayClimb
+   put 0 into sPlayDropUntil
+   put 0 into sPlayDropHardUntil
+   put false into sPlayHurtCtl
+   put 0 into sPlayHurtUntil
+   put 0 into sPlayHurtHalfMS
+   put 0 into sPlayInvulnUntil
    if pFull is true then put empty into sPlayTune
 end b2kPlayerForget
 
@@ -5590,18 +5990,26 @@ end b2kPlayerForget
 -- frame and report phantom landings while rising THROUGH a one-way
 -- chain (the bridge route). Plain upward motion is NOT skipped -- running
 -- up a slope moves the capsule upward while genuinely grounded.
-command b2kPlayerProbe pBody, pVY
-   local tX, tY, tOff
+-- pX/pY are the capsule centre in screen px (the tick already has them).
+-- The grounding hit's SHAPE handle is stashed (sPlayGroundShape): the
+-- drop-through trigger asks its category for the one-way bit. While a
+-- drop window is open, one-way hits are skipped here too -- rays ignore
+-- shape filters (they cast with the default query filter), so without
+-- this the controller would re-ground mid-drop on the very chain the
+-- mask change is letting the body fall through.
+command b2kPlayerProbe pBody, pVY, pX, pY
+   local tOff
    put false into sPlayGrounded
    if sPlayJumping is true and pVY < 0 then exit b2kPlayerProbe
    set the itemDelimiter to comma
-   -- raw reads with the caller's body handle: the probe runs every
-   -- frame, so it skips the ref->body lookup and the "x,y" string pack
-   put b2kToScreenX(b2BodyX(pBody)) into tX
-   put b2kToScreenY(b2BodyY(pBody)) into tY
    repeat for each item tOff in sPlayProbeOffs
-      get b2kRayHit(tX + tOff, tY, tX + tOff, tY + sPlayReach)
+      get b2kRayHit(pX + tOff, pY, pX + tOff, pY + sPlayReach)
       if sRayNY is not empty and sRayNY <= 0 - sPlayCosSlope then
+         if sPlayDropUntil > 0 then
+            -- dropping: one-way surfaces are intangible to the probe too
+            if b2kHasBit(b2ShapeFilterCategory(b2RayShape()), kOneWayBit) then next repeat
+         end if
+         put b2RayShape() into sPlayGroundShape
          put true into sPlayGrounded
          put sRayNX into sPlayNormX          -- flat vs slope, for ground-snap
          put sPlayClock into sPlayGroundMS   -- the sim clock, not wall time
@@ -5615,7 +6023,7 @@ end b2kPlayerProbe
 -- applies the anim it picks. Exits in one compare when unused.
 command b2kPlayerTick
    local tNow, tDT, tB, tVX, tVY, tAxis, tTarget, tAcc, tStep
-   local tPrevState, tWrite
+   local tPrevState, tWrite, tPX, tPY, tMoveY, tJumpPress, tDuck, tLadTop
    if sPlayRef is empty then exit b2kPlayerTick
    put sBody[sPlayRef] into tB
    if tB is empty then exit b2kPlayerTick
@@ -5631,14 +6039,46 @@ command b2kPlayerTick
    set the itemDelimiter to comma
    put b2BodyVX(tB) * sScale into tVX
    put 0 - (b2BodyVY(tB) * sScale) into tVY
-   b2kPlayerProbe tB, tVY
+   -- centre in screen px, read once: the probe and the ladder tests
+   -- share it (one pair of FFI reads per frame, not two)
+   put b2kToScreenX(b2BodyX(tB)) into tPX
+   put b2kToScreenY(b2BodyY(tB)) into tPY
+   -- the drop window closes on ITS clock, control on or off -- a hurt
+   -- or cutscene must never leave the player permanently ghosted. The
+   -- expiry is geometry-aware (see b2kPlayerDropStraddles): never
+   -- restore the filter while a one-way line is inside the capsule.
+   if sPlayDropUntil > 0 and tNow >= sPlayDropUntil then
+      if tNow >= sPlayDropHardUntil then
+         b2kPlayerDropEnd
+      else
+         if b2kPlayerDropStraddles(tPX, tPY) then
+            put tNow + 34 into sPlayDropUntil   -- re-check in ~2 frames
+         else
+            b2kPlayerDropEnd
+         end if
+      end if
+   end if
+   b2kPlayerProbe tB, tVY, tPX, tPY
+   -- hurt auto-restore (also control-independent): the first landing
+   -- after half the window, or the full hurtMs, whichever comes FIRST.
+   -- An explicit b2kPlayerControl call cleared sPlayHurtCtl and owns
+   -- the off-state instead.
+   if sPlayHurtCtl is true then
+      if tNow >= sPlayHurtUntil or (sPlayGrounded is true and tNow >= sPlayHurtHalfMS) then
+         put false into sPlayHurtCtl
+         put true into sPlayControl
+         put empty into sPlayAnimNow   -- re-assert the state anim
+      end if
+   end if
    put false into tWrite
+   put false into tDuck
    if sPlayControl is true then
-      -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
       put sFrameMS / 1000 into tDT
       if tDT <= 0 then put 1 / 60 into tDT
       if tDT > 0.05 then put 0.05 into tDT
       put b2kAxis("moveX") into tAxis
+      put b2kAxis("moveY") into tMoveY
+      put b2kActionPressed("jump") into tJumpPress
       if tAxis is not 0 then
          if tAxis < 0 then
             put -1 into sPlayFacing
@@ -5646,34 +6086,125 @@ command b2kPlayerTick
             put 1 into sPlayFacing
          end if
       end if
-      put tAxis * sPlayMoveSpd into tTarget
-      if sPlayGrounded then
-         put sPlayAccelG into tAcc
+      -- CLIMB, exits first: zone left, climbed down onto ground, or a
+      -- non-directional jump key hops off (UP may BE a jump key -- the
+      -- platformer binds space,up,w -- so exit listens only to jump
+      -- keys that are not also moveY keys; holding UP keeps climbing)
+      if sPlayClimb is true then
+         if not b2kPlayerInLadder(tPX, tPY) then
+            b2kPlayerClimbEnd
+         else
+            if sPlayGrounded is true and tMoveY > 0 then
+               b2kPlayerClimbEnd          -- reached the floor: stand
+            else
+               if b2kPlayerJumpExitPressed() then
+                  b2kPlayerClimbEnd       -- hop off with a normal jump
+                  put 0 - sPlayJumpSpd into tVY
+                  put true into sPlayJumping
+                  put false into sPlayGrounded
+                  put 0 into sPlayGroundMS
+                  put 0 into sPlayPressMS
+                  put false into tJumpPress
+                  put true into tWrite
+               end if
+            end if
+         end if
       else
-         put sPlayAccelA into tAcc
-      end if
-      put tAcc * tDT into tStep
-      if tVX < tTarget then
-         put min(tTarget, tVX + tStep) into tVX
-      else
-         put max(tTarget, tVX - tStep) into tVX
-      end if
-      put true into tWrite
-      -- jump: a buffered press fires while grounded-or-coyote
-      if b2kActionPressed("jump") then put tNow into sPlayPressMS
-      if sPlayPressMS > 0 and tNow - sPlayPressMS <= sPlayBuffer then
-         if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= sPlayCoyote) then
-            put 0 - sPlayJumpSpd into tVY
-            put true into sPlayJumping
-            put false into sPlayGrounded   -- airborne from this frame on
-            put 0 into sPlayGroundMS       -- consume coyote
-            put 0 into sPlayPressMS        -- consume the buffer
+         -- climb ENTRY. UP grabs only when the zone continues well
+         -- above the head (standing ON the ledge a zone pokes through,
+         -- UP must jump, not re-grab); DOWN grabs only in the air
+         -- (drop through the deck or walk off, then hold DOWN to catch
+         -- the ladder -- grounded DOWN means duck).
+         if tMoveY is not 0 and sPlayHurtCtl is not true then
+            if tMoveY < 0 then
+               put b2kPlayerLadderTop(tPX, tPY) into tLadTop
+               if tLadTop is not empty and tLadTop < tPY - 40 then
+                  put true into sPlayClimb
+               end if
+            else
+               if sPlayGrounded is not true and b2kPlayerInLadder(tPX, tPY) then
+                  put true into sPlayClimb
+               end if
+            end if
+            if sPlayClimb is true then
+               b2SetGravityScale tB, 0
+               put false into sPlayJumping
+               put false into tJumpPress   -- the grab consumes the press
+               put 0 into sPlayPressMS     -- ...and any buffered one
+               -- NOTE: a pending drop window is left to its own expiry.
+               -- Forcing it closed here would restore the filter while
+               -- the capsule still straddles the deck it just dropped
+               -- through, and the one-sided push-out would pop the
+               -- climber back on top -- the straddle check knows better.
+            end if
          end if
       end if
-      -- jump-cut: releasing while still rising from OUR jump shortens it
-      if sPlayJumping and tVY < 0 and b2kActionReleased("jump") then
-         put tVY * sPlayJumpCut into tVY
-         put false into sPlayJumping
+      if sPlayClimb is true then
+         -- on the ladder: the moveY axis drives y, x moves at half speed
+         put tMoveY * sPlayClimbSpd into tVY
+         put tAxis * sPlayMoveSpd / 2 into tTarget
+         put sPlayAccelA * tDT into tStep
+         if tVX < tTarget then
+            put min(tTarget, tVX + tStep) into tVX
+         else
+            put max(tTarget, tVX - tStep) into tVX
+         end if
+         put true into tWrite
+      else
+         -- DUCK / DROP: grounded DOWN ducks (vx decays to 0); add a
+         -- JUMP press while standing on a ONE-WAY chain and the player
+         -- drops through it instead. The press is consumed either way
+         -- -- on solid ground down+jump just ducks, per the classics.
+         if sPlayGrounded is true and tMoveY > 0 then
+            put true into tDuck
+            if tJumpPress is true then
+               if sPlayGroundShape is not empty then
+                  if b2kHasBit(b2ShapeFilterCategory(sPlayGroundShape), kOneWayBit) then
+                     b2kPlayerDropStart tNow
+                     put false into sPlayGrounded
+                     put 0 into sPlayGroundMS   -- no coyote off a drop
+                     put 2 into sPlayAir        -- reads airborne at once
+                     put false into tDuck
+                  end if
+               end if
+               put false into tJumpPress
+            end if
+         end if
+         -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
+         if tDuck is true then
+            put 0 into tTarget
+         else
+            put tAxis * sPlayMoveSpd into tTarget
+         end if
+         if sPlayGrounded then
+            put sPlayAccelG into tAcc
+         else
+            put sPlayAccelA into tAcc
+         end if
+         put tAcc * tDT into tStep
+         if tVX < tTarget then
+            put min(tTarget, tVX + tStep) into tVX
+         else
+            put max(tTarget, tVX - tStep) into tVX
+         end if
+         put true into tWrite
+         -- jump: a buffered press fires while grounded-or-coyote (a
+         -- duck swallows it: no jumping out of a crouch this wave)
+         if tJumpPress is true then put tNow into sPlayPressMS
+         if tDuck is not true and sPlayPressMS > 0 and tNow - sPlayPressMS <= sPlayBuffer then
+            if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= sPlayCoyote) then
+               put 0 - sPlayJumpSpd into tVY
+               put true into sPlayJumping
+               put false into sPlayGrounded   -- airborne from this frame on
+               put 0 into sPlayGroundMS       -- consume coyote
+               put 0 into sPlayPressMS        -- consume the buffer
+            end if
+         end if
+         -- jump-cut: releasing while still rising from OUR jump shortens it
+         if sPlayJumping and tVY < 0 and b2kActionReleased("jump") then
+            put tVY * sPlayJumpCut into tVY
+            put false into sPlayJumping
+         end if
       end if
    end if
    if sPlayJumping and tVY >= 0 then put false into sPlayJumping   -- apex
@@ -5686,8 +6217,11 @@ command b2kPlayerTick
    -- landing (a ~7px hop: phantom airtime, double land ticks - measured
    -- by the self-test at vy 61 up). Kill it at the source. Slopes are
    -- exempt (|normalX| >= 0.1): running uphill is real upward motion.
+   -- Climbing is exempt too: ladder ascent is real upward motion at the
+   -- ladder's base, where the probe still reads grounded.
    -- External boosts must use b2kPlayerJump, which sets the jump flag.
-   if sPlayGrounded and sPlayJumping is not true and tVY < 0 and abs(sPlayNormX) < 0.1 then
+   if sPlayGrounded and sPlayJumping is not true and sPlayClimb is not true \
+         and tVY < 0 and abs(sPlayNormX) < 0.1 then
       put 0 into tVY
       put true into tWrite
    end if
@@ -5700,31 +6234,53 @@ command b2kPlayerTick
    -- as "land" only after a real airborne stretch (3+ ticks), and a
    -- single ungrounded blip does not even show as airborne -- unless it
    -- is OUR jump, which must read as "jump" on its launch frame.
+   -- Wave 2 overlays: "hurt" while the knockback owns control (its
+   -- landing is silent -- no land tick), "climb" on a ladder, "duck"
+   -- before idle/run/land while DOWN is held on the ground.
    put sPlayState into tPrevState
-   if sPlayGrounded is true then
-      if (tPrevState is "jump" or tPrevState is "fall") and sPlayAir >= 3 then
-         put "land" into sPlayState
+   if sPlayHurtCtl is true then
+      put "hurt" into sPlayState
+      if sPlayGrounded is true then
+         put 0 into sPlayAir
       else
-         if abs(tVX) < 8 then
-            put "idle" into sPlayState
-         else
-            put "run" into sPlayState
-         end if
+         add 1 to sPlayAir
       end if
-      put 0 into sPlayAir
    else
-      add 1 to sPlayAir
-      if sPlayJumping is true or sPlayAir >= 2 then
-         if tVY < 0 then
-            put "jump" into sPlayState
+      if sPlayClimb is true then
+         put "climb" into sPlayState
+         put 0 into sPlayAir
+      else
+         if sPlayGrounded is true then
+            if tDuck is true then
+               put "duck" into sPlayState
+            else
+               if (tPrevState is "jump" or tPrevState is "fall") and sPlayAir >= 3 then
+                  put "land" into sPlayState
+               else
+                  if abs(tVX) < 8 then
+                     put "idle" into sPlayState
+                  else
+                     put "run" into sPlayState
+                  end if
+               end if
+            end if
+            put 0 into sPlayAir
          else
-            put "fall" into sPlayState
+            add 1 to sPlayAir
+            if sPlayJumping is true or sPlayAir >= 2 then
+               if tVY < 0 then
+                  put "jump" into sPlayState
+               else
+                  put "fall" into sPlayState
+               end if
+            end if
          end if
       end if
    end if
    -- animations: only while controlling (manual poses own the art when
-   -- control is off), and never let a vanished art control abort the
-   -- frame -- the loop's ticks share one try block
+   -- control is off; the hurt pose was written by b2kPlayerHurt), and
+   -- never let a vanished art control abort the frame -- the loop's
+   -- ticks share one try block
    if sPlayControl is not true then exit b2kPlayerTick
    if sPlayAnims["idle"] is empty and sPlayAnims["run"] is empty then exit b2kPlayerTick
    try
@@ -5736,10 +6292,14 @@ command b2kPlayerTick
 end b2kPlayerTick
 
 -- Internal: drive the art's animation and facing from the current state.
+-- The Wave 2 states fall back when unmapped: climb borrows the jump
+-- pose, duck borrows idle, hurt borrows fall -- so a game that maps
+-- only the classic five still looks right on a ladder or in a crouch.
 command b2kPlayerShowState pNow, pVX
    local tWant, tAnim, tAKey, tFPS, tFlip
    put sPlayState into tWant
-   if pNow < sPlayHoldMS and tWant is not "jump" and tWant is not "fall" then
+   if pNow < sPlayHoldMS and tWant is not "jump" and tWant is not "fall" \
+         and tWant is not "climb" and tWant is not "duck" and tWant is not "hurt" then
       put empty into tAnim   -- mid land-flourish: leave it playing
    else
       if tWant is "land" and sPlayAnims["land"] is empty then
@@ -5751,6 +6311,19 @@ command b2kPlayerShowState pNow, pVX
          end if
       end if
       put sPlayAnims[tWant] into tAnim
+      if tAnim is empty then
+         switch tWant
+            case "climb"
+               put sPlayAnims["jump"] into tAnim
+               break
+            case "duck"
+               put sPlayAnims["idle"] into tAnim
+               break
+            case "hurt"
+               put sPlayAnims["fall"] into tAnim
+               break
+         end switch
+      end if
    end if
    if tAnim is not empty and tAnim is not sPlayAnimNow then
       b2kSpritePlay sPlayArt, tAnim, (tWant is "land")

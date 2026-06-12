@@ -93,8 +93,8 @@ failure. Run it after **every** `.livecodescript` edit.
 pass" and let the user confirm.
 
 **The self-test harness** (`examples/box2dxt-selftest.livecodescript`) is the runtime safety net:
-~93 deterministic assertions driving the real Kit (paused world + `b2kStepOnce` hand-stepping +
-`b2kInputInject` scripted keys). The workflow for every Kit change: (1) add/extend an assertion
+~122 deterministic assertions (v10) driving the real Kit (paused world + `b2kStepOnce`
+hand-stepping + `b2kInputInject` scripted keys). The workflow for every Kit change: (1) add/extend an assertion
 that captures the new behavior, (2) **bump `kStHarnessV`** (the report header prints it, so a
 stale paste identifies itself), (3) the user clicks RUN ALL TESTS and reports. It has caught five
 real Kit bugs that play-testing missed; score so far is 5 Kit bugs : 5 harness bugs — expect
