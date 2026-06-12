@@ -71,6 +71,16 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     thick side slabs PLUS two-sided wall segments at the exact edges
     PLUS the ceiling, kill floor, and the camera clamped to the same
     box. Boundary bugs now have exactly one home.
+  - **The scroll-shifted-build regression, found and fixed** ("level 1
+    is fundamentally broken"): the restructure briefly called
+    `b2kCamGoto` before any camera bounds existed; an unbounded goto
+    scrolls the empty viewport (centring x=120 means scroll −392), and
+    the entire level then builds INTO a scrolled group — art lands
+    ~400px from its physics (gotcha #12, again). Order law now in the
+    code: build at scroll 0, set bounds (`pfBounds`), only THEN goto.
+    Stale per-level machine refs (the gate, plate, door, checkpoint)
+    are also reset on every rebuild so no tick ever chases a deleted
+    control from the previous level.
 - **Wave 1 — the iconic-feel base: the platformer learns the classics.**
   Springboards, ?-boxes, breakable bricks, a saw power lever and a
   key-and-lock door land in the platformer — entirely on existing Kit

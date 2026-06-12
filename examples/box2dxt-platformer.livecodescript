@@ -371,6 +371,17 @@ command pfStartGame
    if there is a field "pfSplash" then set the visible of field "pfSplash" to true
    put 0 into gPlateHoldMS
    put empty into gPlateLook
+   -- per-level machine refs: a rebuilt level must never tick a deleted
+   -- control's stale long id from the previous one
+   put empty into gGate
+   put empty into gGateSprA
+   put empty into gGateSprB
+   put empty into gPlateX
+   put empty into gDoorX
+   put empty into gDoorWord
+   put empty into gCheckX
+   put empty into gLevelName
+   put 2880 into gLevelW
    -- the indexed enemy/trap tables start the run empty
    put 0 into gSlimeN
    put empty into gSlimeB
@@ -462,9 +473,13 @@ command pfStartGame
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
    -- regular-platformer camera: the hero is LOCKED to screen centre and
-   -- the world scrolls 1:1; the bounds are set per level by pfBounds
+   -- the world scrolls 1:1; the bounds are set per level by pfBounds.
+   -- ORDER LAW (gotcha #12, learned the hard way): NEVER b2kCamGoto
+   -- before the bounds exist - an unbounded goto scrolls the empty
+   -- viewport (120 centred = scroll -392), and every control built
+   -- after that lands SCROLL-SHIFTED: art ~400px away from its
+   -- physics. Build first at scroll 0, bound (pfBounds), THEN goto.
    b2kCamDeadzone 0, 0
-   b2kCamGoto 120, 480   -- open on the spawn point, no startup slide
    -- ===== LEVEL SCENERY (terrain, machines, Wave 1 toys) =====
    -- Built BEFORE the hero so every piece of it layers BEHIND him (he
    -- must walk in front of doors and levers, never vanish). Each level
@@ -480,6 +495,7 @@ command pfStartGame
          put 1 into gLevel
          pfL1Scene
    end switch
+   b2kCamGoto 120, 480   -- bounds exist now: clamps to scroll 0, no slide
    -- ===== the hero ====
    if gAssetsOK is true then
       b2kSheetScale "chars", 0.75
