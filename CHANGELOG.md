@@ -79,9 +79,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     the open doorway exits onto flat ground, so walking through reads
     as walking through. It hides its **crown coin**: jump up INSIDE
     the open door. (OXT rounds: a slime first guarded the unlock
-    threshold — relocated to the bridge–mound gap; then a column flush
+    threshold — relocated to the bridge–mound gap; a column flush
     against the step made the open door a one-tile jump shaft that
-    read as blocked — moved onto the flat.)
+    read as blocked — moved onto the flat; and the door art was
+    created AFTER the hero, so he walked through *behind* it, hidden
+    by the frame — all Wave 1 scenery is now built BEFORE the hero,
+    putting him in front. Later controls draw on top: scenery first,
+    actors after.)
   - **Re-skinned, sprite-only**: thwomps are now chained weights
     (`weight` + `chain` tiles; the chain stays at the perch while the
     weight falls) — and a weight on a chain is **not the player's to

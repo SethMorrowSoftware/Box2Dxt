@@ -89,11 +89,12 @@
 --      stand powers it back up; the key rides the hero's shoulder, the
 --      locked door opens on approach (no pressing-in needed; the body
 --      is disabled AND parked far off-world, and the doorway exits
---      onto FLAT ground - walk straight through), STAYS open through
---      respawns, and the hollow doorway hides the crown coin (jump up
---      inside it); the crate wears the empty-box face but still drags;
---      spike tips show in the pit; the steps past the door are STONE
---      biome.
+--      onto FLAT ground), STAYS open through respawns, and the hero
+--      walks through IN FRONT of the open door art (Wave 1 scenery is
+--      built before him, so it can never cover him); the hollow
+--      doorway hides the crown coin (jump up inside it); the crate
+--      wears the empty-box face but still drags; spike tips show in
+--      the pit; the steps past the door are STONE biome.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -648,6 +649,24 @@ command pfStartGame
          if gCrateSpr is not empty then b2kSpriteBind gCrateSpr, tRef
       end if
    end if
+   -- ===== Wave 1: the iconic toys (springboard, bonk row, lever, ====
+   -- key + locked door). Invisible static HOSTS carry the physics,
+   -- atlas sprites carry the faces, and every verdict is POLLED
+   -- geometry (pfTickSpring/Bonks/Lever/Door) - nothing depends on
+   -- contact events with statics. Built BEFORE the hero on purpose:
+   -- later controls draw on top, so scenery made after him would
+   -- COVER him - the hero must walk IN FRONT of the open door, never
+   -- vanish behind it. Skipped wholesale without the atlas: the
+   -- no-asset fallback level stays frozen at its original 12 coins.
+   if gToysOK is true then
+      pfMakeSpring 240
+      pfMakeBonk "brick", 384
+      pfMakeBonk "box", 448
+      pfMakeBonk "brick", 512
+      pfMakeBonk "box", 576
+      pfMakeLever 3000      -- past the gateway; the sweep saw is in view
+      pfMakeKeyDoor
+   end if
    -- ===== the hero ====
    if gAssetsOK is true then
       b2kSheetScale "chars", 0.75
@@ -708,22 +727,7 @@ command pfStartGame
    pfMakeCoin 1130, 500     -- in the meadow slime's beat (past the bridge)
    pfMakeCoin 4356, 448     -- over the first step (its slime objects)
    pfMakeCoin 4430, 392     -- over the top step, by the flag
-   -- ===== Wave 1: the iconic toys (springboard, bonk row, lever, ====
-   -- key + locked door). Invisible static HOSTS carry the physics, atlas
-   -- sprites carry the faces, and every verdict below is POLLED geometry
-   -- (pfTickSpring/Bonks/Lever/Door) - nothing depends on contact events
-   -- with statics. Skipped wholesale without the atlas: the no-asset
-   -- fallback level stays frozen at its original 12 coins.
-   if gToysOK is true then
-      pfMakeSpring 240
-      pfMakeCoin 240, 230   -- the sky coin: spring up to it
-      pfMakeBonk "brick", 384
-      pfMakeBonk "box", 448
-      pfMakeBonk "brick", 512
-      pfMakeBonk "box", 576
-      pfMakeLever 3000      -- past the gateway; the sweep saw is in view
-      pfMakeKeyDoor
-   end if
+   if gToysOK is true then pfMakeCoin 240, 230   -- the sky coin (spring up)
    -- ===== enemies, traps & critters ====
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
