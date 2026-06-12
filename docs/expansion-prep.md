@@ -7,9 +7,10 @@ that keep the expansion as reliable as the engine underneath it.
 
 | | |
 |---|---|
-| Baseline | Kit + games user-verified; self-test harness **v8, ~96 assertions, all pass** |
+| Baseline | Kit + games user-verified; self-test harness **v9, ~102 assertions, all pass** |
 | Assets | **LANDED (2026-06-11)** — Kenney's iconic platformer family, ~900 frames; Wave 0 catalogue below |
-| Next | **Wave 1 OXT pass** — built 2026-06-11, statically verified (see §7); then Wave 2 |
+| Wave 1 | **COMPLETE — user-verified 2026-06-12** (the three-level platformer; see §7) |
+| Next | **Wave 2** (player actions I) — design in **§9** |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
@@ -171,20 +172,23 @@ to Kit API (`b2kFoe…`).
    breakable bricks + debris, buttons/levers with art, key+lock+door; the
    platformer re-skinned sprite-only (real thwomp art, spike tiles, biome
    ground). *The "it looks like the classics now" wave.*
-   **BUILT 2026-06-11/12** (statically verified; five OXT feedback
-   rounds folded in): the platformer is now a **three-level game** —
-   L1 GREEN HILLS (movement + the toys: springboard, bonk row, one-way
-   bridge, mound, clouds, spike pit), L2 THE WORKS (button gate, saw
-   lever, thwomps, yellow key + the walled door), L3 FROZEN CITADEL
-   (everything on ICE, snow biome, red key + door). Springboards,
-   ?-boxes paying coins, brick debris swept by the kill floor, button
-   art on the polled plate, stand-to-flip lever, chained-weight
-   thwomps (static at rest, **not player-movable**), walled doors
-   whose gates are STRUCTURAL (floor-to-ceiling; the flag and last
-   coins behind them, so wins provably pass through), GOLD-flag
-   win-state clarity with banners, self-counting coin totals, and
-   one-helper world bounds. Harness **v9** adds the door-clearing
-   assertions (user-confirmed all-pass).
+   **COMPLETE — user-verified 2026-06-12.** Shipped as a **three-level
+   platformer**: L1 GREEN HILLS (movement + the toys: springboard, bonk
+   row, one-way bridge, mound, clouds, spike pit), L2 THE WORKS (button
+   gate, saw lever, thwomps, yellow key + the walled door), L3 FROZEN
+   CITADEL (everything on ICE, snow biome, a second saw, red key +
+   door). Springboards, ?-boxes paying coins, POOLED brick debris,
+   button art on the polled plate, stand-to-flip lever, chained-weight
+   thwomps (static at rest, **not player-movable**), walled doors whose
+   gates are STRUCTURAL (floor-to-ceiling; the flag and last coins
+   behind them, so wins provably pass through), GOLD-flag win-state
+   clarity, self-counting coin totals, one-helper world bounds, and a
+   one-snapshot-per-frame hot path. Harness **v9** (door-clearing
+   assertions) user-confirmed all-pass. The wave's laws, all earned in
+   OXT rounds, live in plan.md: gates must be structural; scenery
+   first, actors after; never goto before camera bounds; no
+   sub-capsule slots between statics; pool mid-game effects; park
+   before disable.
    All POLLED geometry + windows (no static-contact events); **zero Kit
    changes, so no harness bump**. Art note: Wave 1 ships in the
    platformer's native 64px family (it has the full switch/spring/
@@ -192,6 +196,9 @@ to Kit API (`b2kFoe…`).
    its 70px grid (Waves 2-3).
 2. **Wave 2 — player actions I:** drop-through, climb (ladders), duck,
    hurt-knockback standard; alien skins selectable in the micro-game.
+   **Design prepared — see §9.** This is the first KIT-TOUCHING wave
+   of the content phase (controller states), so rule 2 applies in
+   full: harness assertions + a `kStHarnessV` bump ride every change.
 3. **Wave 3 — bestiary I:** shelled (kickable!), ghost, bat, mimic,
    pipe plant, crusher-with-faces — into a platformer "haunted" section.
 4. **Wave 4 — liquids:** swim zones + lava + pit dwellers + collapsing
@@ -216,3 +223,115 @@ to Kit API (`b2kFoe…`).
   `b2kSheetScale`; never mix raw grids inside one level.
 - **Sheet memory:** prefer `-default`/70px sources + scale; the `-double`
   and 128px sets are alternates, not defaults.
+
+## 9. Wave 2 design — player actions I (prepared 2026-06-12)
+
+Four controller abilities plus the alien skins. **This wave edits the
+Kit's player module** — the first Kit-touching wave of the content
+phase — so every change lands with self-test assertions and a
+`kStHarnessV` bump (v9 → v10), and the platformer + micro-game are the
+two consumers that prove the API. One PR: Kit + sync + harness +
+games + docs, statically verified, then the OXT rounds.
+
+### 9.1 Drop-through (one-way platforms, downward)
+
+- **Input:** DOWN+JUMP while grounded **on a one-way chain** (plain
+  DOWN means duck, §9.3). On solid ground, DOWN+JUMP just ducks.
+- **Mechanic:** a `dropMs` (~260ms) collision window between the
+  player and one-way chains, per the original sketch. Chains gain a
+  reserved Kit collision category ("the one-way bit"); the window
+  drops that bit from the player's mask, then restores it.
+- **Kit surface:** `dropMs` tuning key; internal state `drop`
+  (renders as `fall`). `b2kChain`/`b2kSmoothGround` tag their chains
+  with the reserved bit.
+- **OPEN QUESTION (resolve first, in the shim):** can a chain's
+  filter be set through the current ABI? If `b2lc` chain creation
+  takes no filter, this wave carries the content phase's first ABI
+  addition (chain filter args + `LC_ABI_VERSION` bump + a
+  `smoke_test.c` assertion). Budget for it.
+- **Grounding interplay:** during the window the ground probe must
+  ignore one-way chains too, or the controller re-grounds mid-drop
+  (the phantom-ground lesson from Phase 3, in reverse).
+- **Where it lands:** L1's bridge (drop to the low road - mind the
+  spike slime) and clouds; L2's breather cloud.
+- **Harness:** stand on a chain platform, inject down+jump, assert
+  the player's y passes below the chain within `dropMs` frames, and
+  that the chain is solid again after (land on it from above).
+
+### 9.2 Climb (ladders)
+
+- **Mechanic:** ladder ZONES are rectangles registered with the
+  controller (`b2kPlayerAddLadder x1,y1,x2,y2`; cleared by
+  `b2kClear` like world state). In-zone + UP/DOWN enters state
+  `climb`: gravity scale 0, velocity-driven y at `climbSpeed`
+  (~160 px/s), x movement allowed at half speed. JUMP exits with a
+  normal jump; leaving the zone restores gravity. Presence is a
+  POLLED point-in-rect test in the tick (doctrine: presence = polls),
+  zero physics objects.
+- **Kit surface:** `b2kPlayerAddLadder`, `climbSpeed` key, `climb`
+  anim slot in `b2kPlayerAnims` (optional: falls back to the jump
+  pose - the beige hero has no climb frames; the ALIENS do).
+- **Art:** `ladder_bottom/middle/top` (old tiles sheet, 64px) as pure
+  decor tiles over the zone; alien `climb1/2` for skins that have it.
+- **Where it lands:** L2 - a ladder up to a new bonus ledge above the
+  gate area (one coin); the micro-game's level 2 exit approach.
+- **Harness:** zone + hand-stepped UP: assert state `climb`, y
+  decreasing, gravity restored on exit; jump-exit produces a jump.
+
+### 9.3 Duck
+
+- **Mechanic:** DOWN while grounded (and not on a chain) enters
+  `duck`: target vx 0 at normal decel, duck anim. No hitbox change in
+  this wave (capsule reshape is Wave 5 - say so in the guide so
+  nobody expects to duck under saws yet).
+- **Kit surface:** `duck` anim slot; state `duck`; no new keys.
+- **Art:** `character_beige_duck` (already in the chars sheet);
+  alien `_duck`.
+- **Harness:** inject down on flat ground: state `duck`, vx decays to
+  0, anim key reported; releasing down returns to idle.
+
+### 9.4 Hurt-knockback standard
+
+- **Mechanic:** `b2kPlayerHurt pFromX` - control off, an away-pop
+  (sign of pFromX picks the direction; `hurtPopX` ~220 / `hurtPopY`
+  ~320 via the jump-style velocity set, exempt from ground-snap),
+  `hurt` anim, control restored after `hurtMs` (~700) **or** first
+  landing after half that, whichever is later; then an invulnerability
+  window (`invulnMs` ~900) during which `b2kPlayerHurt` no-ops and
+  `b2kPlayerHurtIs()` returns true (the game skips hazard checks).
+- **Game split (design decision):** contact damage (slimes' sides,
+  saws, spikes brushed) = KNOCKBACK in place; lethal falls (pits,
+  kill plane) = the existing respawn. The platformer's `pfHurt`
+  becomes the respawn path only; knockback replaces it for contacts.
+  The micro-game adopts the same split - two consumers, per the
+  promotion rule.
+- **Harness:** call `b2kPlayerHurt`, assert control off + away
+  velocity + `b2kPlayerHurtIs()`; step past `hurtMs`, assert control
+  restored; assert a second hurt inside `invulnMs` is a no-op.
+
+### 9.5 Alien skins in the micro-game
+
+- **Philosophy guard:** the micro-game stays ZERO-ASSET. Skins are an
+  OPTIONAL upgrade: if the Spritesheets folder is known (same
+  stack-property dance as the platformer), the start screen offers
+  p-beige + five aliens; otherwise the embedded base64 hero loads as
+  always, silently.
+- **Mechanics bonus:** aliens carry `climb1/2` and `_duck` frames -
+  the micro-game's skin picker is where Wave 2's anims show fully.
+- **Frames (B family, 66x92):** `stand, walk1/2, jump, duck, hurt,
+  front, climb1/2, swim1/2` per colour (swim waits for Wave 4).
+
+### 9.6 Exit criteria
+
+1. Harness v10 all-pass on the user's machine (every new state and
+   window asserted, self-diagnosing messages).
+2. Platformer: drop-through on the L1 bridge, the L2 ladder ledge,
+   duck everywhere, knockback-vs-respawn split live in all three
+   levels.
+3. Micro-game: skin picker (with folder) + knockback split; still
+   runs asset-free.
+4. Docs ride along: kit-reference (new handlers/keys), kit-guide
+   (climb/drop/hurt patterns + the duck caveat), CHANGELOG, plan.md
+   decision log.
+5. No regression: Wave 1's three levels still complete start to
+   finish.

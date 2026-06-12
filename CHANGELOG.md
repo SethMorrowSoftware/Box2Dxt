@@ -39,6 +39,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 1 closed (user-verified 2026-06-12); Wave 2 designed.** The
+  three-level platformer is the wave's verified exit. Wave 2 — player
+  actions I (drop-through, ladder climb, duck, the hurt-knockback
+  standard, optional alien skins in the micro-game) — is fully
+  designed in `docs/expansion-prep.md` §9, including the Kit surface,
+  tuning keys, harness v10 assertions, art inventory, and the open
+  chain-filter ABI question to resolve first.
 - **The platformer is now a THREE-LEVEL game** (user direction: "we
   need three distinct levels for this demo to show off all features").
   Touching a level's gold flag banners "LEVEL N CLEAR!" and builds the
