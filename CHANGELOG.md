@@ -78,14 +78,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     world (the thwomp re-arm path); nothing is deleted mid-loop — and
     the open doorway exits onto flat ground, so walking through reads
     as walking through. It hides its **crown coin**: jump up INSIDE
-    the open door. (OXT rounds: a slime first guarded the unlock
-    threshold — relocated to the bridge–mound gap; a column flush
-    against the step made the open door a one-tile jump shaft that
-    read as blocked — moved onto the flat; and the door art was
-    created AFTER the hero, so he walked through *behind* it, hidden
-    by the frame — all Wave 1 scenery is now built BEFORE the hero,
-    putting him in front. Later controls draw on top: scenery first,
-    actors after.)
+    the open door. (OXT rounds, each a recorded lesson: a slime first
+    guarded the unlock threshold — relocated; a column flush against
+    the step made the open door a one-tile jump shaft that read as
+    blocked — moved onto the flat; door art created after the hero
+    drew OVER him — scenery now builds first, actors after; and the
+    "double-barrel" unlock had an ordering bug — `b2kDisable` ran
+    first, so on an extension build lacking that newer binding its
+    swallowed throw killed the `b2kMoveTo` park behind it. The park
+    (proven by the demo's thwomps on every install) now runs FIRST
+    and the disable rides behind it in its own try. Harness v9 adds
+    `stTestDoorClears`, which asserts both clearing paths and — if an
+    installed extension truly lacks the disable binding — fails with
+    that exact throw message, turning a mystery into a diagnosis.)
   - **Re-skinned, sprite-only**: thwomps are now chained weights
     (`weight` + `chain` tiles; the chain stays at the perch while the
     weight falls) — and a weight on a chain is **not the player's to
@@ -98,9 +103,22 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     tips (placed from measured alpha: tips at y 606, base flush with
     the stage floor), and the level crosses a biome seam at the locked
     door into a STONE finale.
-  - Fifteen coins now (sky coin + two box coins); five new synthesized
-    cues (spring, smash, key, unlock, lever) — still zero asset files
-    for audio.
+  - **Win-state clarity** (user report: "the flag win state is
+    confusing"): every coin lands in one `pfGainCoin`; the LAST one
+    turns the goal flag **GOLD** (`flag_yellow` wave) with a banner +
+    chime — "ready to win" is visible from across the level — and
+    touching the flag short of the total now **buzzes** and banners
+    exactly how many coins remain (throttled; the HUD line repeats
+    it). The red checkpoint flag can no longer be confused with the
+    goal.
+  - **Layout audit** (jump math, v=430/g=600 → 154px apex; spring 620
+    → 320px): all 15 coins verified reachable, every beat passable.
+    One fix fell out: the springboard squatted on the only path out of
+    the spawn — it now hugs the left wall behind the spawn, a
+    discovery toy that blocks nothing.
+  - Fifteen coins now (sky coin + two box coins); six new synthesized
+    cues (spring, smash, key, unlock, lever, deny) — still zero asset
+    files for audio.
 - **Wave 0: the asset pack catalogued; the content roadmap expanded.**
   The uploaded Kenney platformer family (~900 frames, three compatible
   sets) is fully inventoried in `docs/expansion-prep.md`: six 70px

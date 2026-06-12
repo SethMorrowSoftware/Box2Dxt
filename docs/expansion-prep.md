@@ -178,8 +178,10 @@ to Kit API (`b2kFoe…`).
    lever, key + lock + door on the flat before the stone steps (opens
    on approach; the body is disabled AND parked off-world; crown coin
    inside the open doorway), thwomps as chained weights — static at
-   rest, **not player-movable** — and the crate wearing the empty-box
-   face.
+   rest, **not player-movable** — the crate wearing the empty-box
+   face, and win-state clarity (the goal flag turns GOLD on the last
+   coin; early flag touches buzz with a remaining-count banner).
+   Harness **v9** adds the door-clearing assertions.
    All POLLED geometry + windows (no static-contact events); **zero Kit
    changes, so no harness bump**. Art note: Wave 1 ships in the
    platformer's native 64px family (it has the full switch/spring/

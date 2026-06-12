@@ -27,8 +27,9 @@
 --           R restarts · ESC pauses · M mutes the (synthesized) sound
 --
 -- THE LEVEL, left to right (every beat holds a coin):
---           meadow: the SPRINGBOARD (boing - a sky coin floats high
---           above it) and the BONK ROW (brick, ?-box, brick, ?-box:
+--           meadow: the SPRINGBOARD hugging the left wall behind the
+--           spawn (boing - a sky coin floats high above it; it blocks
+--           no path) and the BONK ROW (brick, ?-box, brick, ?-box:
 --           headbutt the boxes for coins, SMASH the bricks to debris) -
 --           one-way BRIDGE over a spike slime (never stomp it!) - the
 --           slope MOUND - two CLOUD steps with the fly - the SPIKE PIT
@@ -95,6 +96,11 @@
 --      doorway hides the crown coin (jump up inside it); the crate
 --      wears the empty-box face but still drags; spike tips show in
 --      the pit; the steps past the door are STONE biome.
+--  11. WIN-STATE CLARITY: collecting the LAST coin turns the goal flag
+--      GOLD with a banner + chime ("go touch it to WIN"); touching the
+--      flag short of the total BUZZES and banners how many coins
+--      remain (throttled; the HUD repeats the hint). The red flag at
+--      the checkpoint only marks respawn - it never wins.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -117,6 +123,7 @@ local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
 local gHasKey, gKeySpr, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB
 local gDebrisN, gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
 local gBlockChainA, gBlockChainB, gBlockFace
+local gGoalSpr, gNoticeUntil, gFlagNoteMS
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -267,6 +274,7 @@ function pfLoadSheets
    b2kAnimDef "foes", "spikewalk", "slime_spike_walk_a,slime_spike_walk_b", 4, true
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
    b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
+   b2kAnimDef "tiles", "wavegold", "flag_yellow_a,flag_yellow_b", 4, true
    b2kAnimDef "tiles", "coinpop", "coin_gold_side,coin_gold,coin_gold_side", 14, false
    b2kAnimDef "tiles", "checkwave", "flag_red_a,flag_red_b", 4, true
    b2kAnimDef "foes", "flit", "fly_a,fly_b", 10, true
@@ -280,7 +288,7 @@ end pfLoadSheets
 -- engine plays one clip at a time, so a new cue cuts the previous.
 command pfMakeSounds
    -- guard on the NEWEST cue, so a stack upgraded in place re-synthesizes
-   if b2kSoundIsLoaded("unlock") then exit pfMakeSounds   -- already built
+   if b2kSoundIsLoaded("deny") then exit pfMakeSounds   -- already built
    b2kToneMake "jump", "392,587", 40, 55
    b2kToneMake "coin", "1319,1760", 36, 45
    b2kToneMake "stomp", "165,110", 40, 70
@@ -295,6 +303,7 @@ command pfMakeSounds
    b2kToneMake "key", "988,1319", 45, 45, "sine"
    b2kToneMake "unlock", "392,523,659", 55, 50, "sine"
    b2kToneMake "lever", "294,220", 30, 45
+   b2kToneMake "deny", "196,147", 60, 55
 end pfMakeSounds
 
 command pfEmbedPlaceholder
@@ -406,6 +415,9 @@ command pfStartGame
    put empty into gBlockChainA
    put empty into gBlockChainB
    put empty into gBlockFace
+   put empty into gGoalSpr
+   put 0 into gNoticeUntil
+   put 0 into gFlagNoteMS
    b2kSetup
    b2kSetScale 60
    pfMakeSounds
@@ -417,7 +429,7 @@ command pfStartGame
    put 12 into gCoinsTotal
    if gToysOK is true then put 15 into gCoinsTotal   -- + sky coin, 2 ?-boxes
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts, ESC pauses, M mutes - and the MOUSE DRAGS" & cr & "the box-crate onto the yellow button (chained weights do NOT drag). All " & gCoinsTotal & " coins are reachable." & cr & "Spring up, BONK ?-boxes, smash bricks, STAND at the lever to power the saw down, KEY opens the stone door."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts, ESC pauses, M mutes - and the MOUSE DRAGS" & cr & "the box-crate onto the yellow button (chained weights do NOT drag). All " & gCoinsTotal & " coins are reachable." & cr & "Spring up, BONK ?-boxes, smash bricks, STAND at the lever to stop the saw, KEY opens the door. GOLD flag = WIN."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -659,7 +671,10 @@ command pfStartGame
    -- vanish behind it. Skipped wholesale without the atlas: the
    -- no-asset fallback level stays frozen at its original 12 coins.
    if gToysOK is true then
-      pfMakeSpring 240
+      -- the spring hugs the left wall BEHIND the spawn: a discovery toy
+      -- in plain view that blocks nobody's first steps (at 240 it was a
+      -- hull squatting on the only path out of the spawn)
+      pfMakeSpring 40
       pfMakeBonk "brick", 384
       pfMakeBonk "box", 448
       pfMakeBonk "brick", 512
@@ -727,7 +742,7 @@ command pfStartGame
    pfMakeCoin 1130, 500     -- in the meadow slime's beat (past the bridge)
    pfMakeCoin 4356, 448     -- over the first step (its slime objects)
    pfMakeCoin 4430, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 240, 230   -- the sky coin (spring up)
+   if gToysOK is true then pfMakeCoin 40, 230   -- the sky coin (spring up)
    -- ===== enemies, traps & critters ====
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
@@ -793,7 +808,9 @@ command pfStartGame
    pfMakeThwomp 1, 3600
    pfMakeThwomp 2, 3800
    pfMakeCheckpoint
-   -- ===== the goal flag ====
+   -- ===== the goal flag (BLUE while locked; GOLD once every coin =====
+   -- is held - pfGainCoin swaps it, so "ready to win" is visible from
+   -- across the level, and the red checkpoint can't be mistaken for it)
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
       b2kSpriteNew "tiles", "flag_blue_a", 4500, 416
@@ -802,6 +819,7 @@ command pfStartGame
          set the uPfGoalFlag of tRef to true
          b2kSpritePlay tRef, "wave"
          b2kAddSensor tRef, "ball"
+         put tRef into gGoalSpr
       end if
    end if
    if tRef is empty then
@@ -826,6 +844,7 @@ command pfStartGame
             set the uPfGoalFlag of tRef to true
             b2kSpritePlay tRef, "wave"
             b2kAddSensor tRef, "ball"
+            put tRef into gGoalSpr
          end if
       end if
       if tRef is empty then
@@ -1129,6 +1148,31 @@ command pfMakeKeyDoor
    put the result into gDoorSprB
 end pfMakeKeyDoor
 
+-- Every coin (sensor pickup or ?-box payout) lands here. The moment the
+-- LAST one arrives, the goal flag turns GOLD and a banner + chime send
+-- you to it - the win gate is a state you can SEE, never a surprise
+-- delivered only at the flag.
+command pfGainCoin
+   add 1 to gCoins
+   b2kSound "coin"
+   if gCoins >= gCoinsTotal then
+      if gGoalSpr is not empty and b2kSheetHasFrame("tiles", "flag_yellow_a") then
+         b2kSpritePlay gGoalSpr, "wavegold"
+      end if
+      pfNotice "ALL " & gCoinsTotal & " COINS - the flag is GOLD, go touch it to WIN!", 2800
+      b2kSound "check"
+   end if
+end pfGainCoin
+
+-- A big centre-screen banner on the splash field; b2kFrame hides it
+-- when its time is up (no send-in timers to leak across resets).
+command pfNotice pText, pMS
+   if there is no field "pfSplash" then exit pfNotice
+   set the text of field "pfSplash" to pText
+   set the visible of field "pfSplash" to true
+   put the milliseconds + pMS into gNoticeUntil
+end pfNotice
+
 command pfChromeFront
    local tN, tC
    put the number of controls of this card into tN
@@ -1178,6 +1222,11 @@ on b2kFrame
    if gHurtLock is not true then
       set the itemDelimiter to comma
       if (item 2 of b2kPosition(gHero)) > 780 then pfHurt
+   end if
+   -- centre-screen banners (pfNotice) expire here
+   if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then
+      put 0 into gNoticeUntil
+      if there is a field "pfSplash" then set the visible of field "pfSplash" to false
    end if
    -- the Kit's player controller moved/animated the hero before this
    -- handler ran; the example reads its one-tick land state and the
@@ -1487,8 +1536,7 @@ command pfTickBonks
    put the milliseconds + 220 into gBonkMS
    if gBonkKind[tBest] is "box" then
       put true into gBonkUsed[tBest]
-      add 1 to gCoins
-      b2kSound "coin"
+      pfGainCoin
       if gBonkSpr[tBest] is not empty then b2kSpriteSetFrame gBonkSpr[tBest], "block_empty"
       b2kCamShake 2, 90
       -- the payout pops above the box (the same one-shot as a pickup)
@@ -1604,8 +1652,17 @@ command pfTickDoor
       if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
       b2kSpriteSetFrame gDoorSprB, "door_open"
       if there is a graphic "pf_doorHost" then
-         b2kDisable the long id of graphic "pf_doorHost"
+         -- PARK FIRST: b2kMoveTo is the workhorse the demo's thwomps
+         -- prove on every install. b2kDisable rides BEHIND it in its
+         -- own try: if an installed extension build predates the
+         -- disable binding, its throw must not kill the park (exactly
+         -- that ordering bug shipped earlier - disable threw first,
+         -- the park never ran, and the cleared door stayed solid).
          b2kMoveTo the long id of graphic "pf_doorHost", 4032, -2000
+         try
+            b2kDisable the long id of graphic "pf_doorHost"
+         catch tErr
+         end try
       end if
    end if
 end pfTickDoor
@@ -1634,8 +1691,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
    end if
    if the uPfCoinFlag of pSensorCtrl is true then
       local tPopAt
-      add 1 to gCoins
-      b2kSound "coin"
+      pfGainCoin
       put b2kPosition(pSensorCtrl) into tPopAt   -- world px, from its body
       b2kSpriteRemove pSensorCtrl
       try
@@ -1671,7 +1727,15 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       if gCoins >= gCoinsTotal or gCamOK is not true then
          pfWin
       else
+         -- short of the total: the flag BUZZES and banners the count,
+         -- throttled so standing on it does not spam (the HUD line
+         -- repeats the hint until the count is full)
          put true into gFlagHint
+         if the milliseconds > gFlagNoteMS then
+            put the milliseconds + 2600 into gFlagNoteMS
+            b2kSound "deny"
+            pfNotice "Locked: " & (gCoinsTotal - gCoins) & " more coin(s) to find - then return here to WIN", 2400
+         end if
       end if
    end if
 end b2kSensorEnter
@@ -1800,6 +1864,9 @@ command pfWin
    if gWinLock is true then exit pfWin
    put true into gWinLock
    put true into gWon
+   -- the win dialogue owns the screen: any banner yields immediately
+   put 0 into gNoticeUntil
+   if there is a field "pfSplash" then set the visible of field "pfSplash" to false
    put (the milliseconds - gRunStart) div 1000 into tSecs
    put tSecs into gWinSecs
    b2kSound "win"
