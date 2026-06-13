@@ -39,6 +39,56 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 3 — bestiary I + HAUNTED HOLLOW (statically verified; awaiting
+  the OXT pass).** Six enemy archetypes and a FOURTH platformer level,
+  all example-side: **zero Kit changes, so harness v10 stays the
+  baseline** (rule 2). Design in `docs/expansion-prep.md` §10.
+  - **Snail (kickable shell):** joins the slime family as a kind chain
+    `snail -> shell -> shellslide <-> shell` — a stomp shells it, any
+    touch of the parked shell kicks it sliding 520px/s away from the
+    hero, the slide is a per-frame velocity assert that REVERSES off
+    walls (collapsed-vx poll) and bowls over every ground foe it
+    reaches; stomp the slide to park it; its sides knock back.
+  - **Bat:** roosts static under an overhang (`bat_hang`), drops when
+    the hero nears, then flies as a gravity-scale-0 body — patrol vx +
+    a proportional swoop to head height + sine bob. One stomp.
+  - **Mimic:** a `grassBlock` sitting dead still in the PURPLE biome
+    (wrong on purpose — the tell); wakes within ~90px and lunges in
+    short hops on a cooldown. One stomp.
+  - **Piranha burrows:** bodiless sprites rising from drawn mouth
+    holes on a down/rise/bite/sink cycle with the classic mercy (never
+    rises while the hero stands over the mouth). Unkillable.
+  - **Ghost:** bodiless, drifts through terrain toward the hero at
+    ~80px/s ONLY while he faces away (`b2kPlayerFacing` poll); eye
+    contact freezes it in the shy pose. The level's pressure.
+  - **Faced crushers:** `pfMakeThwomp` gains a `pFaced` flag that puts
+    the `block_idle/fall/rest` mood art (which was already the
+    machine's fallback) on L4's thwomps on purpose.
+  - **L4 "HAUNTED HOLLOW"** (3712px, 10 coins): purple biome, the
+    mimic field, the snail+slime bowling lane, the bat bar, a pit, two
+    burrows, the ghost over the back half, a faced-crusher pair around
+    a new **lava strip** hazard (`pfMakeLava`: knockback, never
+    respawn), purple steps, the flag. Win moves to `gLevel >= 4`; all
+    copy says FOUR. Spook art (`enemies.png`, the Family C sheet)
+    loads as sheet `spooks` at `b2kSheetScale 0.9` per the mixed-grids
+    law and is OPTIONAL — without it the four spook makers skip
+    silently and L4 still completes.
+- **Wave 2 closed (user-verified 2026-06-13; harness v10 all-pass) +
+  the level SPACING pass.** The one OXT note from the wave: the new
+  beats cramped the layouts. Every level stretched so each interactive
+  beat gets ~100px of clear air — now a layout law:
+  - **L1** 3712→3968px: the cloud steps no longer start at the mound's
+    foot (+128px gap), the spike pit and second act shift out, the
+    fence/bush decor moves off the bonk row.
+  - **L2** 2816→3072px: the Wave 2 ladder/ledge becomes its own beat
+    past the gate (the checkpoint used to stand INSIDE the ladder
+    tiles and the lever 6px off them); checkpoint → 1000, lever →
+    1120, saws → 1240/1430, thwomps → 1640/1840, wall → 2464.
+  - **L3** 3520→3776px: the bonk-row → saw → pit corridor was
+    wall-to-wall (gaps of 0–18px); the saw now has 88/56px of air and
+    everything from the checkpoint out shifts +128.
+  - **Micro-game L2** 1536→1664px: the exit pillar + ladder move past
+    the sweeper's reach (its far end used to graze the ladder base).
 - **New example: the SLINGSHOT** (`examples/box2dxt-slingshot.livecodescript`)
   — an angry-birds-style tower-knockdown game, and the example that shows
   the PHYSICS CORE carrying a whole game by itself (the platformer and

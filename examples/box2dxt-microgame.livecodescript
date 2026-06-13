@@ -251,28 +251,29 @@ function mgLevelText pLevel
       put "slab 880,512,1010,576" & cr after t
       put "door 945,478" & cr after t
    else
-      put "bounds 1536,640" & cr after t
+      put "bounds 1664,640" & cr after t
       put "spawn 90,500" & cr after t
       put "text 512,140,LEVEL 2 - hop the pillars... and time the SWEEPER" & cr after t
-      put "text 1250,330,every coin - then the door" & cr after t
+      put "text 1330,330,every coin - then the ladder and the door" & cr after t
       put "slab 0,576,360,640" & cr after t
       put "spike 360,1060,624" & cr after t
       put "slab 470,544,560,640" & cr after t
       put "slab 670,512,760,640" & cr after t
       put "slab 870,544,960,640" & cr after t
-      put "slab 1060,576,1536,640" & cr after t
+      put "slab 1060,576,1664,640" & cr after t
       put "coin 240,515" & cr after t
       put "coin 515,496" & cr after t
       put "coin 715,464" & cr after t
       put "coin 915,496" & cr after t
       put "coin 1180,520" & cr after t
       put "sweep 1080,512,1144,544,1080,1420,900" & cr after t
-      -- the exit PILLAR (Wave 2): taller than before, with a LADDER up
-      -- its left face - climb it (or jump the 96px) to reach the door;
-      -- the sweeper's far end guards the ladder's base, so time it
-      put "slab 1430,480,1530,640" & cr after t
-      put "ladder 1410,450,576" & cr after t
-      put "door 1480,446" & cr after t
+      -- the exit PILLAR (Wave 2): a LADDER up its left face - climb it
+      -- (or jump the 96px) to reach the door. Spacing pass: the pillar
+      -- moved past the sweeper's reach (its far end used to graze the
+      -- ladder's base - cramped reads as unfair)
+      put "slab 1558,480,1658,640" & cr after t
+      put "ladder 1538,450,576" & cr after t
+      put "door 1608,446" & cr after t
    end if
    return t
 end mgLevelText
