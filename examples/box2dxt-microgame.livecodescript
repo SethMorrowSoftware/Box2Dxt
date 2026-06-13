@@ -65,6 +65,7 @@ local gLevel, gCoins, gCoinsTotal, gFalls, gRunStart, gWinSecs
 local gHero, gHeroSpr, gDoor, gDoorOpen, gSpawnX, gSpawnY
 local gHudLast, gHudNextMS, gHurtLock, gBuilding, gPrevState, gWorldW, gWorldH
 local gSwpN, gSwpRef, gSwpC, gSwpA, gSwpP, gSwpY, gSwpW, gSwpH
+local gFishN, gFishRef, gFishX, gFishYC, gFishYA, gFishP, gFishW, gFishH -- Wave 4 pit-dwellers
 local gOuches           -- Wave 2: knockback hits (falls stay falls)
 local gSkin             -- "hero" (embedded) or an alien colour word
 local gSkinsOK          -- true when the aliens atlas loaded (folder known)
@@ -173,7 +174,7 @@ command mgBegin
 end mgBegin
 
 command mgAdvance
-   if gLevel is 1 then
+   if gLevel < 3 then
       -- rebuild OUTSIDE this physics frame: we are inside the sensor
       -- dispatch right now, and tearing the world down mid-frame is
       -- asking for trouble. The short beat also lets the door chime ring.
@@ -185,8 +186,8 @@ end mgAdvance
 
 on mgGoNext
    if gMode is not "play" then exit mgGoNext
-   mgBuild 2
-   b2kPlayerControl true   -- straight into level 2, clocks keep running
+   mgBuild gLevel + 1
+   b2kPlayerControl true   -- straight into the next level, clocks keep running
 end mgGoNext
 
 command mgShowWin
@@ -198,7 +199,7 @@ command mgShowWin
    b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
    b2kSound "win"
    put "Y O U   W I N !" & cr & cr into tMsg
-   put "both levels, every coin" & cr after tMsg
+   put "all three levels, every coin" & cr after tMsg
    put "time " & format("%d:%02d", gWinSecs div 60, gWinSecs mod 60) & "      falls " & gFalls & "      hits " & gOuches & cr & cr after tMsg
    if gFalls is 0 and gOuches is 0 then put "flawless - untouched, never fell" & cr & cr after tMsg
    put "C L I C K   T O   P L A Y   A G A I N" after tMsg
@@ -230,6 +231,8 @@ end mgMakeSounds
 -- sweep l,t,r,b,minx,maxx,period (patrolling proximity hazard) ·
 -- ladder x,y1,y2 (a climb zone at x, y1 top to y2 bottom, rungs drawn
 -- - zero-asset; UP/DOWN climbs, JUMP lets go) ·
+-- water l,t,r,b (Wave 4 SWIM zone: buoyant, UP/DOWN swim, SPACE strokes) ·
+-- fish x,yTop,yBot,period (a pit-dweller bobbing in a pool; knockback) ·
 -- door x,y. Add your own verbs in mgBuild's switch - that IS the
 -- pattern: levels are text, the interpreter is the engine of YOUR game.
 -- =====================================================================
@@ -250,6 +253,26 @@ function mgLevelText pLevel
       put "coin 740,372" & cr after t
       put "slab 880,512,1010,576" & cr after t
       put "door 945,478" & cr after t
+   else if pLevel is 3 then
+      -- Wave 4: THE DEEP. A wide pool you DIVE into; the only coins are
+      -- underwater, so the door makes you swim. UP/DOWN swim, SPACE strokes
+      -- (repeatable, no ground), and a stroke + hold-right HOPS you out onto
+      -- the far bank. A pit-dweller fish patrols the middle (knockback).
+      put "bounds 2000,640" & cr after t
+      put "spawn 90,320" & cr after t
+      put "text 1000,104,LEVEL 3 - THE DEEP: dive in and SWIM for every coin" & cr after t
+      put "text 330,208,UP / DOWN swim - SPACE strokes you up and out" & cr after t
+      put "slab 0,360,900,640" & cr after t
+      put "water 900,360,1500,640" & cr after t
+      put "slab 900,612,1500,640" & cr after t
+      put "coin 1000,452" & cr after t
+      put "coin 1140,540" & cr after t
+      put "coin 1290,452" & cr after t
+      put "coin 1430,540" & cr after t
+      put "fish 1210,404,560,1300" & cr after t
+      put "slab 1500,360,2000,640" & cr after t
+      put "coin 1700,326" & cr after t
+      put "door 1900,328" & cr after t
    else
       put "bounds 1664,640" & cr after t
       put "spawn 90,500" & cr after t
@@ -301,6 +324,14 @@ command mgBuild pLevel
    put empty into gSwpY
    put empty into gSwpW
    put empty into gSwpH
+   put 0 into gFishN
+   put empty into gFishRef
+   put empty into gFishX
+   put empty into gFishYC
+   put empty into gFishYA
+   put empty into gFishP
+   put empty into gFishW
+   put empty into gFishH
    try
       b2kClear
    catch tErr
@@ -358,6 +389,7 @@ command mgBuild pLevel
       b2kAnimDef "aliens", "jump", tCh & "_jump.png", 1, true
       b2kAnimDef "aliens", "duck", tCh & "_duck.png", 1, true
       b2kAnimDef "aliens", "climb", tCh & "_climb1.png," & tCh & "_climb2.png", 6, true
+      b2kAnimDef "aliens", "swim", tCh & "_swim1.png," & tCh & "_swim2.png", 6, true
       b2kAnimDef "aliens", "hit", tCh & "_hurt.png", 2, false
       b2kAnimDef "aliens", "hurtpose", tCh & "_hurt.png", 2, true
       put "aliens" into tSheet
@@ -491,6 +523,50 @@ command mgBuild pLevel
                add 24 to tY
             end repeat
             break
+         case "water"
+            -- Wave 4: a SWIM zone. The Kit's controller polls it (buoyant
+            -- gravity, capped sink, UP/DOWN swim, SPACE strokes up). Drawn
+            -- as a blue pool with a surface line; coins/fish placed AFTER
+            -- it in the level text layer on top (later controls draw over).
+            b2kPlayerAddWater item 1 of tArgs, item 2 of tArgs, item 3 of tArgs, item 4 of tArgs
+            put "mg_water" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "rectangle"
+            set the rect of it to item 1 of tArgs, item 2 of tArgs, item 3 of tArgs, item 4 of tArgs
+            set the filled of it to true
+            set the backgroundColor of it to "92,150,205"
+            set the foregroundColor of it to "60,110,170"
+            b2kCamAdopt the long id of graphic tName
+            put "mg_surf" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "line"
+            set the points of it to (item 1 of tArgs) & comma & (item 2 of tArgs) & cr & (item 3 of tArgs) & comma & (item 2 of tArgs)
+            set the lineSize of it to 3
+            set the foregroundColor of it to "165,210,245"
+            b2kCamAdopt the long id of graphic tName
+            break
+         case "fish"
+            -- Wave 4: a PIT-DWELLER. A bodiless mover (the sweep pattern,
+            -- vertical) bobbing between yTop and yBot - it breaches the
+            -- surface and dives, a knockback graze on contact (never a
+            -- respawn). Args: x,yTop,yBot,period.
+            put "mg_fish" & the milliseconds & random(100000) into tName
+            create graphic tName
+            set the style of it to "oval"
+            set the rect of it to (item 1 of tArgs) - 22, ((item 2 of tArgs) + (item 3 of tArgs)) / 2 - 13, (item 1 of tArgs) + 22, ((item 2 of tArgs) + (item 3 of tArgs)) / 2 + 13
+            set the filled of it to true
+            set the backgroundColor of it to "95,165,150"
+            set the foregroundColor of it to "40,90,85"
+            b2kCamAdopt the long id of graphic tName
+            add 1 to gFishN
+            put the long id of graphic tName into gFishRef[gFishN]
+            put item 1 of tArgs into gFishX[gFishN]
+            put ((item 2 of tArgs) + (item 3 of tArgs)) / 2 into gFishYC[gFishN]
+            put ((item 3 of tArgs) - (item 2 of tArgs)) / 2 into gFishYA[gFishN]
+            put max(1, item 4 of tArgs) into gFishP[gFishN]
+            put 36 into gFishW[gFishN]
+            put 30 into gFishH[gFishN]
+            break
          case "door"
             put "mg_door" & the milliseconds & random(100000) into tName
             create graphic tName
@@ -534,9 +610,9 @@ command mgBuild pLevel
    -- knockback pose is the LOOPING "hurtpose", never the one-shot
    -- "hit" whose finish message means RESPAWN here.
    if gSkin is "hero" then
-      b2kPlayerAnims "idle", "walk", "jump", "jump", "", "", "", "hurtpose"
+      b2kPlayerAnims "idle", "walk", "jump", "jump", "", "", "", "hurtpose", ""
    else
-      b2kPlayerAnims "idle", "walk", "jump", "jump", "", "duck", "climb", "hurtpose"
+      b2kPlayerAnims "idle", "walk", "jump", "jump", "", "duck", "climb", "hurtpose", "swim"
    end if
    b2kPlayerSet "moveSpeed", 250
    b2kPlayerSet "jumpSpeed", 460
@@ -593,6 +669,7 @@ on b2kFrame
    -- kill plane: off the bottom = a fall
    if gHurtLock is not true and (item 2 of b2kPosition(gHero)) > gWorldH + 120 then mgHurt
    mgTickSweeps
+   mgTickFish
    -- the door unlocks itself the moment the last coin is taken
    if gDoorOpen is not true and gDoor is not empty and gCoinsTotal > 0 and gCoins >= gCoinsTotal then
       put true into gDoorOpen
@@ -642,6 +719,27 @@ command mgTickSweeps
       end if
    end repeat
 end mgTickSweeps
+
+-- Wave 4 pit-dwellers: each fish bobs VERTICALLY between its yTop and yBot
+-- (the sweep pattern on the y axis), breaching the surface and diving. A
+-- graze knocks back (mgOuch), never respawns -- the Wave 2 hazard split.
+command mgTickFish
+   local i, tMS, tY, tHX, tHY, tPos
+   if gFishN is 0 or gFishN is empty then exit mgTickFish
+   set the itemDelimiter to comma
+   put the milliseconds into tMS
+   put b2kPosition(gHero) into tPos
+   put item 1 of tPos into tHX
+   put item 2 of tPos into tHY
+   repeat with i = 1 to gFishN
+      if gFishRef[i] is empty then next repeat
+      put gFishYC[i] + gFishYA[i] * sin(tMS / gFishP[i]) into tY
+      b2kSpriteMoveTo gFishRef[i], gFishX[i], tY
+      if gHurtLock is not true and gMode is "play" then
+         if abs(tHX - gFishX[i]) < gFishW[i] and abs(tHY - tY) < gFishH[i] then mgOuch gFishX[i]
+      end if
+   end repeat
+end mgTickFish
 
 -- =====================================================================
 -- Events: pickups, hazards, the door
