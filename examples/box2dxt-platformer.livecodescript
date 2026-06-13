@@ -8,9 +8,9 @@
 -- no movement code of its own), atlas spritesheets with named
 -- animations and scaling, the camera (follow + bounds + shake),
 -- synthesized sound, the full Wave 1 toy box, the Wave 3 bestiary, and
--- now the kit's JOINT + dynamics systems (a swinging wrecking ball, a
--- sagging rope bridge, a rolling boulder, an exploding barrel) plus
--- four more enemy species. Collect EVERY coin on a level (the goal
+-- now the kit's JOINT + dynamics systems (a sagging rope bridge, a
+-- rolling boulder, an exploding barrel) plus four more enemy species.
+-- Collect EVERY coin on a level (the goal
 -- flag turns GOLD), touch the flag, and the next level builds; level
 -- 4's flag is the win. Anything without sheet art falls back to plain
 -- graphics, so all four levels run even with no asset folder (the coin
@@ -45,9 +45,8 @@
 --            the sweeping saw down - running past never flips it),
 --            both SAWS, a crawling WORM, THWOMP ALLEY (chained weights:
 --            ride the second one's head to the top coin; grab the
---            YELLOW KEY between them), the DEMOLITION BAY (a swinging
---            WRECKING BALL on a motorised hinge - dash beneath it), a
---            breather cloud with its bee, and the WALLED DOOR - a stone
+--            YELLOW KEY between them), a breather cloud with its bee,
+--            and the WALLED DOOR - a stone
 --            curtain to the ceiling, so the stone steps, the coins and
 --            the FLAG behind it are reachable ONLY through the door.
 --   LEVEL 3  FROZEN CITADEL (4416px) - everything at once,
@@ -58,13 +57,13 @@
 --            saw under a snow cloud) with a ROLLING BOULDER that slides
 --            the ice head-on (leap it), the red walled door, snow
 --            steps, the final flag.
---   LEVEL 4  HAUNTED HOLLOW (4288px) - WAVE 3's bestiary in
+--   LEVEL 4  HAUNTED HOLLOW (4480px) - WAVE 3's bestiary in
 --            the purple biome: a MIMIC field (grass blocks that do
 --            not belong - they wake and lunge), the SNAIL (stomp it
 --            into a SHELL, kick the shell, bowl the slime down the
 --            path), two BATS roosting under a stone bar (they drop
---            and swoop), a pit, two PIRANHA burrows (they will not
---            rise under your feet), the shy GHOST that only drifts
+--            and swoop), a pit, a long FOUR-burrow PIRANHA row (they
+--            will not rise under your feet), the shy GHOST that drifts
 --            closer while you face away, two faced CRUSHERS around a
 --            LAVA strip, a smouldering FIRE SLIME, the POWDER KEG bay
 --            (an explosive barrel + woodpile, scattered by b2kExplode),
@@ -173,14 +172,11 @@
 --      never be outrun). L1 ROPE BRIDGE: the planks SAG under you and
 --      spring back; cross by walking (a moving body needs no carry); a
 --      slip into the chasm respawns you at the new CHECKPOINT on the
---      brink (a quick retry, never a whole-level replay). L2 WRECKING
---      BALL: a
---      weight on a chain hinged to the ceiling, swept by a motor; the
---      bar passes through you (b2kNoCollide) - only the HEAD hurts;
---      dash beneath it when it is up. L3 BOULDER: it slides the icy flat
---      head-on, JUMPING lifts you clear (it passes through you and is
---      judged by a poll); it recycles forever, never reaching the kill
---      floor. L4 POWDER KEG: coming near lights the fuse, then
+--      brink (a quick retry, never a whole-level replay). L3 BOULDER (a
+--      sprite-faced stone): it slides the icy flat head-on, JUMPING lifts
+--      you clear (it passes through you and is judged by a poll); it
+--      recycles forever, never reaching the kill floor. L4 POWDER KEG:
+--      coming near lights the fuse, then
 --      b2kExplode scatters the woodpile and knocks you if you lingered;
 --      retreat on the telegraph. NEW SPECIES (slime FAMILY, native foes
 --      art): a fast MOUSE (L1), a slow WORM (L2), a LADYBUG (L1/L3), a
@@ -223,17 +219,15 @@ local gHasKey, gKeySpr, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB
 local gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
 local gBlockChainA, gBlockChainB, gBlockFace
 local gGoalSpr, gNoticeUntil, gFlagNoteMS
--- Polish pass (the showcase round): four classic mechanisms riding the
+-- Polish pass (the showcase round): three classic mechanisms riding the
 -- Kit's JOINT + dynamics subsystems (all example-side, zero Kit change).
--- The SWINGING WRECKING BALL is a hinge+motor spun arm with a weight
--- head; the ROPE BRIDGE is a row of plank bodies hinged end-to-end and
--- pinned to the world; the ROLLING BOULDER is a dynamic ball gravity
--- carries down a ramp (re-parked on a cycle, never near the kill floor);
--- the EXPLOSIVE BARREL fires b2kExplode to scatter a crate barricade.
+-- The ROPE BRIDGE is a row of plank bodies hinged end-to-end and pinned
+-- to the world; the ROLLING BOULDER is a dynamic ball (a sprite-faced
+-- stone) re-parked on a cycle so it never nears the kill floor; the
+-- EXPLOSIVE BARREL fires b2kExplode to scatter a woodpile of crates.
 -- Per-critter speed + squash frame let the slime FAMILY carry the new
 -- walker species (mouse, worm, ladybug, fire slime) with no new tables.
 local gSlimeSpeed, gSlimeFlat
-local gPendN, gPendArm, gPendHead, gPendPivX, gPendPivY, gPendLen, gPendHurtR
 local gBoulderN, gBoulderB, gBoulderSpr, gBoulderHomeX, gBoulderHomeY
 local gBoulderResetX, gBoulderT, gBoulderHurtR, gBoulderGrace, gBoulderVX
 local gBarrelN, gBarrelB, gBarrelSpr, gBarrelX, gBarrelY, gBarrelState, gBarrelT
@@ -594,13 +588,6 @@ command pfStartGame
    put 0 into gNoticeUntil
    put 0 into gFlagNoteMS
    -- the showcase round's mechanism tables start the run empty/idle
-   put 0 into gPendN
-   put empty into gPendArm
-   put empty into gPendHead
-   put empty into gPendPivX
-   put empty into gPendPivY
-   put empty into gPendLen
-   put empty into gPendHurtR
    put 0 into gBoulderN
    put empty into gBoulderB
    put empty into gBoulderSpr
@@ -1449,38 +1436,6 @@ end pfMakeGoal
 -- world (b2kTeardown) and the spawned ones with b2kClear.
 -- =====================================================================
 
--- A swinging WRECKING BALL: a thin bar hinged to the WORLD at its top
--- (b2kHinge with an empty second control pins to the world) and spun by
--- a motor at a steady rate; gravity is parked so the sweep is even. The
--- bar passes the hero (b2kNoCollide) - the WEIGHT HEAD is the hazard,
--- found each frame at pivot + 2*(centre - pivot) (no angle read, so the
--- y-flip can't bite) and polled. Hang it in OPEN AIR: a sweep that meets
--- terrain would jam the motor.
-command pfMakePendulum pCX, pTopY, pLen, pSpinDeg
-   local tArm, tJ, tIdx
-   add 1 to gPendN
-   put gPendN into tIdx
-   b2kSpawnBox pCX, pTopY + pLen div 2, 12, pLen, "64,62,74"
-   put the result into tArm
-   if tArm is empty then exit pfMakePendulum
-   b2kSetGravityScale tArm, 0          -- the motor owns the spin, not gravity
-   b2kSetDensity tArm, 0.5
-   b2kNoCollide tArm, gHero            -- the bar is intangible; the head hurts
-   b2kHinge tArm, empty, pCX, pTopY    -- pin the top to the world = a pivot
-   put the result into tJ
-   b2kMotor tJ, pSpinDeg, 6000         -- a steady sweep, in degrees/sec
-   put empty into gPendHead[tIdx]
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "weight") then
-      b2kSpriteNew "tiles", "weight", pCX, pTopY + pLen
-      put the result into gPendHead[tIdx]
-   end if
-   put tArm into gPendArm[tIdx]
-   put pCX into gPendPivX[tIdx]
-   put pTopY into gPendPivY[tIdx]
-   put pLen into gPendLen[tIdx]
-   put 40 into gPendHurtR[tIdx]
-end pfMakePendulum
-
 -- A sagging ROPE BRIDGE: pPlanks dynamic plank bodies hinged end-to-end,
 -- the first and last pinned to the world at the posts (pL / pR), so the
 -- span dips under the hero's weight and springs back. Spawned boxes are
@@ -1531,6 +1486,16 @@ command pfMakeBoulder pX, pY, pResetX, pVX
    b2kNoCollide tRef, gHero
    b2kSetStatic tRef                  -- parked until the timer releases it
    put tRef into gBoulderB[tIdx]
+   put empty into gBoulderSpr[tIdx]
+   -- sprite-only: a stone FACE over the (now invisible) ball. A boulder is
+   -- round, so it needs no rotation - the sprite reads right at any spin,
+   -- and a bound sprite tracks the body through roll and re-park alike.
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "rock") then
+      set the visible of tRef to false
+      b2kSpriteNew "tiles", "rock", pX, pY
+      put the result into gBoulderSpr[tIdx]
+      if gBoulderSpr[tIdx] is not empty then b2kSpriteBind gBoulderSpr[tIdx], tRef
+   end if
    put pX into gBoulderHomeX[tIdx]
    put pY into gBoulderHomeY[tIdx]
    put pResetX into gBoulderResetX[tIdx]
@@ -1538,7 +1503,6 @@ command pfMakeBoulder pX, pY, pResetX, pVX
    put the milliseconds + 2200 into gBoulderT[tIdx]   -- first run after the splash
    put 40 into gBoulderHurtR[tIdx]
    put the milliseconds + 2400 into gBoulderGrace[tIdx]
-   put empty into gBoulderSpr[tIdx]
 end pfMakeBoulder
 
 -- An EXPLOSIVE BARREL: a bomb face over an invisible static host. The
@@ -1779,9 +1743,8 @@ end pfL1Cast
 -- =====================================================================
 -- LEVEL 2 - "THE WORKS" (3712px). The machines: crate + button gate,
 -- the Wave 2 ladder to its bonus ledge, the stand-to-flip saw lever,
--- both saws, a crawling WORM, chained thwomps, then the DEMOLITION BAY -
--- a swinging WRECKING BALL (a weight on a motor-driven hinge) you dash
--- beneath - the yellow key and the walled door, stone steps to the flag.
+-- both saws, a crawling WORM, chained thwomps, a breather cloud with its
+-- bee, then the yellow key and the walled door, stone steps to the flag.
 -- Spaced so every machine is its own beat (round-6: cramped reads as
 -- "what IS all this?").
 -- =====================================================================
@@ -1876,8 +1839,14 @@ command pfL2Scene
          if gCrateSpr is not empty then b2kSpriteBind gCrateSpr, tRef
       end if
    end if
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
-      pfTile "sign", 2352, 512        -- a way-marker into the demolition bay
+   -- the open run between the breather cloud and the walled door: decor,
+   -- a breather, not a beat (a swinging-bar machine once stood here, but a
+   -- swinging arm cannot be sprite art and the kit is sprite-only for game
+   -- visuals - so it was cut rather than left as a plain graphic)
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
+      pfTile "sign", 2400, 512
+      pfTile "bush", 2560, 512
+      pfTile "mushroom_brown", 2860, 512
    end if
    if gToysOK is true then
       pfMakeLever 1120        -- stand here to power the sweep saw down
@@ -1892,7 +1861,7 @@ command pfL2Cast
    pfMakeCoin 1840, 64      -- ride the second thwomp's head to the top
    pfMakeCoin 1990, 500     -- the worm's beat, before the breather cloud
    pfMakeCoin 2210, 392     -- on the breather cloud (the bee patrols it)
-   pfMakeCoin 2680, 500     -- under the WRECKING BALL: dash in as it swings up
+   pfMakeCoin 2680, 500     -- on the open run between the cloud and the door
    pfMakeCoin 3460, 448     -- over the first stone step
    pfMakeCoin 3534, 392     -- over the top step, by the flag
    if gToysOK is true then pfMakeCoin 3152, 510   -- inside the door passage
@@ -1944,11 +1913,6 @@ command pfL2Cast
    pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_normal_move_a", "wormwalk", empty, 22, 26, "210,120,170", -2
    pfMakeThwomp 1, 1640
    pfMakeThwomp 2, 1840
-   -- the demolition bay's WRECKING BALL: a weight on a chain hinged to the
-   -- ceiling and swept by a motor - the kit's HINGE + joint system, dark
-   -- in the demo until now. Time the dash beneath it. Built in the CAST so
-   -- the hero exists for b2kNoCollide (the bar passes him; the head hurts).
-   pfMakePendulum 2680, 280, 280, 75
    pfMakeCheckpoint 1000
    pfMakeGoal 3604, 416
 end pfL2Cast
@@ -2076,39 +2040,39 @@ command pfL3Cast
 end pfL3Cast
 
 -- =====================================================================
--- LEVEL 4 - "HAUNTED HOLLOW" (4288px). Wave 3's bestiary in the purple
+-- LEVEL 4 - "HAUNTED HOLLOW" (4480px). Wave 3's bestiary in the purple
 -- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
--- whose kicked shell bowls a slime over, the BAT overhang, a pit, two
--- PIRANHA burrows, the GHOST stalking the back half, a pair of faced
--- CRUSHERS around a lava strip, a smouldering FIRE SLIME, then the
+-- whose kicked shell bowls a slime over, the BAT overhang, a pit, a long
+-- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a pair of
+-- faced CRUSHERS around a lava strip, a smouldering FIRE SLIME, then the
 -- POWDER KEG bay (an explosive barrel + woodpile, scattered by
 -- b2kExplode), purple steps to the flag. Every beat spaced per the
 -- layout law (~100px+ of clear air).
 -- =====================================================================
 command pfL4Scene
-   local tX
+   local tX, tH, tHi
    put "HAUNTED HOLLOW (spooky!)" into gLevelName
-   pfBounds 4288
+   pfBounds 4480
    pfSlab "pf_ground1", 0, 576, 1856, 640
-   pfSlab "pf_ground2", 2048, 576, 4288, 640
-   pfSlab "pf_plat1", 3872, 512, 4064, 576
-   pfSlab "pf_plat2", 4064, 448, 4192, 576
+   pfSlab "pf_ground2", 2048, 576, 4480, 640
+   pfSlab "pf_plat1", 4064, 512, 4256, 576
+   pfSlab "pf_plat2", 4256, 448, 4384, 576
    -- the bat overhang: a stone bar the bats roost under
    pfSlab "pf_batbar", 1472, 256, 1856, 320
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_purple_block_top") then
       repeat with tX = 0 to 1792 step 64
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
-      repeat with tX = 2048 to 4224 step 64
+      repeat with tX = 2048 to 4416 step 64
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
-      pfTile "terrain_purple_block_top_left", 3872, 512
-      pfTile "terrain_purple_block_top", 3936, 512
-      pfTile "terrain_purple_block_top_right", 4000, 512
-      pfTile "terrain_purple_block_top", 4064, 448
-      pfTile "terrain_purple_block_top", 4128, 448
-      pfTile "terrain_purple_block_center", 4064, 512
-      pfTile "terrain_purple_block_center", 4128, 512
+      pfTile "terrain_purple_block_top_left", 4064, 512
+      pfTile "terrain_purple_block_top", 4128, 512
+      pfTile "terrain_purple_block_top_right", 4192, 512
+      pfTile "terrain_purple_block_top", 4256, 448
+      pfTile "terrain_purple_block_top", 4320, 448
+      pfTile "terrain_purple_block_center", 4256, 512
+      pfTile "terrain_purple_block_center", 4320, 512
       pfTile "terrain_purple_horizontal_left", 1472, 256
       pfTile "terrain_purple_horizontal_middle", 1536, 256
       pfTile "terrain_purple_horizontal_middle", 1600, 256
@@ -2119,40 +2083,39 @@ command pfL4Scene
    else
       pfShowSlabs true
    end if
-   -- the piranha burrow mouths, drawn by the SCENE so every later
-   -- sprite (the plants included) layers above them
-   create graphic "pf_hole1"
-   set the style of it to "oval"
-   set the rect of it to 2344, 566, 2392, 590
-   set the filled of it to true
-   set the backgroundColor of it to "30,24,40"
-   b2kCamAdopt the long id of graphic "pf_hole1"
-   create graphic "pf_hole2"
-   set the style of it to "oval"
-   set the rect of it to 2568, 566, 2616, 590
-   set the filled of it to true
-   set the backgroundColor of it to "30,24,40"
-   b2kCamAdopt the long id of graphic "pf_hole2"
+   -- the FOUR piranha burrow mouths (the row is twice as long now), drawn
+   -- by the SCENE so every later sprite (the plants included) layers above
+   set the itemDelimiter to comma
+   put 0 into tHi
+   repeat for each item tH in "2340,2490,2640,2790"
+      add 1 to tHi
+      create graphic ("pf_hole" & tHi)
+      set the style of it to "oval"
+      set the rect of it to tH - 24, 566, tH + 24, 590
+      set the filled of it to true
+      set the backgroundColor of it to "30,24,40"
+      b2kCamAdopt the long id of graphic ("pf_hole" & tHi)
+   end repeat
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "grass_purple") then
       pfTile "grass_purple", 320, 512
       pfTile "grass_purple", 1100, 512
       pfTile "grass_purple", 2240, 512
-      pfTile "grass_purple", 2820, 512
-      pfTile "grass_purple", 3760, 512
+      pfTile "grass_purple", 2920, 512
+      pfTile "grass_purple", 3960, 512
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
-      pfTile "sign", 3392, 512        -- a way-marker into the powder-keg bay
+      pfTile "sign", 2980, 512        -- a way-marker past the piranha row
    end if
-   pfMakeLava 2944, 3072
+   pfMakeLava 3136, 3264
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
    -- explosive barrel amid a woodpile of loose crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
    -- demo until now) scatters the pile and clears the barrel.
-   pfMakeBarrel 3540, 550
-   b2kSpawnBox 3450, 556, 40, 40, "120,80,45"
-   b2kSpawnBox 3496, 556, 40, 40, "120,80,45"
-   b2kSpawnBox 3586, 556, 40, 40, "120,80,45"
-   b2kSpawnBox 3632, 556, 40, 40, "120,80,45"
+   pfMakeBarrel 3732, 550
+   b2kSpawnBox 3642, 556, 40, 40, "120,80,45"
+   b2kSpawnBox 3688, 556, 40, 40, "120,80,45"
+   b2kSpawnBox 3778, 556, 40, 40, "120,80,45"
+   b2kSpawnBox 3824, 556, 40, 40, "120,80,45"
 end pfL4Scene
 
 command pfL4Cast
@@ -2162,13 +2125,14 @@ command pfL4Cast
    pfMakeCoin 1255, 500     -- the slime its shell can bowl over
    pfMakeCoin 1664, 500     -- under the bat roost - they drop
    pfMakeCoin 1952, 430     -- mid-air over the pit
-   pfMakeCoin 2480, 480     -- between the burrows: time the bites
-   pfMakeCoin 2704, 470     -- past the second burrow
-   pfMakeCoin 3008, 470     -- over the lava, between the crushers
-   pfMakeCoin 3300, 500     -- the fire slime's beat, fresh from the lava
-   pfMakeCoin 3700, 500     -- past the powder keg (the lure: mind the blast)
-   pfMakeCoin 3968, 448     -- over the first purple step
-   pfMakeCoin 4096, 392     -- over the top step, by the flag
+   pfMakeCoin 2415, 480     -- threading the FOUR-burrow piranha row: time
+   pfMakeCoin 2565, 480     -- the bites and snatch a coin between each pair
+   pfMakeCoin 2715, 480
+   pfMakeCoin 3200, 470     -- over the lava, between the crushers
+   pfMakeCoin 3492, 500     -- the fire slime's beat, fresh from the lava
+   pfMakeCoin 3892, 500     -- past the powder keg (the lure: mind the blast)
+   pfMakeCoin 4160, 448     -- over the first purple step
+   pfMakeCoin 4288, 392     -- over the top step, by the flag
    pfMakeSnail 1, 980, 880, 1080
    pfMakeSlime 2, "normal", 1255, 1180, 1330, 576
    -- split patrol bands: two flying BODIES sharing one band would
@@ -2177,16 +2141,20 @@ command pfL4Cast
    pfMakeBat 4, 1728, 344, 1690, 1840
    pfMakeMimic 5, 448
    pfMakeMimic 6, 640
-   pfMakePlant 1, 2368
-   pfMakePlant 2, 2592
+   -- the piranha row, twice as long now: FOUR burrows cycling on their
+   -- own staggered timers (the ghost stalks this whole stretch)
+   pfMakePlant 1, 2340
+   pfMakePlant 2, 2490
+   pfMakePlant 3, 2640
+   pfMakePlant 4, 2790
    pfMakeGhost 2240, 360
-   pfMakeThwomp 1, 2848, true   -- the faced CRUSHERS guard the lava
-   pfMakeThwomp 2, 3168, true
+   pfMakeThwomp 1, 3040, true   -- the faced CRUSHERS guard the lava
+   pfMakeThwomp 2, 3360, true
    -- a FIRE SLIME smoulders along past the lava (spike-type: it hurts
    -- from every side - you do not stomp a slime that is on fire)
-   pfMakeCritter 7, "spike", 3300, 3232, 3360, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
+   pfMakeCritter 7, "spike", 3492, 3424, 3560, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
    pfMakeCheckpoint 2160
-   pfMakeGoal 4156, 416
+   pfMakeGoal 4348, 416
 end pfL4Cast
 
 
@@ -2308,7 +2276,6 @@ on b2kFrame
    pfTickDoor
    pfTickPlants
    pfTickGhost
-   pfTickPendulum
    pfTickBoulder
    pfTickBarrel
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
@@ -2937,30 +2904,6 @@ command pfTickDoor
    end if
 end pfTickDoor
 
--- The wrecking ball's sweep: one position read per arm finds the head at
--- pivot + 2*(centre - pivot) (the arm is hinged at its TOP, so its centre
--- orbits the pivot at half the head's radius - pure vectors, no angle, so
--- the screen y-flip cannot flip the maths). Re-place the head sprite there
--- and poll the hero against it. O(1) out when no pendulum exists.
-command pfTickPendulum
-   local i, tPos, tCx, tCy, tEx, tEy
-   if gPendN is 0 or gPendN is empty then exit pfTickPendulum
-   set the itemDelimiter to comma
-   repeat with i = 1 to gPendN
-      if gPendArm[i] is empty then next repeat
-      put b2kPosition(gPendArm[i]) into tPos
-      if tPos is empty then next repeat
-      put item 1 of tPos into tCx
-      put item 2 of tPos into tCy
-      put gPendPivX[i] + 2 * (tCx - gPendPivX[i]) into tEx
-      put gPendPivY[i] + 2 * (tCy - gPendPivY[i]) into tEy
-      if gPendHead[i] is not empty then b2kSpriteMoveTo gPendHead[i], tEx, tEy
-      if gHurtLock is not true then
-         if abs(gHeroPX - tEx) < gPendHurtR[i] and abs(gHeroPY - tEy) < gPendHurtR[i] then pfOuch tEx
-      end if
-   end repeat
-end pfTickPendulum
-
 -- The boulder cycle: parked static at the top, released on a timer with a
 -- nudge + rumble, re-parked the moment it rolls past the reset line (so it
 -- never reaches the kill floor). The hit is a POLL - it rolls THROUGH the
@@ -2991,6 +2934,9 @@ command pfTickBoulder
             or (gBoulderVX[i] < 0 and tX < gBoulderResetX[i]) or tY > 700 then
          b2kSetStatic gBoulderB[i]
          b2kMoveTo gBoulderB[i], gBoulderHomeX[i], gBoulderHomeY[i]
+         -- a STATIC body is not sprite-synced (the thwomp re-arm lesson),
+         -- so re-place the bound stone face by hand back at the top
+         if gBoulderSpr[i] is not empty then b2kSpriteMoveTo gBoulderSpr[i], gBoulderHomeX[i], gBoulderHomeY[i]
          put tMS + 1500 into gBoulderT[i]
          next repeat
       end if

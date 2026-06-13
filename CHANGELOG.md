@@ -42,30 +42,31 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 - **Platformer SHOWCASE polish round (statically verified; awaiting the
   OXT pass).** A pre-Wave-4 pass over the platformer to make it a
   polished demo of the kit *as it stands today* — longer, better-spaced
-  levels, four classic mechanisms drawn from the kit's biggest UNUSED
-  subsystem (JOINTS + dynamics), and four new enemy species for variety.
+  levels, classic mechanics drawn from the kit's biggest UNUSED subsystem
+  (JOINTS + dynamics), and four new enemy species for variety.
   **All example-side: zero Kit changes, so harness v10 stays the
   baseline** (rule 2 is conditional on Kit edits).
-  - **Four classic mechanisms, all polled HAZARDS the player times or
-    avoids (never rides — so none needs the platform-carry a later wave
-    adds):** a swinging **WRECKING BALL** (L2 — a weight on a chain
-    hinged to the world by `b2kHinge` and swept by `b2kMotor`; the bar is
-    `b2kNoCollide` with the hero and the head is found flip-proof at
-    `pivot + 2*(centre - pivot)`); a sagging **ROPE BRIDGE** (L1 — six
-    dynamic planks hinged end-to-end and pinned to the world at both
-    posts, the canonical Box2D bridge, with a new checkpoint at the
-    brink); a **ROLLING BOULDER** (L3 — a dynamic ball that slides the
-    icy flat head-on, recycled on a cycle so it never reaches the kill
-    floor, judged by a poll since it passes through the hero); an
-    **EXPLOSIVE BARREL** (L4 — a fuse-then-`b2kExplode` powder keg that
-    scatters a woodpile of loose crates and knocks the lingering hero).
+  - **Three sprite-faithful mechanisms, all polled HAZARDS the player
+    times or avoids (never rides — so none needs the platform-carry a
+    later wave adds):** a sagging **ROPE BRIDGE** (L1 — six dynamic planks
+    hinged end-to-end and pinned to the world at both posts, the canonical
+    Box2D bridge, with a new checkpoint at the brink); a **ROLLING
+    BOULDER** (L3 — a sprite-faced dynamic ball that slides the icy flat
+    head-on, recycled on a cycle so it never reaches the kill floor,
+    judged by a poll since it passes through the hero); an **EXPLOSIVE
+    BARREL** (L4 — a fuse-then-`b2kExplode` powder keg that scatters a
+    woodpile of loose crates). A swinging wrecking ball was prototyped and
+    **cut**: a rotating arm cannot be sprite art (gotcha 23), and the kit
+    is sprite-only for game visuals — so it was removed rather than left
+    as a plain graphic.
   - **Four new enemy species** on the existing slime FAMILY (native 64px
     foes art, a new `pfMakeCritter` maker + per-row speed/squash-frame
     columns): a fast **mouse**, a slow **worm**, a **ladybug** (+ a
     flying one via the mover table), and a **fire slime** by the L4 lava
-    (spike-type — hurts from every side).
+    (spike-type — hurts from every side). L4's PIRANHA row is now twice as
+    long (four burrows on staggered timers).
   - **Longer, re-spaced levels** (the layout law: widen before squeezing
-    a beat in): L1 3968→4800, L2 3072→3712, L3 3776→4416, L4 3712→4288.
+    a beat in): L1 3968→4800, L2 3072→3712, L3 3776→4416, L4 3712→4480.
     Existing verified beats are preserved in place; each level's walled-
     door / steps finale shifts as a whole to open a bay for its new
     mechanism. More decor (bushes, mushrooms, signs) and a live
