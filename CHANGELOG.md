@@ -66,14 +66,22 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     (spike-type — hurts from every side). L4's PIRANHA row is now twice as
     long (four burrows on staggered timers).
   - **Longer, re-spaced levels** (the layout law: widen before squeezing
-    a beat in), grown across two passes to L1 5568, L2 4032, L3 4800,
-    L4 4864. Existing verified beats are preserved in place; each level's
-    walled-door / steps finale shifts as a whole. New classic acts: a L1
-    "meadow gauntlet" (a one-way cloud over two slimes + a darting fly); a
-    L2 second machine bay (a third chained crusher + an always-on sweeping
-    saw); a L3 second snow cloud + a final glacier slime; a L4 "bowling
-    lane" (a second snail to shell-and-kick + a slime to bowl over). More
-    decor and a live `awake N/M` body count on the HUD.
+    a beat in), grown across three passes to L1 6336, L2 4672, L3 5312,
+    L4 5376. Existing verified beats are preserved in place; each level's
+    walled-door / steps finale shifts as a whole. Classic acts stacked on:
+    L1 a "meadow gauntlet" + a "homeward run" (chained thwomp + snail under
+    a cloud); L2 second and third machine bays (chained crushers + an
+    always-on saw + a snail); L3 a second snow cloud + a glacier slime,
+    snail and thwomp; L4 a "bowling lane" plus a snail-heavy finale.
+    **Snails are now used liberally** (L4 carries four), the **classic
+    chained-weight thwomps are back** in every level alongside L4's faced
+    crushers, and there are more clouds, coins, and decor throughout. A
+    live `awake N/M` body count on the HUD.
+  - **The L3 ice boulder slides ALL THE WAY** in its direction now (per
+    the user: "it is an ice block/boulder") - lower friction so it coasts
+    far, and its reset line moved off-screen-left (past the run, below the
+    camera edge) so a fresh one comes from the source rather than the old
+    one teleporting back in place.
   - **User review fixes:** the SNAIL faced backwards relative to travel
     (gotcha 26 — its sheet art is mirrored vs the slimes'); a per-row
     `gSlimeFlip` polarity column inverts only its flip. The barrel's
