@@ -3052,7 +3052,7 @@ end pfTickBarrel
 -- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
-   local tKPos
+   local tKPos, tPopAt
    if pSensorCtrl is empty then exit b2kSensorEnter
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfKeyFlag of pSensorCtrl is true then
@@ -3070,7 +3070,6 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       exit b2kSensorEnter
    end if
    if the uPfCoinFlag of pSensorCtrl is true then
-      local tPopAt
       pfGainCoin
       put b2kPosition(pSensorCtrl) into tPopAt   -- world px, from its body
       b2kSpriteRemove pSensorCtrl
