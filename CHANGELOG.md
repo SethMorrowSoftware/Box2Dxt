@@ -66,11 +66,20 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     (spike-type — hurts from every side). L4's PIRANHA row is now twice as
     long (four burrows on staggered timers).
   - **Longer, re-spaced levels** (the layout law: widen before squeezing
-    a beat in): L1 3968→4800, L2 3072→3712, L3 3776→4416, L4 3712→4480.
-    Existing verified beats are preserved in place; each level's walled-
-    door / steps finale shifts as a whole to open a bay for its new
-    mechanism. More decor (bushes, mushrooms, signs) and a live
-    `awake N/M` body count on the HUD round it out.
+    a beat in), grown across two passes to L1 5568, L2 4032, L3 4800,
+    L4 4864. Existing verified beats are preserved in place; each level's
+    walled-door / steps finale shifts as a whole. New classic acts: a L1
+    "meadow gauntlet" (a one-way cloud over two slimes + a darting fly); a
+    L2 second machine bay (a third chained crusher + an always-on sweeping
+    saw); a L3 second snow cloud + a final glacier slime; a L4 "bowling
+    lane" (a second snail to shell-and-kick + a slime to bowl over). More
+    decor and a live `awake N/M` body count on the HUD.
+  - **User review fixes:** the SNAIL faced backwards relative to travel
+    (gotcha 26 — its sheet art is mirrored vs the slimes'); a per-row
+    `gSlimeFlip` polarity column inverts only its flip. The barrel's
+    woodpile is now real CRATES (the `block_empty` sprite over invisible
+    fixed-rotation boxes, the L2 gate-crate pattern — a blast slides them
+    without the sprite-cannot-rotate problem) instead of brown rectangles.
 - **Wave 3 — bestiary I + HAUNTED HOLLOW (statically verified; awaiting
   the OXT pass).** Six enemy archetypes and a FOURTH platformer level,
   all example-side: **zero Kit changes, so harness v10 stays the
