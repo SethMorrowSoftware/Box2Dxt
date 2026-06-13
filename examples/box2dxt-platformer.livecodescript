@@ -1819,8 +1819,10 @@ command pfL4Cast
    pfMakeCoin 3520, 392     -- over the top step, by the flag
    pfMakeSnail 1, 980, 880, 1080
    pfMakeSlime 2, "normal", 1255, 1180, 1330, 576
-   pfMakeBat 3, 1568, 344, 1490, 1840
-   pfMakeBat 4, 1728, 344, 1490, 1840
+   -- split patrol bands: two flying BODIES sharing one band would
+   -- collide mid-bar and fight their velocity asserts (jitter)
+   pfMakeBat 3, 1568, 344, 1490, 1650
+   pfMakeBat 4, 1728, 344, 1690, 1840
    pfMakeMimic 5, 448
    pfMakeMimic 6, 640
    pfMakePlant 1, 2368
@@ -2076,8 +2078,12 @@ command pfTickSlimes
       put item 2 of tPos into tY
       switch gSlimeKind[i]
          case "shell"
-            -- a parked shell: brake flat so nothing creeps it around
-            b2kSetVelocity tBody, 0, item 2 of b2kVelocity(tBody)
+            -- a parked shell needs NO per-frame work: the transitions
+            -- already wrote velocity 0, and a per-frame b2kSetVelocity
+            -- would WAKE it every tick (the Kit wakes on velocity
+            -- writes by design) - a sleeping shell costs the solver
+            -- nothing. The case must exist, or the default branch
+            -- would hand it patrol velocity.
             break
          case "shellslide"
             -- the bowling ball: a per-frame velocity ASSERT (the
@@ -2119,8 +2125,9 @@ command pfTickSlimes
             break
          case "mimic"
             -- disguised and DEAD STILL until the hero is close; the
-            -- wake is the tell (grass has no business in this biome)
-            if abs(gHeroPX - tX) < 90 and abs(gHeroPY - tY) < 160 then
+            -- wake is the tell (grass has no business in this biome).
+            -- 110px = ~0.4s of warning even at full sprint.
+            if abs(gHeroPX - tX) < 110 and abs(gHeroPY - tY) < 160 then
                put "mimiclive" into gSlimeKind[i]
                b2kSetDynamic tBody
                if gSlimeSpr[i] is not empty then b2kSpriteSetFrame gSlimeSpr[i], "grassBlock_jump.png"
