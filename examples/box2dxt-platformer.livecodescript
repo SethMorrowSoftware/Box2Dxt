@@ -198,7 +198,7 @@ local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
 local gSlimeT          -- Wave 3: per-row timer (mimic hop cooldowns)
-local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT
+local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT, gBlockX
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
 local gMovHurtW, gMovHurtH, gMovFlip
 -- Wave 3 (bestiary I): the piranha burrows, the ghost, the spooks sheet
@@ -537,6 +537,7 @@ command pfStartGame
    put empty into gBlockSpr
    put empty into gBlockState
    put empty into gBlockT
+   put empty into gBlockX
    put 0 into gMovN
    put empty into gMovSpr
    put empty into gMovX
@@ -1011,6 +1012,7 @@ command pfMakeThwomp pIdx, pX, pFaced, pTileFace
    if the visible of graphic tName is true then b2kCamAdopt tBody
    if pIdx > gBlockN then put pIdx into gBlockN
    put tBody into gBlockB[pIdx]
+   put pX into gBlockX[pIdx]   -- perch x cached: an armed block never moves
    put "armed" into gBlockState[pIdx]
    put 0 into gBlockT[pIdx]
 end pfMakeThwomp
@@ -2543,7 +2545,7 @@ end pfWipeStage
 -- The game tick
 -- =====================================================================
 on b2kFrame
-   local tHud, tPos
+   local tHud, tPos, tHS
    if gHero is empty then exit b2kFrame
    -- THE HERO SNAPSHOT, once per frame: position and controller state
    -- feed the kill plane, edge failsafe, sound cues and every pf tick
@@ -2616,10 +2618,11 @@ on b2kFrame
    else
       put (the milliseconds - gRunStart) div 1000 into tSecs
    end if
-   put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & b2kPlayerState() & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
+   put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
    if gHasKey is true then put "   [KEY]" after tHud
    if gCamOK is true then
-      put "   |   view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
+      put the hScroll of b2kCamGroup() into tHS   -- read the scroll once
+      put "   |   view " & tHS & "-" & (tHS + 1024) after tHud
    end if
    if not b2kIsAwake(gHero) then put "   [ASLEEP?!]" after tHud   -- must never show
    if b2kSoundStatus() is not empty then put "   [audio: " & b2kSoundStatus() & "]" after tHud
@@ -2709,7 +2712,7 @@ end pfTickGate
 -- shell; bat -> batfly; mimic -> mimiclive. (The stomp/kick/hurt
 -- VERDICTS live in b2kContact - this tick is pure steering.)
 command pfTickSlimes
-   local i, j, tX, tY, tPos, tBody, tVX, tMS
+   local i, j, tX, tY, tPos, tBody, tVX, tMS, tVel
    set the itemDelimiter to comma
    put the milliseconds into tMS
    repeat with i = 1 to gSlimeN
@@ -2741,10 +2744,11 @@ command pfTickSlimes
             -- the bowling ball: a per-frame velocity ASSERT (the
             -- player-controller pattern) keeps the slide at speed; a
             -- wall hit shows as collapsed vx -> reverse, keep rolling
-            put item 1 of b2kVelocity(tBody) into tVX
+            put b2kVelocity(tBody) into tVel   -- read once, reuse for the vy pass-through
+            put item 1 of tVel into tVX
             if gSlimeDir[i] > 0 and tVX < 60 then put -520 into gSlimeDir[i]
             if gSlimeDir[i] < 0 and tVX > -60 then put 520 into gSlimeDir[i]
-            b2kSetVelocity tBody, gSlimeDir[i], item 2 of b2kVelocity(tBody)
+            b2kSetVelocity tBody, gSlimeDir[i], item 2 of tVel
             if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
             -- bowl over any ground foe it reaches (shells are immune
             -- to each other; this loop only runs while one slides)
@@ -2915,21 +2919,25 @@ command pfTickThwomps
    repeat with i = 1 to gBlockN
       put gBlockB[i] into tBody
       if tBody is empty then next repeat
+      if gBlockState[i] is "armed" then
+         -- a STATIC block resting at a fixed perch (x cached, y always 200):
+         -- trigger on the cached x + the hero snapshot, NO per-frame FFI.
+         -- Only the 0-1 blocks actually in motion below pay b2kPosition.
+         if abs(tHX - gBlockX[i]) < 42 and tHY > 200 then
+            put "falling" into gBlockState[i]
+            b2kSetDynamic tBody
+            b2kSetGravityScale tBody, 1.8   -- slam, not float
+            -- (face swaps only exist on the block_* fallback art; the
+            -- chained weight is one frame and the chain stays behind)
+            if gBlockFace[i] is true then b2kSpriteSetFrame gBlockSpr[i], "block_fall"
+         end if
+         next repeat
+      end if
       put b2kPosition(tBody) into tPos
       if tPos is empty then next repeat
       put item 1 of tPos into tBX
       put item 2 of tPos into tBY
       switch gBlockState[i]
-         case "armed"
-            if abs(tHX - tBX) < 42 and tHY > tBY then
-               put "falling" into gBlockState[i]
-               b2kSetDynamic tBody
-               b2kSetGravityScale tBody, 1.8   -- slam, not float
-               -- (face swaps only exist on the block_* fallback art; the
-               -- chained weight is one frame and the chain stays behind)
-               if gBlockFace[i] is true then b2kSpriteSetFrame gBlockSpr[i], "block_fall"
-            end if
-            break
          case "falling"
             pfBlockUndersideCheck tHX, tHY, tBX, tBY
             if abs(item 2 of b2kVelocity(tBody)) < 4 and tBY > 320 then
@@ -2960,6 +2968,7 @@ command pfTickThwomps
                b2kSetStatic tBody
                b2kMoveTo tBody, tBX, 200
                b2kSpriteMoveTo tBody, tBX, 200   -- statics are not body-synced
+               put tBX into gBlockX[i]   -- keep the cached perch honest after any drift
                -- re-seat the chain under the weight (defensive: the rise
                -- is vertical, but any drift would betray the chain)
                if gBlockChainA[i] is not empty then b2kSpriteMoveTo gBlockChainA[i], tBX, 76

@@ -88,6 +88,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     so the alley never blocks the path for good). The four levels each grew
     ~1280px for the new gauntlets; the walled-door/steps finales shifted as
     whole units; coins and their totals self-count as the level builds.
+  - **A per-frame optimization pass** against the kit's performance
+    playbook (FFI round-trips are the second-biggest per-frame cost). The
+    new crusher rows exposed that `pfTickThwomps` read each block's
+    position over the FFI *every frame even while ARMED* — a static body
+    resting at a fixed perch that cannot move until triggered — so it now
+    caches each perch x (`gBlockX`) and gates the armed→falling trigger on
+    that + the shared hero snapshot, paying `b2kPosition` only for the 0–1
+    blocks actually in motion (≈8 → ≈1 FFI/frame, identical trigger). Plus
+    the sliding-shell tick reads its velocity once (not twice) and the HUD
+    reuses the snapshotted player state and a single camera-scroll read. An
+    Opus audit confirmed every other per-frame tick was already at the
+    playbook's standard (O(1) idle gates, hoisted clocks, shared snapshot,
+    change-gated writes, sleep-friendly).
   - **The L3 ice boulder slides ALL THE WAY** in its direction now (per
     the user: "it is an ice block/boulder") - lower friction so it coasts
     far, and its reset line moved off-screen-left (past the run, below the
