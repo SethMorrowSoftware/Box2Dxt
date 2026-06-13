@@ -20,35 +20,47 @@
 --      stack property; Shift+Reset re-asks; Cancel = placeholder shapes).
 --
 -- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
---           full) · the MOUSE DRAGS the crate (chained weights are NOT
---           draggable) · R restarts the CURRENT level · ESC pauses ·
---           M mutes the (synthesized) sound
+--           full) · DOWN/S ducks - and DOWN+JUMP on a one-way deck
+--           (bridge, clouds) DROPS THROUGH it · UP/DOWN at the L2
+--           ladder CLIMBS (JUMP lets go) · the MOUSE DRAGS the crate
+--           (chained weights are NOT draggable) · R restarts the
+--           CURRENT level · ESC pauses · M mutes the synthesized sound
 --
--- THE THREE LEVELS (every beat holds a coin; the flag advances):
---   LEVEL 1  GREEN HILLS (3712px, 12 coins) - movement + the toys: the
+-- THE FOUR LEVELS (every beat holds a coin; the flag advances):
+--   LEVEL 1  GREEN HILLS (3968px, 12 coins) - movement + the toys: the
 --            SPRINGBOARD mid-meadow (sky coin above; a 42px hop for
 --            non-bouncers), the BONK ROW (headbutt ?-boxes, SMASH bricks
 --            into debris), the one-way BRIDGE over a spike slime, the
 --            slope MOUND, one-way CLOUDS with the fly, the bee, the
 --            SPIKE PIT - then the second act: two more slimes and a
 --            rest cloud on the long run to the flag.
---   LEVEL 2  THE WORKS (2816px, 8 coins) - the machines: drag the
+--   LEVEL 2  THE WORKS (3072px, 9 coins) - the machines: drag the
 --            CRATE onto the yellow BUTTON to open the gate (coin in
---            the gateway), the red CHECKPOINT, the saw LEVER (STAND at
---            it to power the sweeping saw down - running past never
---            flips it), both SAWS, THWOMP ALLEY (chained weights: ride
---            the second one's head to the top coin; grab the YELLOW
---            KEY between them), a breather cloud with its bee, and the
---            WALLED DOOR - a stone curtain to the ceiling, so the
---            stone steps, three coins and the FLAG behind it are
---            reachable ONLY through the door.
---   LEVEL 3  FROZEN CITADEL (3520px, 10 coins) - everything at once,
+--            the gateway), the Wave 2 LADDER up to its bonus ledge,
+--            the red CHECKPOINT, the saw LEVER (STAND at it to power
+--            the sweeping saw down - running past never flips it),
+--            both SAWS, THWOMP ALLEY (chained weights: ride the second
+--            one's head to the top coin; grab the YELLOW KEY between
+--            them), a breather cloud with its bee, and the WALLED
+--            DOOR - a stone curtain to the ceiling, so the stone
+--            steps, three coins and the FLAG behind it are reachable
+--            ONLY through the door.
+--   LEVEL 3  FROZEN CITADEL (3776px, 10 coins) - everything at once,
 --            on ICE (~15% acceleration: momentum rules): spring over
 --            the first spiked pit, a bonk row, the first sweeping saw,
 --            a second spiked pit, a checkpoint, a thwomp guarding the
 --            RED key, the glacier run (a SECOND always-on saw under a
 --            snow cloud), the red walled door, snow steps, the final
 --            flag.
+--   LEVEL 4  HAUNTED HOLLOW (3712px, 10 coins) - WAVE 3's bestiary in
+--            the purple biome: a MIMIC field (grass blocks that do
+--            not belong - they wake and lunge), the SNAIL (stomp it
+--            into a SHELL, kick the shell, bowl the slime down the
+--            path), two BATS roosting under a stone bar (they drop
+--            and swoop), a pit, two PIRANHA burrows (they will not
+--            rise under your feet), the shy GHOST that only drifts
+--            closer while you face away, two faced CRUSHERS around a
+--            LAVA strip, purple steps, the last flag.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -114,12 +126,47 @@
 --      The boundaries audit rides pfBounds: every level gets thick
 --      side slabs PLUS edge wall segments PLUS the matching camera
 --      clamp - check you cannot leave the world on any level.
+--  13. WAVE 2 player actions (the Kit's controller, harness v10):
+--      DUCK: DOWN anywhere on the ground brakes to a crouch (the duck
+--      pose; hitbox unchanged this wave - you cannot duck under saws).
+--      DROP-THROUGH: DOWN+JUMP on the L1 bridge drops to the low road
+--      (mind the spike slime) and off both cloud rests; same on L2's
+--      breather cloud; solid ground just ducks. The deck is SOLID
+--      again immediately after (land back on it).
+--      CLIMB: the L2 ladder (right of the gate) climbs to a bonus
+--      ledge + coin; UP grabs it, JUMP lets go with a normal jump,
+--      climbing down to the floor steps off.
+--      KNOCKBACK SPLIT: contact damage (slime sides, spike slime, saw
+--      brushes, spike tips, thwomp undersides, the fly) now POPS the
+--      hero away with a hit pose + ~1s of mercy (HUD counts "hits") -
+--      he NO LONGER teleports to the checkpoint; only lethal FALLS
+--      (pits, leaving the world) respawn ("falls" counts those).
+--  14. WAVE 3 bestiary (LEVEL 4; all polled, zero Kit changes):
+--      SNAIL: stomp = shell (not a kill); ANY touch of the parked
+--      shell kicks it sliding at 520px/s AWAY from you; it bowls over
+--      the slime (and any walker it reaches), REVERSES off walls, and
+--      its sides hurt - stomp it again to park it. The kick sound is
+--      new. MIMICS: the two grass blocks sit dead still until you are
+--      ~90px away, then wake (jump face) and lunge in hops; one stomp
+--      each. BATS: roost under the stone bar, drop when you walk
+--      near, swoop to head height and bob; one stomp each. PIRANHAS:
+--      rise from the two burrow holes on a cycle, bite, sink - and
+--      refuse to rise while you stand over a mouth; unkillable (skip
+--      or time them). GHOST: drifts toward you ONLY while you face
+--      away; turn around and it freezes in its shy pose; untouchable
+--      - it is the level's pressure, not a kill. CRUSHERS: the L4
+--      thwomps wear the block FACES (idle/fall/rest swap with state).
+--      If a spook's left/right facing looks mirrored, report it (the
+--      sheet's native facing is unverifiable statically).
+--      No enemies.png in the folder? The four spook makers skip
+--      SILENTLY and L4 still completes (snail/crushers/lava remain).
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
+local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
 local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
 -- the three-level game: which level, its width/name, and the banked
 -- totals carried across level clears for the final win screen
@@ -128,9 +175,14 @@ local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
+local gSlimeT          -- Wave 3: per-row timer (mimic hop cooldowns)
 local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
 local gMovHurtW, gMovHurtH, gMovFlip
+-- Wave 3 (bestiary I): the piranha burrows, the ghost, the spooks sheet
+local gPlantN, gPlantSpr, gPlantX, gPlantState, gPlantT
+local gGhostSpr, gGhostX, gGhostY, gGhostShy
+local gSpooksOK        -- enemies.png loaded (ghost/bat/piranha/mimic art)
 local gCheckSpr, gCheckpointOn, gRespawnX, gRespawnY
 -- Wave 1 (the iconic-feel base): springboard, bonk row, lever, key+door
 local gToysOK, gSpringSpr, gSpringX, gSpringMS, gSpringBackMS
@@ -286,15 +338,34 @@ function pfLoadSheets
    put the result into tN
    if tN < 1 then put "backgrounds atlas gave 0 frames. " after gLoadNote
    b2kSheetScale "bg", 2.5   -- 256px panels -> 640px (full card height)
+   -- Wave 3: the SPOOKS (ghost/bat/piranha/grassBlock) live on the
+   -- Family C enemies.png - a ~70px-grid sheet in a 64px-grid level,
+   -- normalised per the mixed-grids law (frame names keep their .png
+   -- suffix on this sheet). Optional: missing = those makers skip.
+   b2kSheetLoadAtlas "spooks", tFolder & "/enemies.png"
+   put the result into tN
+   if tN >= 1 then
+      b2kSheetScale "spooks", 0.9
+      b2kAnimDef "spooks", "batfly", "bat_fly.png,bat.png", 8, true
+   end if
    -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
    b2kAnimDef "chars", "walk", "character_beige_walk_a,character_beige_walk_b", 6, true
    b2kAnimDef "chars", "jump", "character_beige_jump", 1, true
    b2kAnimDef "chars", "hit", "character_beige_hit", 2, false
+   -- Wave 2 poses: the default characters sheet HAS duck and climb
+   -- frames for the beige hero (the design doc guessed it did not).
+   -- "hurtpose" LOOPS on purpose: the Kit's knockback drives it, and a
+   -- non-looping anim would fire b2kSpriteOnFinish -> pfHurtDone (the
+   -- RESPAWN) mid-knockback. The respawn path keeps the one-shot "hit".
+   b2kAnimDef "chars", "duck", "character_beige_duck", 1, true
+   b2kAnimDef "chars", "climb", "character_beige_climb_a,character_beige_climb_b", 6, true
+   b2kAnimDef "chars", "hurtpose", "character_beige_hit", 2, true
    b2kAnimDef "foes", "buzz", "bee_a,bee_b", 8, true
    b2kAnimDef "foes", "sawspin", "saw_a,saw_b", 10, true
    b2kAnimDef "foes", "slimewalk", "slime_normal_walk_a,slime_normal_walk_b", 4, true
    b2kAnimDef "foes", "spikewalk", "slime_spike_walk_a,slime_spike_walk_b", 4, true
+   b2kAnimDef "foes", "snailwalk", "snail_walk_a,snail_walk_b", 4, true
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
    b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
    b2kAnimDef "tiles", "wavegold", "flag_yellow_a,flag_yellow_b", 4, true
@@ -311,7 +382,7 @@ end pfLoadSheets
 -- engine plays one clip at a time, so a new cue cuts the previous.
 command pfMakeSounds
    -- guard on the NEWEST cue, so a stack upgraded in place re-synthesizes
-   if b2kSoundIsLoaded("deny") then exit pfMakeSounds   -- already built
+   if b2kSoundIsLoaded("kick") then exit pfMakeSounds   -- already built
    b2kToneMake "jump", "392,587", 40, 55
    b2kToneMake "coin", "1319,1760", 36, 45
    b2kToneMake "stomp", "165,110", 40, 70
@@ -327,6 +398,8 @@ command pfMakeSounds
    b2kToneMake "unlock", "392,523,659", 55, 50, "sine"
    b2kToneMake "lever", "294,220", 30, 45
    b2kToneMake "deny", "196,147", 60, 55
+   -- Wave 3 cue: the shell kick
+   b2kToneMake "kick", "330,494", 32, 60
 end pfMakeSounds
 
 command pfEmbedPlaceholder
@@ -341,6 +414,7 @@ command pfEmbedPlaceholder
    b2kAnimDef "chars", "walk", "9-16", 10, true
    b2kAnimDef "chars", "jump", "17", 1, true
    b2kAnimDef "chars", "hit", "19", 2, false
+   b2kAnimDef "chars", "hurtpose", "19", 2, true   -- looping twin (knockback)
    b2kAnimDef "chars", "win", "1-4", 6, true
 end pfEmbedPlaceholder
 
@@ -367,6 +441,7 @@ command pfStartGame
    put 480 into gRespawnY
    put empty into gWinSecs
    put 0 into gFalls
+   put 0 into gOuches
    put 0 into gLands
    put 0 into gHudNextMS
    put empty into gGateVel
@@ -399,6 +474,17 @@ command pfStartGame
    put empty into gSlimeMin
    put empty into gSlimeMax
    put empty into gSlimeGoneAt
+   put empty into gSlimeT
+   -- Wave 3 tables start the run empty
+   put 0 into gPlantN
+   put empty into gPlantSpr
+   put empty into gPlantX
+   put empty into gPlantState
+   put empty into gPlantT
+   put empty into gGhostSpr
+   put 0 into gGhostX
+   put 0 into gGhostY
+   put true into gGhostShy
    put 0 into gBlockN
    put empty into gBlockB
    put empty into gBlockSpr
@@ -464,6 +550,9 @@ command pfStartGame
    -- Wave 1 toys need the tiles atlas (spring/box/brick/lever/key/door
    -- art); without it each level builds its frozen plain-shape fallback
    put (gAssetsOK is true and b2kSheetHasFrame("tiles", "spring_out")) into gToysOK
+   -- Wave 3 spooks need enemies.png (ghost/bat/piranha/mimic); without
+   -- it those four makers skip silently - L4 stays completable
+   put (gAssetsOK is true and b2kSheetHasFrame("spooks", "ghost.png")) into gSpooksOK
    -- the coin total COUNTS ITSELF: pfMakeCoin and every "?-box" add one
    -- as they are built, so totals can never drift from the layout
    put 0 into gCoinsTotal
@@ -503,6 +592,9 @@ command pfStartGame
       case 3
          pfL3Scene
          break
+      case 4
+         pfL4Scene
+         break
       default
          put 1 into gLevel
          pfL1Scene
@@ -537,7 +629,15 @@ command pfStartGame
    -- capsule + fixed rotation + sleep-off + low friction in one call;
    -- the bound sprite above is auto-discovered as the art to animate.
    b2kPlayerAttach gHero
-   b2kPlayerAnims "idle", "walk", "jump", "jump"
+   -- duck/climb map when the atlas loaded them (placeholder art has
+   -- neither: empty slots fall back to idle/jump inside the Kit). The
+   -- knockback pose is the LOOPING "hurtpose" -- never the one-shot
+   -- "hit", whose finish message means RESPAWN in this game
+   if gAssetsOK is true and b2kSheetHasFrame("chars", "character_beige_duck") then
+      b2kPlayerAnims "idle", "walk", "jump", "jump", "", "duck", "climb", "hurtpose"
+   else
+      b2kPlayerAnims "idle", "walk", "jump", "jump", "", "", "", "hurtpose"
+   end if
    b2kPlayerSet "moveSpeed", kMoveSpeed
    b2kPlayerSet "jumpSpeed", kJumpSpeed
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
@@ -549,13 +649,16 @@ command pfStartGame
       case 3
          pfL3Cast
          break
+      case 4
+         pfL4Cast
+         break
       default
          pfL1Cast
    end switch
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), R restarts the level, ESC pauses, M mutes - the MOUSE" & cr & "DRAGS the box-crate (chained weights never drag). LEVEL " & gLevel & " of 3: " & gLevelName & "." & cr & "Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag to advance. Three levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), DOWN ducks - DOWN+JUMP drops through bridges/clouds - UP/DOWN" & cr & "climbs ladders (JUMP lets go). R restarts, ESC pauses, M mutes, MOUSE drags the crate. LEVEL " & gLevel & " of 4: " & gLevelName & "." & cr & "Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag to advance. Four levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -564,7 +667,7 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 3" & cr & gLevelName
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 4" & cr & gLevelName
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -732,11 +835,13 @@ command pfMakeSlime pIdx, pKind, pX, pMinX, pMaxX, pTopY
 end pfMakeSlime
 
 -- A thwomp (falling-block trap) perched at pX. Walking beneath wakes it
--- (static -> dynamic) and it slams down. Only its UNDERSIDE is lethal -
+-- (static -> dynamic) and it slams down. Only its UNDERSIDE is dangerous -
 -- the head is a platform: hop on while it RESTS (static: a weight on a
 -- chain is not the player's to drag or shove) and ride the slow
--- kinematic rise back UP to perch height.
-command pfMakeThwomp pIdx, pX
+-- kinematic rise back UP to perch height. pFaced true = the Wave 3
+-- CRUSHER look: it wears the block_idle/fall/rest FACES (the art that
+-- was this machine's fallback all along) instead of the chained weight.
+command pfMakeThwomp pIdx, pX, pFaced
    local tName, tBody
    put "pf_blockBody" & pIdx into tName
    create graphic tName
@@ -751,23 +856,29 @@ command pfMakeThwomp pIdx, pX
    put empty into gBlockChainA[pIdx]
    put empty into gBlockChainB[pIdx]
    put false into gBlockFace[pIdx]
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "weight") \
-         and b2kSheetHasFrame("tiles", "chain") then
-      -- Wave 1: the REAL thwomp look - a weight on a chain. The chain
-      -- tiles (44..172) reach the block's perch top (170) and STAY put
-      -- while the weight falls; re-arming re-seats them under it
-      -- (pfTickThwomps), defensive against any future sideways drift.
-      b2kSpriteNew "tiles", "chain", pX, 76
-      put the result into gBlockChainA[pIdx]
-      b2kSpriteNew "tiles", "chain", pX, 140
-      put the result into gBlockChainB[pIdx]
-      b2kSpriteNew "tiles", "weight", pX, 200
+   if pFaced is true and gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
+      b2kSpriteNew "foes", "block_idle", pX, 200
       put the result into gBlockSpr[pIdx]
+      put true into gBlockFace[pIdx]   -- pfTickThwomps swaps the moods
    else
-      if gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
-         b2kSpriteNew "foes", "block_idle", pX, 200
+      if gAssetsOK is true and b2kSheetHasFrame("tiles", "weight") \
+            and b2kSheetHasFrame("tiles", "chain") then
+         -- Wave 1: the REAL thwomp look - a weight on a chain. The chain
+         -- tiles (44..172) reach the block's perch top (170) and STAY put
+         -- while the weight falls; re-arming re-seats them under it
+         -- (pfTickThwomps), defensive against any future sideways drift.
+         b2kSpriteNew "tiles", "chain", pX, 76
+         put the result into gBlockChainA[pIdx]
+         b2kSpriteNew "tiles", "chain", pX, 140
+         put the result into gBlockChainB[pIdx]
+         b2kSpriteNew "tiles", "weight", pX, 200
          put the result into gBlockSpr[pIdx]
-         put true into gBlockFace[pIdx]   -- this art has state faces
+      else
+         if gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
+            b2kSpriteNew "foes", "block_idle", pX, 200
+            put the result into gBlockSpr[pIdx]
+            put true into gBlockFace[pIdx]   -- this art has state faces
+         end if
       end if
    end if
    if gBlockSpr[pIdx] is not empty then b2kSpriteBind gBlockSpr[pIdx], tBody, 0, 0
@@ -795,6 +906,183 @@ command pfMakeCheckpoint pX
       end if
    end if
 end pfMakeCheckpoint
+
+-- =====================================================================
+-- Wave 3 builders: the bestiary. Three of the six join the slime
+-- FAMILY (same tables, same contact verdicts, same b2kFell cleanup) as
+-- new KINDS - snail/shell, bat, mimic; the piranha and the ghost are
+-- bodiless sprites with their own small ticks; the faced crusher is
+-- pfMakeThwomp's pFaced flag. Spook art is OPTIONAL (gSpooksOK): the
+-- snail and the crusher are native foes-sheet art and always build.
+-- =====================================================================
+
+-- A snail: patrols like a slime, but a stomp SHELLS it instead of
+-- killing it - then any touch KICKS the shell into a slide that bowls
+-- over every ground foe it reaches (the verdicts live in b2kContact).
+command pfMakeSnail pIdx, pX, pMinX, pMaxX
+   local tName, tBody, tSpr
+   put "pf_slimeBody" & pIdx into tName
+   create graphic tName
+   set the style of it to "rectangle"
+   set the rect of it to pX - 24, 544, pX + 24, 576
+   set the filled of it to true
+   set the backgroundColor of it to "210,170,90"
+   set the visible of it to false
+   put the long id of graphic tName into tBody
+   b2kAddBox tBody
+   b2kSetFixedRotation tBody, true
+   b2kSetFriction tBody, 0.1
+   put empty into tSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "snail_walk_a") then
+      b2kSpriteNew "foes", "snail_walk_a", pX, 560
+      put the result into tSpr
+      if tSpr is not empty then
+         b2kSpriteBind tSpr, tBody, 0, -4
+         b2kSpritePlay tSpr, "snailwalk"
+      end if
+   end if
+   if tSpr is empty then set the visible of graphic tName to true
+   if the visible of graphic tName is true then b2kCamAdopt tBody
+   if pIdx > gSlimeN then put pIdx into gSlimeN
+   put tBody into gSlimeB[pIdx]
+   put tSpr into gSlimeSpr[pIdx]
+   put "snail" into gSlimeKind[pIdx]
+   put 60 into gSlimeDir[pIdx]
+   put pMinX into gSlimeMin[pIdx]
+   put pMaxX into gSlimeMax[pIdx]
+   put empty into gSlimeGoneAt[pIdx]
+   put 0 into gSlimeT[pIdx]
+end pfMakeSnail
+
+-- A bat: hangs STATIC under an overhang until the hero walks near,
+-- then drops into a fast sine-bobbing patrol at head height
+-- (dynamic, gravity scale 0 - a flying body, so stomps just work).
+command pfMakeBat pIdx, pX, pHangY, pMinX, pMaxX
+   local tName, tBody, tSpr
+   if gSpooksOK is not true then exit pfMakeBat
+   put "pf_slimeBody" & pIdx into tName
+   create graphic tName
+   set the style of it to "rectangle"
+   set the rect of it to pX - 20, pHangY - 14, pX + 20, pHangY + 14
+   set the filled of it to true
+   set the backgroundColor of it to "90,70,120"
+   set the visible of it to false
+   put the long id of graphic tName into tBody
+   b2kAddBox tBody, false           -- parked static: hanging
+   b2kSetFixedRotation tBody, true
+   b2kSetFriction tBody, 0.1
+   put empty into tSpr
+   b2kSpriteNew "spooks", "bat_hang.png", pX, pHangY
+   put the result into tSpr
+   if tSpr is not empty then b2kSpriteBind tSpr, tBody, 0, 0
+   if tSpr is empty then
+      set the visible of graphic tName to true
+      b2kCamAdopt tBody
+   end if
+   if pIdx > gSlimeN then put pIdx into gSlimeN
+   put tBody into gSlimeB[pIdx]
+   put tSpr into gSlimeSpr[pIdx]
+   put "bat" into gSlimeKind[pIdx]
+   put 90 into gSlimeDir[pIdx]
+   put pMinX into gSlimeMin[pIdx]
+   put pMaxX into gSlimeMax[pIdx]
+   put empty into gSlimeGoneAt[pIdx]
+   put 0 into gSlimeT[pIdx]
+end pfMakeBat
+
+-- A mimic: a GRASS block sitting in the purple biome - wrong on
+-- purpose, that is the tell - dead still until the hero comes close,
+-- then it wakes and lunges in short hops.
+command pfMakeMimic pIdx, pX
+   local tName, tBody, tSpr
+   if gSpooksOK is not true then exit pfMakeMimic
+   put "pf_slimeBody" & pIdx into tName
+   create graphic tName
+   set the style of it to "rectangle"
+   set the rect of it to pX - 28, 520, pX + 28, 576
+   set the filled of it to true
+   set the backgroundColor of it to "120,180,90"
+   set the visible of it to false
+   put the long id of graphic tName into tBody
+   b2kAddBox tBody, false           -- parked static: just scenery... so far
+   b2kSetFixedRotation tBody, true
+   b2kSetFriction tBody, 0.4
+   put empty into tSpr
+   b2kSpriteNew "spooks", "grassBlock.png", pX, 545
+   put the result into tSpr
+   if tSpr is not empty then b2kSpriteBind tSpr, tBody, 0, -3
+   if tSpr is empty then
+      set the visible of graphic tName to true
+      b2kCamAdopt tBody
+   end if
+   if pIdx > gSlimeN then put pIdx into gSlimeN
+   put tBody into gSlimeB[pIdx]
+   put tSpr into gSlimeSpr[pIdx]
+   put "mimic" into gSlimeKind[pIdx]
+   put 0 into gSlimeDir[pIdx]
+   put pX into gSlimeMin[pIdx]
+   put pX into gSlimeMax[pIdx]
+   put empty into gSlimeGoneAt[pIdx]
+   put 0 into gSlimeT[pIdx]
+end pfMakeMimic
+
+-- A piranha burrow at pX: the plant is a bodiless sprite pfTickPlants
+-- raises and sinks; its dark mouth-hole is drawn by the SCENE (so it
+-- layers under every later sprite). Unkillable, like the saws.
+command pfMakePlant pIdx, pX
+   local tSpr
+   if gSpooksOK is not true then exit pfMakePlant
+   b2kSpriteNew "spooks", "piranha.png", pX, 606
+   put the result into tSpr
+   if tSpr is empty then exit pfMakePlant
+   set the visible of tSpr to false       -- starts swallowed
+   if pIdx > gPlantN then put pIdx into gPlantN
+   put tSpr into gPlantSpr[pIdx]
+   put pX into gPlantX[pIdx]
+   put "down" into gPlantState[pIdx]
+   put the milliseconds + 800 + random(600) into gPlantT[pIdx]
+end pfMakePlant
+
+-- THE ghost (one per level): bodiless, drifts through terrain, chases
+-- only while the hero faces away - eye contact freezes it shy.
+command pfMakeGhost pX, pY
+   local tSpr
+   if gSpooksOK is not true then exit pfMakeGhost
+   b2kSpriteNew "spooks", "ghost_normal.png", pX, pY
+   put the result into tSpr
+   if tSpr is empty then exit pfMakeGhost
+   put tSpr into gGhostSpr
+   put pX into gGhostX
+   put pY into gGhostY
+   put true into gGhostShy
+end pfMakeGhost
+
+-- A lava strip ON the path (the haunted ground hazard): lava art over
+-- a knockback sensor that rises above the floor line, so wading in -
+-- not just falling in - burns. The Wave 2 split holds: surface
+-- hazards knock back; only pits respawn.
+command pfMakeLava pL, pR
+   local tRef, tX
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "lava_top") then
+      repeat with tX = pL to pR - 64 step 64
+         pfTile "lava_top", tX, 576
+      end repeat
+   else
+      create graphic ("pf_lava" & pL)
+      set the style of it to "rectangle"
+      set the rect of it to pL, 600, pR, 640
+      set the filled of it to true
+      set the backgroundColor of it to "235,120,40"
+      b2kCamAdopt the long id of graphic ("pf_lava" & pL)
+   end if
+   create graphic ("pf_lavasens" & pL)
+   set the style of it to "rectangle"
+   set the rect of it to pL + 6, 548, pR - 6, 640
+   set the visible of it to false
+   put the long id of graphic ("pf_lavasens" & pL) into tRef
+   set the uPfHazardFlag of tRef to true
+   b2kAddSensor tRef, "box"
+end pfMakeLava
 
 -- =====================================================================
 -- Wave 1 builders: springboard, bonk row, lever, key + locked door.
@@ -1029,19 +1317,19 @@ end pfMakeGoal
 command pfL1Scene
    local tX
    put "GREEN HILLS" into gLevelName
-   pfBounds 3712
-   pfSlab "pf_ground1", 0, 576, 2304, 640
-   pfSlab "pf_ground2", 2496, 576, 3712, 640
+   pfBounds 3968
+   pfSlab "pf_ground1", 0, 576, 2560, 640
+   pfSlab "pf_ground2", 2752, 576, 3968, 640
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 2240 step 64
-         if tX >= 1248 and tX <= 1568 then
+      repeat with tX = 0 to 2496 step 64
+         if tX >= 1376 and tX <= 1696 then
             -- under the mound: plain centre, so the hill reads as one mass
             pfTile "terrain_grass_block_center", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
       end repeat
-      repeat with tX = 2496 to 3648 step 64
+      repeat with tX = 2752 to 3904 step 64
          pfTile "terrain_grass_block_top", tX, 576
       end repeat
       pfShowSlabs false
@@ -1050,20 +1338,20 @@ command pfL1Scene
    end if
    -- the post-pit meadow (the level's second act): a one-way cloud rest
    -- over the long run home (chain ghost-padded a tile past the art)
-   b2kSmoothGround "3136,448" & cr & "3072,448" & cr & "2880,448" & cr & "2816,448"
+   b2kSmoothGround "3392,448" & cr & "3328,448" & cr & "3136,448" & cr & "3072,448"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
-      pfTile "terrain_grass_cloud_left", 2880, 448
-      pfTile "terrain_grass_cloud_middle", 2944, 448
-      pfTile "terrain_grass_cloud_right", 3008, 448
+      pfTile "terrain_grass_cloud_left", 3136, 448
+      pfTile "terrain_grass_cloud_middle", 3200, 448
+      pfTile "terrain_grass_cloud_right", 3264, 448
    else
       create graphic "pf_cloudledgeC"
       set the style of it to "line"
-      set the points of it to "2880,448" & cr & "3072,448"
+      set the points of it to "3136,448" & cr & "3328,448"
       set the lineSize of it to 4
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeC"
    end if
-   pfMakeSpikes 2304, 2496
+   pfMakeSpikes 2560, 2752
    -- the one-way bridge (GHOST RULE: the chain runs one tile past the
    -- deck on each side - 688..1072 under art 752..1008)
    b2kSmoothGround "1072,440" & cr & "1008,440" & cr & "752,440" & cr & "688,440"
@@ -1080,52 +1368,56 @@ command pfL1Scene
       b2kCamAdopt the long id of graphic "pf_ledge"
    end if
    -- the slope mound (26.6-degree ramps): six chain points, the outer
-   -- two are non-colliding ghost anchors; ramps mirrored on the ascent
-   b2kSmoothGround "1696,576" & cr & "1632,576" & cr & "1504,512" & cr & "1376,512" & cr & "1248,576" & cr & "1184,576"
+   -- two are non-colliding ghost anchors; ramps mirrored on the ascent.
+   -- Spacing pass: the mound and the cloud steps each get clear air
+   -- (the steps used to start at the mound's very foot).
+   b2kSmoothGround "1824,576" & cr & "1760,576" & cr & "1632,512" & cr & "1504,512" & cr & "1376,576" & cr & "1312,576"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_ramp_long_a") then
-      pfTile "terrain_grass_ramp_long_b", 1248, 512, true
-      pfTile "terrain_grass_ramp_long_a", 1312, 512, true
-      pfTile "terrain_grass_block_top", 1376, 512
-      pfTile "terrain_grass_block_top", 1440, 512
-      pfTile "terrain_grass_ramp_long_a", 1504, 512
-      pfTile "terrain_grass_ramp_long_b", 1568, 512
+      pfTile "terrain_grass_ramp_long_b", 1376, 512, true
+      pfTile "terrain_grass_ramp_long_a", 1440, 512, true
+      pfTile "terrain_grass_block_top", 1504, 512
+      pfTile "terrain_grass_block_top", 1568, 512
+      pfTile "terrain_grass_ramp_long_a", 1632, 512
+      pfTile "terrain_grass_ramp_long_b", 1696, 512
    else
       create graphic "pf_mound"
       set the style of it to "polygon"
-      set the points of it to "1248,576" & cr & "1376,512" & cr & "1504,512" & cr & "1632,576" & cr & "1248,576"
+      set the points of it to "1376,576" & cr & "1504,512" & cr & "1632,512" & cr & "1760,576" & cr & "1376,576"
       set the filled of it to true
       set the backgroundColor of it to "90,170,90"
       b2kCamAdopt the long id of graphic "pf_mound"
    end if
    -- the cloud steps (one-way chains, ghost-padded past the art)
-   b2kSmoothGround "1952,448" & cr & "1888,448" & cr & "1696,448" & cr & "1632,448"
-   b2kSmoothGround "2240,320" & cr & "2176,320" & cr & "1984,320" & cr & "1920,320"
+   b2kSmoothGround "2208,448" & cr & "2144,448" & cr & "1952,448" & cr & "1888,448"
+   b2kSmoothGround "2496,320" & cr & "2432,320" & cr & "2240,320" & cr & "2176,320"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
-      pfTile "terrain_grass_cloud_left", 1696, 448
-      pfTile "terrain_grass_cloud_middle", 1760, 448
-      pfTile "terrain_grass_cloud_right", 1824, 448
-      pfTile "terrain_grass_cloud_left", 1984, 320
-      pfTile "terrain_grass_cloud_middle", 2048, 320
-      pfTile "terrain_grass_cloud_right", 2112, 320
+      pfTile "terrain_grass_cloud_left", 1952, 448
+      pfTile "terrain_grass_cloud_middle", 2016, 448
+      pfTile "terrain_grass_cloud_right", 2080, 448
+      pfTile "terrain_grass_cloud_left", 2240, 320
+      pfTile "terrain_grass_cloud_middle", 2304, 320
+      pfTile "terrain_grass_cloud_right", 2368, 320
    else
       create graphic "pf_cloudledgeA"
       set the style of it to "line"
-      set the points of it to "1696,448" & cr & "1888,448"
+      set the points of it to "1952,448" & cr & "2144,448"
       set the lineSize of it to 4
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeA"
       create graphic "pf_cloudledgeB"
       set the style of it to "line"
-      set the points of it to "1984,320" & cr & "2176,320"
+      set the points of it to "2240,320" & cr & "2432,320"
       set the lineSize of it to 4
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeB"
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
-      pfTile "bush", 480, 512
-      pfTile "fence", 544, 512
-      pfTile "fence_broken", 608, 512
-      pfTile "mushroom_red", 2560, 512
+      -- decor stays CLEAR of the interactive beats (the bonk row used
+      -- to sit right on top of the fences)
+      pfTile "bush", 168, 512
+      pfTile "fence", 640, 512
+      pfTile "fence_broken", 704, 512
+      pfTile "mushroom_red", 2816, 512
    end if
    if gToysOK is true then
       -- the spring mid-meadow: bouncing happens in open air, well away
@@ -1144,84 +1436,118 @@ command pfL1Cast
    pfMakeCoin 360, 496      -- on the path, under the bonk row
    pfMakeCoin 880, 396      -- on the bridge deck (the high road)
    pfMakeCoin 1130, 500     -- the meadow slime's beat
-   pfMakeCoin 1440, 460     -- on the mound plateau
-   pfMakeCoin 2080, 264     -- on the high cloud (mind the fly)
-   pfMakeCoin 2400, 440     -- mid-air over the spike pit: grab it mid-jump
-   pfMakeCoin 2620, 500     -- the second act's slime beat
-   pfMakeCoin 2976, 392     -- on the rest cloud
-   pfMakeCoin 3360, 500     -- the last slime's beat, before the flag
+   pfMakeCoin 1568, 460     -- on the mound plateau
+   pfMakeCoin 2336, 264     -- on the high cloud (mind the fly)
+   pfMakeCoin 2656, 440     -- mid-air over the spike pit: grab it mid-jump
+   pfMakeCoin 2876, 500     -- the second act's slime beat
+   pfMakeCoin 3232, 392     -- on the rest cloud
+   pfMakeCoin 3616, 500     -- the last slime's beat, before the flag
    if gToysOK is true then pfMakeCoin 240, 230   -- the sky coin (spring up)
    -- the bee tours the mound (harmless); the fly guards the cloud coin
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
-      b2kSpriteNew "foes", "bee_a", 1320, 300
+      b2kSpriteNew "foes", "bee_a", 1448, 300
       put the result into tRef
       if tRef is not empty then
          b2kSpritePlay tRef, "buzz"
-         pfAddMover tRef, 1320, 300, 90, 900, 26, 430, 0, 0, true
+         pfAddMover tRef, 1448, 300, 90, 900, 26, 430, 0, 0, true
       end if
    end if
    if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
-      b2kSpriteNew "foes", "fly_a", 1930, 390
+      b2kSpriteNew "foes", "fly_a", 2186, 390
       put the result into tRef
       if tRef is not empty then
          b2kSpritePlay tRef, "flit"
-         pfAddMover tRef, 1930, 390, 70, 700, 60, 450, 36, 44, true
+         pfAddMover tRef, 2186, 390, 70, 700, 60, 450, 36, 44, true
       end if
    end if
    pfMakeSlime 1, "spike", 880, 760, 1000, 576
    pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
-   pfMakeSlime 3, "normal", 2620, 2560, 2680, 576
-   pfMakeSlime 4, "normal", 3360, 3300, 3420, 576
+   pfMakeSlime 3, "normal", 2876, 2816, 2936, 576
+   pfMakeSlime 4, "normal", 3616, 3556, 3676, 576
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
-   pfMakeGoal 3580, 544
+   pfMakeGoal 3836, 544
 end pfL1Cast
 
 -- =====================================================================
--- LEVEL 2 - "THE WORKS" (2208px). The machines: crate + button gate,
--- the stand-to-flip saw lever, both saws, chained thwomps, the yellow
--- key and the walled door, stone steps to the flag.
+-- LEVEL 2 - "THE WORKS" (3072px). The machines: crate + button gate,
+-- the Wave 2 ladder to its bonus ledge, the stand-to-flip saw lever,
+-- both saws, chained thwomps, the yellow key and the walled door,
+-- stone steps to the flag. Spaced so every machine is its own beat
+-- (the user's round-6 note: cramped reads as "what IS all this?").
 -- =====================================================================
 command pfL2Scene
    local tX, tRef
    put "THE WORKS" into gLevelName
-   pfBounds 2816
-   pfSlab "pf_ground1", 0, 576, 2816, 640
-   pfSlab "pf_plat1", 2432, 512, 2624, 576
-   pfSlab "pf_plat2", 2624, 448, 2752, 576
+   pfBounds 3072
+   pfSlab "pf_ground1", 0, 576, 3072, 640
+   pfSlab "pf_plat1", 2688, 512, 2880, 576
+   pfSlab "pf_plat2", 2880, 448, 3008, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 2752 step 64
-         if tX >= 2432 then
+      repeat with tX = 0 to 3008 step 64
+         if tX >= 2688 then
             -- the finale plays in STONE past the walled door
             pfTile "terrain_stone_block_top", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
       end repeat
-      pfTile "terrain_stone_block_top_left", 2432, 512
-      pfTile "terrain_stone_block_top", 2496, 512
-      pfTile "terrain_stone_block_top_right", 2560, 512
-      pfTile "terrain_stone_block_top", 2624, 448
-      pfTile "terrain_stone_block_top", 2688, 448
-      pfTile "terrain_stone_block_center", 2624, 512
-      pfTile "terrain_stone_block_center", 2688, 512
+      pfTile "terrain_stone_block_top_left", 2688, 512
+      pfTile "terrain_stone_block_top", 2752, 512
+      pfTile "terrain_stone_block_top_right", 2816, 512
+      pfTile "terrain_stone_block_top", 2880, 448
+      pfTile "terrain_stone_block_top", 2944, 448
+      pfTile "terrain_stone_block_center", 2880, 512
+      pfTile "terrain_stone_block_center", 2944, 512
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
    -- the breather between the alley and the wall: a one-way cloud rest
    -- (chain ghost-padded a tile past the art on each side)
-   b2kSmoothGround "1920,448" & cr & "1856,448" & cr & "1664,448" & cr & "1600,448"
+   b2kSmoothGround "2370,448" & cr & "2306,448" & cr & "2114,448" & cr & "2050,448"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
-      pfTile "terrain_grass_cloud_left", 1664, 448
-      pfTile "terrain_grass_cloud_middle", 1728, 448
-      pfTile "terrain_grass_cloud_right", 1792, 448
+      pfTile "terrain_grass_cloud_left", 2114, 448
+      pfTile "terrain_grass_cloud_middle", 2178, 448
+      pfTile "terrain_grass_cloud_right", 2242, 448
    else
       create graphic "pf_cloudledgeA"
       set the style of it to "line"
-      set the points of it to "1664,448" & cr & "1856,448"
+      set the points of it to "2114,448" & cr & "2306,448"
       set the lineSize of it to 4
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeA"
+   end if
+   -- WAVE 2: the bonus ledge, a clear beat of its own past the gate
+   -- (round 6 had it tangled with the checkpoint and the lever). The
+   -- ledge is a one-way chain (ghost-padded a tile past the stone art
+   -- each side), so you can also DOWN+JUMP off it; the ladder is a
+   -- pure polled ZONE -- no physics body, the climb is the Kit
+   -- controller's. The zone tops out 40px above the deck so climbing
+   -- out steps you onto it, and it starts at the floor so DOWN while
+   -- falling past grabs it.
+   b2kSmoothGround "960,352" & cr & "896,352" & cr & "704,352" & cr & "640,352"
+   b2kPlayerAddLadder 824, 312, 864, 570
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "ladder_middle") then
+      pfTile "terrain_stone_block_top_left", 704, 352
+      pfTile "terrain_stone_block_top", 768, 352
+      pfTile "terrain_stone_block_top_right", 832, 352
+      pfTile "ladder_top", 812, 352
+      pfTile "ladder_middle", 812, 416
+      pfTile "ladder_middle", 812, 480
+      pfTile "ladder_bottom", 812, 544
+   else
+      create graphic "pf_bonusledge"
+      set the style of it to "line"
+      set the points of it to "704,352" & cr & "896,352"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "180,170,150"
+      b2kCamAdopt the long id of graphic "pf_bonusledge"
+      create graphic "pf_ladderline"
+      set the style of it to "line"
+      set the points of it to "844,352" & cr & "844,576"
+      set the lineSize of it to 6
+      set the foregroundColor of it to "170,120,60"
+      b2kCamAdopt the long id of graphic "pf_ladderline"
    end if
    pfMakeGate 400, 500
    -- the crate that holds the plate down (drag or push it). It wears
@@ -1241,32 +1567,33 @@ command pfL2Scene
       end if
    end if
    if gToysOK is true then
-      pfMakeLever 690         -- stand here to power the sweep saw down
-      pfMakeKeyDoor 1300, 500, 2208, "yellow"
+      pfMakeLever 1120        -- stand here to power the sweep saw down
+      pfMakeKeyDoor 1740, 500, 2464, "yellow"
    end if
 end pfL2Scene
 
 command pfL2Cast
    local tRef
-   pfMakeCoin 1000, 448     -- above the sweeping saw: time the hop
-   pfMakeCoin 1400, 64      -- ride the second thwomp's head to the top
-   pfMakeCoin 1760, 392     -- on the breather cloud (the bee patrols it)
-   pfMakeCoin 2000, 500     -- on the run-up to the wall
-   pfMakeCoin 2564, 448     -- over the first stone step
-   pfMakeCoin 2638, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 2256, 510   -- inside the door passage
+   pfMakeCoin 800, 296      -- on the LADDER's bonus ledge (Wave 2 climb)
+   pfMakeCoin 1430, 448     -- above the sweeping saw: time the hop
+   pfMakeCoin 1840, 64      -- ride the second thwomp's head to the top
+   pfMakeCoin 2210, 392     -- on the breather cloud (the bee patrols it)
+   pfMakeCoin 2350, 500     -- on the run-up to the wall
+   pfMakeCoin 2820, 448     -- over the first stone step
+   pfMakeCoin 2894, 392     -- over the top step, by the flag
+   if gToysOK is true then pfMakeCoin 2512, 510   -- inside the door passage
    -- the bee patrols the breather cloud
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
-      b2kSpriteNew "foes", "bee_a", 1760, 310
+      b2kSpriteNew "foes", "bee_a", 2210, 310
       put the result into tRef
       if tRef is not empty then
          b2kSpritePlay tRef, "buzz"
-         pfAddMover tRef, 1760, 310, 80, 850, 24, 400, 0, 0, true
+         pfAddMover tRef, 2210, 310, 80, 850, 24, 400, 0, 0, true
       end if
    end if
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
-      b2kSpriteNew "foes", "saw_a", 800, 544
+      b2kSpriteNew "foes", "saw_a", 1240, 544
       put the result into tRef
       if tRef is not empty then
          set the uPfHazardFlag of tRef to true
@@ -1277,7 +1604,7 @@ command pfL2Cast
    if tRef is empty then
       create graphic "pf_saw"
       set the style of it to "oval"
-      set the rect of it to 776, 520, 824, 568
+      set the rect of it to 1216, 520, 1264, 568
       set the filled of it to true
       set the backgroundColor of it to "210,60,60"
       put the long id of graphic "pf_saw" into tRef
@@ -1288,20 +1615,20 @@ command pfL2Cast
    -- its restless twin SWEEPS the ground: a bodiless mover the lever
    -- can power down
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
-      b2kSpriteNew "foes", "saw_a", 1000, 548
+      b2kSpriteNew "foes", "saw_a", 1430, 548
       put the result into tRef
       if tRef is not empty then
          b2kSpritePlay tRef, "sawspin"
-         pfAddMover tRef, 1000, 548, 96, 1100, 0, 1, 38, 42, false
+         pfAddMover tRef, 1430, 548, 96, 1100, 0, 1, 38, 42, false
          put gMovN into gSawMov
          put tRef into gSawSpr
       end if
    end if
-   pfMakeSlime 1, "normal", 2518, 2468, 2604, 512
-   pfMakeThwomp 1, 1200
-   pfMakeThwomp 2, 1400
-   pfMakeCheckpoint 610
-   pfMakeGoal 2708, 416
+   pfMakeSlime 1, "normal", 2774, 2724, 2860, 512
+   pfMakeThwomp 1, 1640
+   pfMakeThwomp 2, 1840
+   pfMakeCheckpoint 1000
+   pfMakeGoal 2964, 416
 end pfL2Cast
 
 -- =====================================================================
@@ -1314,46 +1641,46 @@ end pfL2Cast
 command pfL3Scene
    local tX
    put "FROZEN CITADEL (icy!)" into gLevelName
-   pfBounds 3520
+   pfBounds 3776
    pfSlab "pf_ground1", 0, 576, 768, 640
-   pfSlab "pf_ground2", 960, 576, 1664, 640
-   pfSlab "pf_ground3", 1856, 576, 3520, 640
-   pfSlab "pf_plat1", 3040, 512, 3232, 576
-   pfSlab "pf_plat2", 3232, 448, 3360, 576
+   pfSlab "pf_ground2", 960, 576, 1792, 640
+   pfSlab "pf_ground3", 1984, 576, 3776, 640
+   pfSlab "pf_plat1", 3168, 512, 3360, 576
+   pfSlab "pf_plat2", 3360, 448, 3488, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_block_top") then
       repeat with tX = 0 to 704 step 64
          pfTile "terrain_snow_block_top", tX, 576
       end repeat
-      repeat with tX = 960 to 1600 step 64
+      repeat with tX = 960 to 1728 step 64
          pfTile "terrain_snow_block_top", tX, 576
       end repeat
-      repeat with tX = 1856 to 3456 step 64
+      repeat with tX = 1984 to 3712 step 64
          pfTile "terrain_snow_block_top", tX, 576
       end repeat
-      pfTile "terrain_snow_block_top_left", 3040, 512
-      pfTile "terrain_snow_block_top", 3104, 512
-      pfTile "terrain_snow_block_top_right", 3168, 512
-      pfTile "terrain_snow_block_top", 3232, 448
-      pfTile "terrain_snow_block_top", 3296, 448
-      pfTile "terrain_snow_block_center", 3232, 512
-      pfTile "terrain_snow_block_center", 3296, 512
+      pfTile "terrain_snow_block_top_left", 3168, 512
+      pfTile "terrain_snow_block_top", 3232, 512
+      pfTile "terrain_snow_block_top_right", 3296, 512
+      pfTile "terrain_snow_block_top", 3360, 448
+      pfTile "terrain_snow_block_top", 3424, 448
+      pfTile "terrain_snow_block_center", 3360, 512
+      pfTile "terrain_snow_block_center", 3424, 512
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
    pfMakeSpikes 768, 960
-   pfMakeSpikes 1664, 1856
+   pfMakeSpikes 1792, 1984
    -- the glacier run (the level's second act): a snow cloud rest above
    -- the second sweeping saw's stretch
-   b2kSmoothGround "2880,448" & cr & "2816,448" & cr & "2624,448" & cr & "2560,448"
+   b2kSmoothGround "3008,448" & cr & "2944,448" & cr & "2752,448" & cr & "2688,448"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_cloud_left") then
-      pfTile "terrain_snow_cloud_left", 2624, 448
-      pfTile "terrain_snow_cloud_middle", 2688, 448
-      pfTile "terrain_snow_cloud_right", 2752, 448
+      pfTile "terrain_snow_cloud_left", 2752, 448
+      pfTile "terrain_snow_cloud_middle", 2816, 448
+      pfTile "terrain_snow_cloud_right", 2880, 448
    else
       create graphic "pf_cloudledgeD"
       set the style of it to "line"
-      set the points of it to "2624,448" & cr & "2816,448"
+      set the points of it to "2752,448" & cr & "2944,448"
       set the lineSize of it to 4
       set the foregroundColor of it to "200,220,240"
       b2kCamAdopt the long id of graphic "pf_cloudledgeD"
@@ -1364,7 +1691,7 @@ command pfL3Scene
       pfMakeBonk "box", 1296
       pfMakeBonk "brick", 1360
       pfMakeBonk "box", 1424
-      pfMakeKeyDoor 2140, 500, 2880, "red"
+      pfMakeKeyDoor 2268, 500, 3008, "red"
    end if
 end pfL3Scene
 
@@ -1376,42 +1703,136 @@ command pfL3Cast
    b2kPlayerSet "accel", 260
    b2kPlayerSet "airAccel", 480
    pfMakeCoin 1300, 500     -- under the bonk row
-   pfMakeCoin 1550, 448     -- above the first sweeping saw
-   pfMakeCoin 1760, 440     -- mid-air over the second pit
-   pfMakeCoin 1985, 500     -- the snow slime's beat
-   pfMakeCoin 2480, 448     -- above the SECOND sweeping saw (no lever here)
-   pfMakeCoin 2720, 392     -- on the snow cloud
-   pfMakeCoin 3170, 448     -- over the first snow step
-   pfMakeCoin 3265, 392     -- over the top step, by the flag
+   pfMakeCoin 1640, 448     -- above the first sweeping saw
+   pfMakeCoin 1888, 440     -- mid-air over the second pit
+   pfMakeCoin 2113, 500     -- the snow slime's beat
+   pfMakeCoin 2608, 448     -- above the SECOND sweeping saw (no lever here)
+   pfMakeCoin 2848, 392     -- on the snow cloud
+   pfMakeCoin 3298, 448     -- over the first snow step
+   pfMakeCoin 3393, 392     -- over the top step, by the flag
    if gToysOK is true then
       pfMakeCoin 864, 300   -- over the first pit: ride the spring's arc
-      pfMakeCoin 2928, 510  -- inside the red door's passage
+      pfMakeCoin 3056, 510  -- inside the red door's passage
    end if
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
-      b2kSpriteNew "foes", "saw_a", 1550, 548
+      b2kSpriteNew "foes", "saw_a", 1640, 548
       put the result into tRef
       if tRef is not empty then
          b2kSpritePlay tRef, "sawspin"
-         pfAddMover tRef, 1550, 548, 96, 1100, 0, 1, 38, 42, false
+         pfAddMover tRef, 1640, 548, 96, 1100, 0, 1, 38, 42, false
          put gMovN into gSawMov
          put tRef into gSawSpr
       end if
    end if
    -- the glacier run's saw: always on (the lever stayed in level 2)
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
-      b2kSpriteNew "foes", "saw_a", 2480, 548
+      b2kSpriteNew "foes", "saw_a", 2608, 548
       put the result into tRef
       if tRef is not empty then
          b2kSpritePlay tRef, "sawspin"
-         pfAddMover tRef, 2480, 548, 96, 1000, 0, 1, 38, 42, false
+         pfAddMover tRef, 2608, 548, 96, 1000, 0, 1, 38, 42, false
       end if
    end if
-   pfMakeSlime 1, "normal", 1985, 1950, 2020, 576
-   pfMakeThwomp 1, 2080     -- it guards the red key
-   pfMakeCheckpoint 1920
+   pfMakeSlime 1, "normal", 2113, 2078, 2148, 576
+   pfMakeThwomp 1, 2208     -- it guards the red key
+   pfMakeCheckpoint 2048
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
-   pfMakeGoal 3320, 416
+   pfMakeGoal 3448, 416
 end pfL3Cast
+
+-- =====================================================================
+-- LEVEL 4 - "HAUNTED HOLLOW" (3712px). Wave 3's bestiary in the purple
+-- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
+-- whose kicked shell bowls a slime over, the BAT overhang, a pit, two
+-- PIRANHA burrows, the GHOST stalking the whole back half, a pair of
+-- faced CRUSHERS around a lava strip, purple steps to the flag. Every
+-- beat spaced per the layout law (~100px+ of clear air).
+-- =====================================================================
+command pfL4Scene
+   local tX
+   put "HAUNTED HOLLOW (spooky!)" into gLevelName
+   pfBounds 3712
+   pfSlab "pf_ground1", 0, 576, 1856, 640
+   pfSlab "pf_ground2", 2048, 576, 3712, 640
+   pfSlab "pf_plat1", 3296, 512, 3488, 576
+   pfSlab "pf_plat2", 3488, 448, 3616, 576
+   -- the bat overhang: a stone bar the bats roost under
+   pfSlab "pf_batbar", 1472, 256, 1856, 320
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_purple_block_top") then
+      repeat with tX = 0 to 1792 step 64
+         pfTile "terrain_purple_block_top", tX, 576
+      end repeat
+      repeat with tX = 2048 to 3648 step 64
+         pfTile "terrain_purple_block_top", tX, 576
+      end repeat
+      pfTile "terrain_purple_block_top_left", 3296, 512
+      pfTile "terrain_purple_block_top", 3360, 512
+      pfTile "terrain_purple_block_top_right", 3424, 512
+      pfTile "terrain_purple_block_top", 3488, 448
+      pfTile "terrain_purple_block_top", 3552, 448
+      pfTile "terrain_purple_block_center", 3488, 512
+      pfTile "terrain_purple_block_center", 3552, 512
+      pfTile "terrain_purple_horizontal_left", 1472, 256
+      pfTile "terrain_purple_horizontal_middle", 1536, 256
+      pfTile "terrain_purple_horizontal_middle", 1600, 256
+      pfTile "terrain_purple_horizontal_middle", 1664, 256
+      pfTile "terrain_purple_horizontal_middle", 1728, 256
+      pfTile "terrain_purple_horizontal_right", 1792, 256
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   -- the piranha burrow mouths, drawn by the SCENE so every later
+   -- sprite (the plants included) layers above them
+   create graphic "pf_hole1"
+   set the style of it to "oval"
+   set the rect of it to 2344, 566, 2392, 590
+   set the filled of it to true
+   set the backgroundColor of it to "30,24,40"
+   b2kCamAdopt the long id of graphic "pf_hole1"
+   create graphic "pf_hole2"
+   set the style of it to "oval"
+   set the rect of it to 2568, 566, 2616, 590
+   set the filled of it to true
+   set the backgroundColor of it to "30,24,40"
+   b2kCamAdopt the long id of graphic "pf_hole2"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "grass_purple") then
+      pfTile "grass_purple", 320, 512
+      pfTile "grass_purple", 1100, 512
+      pfTile "grass_purple", 2240, 512
+      pfTile "grass_purple", 2820, 512
+   end if
+   pfMakeLava 2944, 3072
+end pfL4Scene
+
+command pfL4Cast
+   local tRef
+   pfMakeCoin 544, 470      -- between the two things that are not grass
+   pfMakeCoin 980, 500      -- the snail's beat (shell it, kick it)
+   pfMakeCoin 1255, 500     -- the slime its shell can bowl over
+   pfMakeCoin 1664, 500     -- under the bat roost - they drop
+   pfMakeCoin 1952, 430     -- mid-air over the pit
+   pfMakeCoin 2480, 480     -- between the burrows: time the bites
+   pfMakeCoin 2704, 470     -- past the second burrow
+   pfMakeCoin 3008, 470     -- over the lava, between the crushers
+   pfMakeCoin 3392, 448     -- over the first purple step
+   pfMakeCoin 3520, 392     -- over the top step, by the flag
+   pfMakeSnail 1, 980, 880, 1080
+   pfMakeSlime 2, "normal", 1255, 1180, 1330, 576
+   -- split patrol bands: two flying BODIES sharing one band would
+   -- collide mid-bar and fight their velocity asserts (jitter)
+   pfMakeBat 3, 1568, 344, 1490, 1650
+   pfMakeBat 4, 1728, 344, 1690, 1840
+   pfMakeMimic 5, 448
+   pfMakeMimic 6, 640
+   pfMakePlant 1, 2368
+   pfMakePlant 2, 2592
+   pfMakeGhost 2240, 360
+   pfMakeThwomp 1, 2848, true   -- the faced CRUSHERS guard the lava
+   pfMakeThwomp 2, 3168, true
+   pfMakeCheckpoint 2160
+   pfMakeGoal 3580, 416
+end pfL4Cast
 
 
 -- Every coin (sensor pickup or ?-box payout) lands here. The moment the
@@ -1530,6 +1951,8 @@ on b2kFrame
    pfTickDebris
    pfTickLever
    pfTickDoor
+   pfTickPlants
+   pfTickGhost
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
    -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
    -- on EVERY frame -- the single biggest avoidable per-frame cost here
@@ -1541,7 +1964,7 @@ on b2kFrame
    else
       put (the milliseconds - gRunStart) div 1000 into tSecs
    end if
-   put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   lands " & gLands & "   |   " & b2kPlayerState() & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & b2kPlayerState() & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
    if gHasKey is true then put "   [KEY]" after tHud
    if gCamOK is true then
       put "   |   view " & the hScroll of b2kCamGroup() & "-" & (the hScroll of b2kCamGroup() + 1024) after tHud
@@ -1628,12 +2051,18 @@ command pfTickGate
    end if
 end pfTickGate
 
+-- The slime-FAMILY tick: the classic patrollers plus the Wave 3 kinds.
+-- One position read per live row; each kind costs a couple of compares
+-- plus its own steering. Kind chains: snail -> shell -> shellslide <->
+-- shell; bat -> batfly; mimic -> mimiclive. (The stomp/kick/hurt
+-- VERDICTS live in b2kContact - this tick is pure steering.)
 command pfTickSlimes
-   local i, tX, tBody
+   local i, j, tX, tY, tPos, tBody, tVX, tMS
    set the itemDelimiter to comma
+   put the milliseconds into tMS
    repeat with i = 1 to gSlimeN
       if gSlimeGoneAt[i] is not empty then
-         if the milliseconds > gSlimeGoneAt[i] then
+         if tMS > gSlimeGoneAt[i] then
             if gSlimeSpr[i] is not empty then b2kSpriteRemove gSlimeSpr[i]
             put empty into gSlimeSpr[i]
             if there is a graphic ("pf_slimeBody" & i) then delete graphic ("pf_slimeBody" & i)
@@ -1643,14 +2072,181 @@ command pfTickSlimes
       end if
       put gSlimeB[i] into tBody
       if tBody is empty then next repeat
-      put item 1 of b2kPosition(tBody) into tX
-      if tX is empty then next repeat
-      if tX <= gSlimeMin[i] then put 60 into gSlimeDir[i]
-      if tX >= gSlimeMax[i] then put -60 into gSlimeDir[i]
-      b2kSetVelocity tBody, gSlimeDir[i], item 2 of b2kVelocity(tBody)
-      if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], (gSlimeDir[i] < 0)
+      put b2kPosition(tBody) into tPos
+      if tPos is empty then next repeat
+      put item 1 of tPos into tX
+      put item 2 of tPos into tY
+      switch gSlimeKind[i]
+         case "shell"
+            -- a parked shell needs NO per-frame work: the transitions
+            -- already wrote velocity 0, and a per-frame b2kSetVelocity
+            -- would WAKE it every tick (the Kit wakes on velocity
+            -- writes by design) - a sleeping shell costs the solver
+            -- nothing. The case must exist, or the default branch
+            -- would hand it patrol velocity.
+            break
+         case "shellslide"
+            -- the bowling ball: a per-frame velocity ASSERT (the
+            -- player-controller pattern) keeps the slide at speed; a
+            -- wall hit shows as collapsed vx -> reverse, keep rolling
+            put item 1 of b2kVelocity(tBody) into tVX
+            if gSlimeDir[i] > 0 and tVX < 60 then put -520 into gSlimeDir[i]
+            if gSlimeDir[i] < 0 and tVX > -60 then put 520 into gSlimeDir[i]
+            b2kSetVelocity tBody, gSlimeDir[i], item 2 of b2kVelocity(tBody)
+            if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], (gSlimeDir[i] < 0)
+            -- bowl over any ground foe it reaches (shells are immune
+            -- to each other; this loop only runs while one slides)
+            repeat with j = 1 to gSlimeN
+               if j is i then next repeat
+               if gSlimeB[j] is empty then next repeat
+               if gSlimeKind[j] is "shell" or gSlimeKind[j] is "shellslide" then next repeat
+               put b2kPosition(gSlimeB[j]) into tPos
+               if tPos is empty then next repeat
+               if abs(item 1 of tPos - tX) < 44 and abs(item 2 of tPos - tY) < 44 then
+                  pfSquashSlime j
+               end if
+            end repeat
+            break
+         case "bat"
+            -- hanging: one proximity compare arms the drop
+            if abs(gHeroPX - tX) < 150 and gHeroPY > tY then
+               put "batfly" into gSlimeKind[i]
+               b2kSetDynamic tBody
+               b2kSetGravityScale tBody, 0   -- a flying body
+               if gSlimeSpr[i] is not empty then b2kSpritePlay gSlimeSpr[i], "batfly"
+            end if
+            break
+         case "batfly"
+            -- patrol + a proportional swoop to head height + sine bob
+            if tX <= gSlimeMin[i] then put 90 into gSlimeDir[i]
+            if tX >= gSlimeMax[i] then put -90 into gSlimeDir[i]
+            b2kSetVelocity tBody, gSlimeDir[i], (450 - tY) * 1.5 + 40 * sin(tMS / 300)
+            if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], (gSlimeDir[i] < 0)
+            break
+         case "mimic"
+            -- disguised and DEAD STILL until the hero is close; the
+            -- wake is the tell (grass has no business in this biome).
+            -- 110px = ~0.4s of warning even at full sprint.
+            if abs(gHeroPX - tX) < 110 and abs(gHeroPY - tY) < 160 then
+               put "mimiclive" into gSlimeKind[i]
+               b2kSetDynamic tBody
+               if gSlimeSpr[i] is not empty then b2kSpriteSetFrame gSlimeSpr[i], "grassBlock_jump.png"
+               put tMS + 350 into gSlimeT[i]   -- first hop after a beat
+            end if
+            break
+         case "mimiclive"
+            -- short lunges at the hero whenever it has settled
+            if tMS > gSlimeT[i] and abs(item 2 of b2kVelocity(tBody)) < 8 then
+               if gHeroPX < tX then
+                  put -170 into gSlimeDir[i]
+               else
+                  put 170 into gSlimeDir[i]
+               end if
+               b2kSetVelocity tBody, gSlimeDir[i], -330
+               put tMS + 900 + random(400) into gSlimeT[i]
+               if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], (gSlimeDir[i] < 0)
+            end if
+            break
+         default
+            -- the classic patroller (normal/spike slimes, walking snails)
+            if tX <= gSlimeMin[i] then put 60 into gSlimeDir[i]
+            if tX >= gSlimeMax[i] then put -60 into gSlimeDir[i]
+            b2kSetVelocity tBody, gSlimeDir[i], item 2 of b2kVelocity(tBody)
+            if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], (gSlimeDir[i] < 0)
+      end switch
    end repeat
 end pfTickSlimes
+
+-- The piranha burrows: a pure sprite cycle, no body. down (hidden,
+-- with the classic mercy - it will not rise while the hero stands
+-- over the mouth) -> rise -> up (the bite = the hurt box) -> sink.
+command pfTickPlants
+   local i, tMS, tP
+   if gPlantN is 0 or gPlantN is empty then exit pfTickPlants
+   put the milliseconds into tMS
+   repeat with i = 1 to gPlantN
+      if gPlantSpr[i] is empty then next repeat
+      switch gPlantState[i]
+         case "down"
+            if tMS > gPlantT[i] and abs(gHeroPX - gPlantX[i]) > 52 then
+               put "rise" into gPlantState[i]
+               put tMS + 450 into gPlantT[i]
+               set the visible of gPlantSpr[i] to true
+            end if
+            break
+         case "rise"
+            put 1 - (gPlantT[i] - tMS) / 450 into tP
+            if tP > 1 then put 1 into tP
+            b2kSpriteMoveTo gPlantSpr[i], gPlantX[i], 606 - 56 * tP
+            if tMS >= gPlantT[i] then
+               put "up" into gPlantState[i]
+               put tMS + 1200 into gPlantT[i]
+            end if
+            break
+         case "up"
+            if gHurtLock is not true then
+               if abs(gHeroPX - gPlantX[i]) < 34 and gHeroPY > 460 and gHeroPY < 600 then
+                  pfOuch gPlantX[i]
+               end if
+            end if
+            if tMS >= gPlantT[i] then
+               put "sink" into gPlantState[i]
+               put tMS + 450 into gPlantT[i]
+            end if
+            break
+         case "sink"
+            put (gPlantT[i] - tMS) / 450 into tP
+            if tP < 0 then put 0 into tP
+            b2kSpriteMoveTo gPlantSpr[i], gPlantX[i], 606 - 56 * tP
+            if tMS >= gPlantT[i] then
+               put "down" into gPlantState[i]
+               put tMS + 1400 + random(500) into gPlantT[i]
+               set the visible of gPlantSpr[i] to false
+            end if
+            break
+      end switch
+   end repeat
+end pfTickPlants
+
+-- The ghost: bodiless, drifts through everything, chases at ~80px/s
+-- ONLY while the hero faces away - eye contact freezes it in the shy
+-- pose. One sprite and a handful of compares; the haunt is cheap.
+command pfTickGhost
+   local tDX, tDY, tLen, tWatched, tDT
+   if gGhostSpr is empty then exit pfTickGhost
+   if (gGhostX - gHeroPX >= 0 and b2kPlayerFacing() is 1) \
+         or (gGhostX - gHeroPX < 0 and b2kPlayerFacing() is -1) then
+      put true into tWatched
+   else
+      put false into tWatched
+   end if
+   if tWatched is not gGhostShy then
+      put tWatched into gGhostShy
+      if tWatched is true then
+         b2kSpriteSetFrame gGhostSpr, "ghost_normal.png"
+      else
+         b2kSpriteSetFrame gGhostSpr, "ghost.png"
+      end if
+   end if
+   if tWatched is not true then
+      put b2kFrameMS() / 1000 into tDT
+      if tDT > 0.05 then put 0.05 into tDT
+      put gHeroPX - gGhostX into tDX
+      put (gHeroPY - 12) - gGhostY into tDY
+      put sqrt(tDX * tDX + tDY * tDY) into tLen
+      if tLen > 10 then
+         put gGhostX + tDX / tLen * 80 * tDT into gGhostX
+         put gGhostY + tDY / tLen * 80 * tDT into gGhostY
+         if gGhostY < 220 then put 220 into gGhostY
+         if gGhostY > 540 then put 540 into gGhostY
+         b2kSpriteFlipH gGhostSpr, (tDX < 0)
+         b2kSpriteMoveTo gGhostSpr, gGhostX, gGhostY
+      end if
+   end if
+   if gHurtLock is not true then
+      if abs(gHeroPX - gGhostX) < 30 and abs(gHeroPY - gGhostY) < 44 then pfOuch gGhostX
+   end if
+end pfTickGhost
 
 -- Each thwomp's life cycle (only the underside kills; the head is a
 -- platform). A chained weight is never the player's to move: it rests
@@ -1740,15 +2336,17 @@ command pfTickMovers
          b2kSpriteFlipH gMovSpr[i], (cos(tMS / gMovPX[i]) < 0)
       end if
       if gMovHurtW[i] > 0 and gHurtLock is not true then
-         if abs(tHX - tMX) < gMovHurtW[i] and abs(tHY - tMY) < gMovHurtH[i] then pfHurt
+         -- a brush with a mover (saw, fly) knocks back, never respawns
+         if abs(tHX - tMX) < gMovHurtW[i] and abs(tHY - tMY) < gMovHurtH[i] then pfOuch tMX
       end if
    end repeat
 end pfTickMovers
 
--- Lethal only from below: the hero must be under the block's bottom edge
--- and horizontally within it.
+-- Dangerous only from below: the hero must be under the block's bottom
+-- edge and horizontally within it. A crush knocks back (Wave 2) -- the
+-- pop throws him clear of the slam.
 command pfBlockUndersideCheck pHX, pHY, pBX, pBY
-   if abs(pHX - pBX) < 46 and pHY > pBY + 26 and pHY < pBY + 96 then pfHurt
+   if abs(pHX - pBX) < 46 and pHY > pBY + 26 and pHY < pBY + 96 then pfOuch pBX
 end pfBlockUndersideCheck
 
 -- =====================================================================
@@ -2032,12 +2630,17 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       end if
       exit b2kSensorEnter
    end if
-   if the uPfHazardFlag of pSensorCtrl is true then pfHurt
+   if the uPfHazardFlag of pSensorCtrl is true then
+      -- spikes/saw sensors: knockback away from the hazard's centre
+      -- (a wide spike strip pops you back toward the side you entered)
+      set the itemDelimiter to comma
+      pfOuch item 1 of b2kPosition(pSensorCtrl)
+   end if
    if the uPfGoalFlag of pSensorCtrl is true then
       -- camera-dead fallback clamps play to one screen, so most coins are
       -- out of reach there: the near flag advances unconditionally instead
       if gCoins >= gCoinsTotal or gCamOK is not true then
-         if gLevel >= 3 then
+         if gLevel >= 4 then
             pfWin
          else
             pfLevelClear
@@ -2112,7 +2715,7 @@ end b2kFell
 -- and gPrevState is last frame's - a stomp shows up as land/fall in one
 -- of them. The raw velocity stays as a belt-and-braces fallback.
 on b2kContact pA, pB
-   local i, tWhich, tFoe, tState, tStomp
+   local i, tWhich, tFoe, tState, tStomp, tAbove, tKind, tFX
    if gHurtLock is true then exit b2kContact
    put empty into tWhich
    repeat with i = 1 to gSlimeN
@@ -2135,31 +2738,115 @@ on b2kContact pA, pB
          or gPrevState is "land" or gPrevState is "fall" \
          or (gAirMS > 0 and the milliseconds - gAirMS < 250) \
          or (item 2 of b2kVelocity(gHero)) > 40) into tStomp
-   if gSlimeKind[tWhich] is not "spike" and tStomp and \
-         (item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(tFoe)) - 16 then
+   put ((item 2 of b2kPosition(gHero)) < (item 2 of b2kPosition(tFoe)) - 16) into tAbove
+   put item 1 of b2kPosition(tFoe) into tFX
+   put gSlimeKind[tWhich] into tKind
+   -- ===== the Wave 3 kinds own their verdicts =====
+   if tKind is "snail" then
+      -- a stomp SHELLS the snail (it does not die); a side touch hurts
+      if tStomp and tAbove then
+         put "shell" into gSlimeKind[tWhich]
+         put 0 into gSlimeDir[tWhich]
+         b2kSetVelocity tFoe, 0, item 2 of b2kVelocity(tFoe)
+         if gSlimeSpr[tWhich] is not empty then
+            b2kSpriteStop gSlimeSpr[tWhich]
+            b2kSpriteSetFrame gSlimeSpr[tWhich], "snail_shell"
+         end if
+         b2kSound "stomp"
+         b2kPlayerJump 260
+      else
+         pfOuch tFX
+      end if
+      exit b2kContact
+   end if
+   if tKind is "shell" then
+      -- ANY touch of a parked shell KICKS it away from the hero (a
+      -- stomp-kick also bounces him, stomp-style); resting shells are
+      -- otherwise harmless
+      if gHeroPX < tFX then
+         put 520 into gSlimeDir[tWhich]
+      else
+         put -520 into gSlimeDir[tWhich]
+      end if
+      put "shellslide" into gSlimeKind[tWhich]
+      b2kSetVelocity tFoe, gSlimeDir[tWhich], 0
+      b2kSound "kick"
+      if tStomp and tAbove then b2kPlayerJump 260
+      exit b2kContact
+   end if
+   if tKind is "shellslide" then
+      -- stomping a sliding shell STOPS it; its sides hurt
+      if tStomp and tAbove then
+         put "shell" into gSlimeKind[tWhich]
+         put 0 into gSlimeDir[tWhich]
+         b2kSetVelocity tFoe, 0, item 2 of b2kVelocity(tFoe)
+         b2kSound "stomp"
+         b2kPlayerJump 260
+      else
+         pfOuch tFX
+      end if
+      exit b2kContact
+   end if
+   if tKind is "bat" or tKind is "batfly" or tKind is "mimic" or tKind is "mimiclive" then
+      -- one-stomp critters; their touch knocks back like everything
+      if tStomp and tAbove then
+         pfSquashSlime tWhich
+         b2kPlayerJump 260
+      else
+         pfOuch tFX
+      end if
+      exit b2kContact
+   end if
+   -- ===== the classic slimes =====
+   if tKind is not "spike" and tStomp and tAbove then
       pfSquashSlime tWhich
       b2kPlayerJump 260   -- the API jump: exempt from the ground-snap
                           -- (a raw upward set-velocity on a grounded
                           -- player is treated as solver rebound)
    else
-      pfHurt
+      -- contact damage = knockback away from the slime (Wave 2 split)
+      pfOuch tFX
    end if
 end b2kContact
 
+-- The slime-family death: pick the kind's death pose, freeze the art,
+-- drop the body, sweep the remains a moment later (pfTickSlimes).
+-- Wave 3 kinds die too - bats and mimics to their spook hit frames, a
+-- bowled snail leaves its shell behind. (A frame a sheet lacks is a
+-- safe no-op inside the Kit: the art simply keeps its last pose.)
 command pfSquashSlime pWhich
    local tFlat
    if gSlimeB[pWhich] is empty then exit pfSquashSlime
    b2kSound "stomp"
-   put "slime_" & gSlimeKind[pWhich] & "_flat" into tFlat
-   if gSlimeSpr[pWhich] is not empty and b2kSheetHasFrame("foes", tFlat) then
+   switch gSlimeKind[pWhich]
+      case "bat"
+      case "batfly"
+         put "bat_hit.png" into tFlat
+         break
+      case "mimic"
+      case "mimiclive"
+         put "grassBlock_hit.png" into tFlat
+         break
+      case "snail"
+      case "shell"
+      case "shellslide"
+         put "snail_shell" into tFlat
+         break
+      default
+         put "slime_" & gSlimeKind[pWhich] & "_flat" into tFlat
+   end switch
+   if gSlimeSpr[pWhich] is not empty then
+      b2kSpriteStop gSlimeSpr[pWhich]
       b2kSpriteSetFrame gSlimeSpr[pWhich], tFlat
       b2kSpriteUnbind gSlimeSpr[pWhich]
    end if
-   b2kRemove gSlimeB[pWhich]      -- body gone; the flat art lingers a moment
+   b2kRemove gSlimeB[pWhich]      -- body gone; the death art lingers a moment
    put empty into gSlimeB[pWhich]
    put the milliseconds + 700 into gSlimeGoneAt[pWhich]
 end pfSquashSlime
 
+-- The RESPAWN path -- Wave 2 reserves it for LETHAL hits (pits, the
+-- kill plane). Contact damage goes through pfOuch instead.
 command pfHurt
    if gHurtLock is true or gWinLock is true then exit pfHurt
    put true into gHurtLock
@@ -2167,12 +2854,27 @@ command pfHurt
    b2kSound "hurt"
    b2kCamShake 7, 280
    -- the controller must not steer or re-anim during the hit pose; it
-   -- keeps observing (state stays fresh) and resumes in pfHurtDone
+   -- keeps observing (state stays fresh) and resumes in pfHurtDone.
+   -- (The explicit control call also cancels any Kit knockback in
+   -- flight -- a knockback that ends in a pit hands over cleanly.)
    b2kPlayerControl false
    set the itemDelimiter to comma
    b2kSetVelocity gHero, 0, item 2 of b2kVelocity(gHero)
    b2kSpritePlay gHeroSpr, "hit", true   -- non-loop; OnFinish respawns
 end pfHurt
+
+-- Contact damage -> the Kit's knockback standard (Wave 2): an away-pop
+-- off pFromX, the hurt pose, a short control-off window, then a mercy
+-- window. The Kit no-ops repeat hurts inside the window; the gate here
+-- just keeps the sound/shake from spamming alongside.
+command pfOuch pFromX
+   if gHurtLock is true or gWinLock is true then exit pfOuch
+   if b2kPlayerHurtIs() then exit pfOuch
+   add 1 to gOuches
+   b2kSound "hurt"
+   b2kCamShake 5, 200
+   b2kPlayerHurt pFromX
+end pfOuch
 
 -- All coins + the flag on levels 1-2: bank the stats, banner the clear,
 -- and rebuild the NEXT level outside this frame (sensor dispatch runs
@@ -2231,7 +2933,7 @@ command pfWin
       put the result into tC
       if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
    end repeat
-   put "ALL THREE LEVELS CLEAR!" & cr & cr into tMsg
+   put "ALL FOUR LEVELS CLEAR!" & cr & cr into tMsg
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
    if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
@@ -2259,6 +2961,10 @@ command pfTogglePause
 end pfTogglePause
 
 on pfHurtDone pSprite, pAnim
+   -- ONLY the respawn flow's one-shot "hit" may land here: any other
+   -- non-looping anim finishing on the hero (a stray pose) must not
+   -- teleport him to the checkpoint
+   if gHurtLock is not true then exit pfHurtDone
    b2kMoveTo gHero, gRespawnX, gRespawnY
    b2kSetVelocity gHero, 0, 0
    put false into gHurtLock
@@ -2401,11 +3107,16 @@ end rawKeyDown
 --         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
 --         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
 -- PLAYER  b2kPlayerMake x,y,w,h[,sheet] · b2kPlayerAttach ctrl ·
---         b2kPlayerAnims idle,run,jump,fall[,land] · b2kPlayerSet key,value ·
---         b2kPlayerGet(key) · b2kPlayerOnGround() · b2kPlayerState() ·
+--         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt] ·
+--         b2kPlayerSet key,value · b2kPlayerGet(key) · b2kPlayerOnGround() ·
+--         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt) ·
 --         b2kPlayerFacing() · b2kPlayerJump [speed] · b2kPlayerControl flag ·
+--         b2kPlayerAddLadder x1,y1,x2,y2 · b2kPlayerHurt [fromX] ·
+--         b2kPlayerHurtIs() (true through knockback + mercy window) ·
 --         b2kPlayer() · b2kPlayerSprite() · b2kPlayerRemove
---         (drives axis "moveX" + action "jump"; rebind those to remap)
+--         (drives axes "moveX"/"moveY" + action "jump"; rebind to remap.
+--         DOWN ducks · DOWN+JUMP on a one-way chain drops through ·
+--         UP/DOWN in a ladder zone climbs · JUMP exits a climb)
 -- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
 --         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
 --         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
@@ -2421,7 +3132,8 @@ end rawKeyDown
 --         on b2kSensorExit pSensor,pVisitor · b2kSensorCount()+EnterSensor/Visitor(i)
 -- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
 --         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
--- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen points)
+-- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen
+--         points; chains carry the reserved "oneway" layer, bit 2^31)
 -- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapMoving x1,y1,x2,y2 (presence:
 --         statics filtered out) · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
 -- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
@@ -2456,6 +3168,10 @@ local sFrameObj      -- object that receives an on b2kFrame message each frame
 local sRayX, sRayY   -- last b2kRayHit point (screen pixels)
 local sRayNX, sRayNY -- last b2kRayHit surface normal (screen-oriented)
 local sRayDist       -- last b2kRayHit distance from the ray start (pixels)
+local sRayBodyH      -- last b2kRayHit BODY HANDLE (already fetched for the
+                     -- control lookup; stashed so the player's ground probe
+                     -- can classify the hit with zero extra FFI calls)
+local sOneWayBody    -- body handle -> true for one-way chain bodies (b2kChain)
 local sNeedFullSync  -- true when a script-side transform/type edit bypassed move events
 local sEvtCN, sEvtCA, sEvtCB -- begin-contacts buffered THIS FRAME (body handles)
 local sEvtEN, sEvtEA, sEvtEB -- end-contacts buffered this frame
@@ -2508,8 +3224,9 @@ local sInCam         -- ctrlRef -> true when the Kit placed it inside the viewpo
 local sPlayRef       -- the player's control (empty = no player controller)
 local sPlayArt       -- the sprite whose anims the controller drives
 local sPlayTune      -- tuning key -> value (b2kPlayerSet; defaults fill gaps)
-local sPlayAnims     -- state -> animation name (idle/run/jump/fall/land)
-local sPlayState     -- idle | run | jump | fall | land (land lasts one tick)
+local sPlayAnims     -- state -> animation name (idle/run/jump/fall/land/duck/climb/hurt)
+local sPlayState     -- idle | run | jump | fall | land | duck | climb | hurt
+                     -- (land lasts one tick; a drop-through renders as fall)
 local sPlayFacing    -- 1 right / -1 left (last horizontal intent)
 local sPlayGrounded  -- this frame's ray-probe verdict
 local sPlayGroundMS  -- when last grounded (the coyote window)
@@ -2522,13 +3239,37 @@ local sPlayAnimNow   -- last animation written (redundancy suppression)
 local sPlayFlipNow   -- last flip written
 local sPlayHoldMS    -- suppress anim switches until then (land flourish)
 -- hot-path caches (b2kPlayerTuneCache): the tick runs every frame, so
--- the nine knobs resolve at SET time, not per use
+-- the knobs resolve at SET time, not per use
 local sPlayMoveSpd, sPlayAccelG, sPlayAccelA, sPlayJumpSpd, sPlayJumpCut
 local sPlayCoyote, sPlayBuffer, sPlayMaxFall, sPlayCosSlope
+local sPlayDropMS, sPlayClimbSpd                       -- Wave 2 caches...
+local sPlayHurtPopX, sPlayHurtPopY, sPlayHurtMS, sPlayInvulnMS
 local sPlayProbeOffs -- the 3 probe x-offsets, precomputed at attach
 local sPlayReach     -- probe ray length (halfH + 4), precomputed
 local sPlayAir       -- consecutive airborne ticks (landing hysteresis)
 local sPlayNormX     -- surface normal X at the grounded probe hit (slope test)
+local sPlayPX, sPlayPY -- the probe's screen-px body centre, stashed for the
+                     -- ladder zone test and b2kPlayerHurt (no second FFI read)
+local sPlayOnOneWay  -- this frame's ground is a one-way chain (drop eligible)
+local sPlayDropUntil -- sim-clock end of the drop-through window (0 = inactive)
+local sPlayDropHard  -- hard restore deadline (4x dropMs): a drop that lands on
+                     -- a parked solid under the chain must not stay intangible
+local sPlayDropLineY -- surface y the drop started through; the mask is only
+                     -- restored once the capsule's TOP clears it (a straddling
+                     -- restore would snap the player back on top: chain contacts
+                     -- are one-sided, judged by the centroid)
+local sPlayDropSeen  -- the probe skipped a one-way hit this frame (still inside)
+local sPlayDropMask  -- the player's mask to restore when the window closes
+local sPlayClimb     -- true while in the climb state (gravity scale parked at 0)
+local sPlayGravSave  -- the body's gravity scale to restore on climb exit
+local sPlayLadN      -- registered ladder zones (flat numeric arrays: the
+local sPlayLadL, sPlayLadT, sPlayLadR, sPlayLadB -- ...in-zone test is pure compares)
+local sPlayHurt      -- true while knockback owns the controller
+local sPlayHurtEnd   -- sim-clock when hurtMs has elapsed
+local sPlayHurtHalf  -- sim-clock when half of hurtMs has elapsed (landings
+                     -- only count from here; restore = LATER of the two)
+local sPlayHurtLand  -- sim-clock of the first landing after the half mark (0 = none)
+local sPlayInvulnUntil -- sim-clock end of the post-hurt mercy window
 local sPlayClock     -- the player's SIM-TIME clock: summed frame ms.
                      -- Wall-clock would shrink the coyote/buffer windows
                      -- on slow machines (90ms = fewer frames); sim time
@@ -2580,6 +3321,7 @@ command b2kResetTables
    put empty into sSpawned
    put empty into sSensor
    put empty into sInCam
+   put empty into sOneWayBody
 end b2kResetTables
 
 command b2kTeardown
@@ -3610,13 +4352,18 @@ function b2kRayHit pX1, pY1, pX2, pY2
       put pX2 - pX1 into dx
       put pY2 - pY1 into dy
       put b2RayFraction() * sqrt(dx * dx + dy * dy) into sRayDist
-      return sCtrl[b2RayBody()]
+      -- the handle is fetched for the control lookup anyway; stashing it
+      -- lets the player's probe classify the ground (one-way chain or
+      -- solid) without a single extra FFI call
+      put b2RayBody() into sRayBodyH
+      return sCtrl[sRayBodyH]
    end if
    put empty into sRayX
    put empty into sRayY
    put empty into sRayNX
    put empty into sRayNY
    put empty into sRayDist
+   put empty into sRayBodyH
    return empty
 end b2kRayHit
 
@@ -3979,9 +4726,11 @@ end b2kSensorExitVisitor
 command b2kDefineLayer pName
    if sLayers[pName] is not empty then return sLayers[pName]
    if sNextBit is empty or sNextBit < 1 then put 1 into sNextBit
-   -- xTalk's bitOr is 32-bit, so layer 33+ would wrap to a category of 0
-   -- (= collides with nothing). Refuse instead of corrupting filters.
-   if sNextBit > 2147483648 then return 0
+   -- xTalk's bitOr is 32-bit, so a wrapped layer would get a category of 0
+   -- (= collides with nothing). Refuse instead of corrupting filters. The
+   -- TOP bit (2^31) is the Kit's reserved "oneway" chain layer, so user
+   -- layers stop at 2^30: 31 nameable layers.
+   if sNextBit > 1073741824 then return 0
    put sNextBit into sLayers[pName]
    put sNextBit * 2 into sNextBit
    return sLayers[pName]
@@ -3993,6 +4742,12 @@ function b2kLayerBits pLayerList
    replace comma with space in pLayerList
    repeat for each word tL in pLayerList
       if tL is empty then next repeat
+      if tL is "oneway" then
+         -- the reserved chain layer (bit 2^31): nameable in masks so a
+         -- body can opt in/out of one-way terrain explicitly
+         put tBits bitOr 2147483648 into tBits
+         next repeat
+      end if
       if tL is a number then
          put tBits bitOr (tL) into tBits
       else
@@ -4016,7 +4771,12 @@ command b2kSetMask pControl, pLayerList
    local s
    put sShapeH[the long id of pControl] into s
    if s is empty then exit b2kSetMask
-   b2SetShapeFilter s, b2ShapeFilterCategory(s), b2kLayerBits(pLayerList), b2ShapeFilterGroup(s)
+   -- a named-layer mask means OBJECT rules, not "fall through the
+   -- terrain": the reserved chain bit rides along automatically, so
+   -- custom-masked bodies still stand on b2kChain ground. To really
+   -- pass through chains use raw b2SetShapeFilter (the player's
+   -- drop-through window does exactly that, internally).
+   b2SetShapeFilter s, b2ShapeFilterCategory(s), b2kLayerBits(pLayerList) bitOr 2147483648, b2ShapeFilterGroup(s)
 end b2kSetMask
 
 -- Group index: bodies sharing a NEGATIVE group never collide; a POSITIVE group
@@ -4041,15 +4801,23 @@ end b2kSetCollisionGroup
 -- ghost tails can simply continue flat). A chain whose endpoints sit AT the
 -- platform edges has non-solid ends -- bodies fall straight through them.
 command b2kChain pPoints, pLoop
-   local tBody, p
+   local tBody, p, tChain
    if sWorld is empty then return 0
+   set the itemDelimiter to comma   -- points are "x,y" (gotcha 5)
    put b2NewStaticBody(sWorld, 0, 0) into tBody
    b2ChainBegin
    repeat for each line p in pPoints
       if p is empty then next repeat
       b2ChainAddPoint b2kToWorldX(item 1 of p), b2kToWorldY(item 2 of p)
    end repeat
-   return b2CreateChain(tBody, (pLoop is true), 0.6, 0.1)
+   -- every Kit chain carries the reserved ONE-WAY category (bit 2^31,
+   -- the "oneway" layer) with an all-bits mask: nothing collides any
+   -- differently, but the player's drop-through window can now stop
+   -- colliding with chains ALONE by masking out that single bit.
+   b2ShapeDefFilter 2147483648, 4294967295, 0
+   put b2CreateChain(tBody, (pLoop is true), 0.6, 0.1) into tChain
+   if tChain > 0 then put true into sOneWayBody[tBody]
+   return tChain
 end b2kChain
 
 command b2kSmoothGround pPoints
@@ -4070,6 +4838,7 @@ end b2kSmoothGround
 command b2kAddChain pControl, pPoints, pLoop
    local tRef, tCx, tCy, tBody, p, lx, ly
    if sWorld is empty then return 0
+   set the itemDelimiter to comma   -- locs and points are "x,y" (gotcha 5)
    put the long id of pControl into tRef
    put item 1 of the loc of pControl into tCx
    put item 2 of the loc of pControl into tCy
@@ -5307,8 +6076,8 @@ end b2kSpritesTick
 -- =====================================================================
 -- ONE keyboard-driven player (spec section 6): a vertical capsule with
 -- fixed rotation, sleep disabled and low friction, steered by a per-frame
--- tick that reads the Input module's axis "moveX" and action "jump"
--- (rebind those names to remap the controls). Horizontal motion is
+-- tick that reads the Input module's axes "moveX"/"moveY" and action
+-- "jump" (rebind those names to remap the controls). Horizontal motion is
 -- velocity-driven -- vx is accelerated toward axis * moveSpeed, so
 -- stopping needs no friction and walls can't glue the character.
 -- Grounding is decided by short downward rays whose surface normal must
@@ -5316,6 +6085,11 @@ end b2kSpritesTick
 -- compare. The feel features platformers expect are built in: coyote
 -- time, jump buffering, release jump-cut (tap = hop, hold = full jump),
 -- a terminal fall speed, and a one-tick "land" state for dust and sound.
+-- Wave 2 actions: DOWN ducks (brake to a stop; the hitbox keeps its
+-- size this wave); DOWN+JUMP on a ONE-WAY CHAIN drops through it (a
+-- dropMs window without chain collision); UP (or DOWN in the air) in a
+-- b2kPlayerAddLadder zone climbs (gravity 0, velocity-driven, JUMP
+-- exits); b2kPlayerHurt is the contact-damage knockback standard.
 -- With b2kPlayerAnims set, the controller drives b2kSpritePlay/FlipH on
 -- the player's art -- the player control itself when it IS a sprite, or
 -- the first sprite b2kSpriteBind-pinned to it (the invisible-body
@@ -5400,6 +6174,22 @@ command b2kPlayerAttach pCtrl
    put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
+   -- Wave 2 state starts clean (ladder ZONES survive an attach: they are
+   -- world geometry, registered before or after the player exists)
+   put 0 into sPlayPX
+   put 0 into sPlayPY
+   put false into sPlayOnOneWay
+   put 0 into sPlayDropUntil
+   put 0 into sPlayDropHard
+   put empty into sPlayDropMask
+   put false into sPlayClimb
+   put empty into sPlayGravSave
+   put false into sPlayHurt
+   put 0 into sPlayHurtEnd
+   put 0 into sPlayHurtHalf
+   put 0 into sPlayHurtLand
+   put 0 into sPlayInvulnUntil
+   if sPlayLadN is empty then put 0 into sPlayLadN
    b2kPlayerTuneCache   -- bake the knobs + probe geometry for the tick
    b2kPlayerResolveArt
    b2kInputOn   -- arms the sampler; starter bindings fill empty slots only
@@ -5424,9 +6214,11 @@ command b2kPlayerResolveArt
 end b2kPlayerResolveArt
 
 -- Tuning knobs (pixels, px/s, ms, degrees). Keys: moveSpeed, accel,
--- airAccel, jumpSpeed, jumpCut, coyoteMs, bufferMs, maxFall, maxSlopeDeg.
--- Settable any time, before or after the player exists; unknown keys are
--- stored verbatim for your own use.
+-- airAccel, jumpSpeed, jumpCut, coyoteMs, bufferMs, maxFall, maxSlopeDeg,
+-- dropMs (drop-through window), climbSpeed (ladder px/s), hurtPopX/
+-- hurtPopY (knockback launch px/s), hurtMs (control-off span), invulnMs
+-- (post-hurt mercy). Settable any time, before or after the player
+-- exists; unknown keys are stored verbatim for your own use.
 command b2kPlayerSet pKey, pValue
    put pValue into sPlayTune[toLower(pKey)]
    b2kPlayerTuneCache
@@ -5443,6 +6235,12 @@ command b2kPlayerTuneCache
    put b2kPlayerGet("coyoteMs") into sPlayCoyote
    put b2kPlayerGet("bufferMs") into sPlayBuffer
    put b2kPlayerGet("maxFall") into sPlayMaxFall
+   put b2kPlayerGet("dropMs") into sPlayDropMS
+   put b2kPlayerGet("climbSpeed") into sPlayClimbSpd
+   put b2kPlayerGet("hurtPopX") into sPlayHurtPopX
+   put b2kPlayerGet("hurtPopY") into sPlayHurtPopY
+   put b2kPlayerGet("hurtMs") into sPlayHurtMS
+   put b2kPlayerGet("invulnMs") into sPlayInvulnMS
    put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into sPlayCosSlope
    if sPlayHalfW is not empty and sPlayHalfW > 0 then
       put sPlayHalfH + 4 into sPlayReach
@@ -5481,6 +6279,18 @@ function b2kPlayerDefault pKey
          return 900
       case "maxslopedeg"
          return 50
+      case "dropms"
+         return 260
+      case "climbspeed"
+         return 160
+      case "hurtpopx"
+         return 220
+      case "hurtpopy"
+         return 320
+      case "hurtms"
+         return 700
+      case "invulnms"
+         return 900
    end switch
    return empty
 end b2kPlayerDefault
@@ -5490,7 +6300,10 @@ end b2kPlayerDefault
 -- touch-down flourish: the controller holds it for its own duration, then
 -- idle/run resume. NOTE: a finishing land animation dispatches the art's
 -- b2kSpriteOnFinish message like any non-looping animation would.
-command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand
+-- Wave 2 slots (all optional, so old five-argument calls keep working):
+-- pDuck falls back to the idle pose, pClimb and pHurt to the jump pose --
+-- sheets without those frames still read correctly.
+command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pDuck, pClimb, pHurt
    put pIdle into sPlayAnims["idle"]
    put pRun into sPlayAnims["run"]
    put pJump into sPlayAnims["jump"]
@@ -5500,6 +6313,21 @@ command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand
       put pFall into sPlayAnims["fall"]
    end if
    put pLand into sPlayAnims["land"]
+   if pDuck is empty then
+      put pIdle into sPlayAnims["duck"]
+   else
+      put pDuck into sPlayAnims["duck"]
+   end if
+   if pClimb is empty then
+      put pJump into sPlayAnims["climb"]
+   else
+      put pClimb into sPlayAnims["climb"]
+   end if
+   if pHurt is empty then
+      put pJump into sPlayAnims["hurt"]
+   else
+      put pHurt into sPlayAnims["hurt"]
+   end if
    put empty into sPlayAnimNow   -- re-assert on the next tick
    if sPlayArt is empty then b2kPlayerResolveArt
 end b2kPlayerAnims
@@ -5518,8 +6346,9 @@ function b2kPlayerOnGround
    return (sPlayGrounded is true)
 end b2kPlayerOnGround
 
--- idle | run | jump | fall, plus "land" for exactly one frame on
--- touch-down from jump/fall (dust puffs, landing sounds). Empty = no player.
+-- idle | run | jump | fall | duck | climb | hurt, plus "land" for exactly
+-- one frame on touch-down from jump/fall (dust puffs, landing sounds).
+-- A drop-through renders as "fall". Empty = no player.
 function b2kPlayerState
    return sPlayState
 end b2kPlayerState
@@ -5544,12 +6373,87 @@ command b2kPlayerJump pSpeed
    put 0 into sPlayPressMS    -- ...and any buffered press
 end b2kPlayerJump
 
+-- Register a ladder ZONE (screen-px rect, any corner order). While the
+-- player's centre is inside one, UP enters the climb state (DOWN too,
+-- when airborne -- walk off a platform and grab); gravity parks at 0,
+-- y runs at climbSpeed off the moveY axis (0 = hang), x at half speed.
+-- JUMP exits with a normal jump; leaving the zone (or climbing down
+-- onto ground) restores gravity. Zones are pure polled geometry -- no
+-- physics objects -- and are WORLD state: b2kClear wipes them.
+-- TIP: run the zone a little above a platform at the ladder's top, so
+-- walking off that edge while holding DOWN grabs the ladder.
+command b2kPlayerAddLadder pX1, pY1, pX2, pY2
+   if pX1 is not a number or pY1 is not a number \
+         or pX2 is not a number or pY2 is not a number then exit b2kPlayerAddLadder
+   if sPlayLadN is empty then put 0 into sPlayLadN
+   add 1 to sPlayLadN
+   put min(pX1, pX2) into sPlayLadL[sPlayLadN]
+   put max(pX1, pX2) into sPlayLadR[sPlayLadN]
+   put min(pY1, pY2) into sPlayLadT[sPlayLadN]
+   put max(pY1, pY2) into sPlayLadB[sPlayLadN]
+end b2kPlayerAddLadder
+
+-- The knockback standard (spec section 9.4): control off, an away-pop
+-- (the sign of pFromX vs the player picks the direction; no/empty
+-- pFromX pops away from the facing), the hurt anim, control restored
+-- after hurtMs OR the first landing after half of it -- whichever is
+-- LATER -- then an invulnMs mercy window during which this command
+-- no-ops and b2kPlayerHurtIs() stays true (skip your hazard checks).
+-- Games keep their respawn flow for LETHAL hits (pits, kill planes):
+-- contact damage knocks back, falling dies -- the Wave 2 split.
+command b2kPlayerHurt pFromX
+   local tDir
+   if sPlayRef is empty or sBody[sPlayRef] is empty then exit b2kPlayerHurt
+   if b2kPlayerHurtIs() then exit b2kPlayerHurt          -- mercy window
+   if sPlayControl is not true then exit b2kPlayerHurt   -- a cutscene owns the body
+   if sPlayClimb is true then b2kPlayerClimbEnd sBody[sPlayRef]
+   if pFromX is a number then
+      if pFromX > sPlayPX then
+         put -1 into tDir
+      else
+         put 1 into tDir
+      end if
+   else
+      put 0 - sPlayFacing into tDir   -- pop back off whatever was ahead
+   end if
+   -- the pop rides the jump flag, like b2kPlayerJump: a raw upward
+   -- set-velocity on a grounded player reads as solver rebound and gets
+   -- ground-snapped to zero (gotcha 16)
+   b2kSetVelocity sPlayRef, tDir * sPlayHurtPopX, 0 - sPlayHurtPopY
+   put true into sPlayJumping
+   put true into sPlayHurt
+   put 0 into sPlayHurtLand
+   put sPlayClock + sPlayHurtMS into sPlayHurtEnd
+   put sPlayClock + sPlayHurtMS / 2 into sPlayHurtHalf
+   put false into sPlayGrounded
+   put 0 into sPlayGroundMS   -- no coyote freebie off a knockback
+   put 0 into sPlayPressMS
+   put "hurt" into sPlayState
+   put empty into sPlayAnimNow   -- assert the hurt anim this tick
+end b2kPlayerHurt
+
+-- True through the knockback AND the mercy window that follows it: the
+-- one gate a game's hazard checks need (poll it before calling
+-- b2kPlayerHurt -- though a hurt inside the window already no-ops).
+function b2kPlayerHurtIs
+   if sPlayHurt is true then return true
+   if sPlayInvulnUntil is not empty and sPlayInvulnUntil > 0 and sPlayClock < sPlayInvulnUntil then return true
+   return false
+end b2kPlayerHurtIs
+
 -- false = the controller only OBSERVES: ground/state/facing stay fresh
 -- but it writes neither velocity nor animations (the maxFall clamp stays
 -- live -- it is the character's terminal velocity). For cutscenes,
--- knockback, hit poses, scripted deaths; physics and the Kit run on.
+-- hit poses, scripted deaths; physics and the Kit run on.
 command b2kPlayerControl pFlag
    put (pFlag is not false) into sPlayControl
+   -- an EXPLICIT control call overrides a knockback in flight: the game
+   -- is taking the body (cutscene, respawn). No mercy window is granted
+   -- -- the game owns what happens next.
+   if sPlayHurt is true then
+      put false into sPlayHurt
+      put 0 into sPlayHurtLand
+   end if
    -- returning control must re-assert the state anim over any manual pose
    if sPlayControl then put empty into sPlayAnimNow
 end b2kPlayerControl
@@ -5562,7 +6466,13 @@ end b2kPlayerRemove
 
 -- Internal: drop controller state. b2kClear passes false (tuning is
 -- config and survives, like input bindings); teardown/remove pass true.
+-- Ladder zones are WORLD state, so they go either way; a mid-climb or
+-- mid-drop body gets its gravity scale and collision mask back first.
 command b2kPlayerForget pFull
+   if sPlayClimb is true and sPlayRef is not empty and sBody[sPlayRef] is not empty then
+      b2kPlayerClimbEnd sBody[sPlayRef]
+   end if
+   if sPlayDropUntil is not empty and sPlayDropUntil > 0 then b2kPlayerDropRestore
    put empty into sPlayRef
    put empty into sPlayArt
    put empty into sPlayAnims
@@ -5578,6 +6488,22 @@ command b2kPlayerForget pFull
    put 0 into sPlayAir
    put empty into sPlayAnimNow
    put empty into sPlayFlipNow
+   put false into sPlayOnOneWay
+   put 0 into sPlayDropUntil
+   put 0 into sPlayDropHard
+   put empty into sPlayDropMask
+   put false into sPlayClimb
+   put empty into sPlayGravSave
+   put false into sPlayHurt
+   put 0 into sPlayHurtEnd
+   put 0 into sPlayHurtHalf
+   put 0 into sPlayHurtLand
+   put 0 into sPlayInvulnUntil
+   put 0 into sPlayLadN
+   put empty into sPlayLadL
+   put empty into sPlayLadT
+   put empty into sPlayLadR
+   put empty into sPlayLadB
    if pFull is true then put empty into sPlayTune
 end b2kPlayerForget
 
@@ -5593,15 +6519,32 @@ end b2kPlayerForget
 command b2kPlayerProbe pBody, pVY
    local tX, tY, tOff
    put false into sPlayGrounded
-   if sPlayJumping is true and pVY < 0 then exit b2kPlayerProbe
+   put false into sPlayOnOneWay
+   put false into sPlayDropSeen
    set the itemDelimiter to comma
    -- raw reads with the caller's body handle: the probe runs every
-   -- frame, so it skips the ref->body lookup and the "x,y" string pack
+   -- frame, so it skips the ref->body lookup and the "x,y" string pack.
+   -- The centre is stashed even when the rays are skipped -- the tick's
+   -- ladder zone test and b2kPlayerHurt read it.
    put b2kToScreenX(b2BodyX(pBody)) into tX
    put b2kToScreenY(b2BodyY(pBody)) into tY
+   put tX into sPlayPX
+   put tY into sPlayPY
+   if sPlayJumping is true and pVY < 0 then exit b2kPlayerProbe
    repeat for each item tOff in sPlayProbeOffs
       get b2kRayHit(tX + tOff, tY, tX + tOff, tY + sPlayReach)
       if sRayNY is not empty and sRayNY <= 0 - sPlayCosSlope then
+         if sOneWayBody[sRayBodyH] is true then
+            -- mid-drop, a one-way chain is NOT ground (or the controller
+            -- would re-ground on the very platform it is leaving -- the
+            -- phantom-ground lesson in reverse); remember the sighting:
+            -- the window's restore logic waits for the capsule to clear
+            if sPlayDropUntil > 0 then
+               put true into sPlayDropSeen
+               next repeat
+            end if
+            put true into sPlayOnOneWay   -- standing on a chain: drop eligible
+         end if
          put true into sPlayGrounded
          put sRayNX into sPlayNormX          -- flat vs slope, for ground-snap
          put sPlayClock into sPlayGroundMS   -- the sim clock, not wall time
@@ -5610,12 +6553,60 @@ command b2kPlayerProbe pBody, pVY
    end repeat
 end b2kPlayerProbe
 
+-- Internal: enter the climb -- gravity parks at 0 (the body's own scale
+-- is saved and restored, so a game-tuned floatiness survives a ladder).
+command b2kPlayerClimbStart pBody
+   if sPlayClimb is true then exit b2kPlayerClimbStart
+   put b2BodyGravityScale(pBody) into sPlayGravSave
+   b2SetGravityScale pBody, 0
+   put true into sPlayClimb
+   put false into sPlayJumping
+end b2kPlayerClimbStart
+
+command b2kPlayerClimbEnd pBody
+   if sPlayClimb is not true then exit b2kPlayerClimbEnd
+   b2SetGravityScale pBody, b2kNumberOr(sPlayGravSave, 1)
+   put empty into sPlayGravSave
+   put false into sPlayClimb
+end b2kPlayerClimbEnd
+
+-- Internal: open the drop-through window -- take the reserved one-way
+-- bit out of the player's mask so chains (alone) stop colliding.
+command b2kPlayerDropStart
+   local tS, tM
+   put sShapeH[sPlayRef] into tS
+   if tS is empty then exit b2kPlayerDropStart
+   put b2ShapeFilterMask(tS) into tM
+   -- Box2D's default mask reads back as 2^64-1, which neither xTalk's
+   -- 32-bit bit ops nor the shim's 2^53 guard can round-trip: clamp to
+   -- "all 32 kit bits" -- identical behaviour, every category this Kit
+   -- can mint lives below 2^32
+   if tM > 4294967295 then put 4294967295 into tM
+   put tM into sPlayDropMask
+   b2SetShapeFilter tS, b2ShapeFilterCategory(tS), tM bitAnd (bitNot 2147483648), b2ShapeFilterGroup(tS)
+   put sPlayClock + sPlayDropMS into sPlayDropUntil
+   put sPlayClock + sPlayDropMS * 4 into sPlayDropHard
+   put sRayY into sPlayDropLineY   -- the grounding ray's hit = the surface line
+end b2kPlayerDropStart
+
+command b2kPlayerDropRestore
+   local tS
+   put 0 into sPlayDropUntil
+   put 0 into sPlayDropHard
+   put sShapeH[sPlayRef] into tS
+   if tS is empty or sPlayDropMask is empty then exit b2kPlayerDropRestore
+   b2SetShapeFilter tS, b2ShapeFilterCategory(tS), sPlayDropMask, b2ShapeFilterGroup(tS)
+   put empty into sPlayDropMask
+end b2kPlayerDropRestore
+
 -- Internal: the per-frame controller. Loop order: input -> PLAYER ->
 -- sprites -> camera, so it reads this frame's edges and the sprite tick
--- applies the anim it picks. Exits in one compare when unused.
+-- applies the anim it picks. Exits in one compare when unused. The
+-- Wave 2 paths (drop window, ladders, hurt) each cost ONE compare per
+-- frame while idle -- the tick's steady-state budget is unchanged.
 command b2kPlayerTick
-   local tNow, tDT, tB, tVX, tVY, tAxis, tTarget, tAcc, tStep
-   local tPrevState, tWrite
+   local tNow, tDT, tB, tVX, tVY, tAxis, tAxisY, tTarget, tAcc, tStep
+   local tPrevState, tWrite, tInZone, tDuck, tClimbJump, i
    if sPlayRef is empty then exit b2kPlayerTick
    put sBody[sPlayRef] into tB
    if tB is empty then exit b2kPlayerTick
@@ -5632,13 +6623,39 @@ command b2kPlayerTick
    put b2BodyVX(tB) * sScale into tVX
    put 0 - (b2BodyVY(tB) * sScale) into tVY
    b2kPlayerProbe tB, tVY
+   -- the drop window's bookkeeping runs UNGATED (a hurt or control-off
+   -- mid-drop must never strand the mask without its one-way bit). The
+   -- mask returns when the clock has run AND the capsule has cleared the
+   -- line it dropped through -- a straddling restore would snap it back
+   -- on top (chain contacts are one-sided, judged by the centroid) --
+   -- with a hard 4x deadline for drops that land on something below.
+   if sPlayDropUntil > 0 and tNow >= sPlayDropUntil then
+      if (sPlayDropSeen is not true and sPlayPY - sPlayHalfH > sPlayDropLineY + 2) \
+            or tNow >= sPlayDropHard then
+         b2kPlayerDropRestore
+      end if
+   end if
+   -- the hurt window runs its own clock: control comes back at hurtMs
+   -- OR the first landing after half of it, whichever is LATER, and the
+   -- mercy window starts then
+   if sPlayHurt is true then
+      if sPlayHurtLand is 0 and sPlayGrounded is true and tNow >= sPlayHurtHalf then
+         put tNow into sPlayHurtLand
+      end if
+      if tNow >= sPlayHurtEnd and sPlayHurtLand > 0 then
+         put false into sPlayHurt
+         put tNow + sPlayInvulnMS into sPlayInvulnUntil
+         put empty into sPlayAnimNow   -- re-assert the state anim
+      end if
+   end if
    put false into tWrite
-   if sPlayControl is true then
-      -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
+   put false into tDuck
+   if sPlayControl is true and sPlayHurt is not true then
       put sFrameMS / 1000 into tDT
       if tDT <= 0 then put 1 / 60 into tDT
       if tDT > 0.05 then put 0.05 into tDT
       put b2kAxis("moveX") into tAxis
+      put b2kAxis("moveY") into tAxisY
       if tAxis is not 0 then
          if tAxis < 0 then
             put -1 into sPlayFacing
@@ -5646,34 +6663,111 @@ command b2kPlayerTick
             put 1 into sPlayFacing
          end if
       end if
-      put tAxis * sPlayMoveSpd into tTarget
-      if sPlayGrounded then
-         put sPlayAccelG into tAcc
-      else
-         put sPlayAccelA into tAcc
+      -- ladder presence: pure numeric compares on the probe's stashed
+      -- centre; zero zones = one compare and out
+      put false into tInZone
+      if sPlayLadN > 0 then
+         repeat with i = 1 to sPlayLadN
+            if sPlayPX >= sPlayLadL[i] and sPlayPX <= sPlayLadR[i] \
+                  and sPlayPY >= sPlayLadT[i] and sPlayPY <= sPlayLadB[i] then
+               put true into tInZone
+               exit repeat
+            end if
+         end repeat
       end if
-      put tAcc * tDT into tStep
-      if tVX < tTarget then
-         put min(tTarget, tVX + tStep) into tVX
-      else
-         put max(tTarget, tVX - tStep) into tVX
-      end if
-      put true into tWrite
-      -- jump: a buffered press fires while grounded-or-coyote
-      if b2kActionPressed("jump") then put tNow into sPlayPressMS
-      if sPlayPressMS > 0 and tNow - sPlayPressMS <= sPlayBuffer then
-         if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= sPlayCoyote) then
-            put 0 - sPlayJumpSpd into tVY
-            put true into sPlayJumping
-            put false into sPlayGrounded   -- airborne from this frame on
-            put 0 into sPlayGroundMS       -- consume coyote
-            put 0 into sPlayPressMS        -- consume the buffer
+      if sPlayClimb is not true and tInZone is true then
+         -- enter: UP any time in-zone; DOWN only while AIRBORNE (a
+         -- grounded DOWN is a duck -- or a drop-through on a chain)
+         if tAxisY is -1 or (tAxisY is 1 and sPlayGrounded is not true) then
+            b2kPlayerClimbStart tB
          end if
       end if
-      -- jump-cut: releasing while still rising from OUR jump shortens it
-      if sPlayJumping and tVY < 0 and b2kActionReleased("jump") then
-         put tVY * sPlayJumpCut into tVY
-         put false into sPlayJumping
+      if sPlayClimb is true then
+         if b2kActionPressed("jump") then
+            -- JUMP exits with a normal jump. The same press edge is
+            -- still "pressed" when the walk branch runs below this
+            -- tick: tClimbJump keeps it from re-arming the buffer
+            -- (one press must never pay for two jumps)
+            b2kPlayerClimbEnd tB
+            put 0 - sPlayJumpSpd into tVY
+            put true into sPlayJumping
+            put false into sPlayGrounded
+            put 0 into sPlayGroundMS
+            put 0 into sPlayPressMS
+            put true into tClimbJump
+            put true into tWrite
+         else
+            if tInZone is not true or (sPlayGrounded is true and tAxisY is 1) then
+               -- slid out of the zone, or climbed down onto ground:
+               -- gravity returns and (same tick) normal control resumes
+               b2kPlayerClimbEnd tB
+            else
+               -- the climb drive: y runs at climbSpeed off the moveY
+               -- axis (0 = hang), x at half speed, gravity parked at 0
+               put tAxisY * sPlayClimbSpd into tVY
+               put tAxis * sPlayMoveSpd / 2 into tTarget
+               put sPlayAccelG * tDT into tStep
+               if tVX < tTarget then
+                  put min(tTarget, tVX + tStep) into tVX
+               else
+                  put max(tTarget, tVX - tStep) into tVX
+               end if
+               put true into tWrite
+            end if
+         end if
+      end if
+      if sPlayClimb is not true then
+         -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
+         put tAxis * sPlayMoveSpd into tTarget
+         -- DUCK: down on the ground crouches and brakes to a stop at
+         -- the normal decel (the hitbox keeps its size this wave)
+         if tAxisY is 1 and sPlayGrounded is true then
+            put true into tDuck
+            put 0 into tTarget
+         end if
+         if sPlayGrounded then
+            put sPlayAccelG into tAcc
+         else
+            put sPlayAccelA into tAcc
+         end if
+         put tAcc * tDT into tStep
+         if tVX < tTarget then
+            put min(tTarget, tVX + tStep) into tVX
+         else
+            put max(tTarget, tVX - tStep) into tVX
+         end if
+         put true into tWrite
+         if tClimbJump is not true and b2kActionPressed("jump") then put tNow into sPlayPressMS
+         if tDuck is true then
+            -- a press while crouched: on a ONE-WAY CHAIN it drops
+            -- through (dropMs of no chain collision); on solid ground
+            -- nothing -- and nothing later either, so the buffer is
+            -- eaten (a crouch-press must not launch on release)
+            if sPlayPressMS > 0 and tNow - sPlayPressMS <= sPlayBuffer then
+               if sPlayOnOneWay is true and sPlayDropUntil is 0 then
+                  b2kPlayerDropStart
+                  put false into sPlayGrounded   -- falling from this frame on
+                  put 0 into sPlayGroundMS       -- no coyote out of a drop
+               end if
+               put 0 into sPlayPressMS
+            end if
+         else
+            -- jump: a buffered press fires while grounded-or-coyote
+            if sPlayPressMS > 0 and tNow - sPlayPressMS <= sPlayBuffer then
+               if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= sPlayCoyote) then
+                  put 0 - sPlayJumpSpd into tVY
+                  put true into sPlayJumping
+                  put false into sPlayGrounded   -- airborne from this frame on
+                  put 0 into sPlayGroundMS       -- consume coyote
+                  put 0 into sPlayPressMS        -- consume the buffer
+               end if
+            end if
+         end if
+         -- jump-cut: releasing while still rising from OUR jump shortens it
+         if sPlayJumping and tVY < 0 and b2kActionReleased("jump") then
+            put tVY * sPlayJumpCut into tVY
+            put false into sPlayJumping
+         end if
       end if
    end if
    if sPlayJumping and tVY >= 0 then put false into sPlayJumping   -- apex
@@ -5686,8 +6780,12 @@ command b2kPlayerTick
    -- landing (a ~7px hop: phantom airtime, double land ticks - measured
    -- by the self-test at vy 61 up). Kill it at the source. Slopes are
    -- exempt (|normalX| >= 0.1): running uphill is real upward motion.
-   -- External boosts must use b2kPlayerJump, which sets the jump flag.
-   if sPlayGrounded and sPlayJumping is not true and tVY < 0 and abs(sPlayNormX) < 0.1 then
+   -- Climbs are exempt too: rising up a ladder from its grounded base
+   -- is exactly the motion this guard exists to kill. External boosts
+   -- must use b2kPlayerJump, which sets the jump flag (b2kPlayerHurt's
+   -- pop rides the same flag).
+   if sPlayGrounded and sPlayJumping is not true and sPlayClimb is not true \
+         and tVY < 0 and abs(sPlayNormX) < 0.1 then
       put 0 into tVY
       put true into tWrite
    end if
@@ -5700,25 +6798,45 @@ command b2kPlayerTick
    -- as "land" only after a real airborne stretch (3+ ticks), and a
    -- single ungrounded blip does not even show as airborne -- unless it
    -- is OUR jump, which must read as "jump" on its launch frame.
+   -- Hurt and climb OWN the state outright; a knockback's landing shows
+   -- no "land" tick (the hit pose holds through the touchdown).
    put sPlayState into tPrevState
-   if sPlayGrounded is true then
-      if (tPrevState is "jump" or tPrevState is "fall") and sPlayAir >= 3 then
-         put "land" into sPlayState
+   if sPlayHurt is true then
+      put "hurt" into sPlayState
+      if sPlayGrounded is true then
+         put 0 into sPlayAir
       else
-         if abs(tVX) < 8 then
-            put "idle" into sPlayState
-         else
-            put "run" into sPlayState
-         end if
+         add 1 to sPlayAir
       end if
-      put 0 into sPlayAir
    else
-      add 1 to sPlayAir
-      if sPlayJumping is true or sPlayAir >= 2 then
-         if tVY < 0 then
-            put "jump" into sPlayState
+      if sPlayClimb is true then
+         put "climb" into sPlayState
+         put 0 into sPlayAir
+      else
+         if sPlayGrounded is true then
+            if (tPrevState is "jump" or tPrevState is "fall") and sPlayAir >= 3 then
+               put "land" into sPlayState
+            else
+               if tDuck is true then
+                  put "duck" into sPlayState
+               else
+                  if abs(tVX) < 8 then
+                     put "idle" into sPlayState
+                  else
+                     put "run" into sPlayState
+                  end if
+               end if
+            end if
+            put 0 into sPlayAir
          else
-            put "fall" into sPlayState
+            add 1 to sPlayAir
+            if sPlayJumping is true or sPlayAir >= 2 then
+               if tVY < 0 then
+                  put "jump" into sPlayState
+               else
+                  put "fall" into sPlayState
+               end if
+            end if
          end if
       end if
    end if
@@ -5739,7 +6857,8 @@ end b2kPlayerTick
 command b2kPlayerShowState pNow, pVX
    local tWant, tAnim, tAKey, tFPS, tFlip
    put sPlayState into tWant
-   if pNow < sPlayHoldMS and tWant is not "jump" and tWant is not "fall" then
+   if pNow < sPlayHoldMS and tWant is not "jump" and tWant is not "fall" \
+         and tWant is not "hurt" and tWant is not "climb" then
       put empty into tAnim   -- mid land-flourish: leave it playing
    else
       if tWant is "land" and sPlayAnims["land"] is empty then

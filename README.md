@@ -52,12 +52,15 @@ Box2D v3.1.0 (fetched by CMake)
    motors, and save/load. Game-minded? The
    [micro-game](examples/box2dxt-microgame.livecodescript) is a complete
    two-level platformer (menu → levels → win screen, embedded art,
-   synthesized sound) and the
+   synthesized sound), the
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
    Game Kit pushed hard — player controller, scrolling camera, spritesheets,
-   coin puzzles. And the
+   coin puzzles — and the
+   [slingshot](examples/box2dxt-slingshot.livecodescript) is pure physics
+   joy: catapult cannonballs into toppling towers, angry-birds style
+   (three levels, ballistic aim preview, zero assets). And the
    [self-test harness](examples/box2dxt-selftest.livecodescript) proves the
-   whole Kit on *your* machine in one click — ~93 deterministic assertions,
+   whole Kit on *your* machine in one click — deterministic assertions
    from physics events to player feel (run it on any new platform first).
 
 The step-by-step version (with troubleshooting) is in

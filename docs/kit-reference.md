@@ -314,27 +314,40 @@ control creation under the compositor caused the spike's one-time stall.
 
 A complete keyboard character controller for **one** player: a vertical
 capsule with fixed rotation, sleep disabled, and low friction, steered every
-frame from the Input module's axis **`moveX`** and action **`jump`** (rebind
-those names to remap the controls). Horizontal motion is velocity-driven —
-vx accelerates toward `axis × moveSpeed` — and grounding comes from three
-short downward rays whose surface normal must point up within `maxSlopeDeg`,
-so walkable slope vs wall is one comparison. The jump feel platformers
-expect is built in: **coyote time** (jump shortly after running off a
-ledge), **jump buffering** (press just before landing), **jump-cut** (tap =
-hop, hold = full height), and a terminal fall speed. With animations mapped,
-the controller drives `b2kSpritePlay`/`b2kSpriteFlipH` itself.
+frame from the Input module's axes **`moveX`**/**`moveY`** and action
+**`jump`** (rebind those names to remap the controls). Horizontal motion is
+velocity-driven — vx accelerates toward `axis × moveSpeed` — and grounding
+comes from three short downward rays whose surface normal must point up
+within `maxSlopeDeg`, so walkable slope vs wall is one comparison. The jump
+feel platformers expect is built in: **coyote time** (jump shortly after
+running off a ledge), **jump buffering** (press just before landing),
+**jump-cut** (tap = hop, hold = full height), and a terminal fall speed.
+With animations mapped, the controller drives
+`b2kSpritePlay`/`b2kSpriteFlipH` itself.
+
+**Wave 2 actions**, all built in: **duck** (DOWN while grounded brakes to a
+crouch — the hitbox does *not* shrink this wave), **drop-through**
+(DOWN+JUMP while standing on a one-way `b2kChain`/`b2kSmoothGround` deck
+opens a `dropMs` window in which chains alone stop colliding; on solid
+ground the press is simply eaten), **climb** (UP — or DOWN while airborne —
+inside a `b2kPlayerAddLadder` zone parks gravity at 0 and runs y at
+`climbSpeed`; JUMP exits with a normal jump), and the **hurt-knockback
+standard** (`b2kPlayerHurt`, below).
 
 | Handler | Purpose |
 |---------|---------|
 | `b2kPlayerMake x, y, w, h [,sheet]` → control | One call: a capsule body host (`w`×`h` collision box — a visible capsule graphic, or invisible with a bound sprite of `sheet`'s first frame on top), controller armed, input on. Reports the player control. |
 | `b2kPlayerAttach ctrl` | Adopt an existing control (or sprite) as the player. A capsule body is added if it has none (then the controller also sets low friction); a body you made yourself keeps your material. Also sets fixed rotation + sleep-off and arms input. |
-| `b2kPlayerAnims idle, run, jump [,fall] [,land]` | Map states to the art's animation names (`fall` defaults to `jump`). `land` is an optional non-looping touch-down flourish, held for its own duration. The art is the player control itself if it is a sprite, else the first sprite `b2kSpriteBind`-pinned to it. |
+| `b2kPlayerAnims idle, run, jump [,fall] [,land] [,duck] [,climb] [,hurt]` | Map states to the art's animation names (`fall` defaults to `jump`; `duck` to `idle`; `climb` and `hurt` to `jump` — sheets without those frames still read correctly). `land` is an optional non-looping touch-down flourish, held for its own duration. **Map a LOOPING animation to `hurt`** if your game uses `b2kSpriteOnFinish` on the player's art — a non-looping hurt pose fires that finish message mid-knockback. The art is the player control itself if it is a sprite, else the first sprite `b2kSpriteBind`-pinned to it. |
 | `b2kPlayerSet key, value` / `b2kPlayerGet(key)` | Tuning knobs (table below). Settable any time; `b2kClear` keeps them (config, like input bindings), `b2kTeardown`/`b2kPlayerRemove` wipe them. |
 | `b2kPlayerOnGround()` | Grounded this frame (post-tick; false on the frame a jump launches). |
-| `b2kPlayerState()` | `idle` / `run` / `jump` / `fall`, plus `land` for exactly one frame on touch-down (dust puffs, sounds — read it in `on b2kFrame`). |
+| `b2kPlayerState()` | `idle` / `run` / `jump` / `fall` / `duck` / `climb` / `hurt`, plus `land` for exactly one frame on touch-down (dust puffs, sounds — read it in `on b2kFrame`). A drop-through renders as `fall`; a knockback's own landing shows no `land` tick. |
 | `b2kPlayerFacing()` | 1 right / -1 left — the last horizontal intent. |
 | `b2kPlayerJump [speed]` | Programmatic jump (springs, double-jump powerups): the same launch as a pressed jump but **without** the grounded/coyote gate — the caller decides when it is allowed. |
-| `b2kPlayerControl flag` | `false` = the controller only observes (state/ground/facing stay fresh) and writes neither velocity nor animations — cutscenes, knockback, hit poses. The `maxFall` clamp stays live. `true` re-asserts the state animation. |
+| `b2kPlayerAddLadder x1, y1, x2, y2` | Register a ladder **zone** (screen-px rect, any corner order; purely polled — no physics object). Zones are world state: `b2kClear` wipes them with everything else. Run the zone a little above a platform at the ladder's top so walking off that edge holding DOWN grabs it. |
+| `b2kPlayerHurt [fromX]` | The contact-damage knockback standard: an away-pop (`hurtPopX`/`hurtPopY`, ground-snap-exempt; the sign of `fromX` vs the player picks the direction — empty pops back off the facing), the `hurt` state/anim, input suppressed until `hurtMs` *or* the first landing after half of it (whichever is **later**), then an `invulnMs` mercy window in which this command no-ops. Keep your respawn flow for **lethal** hits (pits, kill planes): contact damage knocks back, falling dies. |
+| `b2kPlayerHurtIs()` | True through the knockback *and* the mercy window — the one gate your hazard checks need. |
+| `b2kPlayerControl flag` | `false` = the controller only observes (state/ground/facing stay fresh) and writes neither velocity nor animations — cutscenes, hit poses, scripted deaths. The `maxFall` clamp stays live. `true` re-asserts the state animation. An **explicit call (either way) cancels a knockback in flight** — your respawn flow takes the body over cleanly, and no mercy window is granted. |
 | `b2kPlayer()` / `b2kPlayerSprite()` | The player control / the art control the controller animates. |
 | `b2kPlayerRemove` | Tear down the controller (tuning included). The body and sprite remain yours — remove them with `b2kRemove` / `b2kSpriteRemove`. |
 
@@ -342,7 +355,10 @@ the controller drives `b2kSpritePlay`/`b2kSpriteFlipH` itself.
 scale 40: `moveSpeed` 220 px/s · `accel` 1800 px/s² · `airAccel` 1100 px/s² ·
 `jumpSpeed` 460 px/s · `jumpCut` 0.45 (velocity multiplier on early release) ·
 `coyoteMs` 90 · `bufferMs` 110 · `maxFall` 900 px/s · `maxSlopeDeg` 50
-(steeper than this is a wall, not ground).
+(steeper than this is a wall, not ground) · `dropMs` 260 (the drop-through
+window) · `climbSpeed` 160 px/s (ladder rate; x runs at half `moveSpeed`
+while climbing) · `hurtPopX` 220 / `hurtPopY` 320 px/s (knockback launch) ·
+`hurtMs` 700 (control-off span) · `invulnMs` 900 (post-hurt mercy).
 
 ```
 -- a playable character in four lines (after b2kQuickStart + sheet load):
@@ -487,14 +503,16 @@ events on every body it creates, so sensors detect them automatically.
 
 ## Collision filtering (named layers)
 
-Up to 32 layers. Two shapes collide only if **each** one's category is in the
-other's mask (and no shared negative group forbids it).
+Up to **31 nameable layers** (bits 2⁰–2³⁰; the top bit 2³¹ is the Kit's
+reserved **`oneway`** chain layer — usable by name in any list, never handed
+out by `b2kDefineLayer`). Two shapes collide only if **each** one's category
+is in the other's mask (and no shared negative group forbids it).
 
 | Handler | Purpose |
 |---------|---------|
 | `b2kDefineLayer name` → bit | Define/fetch a named layer. |
 | `b2kSetCategory ctrl, layers` | Set which layer(s) a control *is* (comma/space list of names or numbers). |
-| `b2kSetMask ctrl, layers` | Set which layer(s) it collides *with*. |
+| `b2kSetMask ctrl, layers` | Set which layer(s) it collides *with*. The reserved `oneway` bit is **included automatically** — a custom-masked body still stands on `b2kChain` terrain (object rules shouldn't silently mean "fall through the ground"). To genuinely pass through chains, use the raw `b2SetShapeFilter`. |
 | `b2kSetCollisionGroup ctrl, n` | Negative = never collide with same group; positive = always. |
 | `b2kNoCollide ctrlA, ctrlB` → joint | Stop just these two from colliding (a filter joint). |
 
@@ -505,6 +523,15 @@ other's mask (and no shared negative group forbids it).
 | `b2kChain pointList [,loop]` → chain | Smooth static terrain from a list of `x,y` screen points (≥ 4). No inner corners for fast bodies to catch on. Invisible — draw a matching graphic. |
 | `b2kSmoothGround pointList` → chain | An open chain (alias for `b2kChain …, false`). |
 | `b2kAddChain ctrl, pointList [,loop]` | A smooth chain that **tracks a control** (move/draw the terrain as one graphic). Points are the control's own outline. |
+
+> **One-way chains (Wave 2):** every `b2kChain`/`b2kSmoothGround` chain
+> carries the Kit's reserved **`oneway`** collision category (bit 2³¹) with
+> an all-bits mask, so nothing collides any differently by default — but the
+> player's **drop-through** (DOWN+JUMP while standing on one) can mask out
+> chains *alone* for a `dropMs` window. `b2kAddChain` outlines are **solid
+> terrain** and are *not* tagged. Don't park a solid platform less than a
+> player-height under a one-way deck — a drop that can't clear the deck is
+> restored by a hard deadline and may pop back on top.
 
 > **Winding:** a chain's solid side is to the *right* of the point-travel
 > direction. For ground you stand on, list the top surface **right-to-left** so

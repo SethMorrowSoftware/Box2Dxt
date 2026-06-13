@@ -1,4 +1,787 @@
 -- =====================================================================
+-- box2dxt-slingshot.livecodescript  ·  knock the towers down
+--
+-- An "angry birds"-style physics demo on the Kit: drag the RED BALL
+-- out of the slingshot pocket, release, and the tower across the field
+-- comes down - stacked columns, planks and crates tumble for real, and
+-- the green PIGS pop when anything (your shot, a falling beam, the
+-- ground rushing up) jolts them hard enough. Three towers, a shot
+-- budget per level, score with a leftover-ammo bonus.
+--
+-- WHY THIS EXAMPLE EXISTS: the platformer and micro-game show the GAME
+-- modules (player/camera/sprites). This one shows the PHYSICS CORE
+-- carrying a whole game by itself:
+--   * stacked-body towers that settle ASLEEP and only wake when struck
+--   * projectile ballistics - the aim dots preview the same
+--     x + v*t + a*t^2/2 the world then integrates for real
+--   * impact verdicts as SPEED POLLS per the project doctrine: a pig
+--     pops when ITS OWN speed spikes (the light body always inherits
+--     the momentum, so the poll cannot be outrun) - this file never
+--     even sets a contact target, there is zero event plumbing
+--   * the hot-path rules: ammo, bands, aim dots and pop rings are all
+--     POOLED at build (never created mid-game); per-frame work while
+--     idle is a handful of compares; the HUD rewrites at 4 Hz
+-- ZERO assets by design: every visual is a colored graphic - which is
+-- also why there are no sprites here: Kit sprites follow position
+-- only, while spawned box GRAPHICS rotate with their body, and a
+-- toppling tower is all rotation. Every sound is b2kToneMake'd.
+--
+-- HOW TO RUN
+--   1. In OXT, make a new stack. Put this whole file into the STACK
+--      script. Make sure the box2dxt extension is loaded.
+--   2. Close and reopen the stack. Click to start. That is all.
+--
+-- CONTROLS  drag the RED BALL back, release to fire (further = harder;
+--           the dots preview the arc) · R restarts the level (score
+--           rolls back) · 1/2/3 jump to a level · ESC pauses · M mutes
+--
+-- WHAT TO VERIFY (OXT pass)
+--   1. Paste-and-play: menu, click, level 1 builds; the tower STANDS
+--      (it settles asleep - no jitter, no self-collapse).
+--   2. Drag feel: the ball follows the mouse inside the tether circle,
+--      bands and aim dots track live; release fires along the dots; a
+--      tiny pull (under 12px) re-seats the ball - no shot spent.
+--   3. Knockdown: a direct hit pops a pig (ring flash + 500); a
+--      collapsing column pops pigs it lands on; a pig knocked off a
+--      high perch pops from the fall alone; each block scores 50 the
+--      first time it really moves (the HUD ticks during the carnage).
+--   4. Shot lifecycle: the next ball loads about a second after the
+--      last one stops rolling (7s cap); spent balls stay as debris.
+--   5. Clear: last pig -> "TOWER DOWN" + 1000 per leftover shot; the
+--      next level builds by itself; level 3 clear -> the win screen
+--      with the total; click restarts a fresh run.
+--   6. Out of ammo with pigs left -> banner; click or R retries the
+--      level with the score rolled back to the level's start.
+--   7. R / 1-3 / ESC / M work mid-flight; stack reopen = clean rebuild.
+-- =====================================================================
+
+local gMode              -- menu | play | clear | retry | won
+local gLevel             -- 1..3
+local gScore             -- running total (rolls back on a retry)
+local gScoreAt           -- the score this level STARTED with
+local gShots             -- shots left in the pouch (the loaded one excluded)
+local gPigsLeft          -- live pigs this level
+local gLoaded            -- a (bodiless) ammo ball waits in the pocket
+local gDragging          -- the mouse owns the loaded ball right now
+local gAimX, gAimY       -- the clamped pull point (screen px)
+local gLiveBall          -- the shot in flight/rolling (empty = none)
+local gLiveSince         -- when it launched (the 7s cap)
+local gCalmSince         -- when it last dropped below rolling speed
+local gActiveUntil       -- block-scoring poll window (carnage time)
+local gArmedAt           -- pig polls arm AFTER the build settles
+local gPigN, gPig        -- pig slots (refs; empty = popped)
+local gBlkN, gBlk, gBlkX, gBlkY, gBlkScored   -- blocks + build spots
+local gRingUntil         -- pop-ring pool timers (0 = ring free)
+local gDotsOn            -- aim dots currently shown (skip redundant sets)
+local gHudLast, gHudNextMS, gBuilding
+
+constant kSgUIVersion = "1"
+constant kPocketX = 170      -- the sling pocket (screen px)
+constant kPocketY = 444
+constant kPullMax = 96       -- tether radius: full pull = full power
+constant kGrabR = 80         -- how close a press must be to grab the ball
+constant kLaunchK = 9        -- launch px/s per pulled px (96 * 9 = 864)
+constant kBallD = 32         -- ammo diameter
+constant kPopSpeed = 300     -- a pig moving faster than this pops (px/s)
+constant kDots = 9           -- aim-preview dots (pooled)
+constant kRings = 3          -- pop-ring effects (pooled)
+
+-- =====================================================================
+-- Lifecycle
+-- =====================================================================
+on openCard
+   if the uSgUIVersionTag of this stack is not kSgUIVersion then buildSgUI
+   put 0 into gScore
+   sgBuildLevel 1
+   sgShowMenu
+   pass openCard
+end openCard
+
+on closeCard
+   b2kStop
+   pass closeCard
+end closeCard
+
+-- =====================================================================
+-- Chrome (version-tagged; rebuilds once when a newer file is pasted in)
+-- =====================================================================
+command buildSgUI
+   if there is a field "sgTitle" then delete field "sgTitle"
+   if there is a field "sgHelp" then delete field "sgHelp"
+   if there is a field "sgHud" then delete field "sgHud"
+   if there is a graphic "sgShade" then delete graphic "sgShade"
+   if there is a field "sgBigText" then delete field "sgBigText"
+   set the width of this stack to 1024
+   set the height of this stack to 640
+   set the loc of this stack to the screenLoc
+   try
+      set the title of this stack to "Box2Dxt - Slingshot"
+   catch tErr
+   end try
+   create field "sgTitle"
+   set the rect of it to 20, 6, 1004, 26
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 13
+   set the text of it to "Box2Dxt slingshot - knock the towers down (pure physics: stacks, ballistics, speed-poll verdicts)"
+   create field "sgHelp"
+   set the rect of it to 20, 28, 1004, 44
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 11
+   set the text of it to "Drag the RED BALL back, release to fire - the dots preview the arc. R restarts the level, 1/2/3 jump levels, ESC pauses, M mutes."
+   create field "sgHud"
+   set the rect of it to 20, 612, 1004, 636
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textSize of it to 12
+   -- one overlay pair serves the menu, banners AND the win screen
+   create graphic "sgShade"
+   set the style of it to "rectangle"
+   set the rect of it to 0, 0, 1024, 640
+   set the filled of it to true
+   set the backgroundColor of it to "18,20,28"
+   set the blendLevel of it to 35
+   create field "sgBigText"
+   set the rect of it to 112, 150, 912, 450
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textAlign of it to "center"
+   set the textSize of it to 20
+   set the textStyle of it to "bold"
+   set the opaque of it to false
+   set the showBorder of it to false
+   set the textColor of it to "245,245,250"
+   set the uSgUIVersionTag of this stack to kSgUIVersion
+end buildSgUI
+
+command sgChromeFront
+   local tN
+   put the number of controls of this card into tN
+   if there is a graphic "sgShade" then set the layer of graphic "sgShade" to tN - 1
+   if there is a field "sgBigText" then set the layer of field "sgBigText" to tN
+   if there is a field "sgTitle" then set the layer of field "sgTitle" to tN
+   if there is a field "sgHelp" then set the layer of field "sgHelp" to tN
+   if there is a field "sgHud" then set the layer of field "sgHud" to tN
+end sgChromeFront
+
+-- =====================================================================
+-- The state machine: menu -> play -> (clear ->) ... -> won -> (again)
+-- =====================================================================
+command sgShowMenu
+   put "menu" into gMode
+   set the text of field "sgBigText" to "B O X 2 D X T   S L I N G S H O T" & cr & cr & "knock every green pig off its tower" & cr & cr & "DRAG the red ball back - further = harder - and let go" & cr & "the dots show where your shot will fly" & cr & cr & "pigs pop when something hits them hard (or they fall hard)" & cr & "1000 bonus for every shot you do not need" & cr & cr & "C L I C K   T O   S T A R T"
+   set the visible of graphic "sgShade" to true
+   set the visible of field "sgBigText" to true
+   sgChromeFront
+end sgShowMenu
+
+command sgBegin
+   put "play" into gMode
+   set the visible of graphic "sgShade" to false
+   set the visible of field "sgBigText" to false
+   b2kSound "start"
+end sgBegin
+
+command sgBanner pText
+   set the text of field "sgBigText" to pText
+   set the visible of graphic "sgShade" to true
+   set the visible of field "sgBigText" to true
+   sgChromeFront
+end sgBanner
+
+command sgShowWin
+   local tMsg
+   put "won" into gMode
+   put "A L L   T O W E R S   D O W N !" & cr & cr into tMsg
+   put "final score  " & gScore & cr & cr after tMsg
+   put "C L I C K   T O   P L A Y   A G A I N" after tMsg
+   sgBanner tMsg
+   b2kSound "win"
+end sgShowWin
+
+-- =====================================================================
+-- Sounds: all synthesized, built once (they survive b2kTeardown)
+-- =====================================================================
+command sgMakeSounds
+   if b2kSoundIsLoaded("pop") then exit sgMakeSounds
+   b2kToneMake "start", "392,523,659", 70, 55
+   b2kToneMake "stretch", "131,147", 45, 35
+   b2kToneMake "launch", "262,392,523", 30, 55
+   b2kToneMake "pop", "988,1319", 35, 60
+   b2kToneMake "clear", "523,659,784,1047", 90, 60
+   b2kToneMake "dud", "196,147,98", 70, 55
+   b2kToneMake "win", "523,659,784,1047,1319", 110, 65
+end sgMakeSounds
+
+-- =====================================================================
+-- Levels as DATA (the micro-game pattern). One verb per line:
+--   shots n · box x,y,w,h[,stone] · plank x,y,w · pig x,y ·
+--   text x,y,label (no commas in the label)
+-- x,y are world-pixel CENTRES; the ground top is y 580. Towers are
+-- laid out EXACTLY touching (a stack built with gaps settles with a
+-- thud that can pop its own pigs; built touching, it sleeps).
+-- =====================================================================
+function sgLevelText pLevel
+   local t
+   put empty into t
+   if pLevel is 1 then
+      put "shots 4" & cr after t
+      put "text 800,200,LEVEL 1 - two legs and a lintel" & cr after t
+      put "box 740,520,24,120" & cr after t
+      put "box 860,520,24,120" & cr after t
+      put "plank 800,451,170" & cr after t
+      put "pig 800,566" & cr after t
+      put "pig 800,428" & cr after t
+   else
+      if pLevel is 2 then
+         put "shots 5" & cr after t
+         put "text 810,150,LEVEL 2 - two storeys; aim for the legs" & cr after t
+         put "box 700,525,24,110" & cr after t
+         put "box 810,525,24,110" & cr after t
+         put "box 920,525,24,110" & cr after t
+         put "plank 810,461,260" & cr after t
+         put "box 755,407,24,90" & cr after t
+         put "box 865,407,24,90" & cr after t
+         put "plank 810,353,150" & cr after t
+         put "box 810,322,44,44" & cr after t
+         put "pig 810,438" & cr after t
+         put "pig 855,330" & cr after t
+         put "pig 810,286" & cr after t
+      else
+         put "shots 6" & cr after t
+         put "text 800,130,LEVEL 3 - the stone shield does not care; go OVER it" & cr after t
+         put "box 640,560,40,40,stone" & cr after t
+         put "box 640,520,40,40,stone" & cr after t
+         put "box 640,480,40,40,stone" & cr after t
+         put "box 640,440,40,40,stone" & cr after t
+         put "box 760,515,24,130" & cr after t
+         put "box 880,515,24,130" & cr after t
+         put "plank 820,441,180" & cr after t
+         put "box 770,387,24,90" & cr after t
+         put "box 870,387,24,90" & cr after t
+         put "plank 820,333,160" & cr after t
+         put "box 820,304,40,40" & cr after t
+         put "pig 820,566" & cr after t
+         put "pig 820,427" & cr after t
+         put "pig 862,310" & cr after t
+         put "pig 820,270" & cr after t
+      end if
+   end if
+   return t
+end sgLevelText
+
+-- =====================================================================
+-- The level builder: tear down, build the range, parse the tower,
+-- pool the effects, load the first shot. Mirrors mgBuild's shape
+-- (guarded build, error to the HUD, never leaves the screen locked).
+-- =====================================================================
+command sgBuildLevel pLevel
+   local tLine, tVerb, tArgs, tRef, tName, tBuildErr, i, tW
+   if gBuilding is true then exit sgBuildLevel
+   put true into gBuilding
+   put pLevel into gLevel
+   put gScore into gScoreAt   -- the retry rollback point
+   put false into gLoaded
+   put false into gDragging
+   put false into gDotsOn
+   put empty into gLiveBall
+   put 0 into gCalmSince
+   put 0 into gActiveUntil
+   put 0 into gPigN
+   put empty into gPig
+   put 0 into gPigsLeft
+   put 0 into gBlkN
+   put empty into gBlk
+   put empty into gBlkX
+   put empty into gBlkY
+   put empty into gBlkScored
+   put empty into gRingUntil
+   put 4 into gShots
+   try
+      b2kClear
+   catch tBuildErr
+   end try
+   b2kTeardown
+   sgWipeStage
+   put empty into tBuildErr
+   lock screen
+   try
+      b2kSetup
+      b2kSetScale 60
+      sgMakeSounds
+      set the itemDelimiter to comma
+      -- ===== the range: visible ground + thick invisible side walls
+      -- (thick per the squeeze law; NO ceiling - high arcs are the fun)
+      create graphic "sg_ground"
+      set the style of it to "rectangle"
+      set the rect of it to 0, 580, 1024, 640
+      set the filled of it to true
+      set the backgroundColor of it to "126,168,96"
+      set the foregroundColor of it to "96,128,72"
+      b2kAddStatic the long id of graphic "sg_ground"
+      create graphic "sg_wallL"
+      set the style of it to "rectangle"
+      set the rect of it to -200, -2000, -2, 640
+      set the visible of it to false
+      b2kAddStatic the long id of graphic "sg_wallL"
+      create graphic "sg_wallR"
+      set the style of it to "rectangle"
+      set the rect of it to 1026, -2000, 1224, 640
+      set the visible of it to false
+      b2kAddStatic the long id of graphic "sg_wallR"
+      -- ===== the slingshot: a post and a pocket (pure decor - the
+      -- launch is math, not a joint), two bands, the pooled ammo ball
+      create graphic "sg_post"
+      set the style of it to "rectangle"
+      set the rect of it to kPocketX - 7, kPocketY + 10, kPocketX + 7, 580
+      set the filled of it to true
+      set the backgroundColor of it to "122,82,52"
+      create graphic "sg_bandL"
+      set the style of it to "line"
+      set the lineSize of it to 5
+      set the foregroundColor of it to "84,52,32"
+      set the points of it to (kPocketX - 10) & comma & kPocketY & cr & kPocketX & comma & kPocketY
+      create graphic "sg_bandR"
+      set the style of it to "line"
+      set the lineSize of it to 5
+      set the foregroundColor of it to "84,52,32"
+      set the points of it to (kPocketX + 10) & comma & kPocketY & cr & kPocketX & comma & kPocketY
+      create graphic "sg_ammo"
+      set the style of it to "oval"
+      set the filled of it to true
+      set the backgroundColor of it to "226,74,60"
+      set the foregroundColor of it to "150,40,32"
+      set the lineSize of it to 2
+      set the width of it to kBallD
+      set the height of it to kBallD
+      set the loc of it to kPocketX & comma & kPocketY
+      set the visible of it to false
+      -- ===== the tower (parse the level text)
+      repeat for each line tLine in sgLevelText(pLevel)
+         if tLine is empty then next repeat
+         put word 1 of tLine into tVerb
+         put word 2 to -1 of tLine into tArgs
+         switch tVerb
+            case "shots"
+               put item 1 of tArgs into gShots
+               break
+            case "text"
+               put "sg_txt" & the milliseconds & random(100000) into tName
+               create field tName
+               set the lockText of it to true
+               set the traversalOn of it to false
+               set the opaque of it to false
+               set the showBorder of it to false
+               set the textAlign of it to "center"
+               set the textSize of it to 14
+               set the textColor of it to "70,80,100"
+               set the rect of it to (item 1 of tArgs) - 260, (item 2 of tArgs) - 16, (item 1 of tArgs) + 260, (item 2 of tArgs) + 16
+               set the text of it to item 3 to -1 of tArgs
+               break
+            case "box"
+            case "plank"
+               if tVerb is "plank" then
+                  -- a plank is a wide thin box: x,y,w
+                  b2kSpawnBox item 1 of tArgs, item 2 of tArgs, item 3 of tArgs, 18, "204,160,96"
+               else
+                  if item 5 of tArgs is "stone" then
+                     b2kSpawnBox item 1 of tArgs, item 2 of tArgs, item 3 of tArgs, item 4 of tArgs, "128,132,142"
+                  else
+                     b2kSpawnBox item 1 of tArgs, item 2 of tArgs, item 3 of tArgs, item 4 of tArgs, "188,142,84"
+                  end if
+               end if
+               put the result into tRef
+               if tRef is empty then next repeat
+               b2kSetFriction tRef, 0.55
+               b2kSetBounce tRef, 0.05
+               if item 5 of tArgs is "stone" then b2kSetDensity tRef, 3
+               add 1 to gBlkN
+               put tRef into gBlk[gBlkN]
+               put item 1 of tArgs into gBlkX[gBlkN]
+               put item 2 of tArgs into gBlkY[gBlkN]
+               break
+            case "pig"
+               b2kSpawnBall item 1 of tArgs, item 2 of tArgs, 28, "110,200,90"
+               put the result into tRef
+               if tRef is empty then next repeat
+               -- LIGHT on purpose: the light body inherits the impact
+               -- momentum, so the speed poll below cannot miss a hit
+               b2kSetDensity tRef, 0.55
+               b2kSetFriction tRef, 0.4
+               b2kSetBounce tRef, 0.25
+               add 1 to gPigN
+               put tRef into gPig[gPigN]
+               add 1 to gPigsLeft
+               break
+         end switch
+      end repeat
+      -- ===== pooled effects, created LAST so they draw over the tower:
+      -- the aim dots and the pop rings (build once, write on change)
+      repeat with i = 1 to kDots
+         create graphic ("sg_dot" & i)
+         set the style of it to "oval"
+         set the filled of it to true
+         set the backgroundColor of it to "240,240,244"
+         set the width of it to 7
+         set the height of it to 7
+         set the visible of it to false
+      end repeat
+      repeat with i = 1 to kRings
+         create graphic ("sg_ring" & i)
+         set the style of it to "oval"
+         set the filled of it to false
+         set the lineSize of it to 4
+         set the foregroundColor of it to "250,170,60"
+         set the visible of it to false
+         put 0 into gRingUntil[i]
+      end repeat
+      sgLoadShot
+      b2kFrameTarget the long id of me
+      -- (no contact target on purpose: every verdict here is a poll)
+   catch tBuildErr
+   end try
+   sgChromeFront
+   unlock screen
+   put empty into gHudLast
+   put 0 into gHudNextMS
+   put the milliseconds + 600 into gArmedAt   -- let the stack settle
+   if tBuildErr is not empty then
+      set the text of field "sgHud" to "BUILD ERROR (report this): " & tBuildErr
+   else
+      b2kStart
+   end if
+   put false into gBuilding
+end sgBuildLevel
+
+-- Remove every level control (all are "sg_" prefixed; chrome is "sgX").
+command sgWipeStage
+   local tAgain, i, tName
+   put true into tAgain
+   repeat while tAgain
+      put false into tAgain
+      repeat with i = 1 to the number of controls of this card
+         put the short name of control i of this card into tName
+         if char 1 to 3 of tName is "sg_" then
+            delete control i of this card
+            put true into tAgain
+            exit repeat
+         end if
+      end repeat
+   end repeat
+end sgWipeStage
+
+-- =====================================================================
+-- The shot lifecycle: load (pooled graphic) -> drag -> fire (the only
+-- body this game ever creates mid-play) -> settle -> load the next
+-- =====================================================================
+command sgLoadShot
+   if gShots < 1 then exit sgLoadShot
+   set the itemDelimiter to comma
+   set the loc of graphic "sg_ammo" to kPocketX & comma & kPocketY
+   set the visible of graphic "sg_ammo" to true
+   put kPocketX into gAimX
+   put kPocketY into gAimY
+   sgDrawBands
+   put true into gLoaded
+end sgLoadShot
+
+-- The bands chase whatever holds the ball (the pocket, or the drag).
+command sgDrawBands
+   set the points of graphic "sg_bandL" to (kPocketX - 10) & comma & kPocketY & cr & gAimX & comma & gAimY
+   set the points of graphic "sg_bandR" to (kPocketX + 10) & comma & kPocketY & cr & gAimX & comma & gAimY
+end sgDrawBands
+
+command sgFire
+   local dx, dy, tLen, tRef, i
+   put false into gDragging
+   put false into gDotsOn
+   put kPocketX - gAimX into dx
+   put kPocketY - gAimY into dy
+   put sqrt(dx * dx + dy * dy) into tLen
+   repeat with i = 1 to kDots
+      set the visible of graphic ("sg_dot" & i) to false
+   end repeat
+   if tLen < 12 then
+      -- a fizzle: re-seat the ball, no shot spent
+      set the itemDelimiter to comma
+      set the loc of graphic "sg_ammo" to kPocketX & comma & kPocketY
+      put kPocketX into gAimX
+      put kPocketY into gAimY
+      sgDrawBands
+      exit sgFire
+   end if
+   set the visible of graphic "sg_ammo" to false
+   put false into gLoaded
+   b2kSpawnBall gAimX, gAimY, kBallD, "226,74,60"
+   put the result into tRef
+   if tRef is empty then exit sgFire   -- world gone; the next build reloads
+   b2kSetDensity tRef, 2.2   -- a cannonball, not a balloon
+   b2kSetFriction tRef, 0.5
+   b2kSetBounce tRef, 0.18
+   b2kSetVelocity tRef, dx * kLaunchK, dy * kLaunchK
+   subtract 1 from gShots
+   put tRef into gLiveBall
+   put the milliseconds into gLiveSince
+   put 0 into gCalmSince
+   put the milliseconds + 4500 into gActiveUntil
+   put kPocketX into gAimX
+   put kPocketY into gAimY
+   sgDrawBands
+   b2kSound "launch"
+end sgFire
+
+-- The shot is over: stays as debris; the pouch decides what is next.
+command sgShotDone
+   put empty into gLiveBall
+   if gMode is not "play" then exit sgShotDone
+   if gPigsLeft > 0 then
+      if gShots > 0 then
+         sgLoadShot
+      else
+         put "retry" into gMode
+         sgBanner "O U T   O F   A M M O" & cr & cr & "the pigs are still smiling up there" & cr & cr & "C L I C K   ( o r   R )   T O   R E T R Y"
+         b2kSound "dud"
+      end if
+   end if
+end sgShotDone
+
+command sgRetry
+   put gScoreAt into gScore   -- the level never happened
+   set the visible of graphic "sgShade" to false
+   set the visible of field "sgBigText" to false
+   sgBuildLevel gLevel
+   put "play" into gMode
+end sgRetry
+
+-- =====================================================================
+-- Pig pops + level flow
+-- =====================================================================
+command sgPopPig pWhich
+   local tPos, tSlot, i
+   if gPig[pWhich] is empty then exit sgPopPig
+   set the itemDelimiter to comma
+   put b2kPosition(gPig[pWhich]) into tPos
+   b2kRemove gPig[pWhich]   -- kit-spawned: body AND control go
+   put empty into gPig[pWhich]
+   subtract 1 from gPigsLeft
+   add 500 to gScore
+   put the milliseconds + 3000 into gActiveUntil   -- carnage continues
+   -- flash a pooled ring where the pig was (never create mid-game)
+   put 0 into tSlot
+   repeat with i = 1 to kRings
+      if gRingUntil[i] is 0 then
+         put i into tSlot
+         exit repeat
+      end if
+   end repeat
+   if tSlot is 0 then put 1 into tSlot   -- all busy: recycle the first
+   set the rect of graphic ("sg_ring" & tSlot) to (item 1 of tPos) - 26, (item 2 of tPos) - 26, (item 1 of tPos) + 26, (item 2 of tPos) + 26
+   set the visible of graphic ("sg_ring" & tSlot) to true
+   put the milliseconds + 380 into gRingUntil[tSlot]
+   b2kSound "pop"
+   if gPigsLeft <= 0 then sgLevelClear
+end sgPopPig
+
+-- The flow lessons ride along: banner now, REBUILD OUTSIDE this frame.
+-- "retry" qualifies too: a slow-toppling column that pops the last pig
+-- AFTER the out-of-ammo banner is a buzzer-beater, not a loss.
+command sgLevelClear
+   local tBonus
+   if gMode is not "play" and gMode is not "retry" then exit sgLevelClear
+   put "clear" into gMode
+   put gShots * 1000 into tBonus
+   add tBonus to gScore
+   if tBonus > 0 then
+      sgBanner "T O W E R   D O W N !" & cr & cr & "+" & tBonus & " ammo bonus"
+   else
+      sgBanner "T O W E R   D O W N !"
+   end if
+   b2kSound "clear"
+   send "sgNextLevel" to me in 1700 milliseconds
+end sgLevelClear
+
+command sgNextLevel
+   if gMode is not "clear" then exit sgNextLevel   -- an R beat us here
+   if gLevel >= 3 then
+      sgShowWin
+      exit sgNextLevel
+   end if
+   set the visible of graphic "sgShade" to false
+   set the visible of field "sgBigText" to false
+   sgBuildLevel gLevel + 1
+   put "play" into gMode
+end sgNextLevel
+
+-- =====================================================================
+-- The per-frame game logic (all POLLS; idles at a handful of compares)
+-- =====================================================================
+on b2kFrame
+   local i, tNow, tPos, tMX, tMY, dx, dy, tLen, tSpd, tT, tHud, tS
+   if gBuilding is true then exit b2kFrame
+   put the milliseconds into tNow
+   set the itemDelimiter to comma
+   -- 1. the drag: clamp the pull to the tether circle, chase with the
+   --    ball + bands + the ballistic preview (x + v*t + a*t^2/2 at
+   --    this world's gravity - scale 60 = 600 px/s^2)
+   if gDragging is true then
+      put the mouseLoc into tPos
+      put (item 1 of tPos) - kPocketX into dx
+      put (item 2 of tPos) - kPocketY into dy
+      put sqrt(dx * dx + dy * dy) into tLen
+      if tLen > kPullMax then
+         put dx * kPullMax / tLen into dx
+         put dy * kPullMax / tLen into dy
+      end if
+      put kPocketX + dx into gAimX
+      put min(kPocketY + dy, 562) into gAimY   -- never into the ground
+      set the loc of graphic "sg_ammo" to round(gAimX) & comma & round(gAimY)
+      sgDrawBands
+      repeat with i = 1 to kDots
+         put i * 0.11 into tT
+         put round(gAimX + (kPocketX - gAimX) * kLaunchK * tT) into tMX
+         put round(gAimY + (kPocketY - gAimY) * kLaunchK * tT + 300 * tT * tT) into tMY
+         set the loc of graphic ("sg_dot" & i) to tMX & comma & tMY
+      end repeat
+      if gDotsOn is not true then
+         put true into gDotsOn
+         repeat with i = 1 to kDots
+            set the visible of graphic ("sg_dot" & i) to true
+         end repeat
+      end if
+   end if
+   -- 2. the live shot: done when it has been slow for ~0.7s (a settle
+   --    WINDOW, never an instantaneous read) or after a 7s cap
+   if gLiveBall is not empty then
+      put b2kSpeed(gLiveBall) into tSpd
+      if tSpd is not empty and tSpd < 14 then
+         if gCalmSince is 0 then
+            put tNow into gCalmSince
+         end if
+      else
+         put 0 into gCalmSince
+      end if
+      if (gCalmSince > 0 and tNow - gCalmSince > 700) or tNow - gLiveSince > 7000 then sgShotDone
+   end if
+   -- 3. pig verdicts: pure speed polls on the LIVE pigs (armed after
+   --    the build settles, so a stack thud cannot self-pop)
+   if gPigsLeft > 0 and tNow > gArmedAt and (gMode is "play" or gMode is "retry") then
+      repeat with i = 1 to gPigN
+         if gPig[i] is empty then next repeat
+         if b2kSpeed(gPig[i]) > kPopSpeed then sgPopPig i
+      end repeat
+   end if
+   -- 4. block damage scores 50 once each - polled ONLY while the
+   --    carnage window is open (towers do not move on their own)
+   if tNow < gActiveUntil and gBlkN > 0 then
+      repeat with i = 1 to gBlkN
+         if gBlk[i] is empty then next repeat
+         if gBlkScored[i] is true then next repeat
+         put b2kPosition(gBlk[i]) into tPos
+         if abs(item 1 of tPos - gBlkX[i]) + abs(item 2 of tPos - gBlkY[i]) > 40 then
+            put true into gBlkScored[i]
+            add 50 to gScore
+         end if
+      end repeat
+   end if
+   -- 5. pop rings fade out
+   repeat with i = 1 to kRings
+      if gRingUntil[i] > 0 and tNow > gRingUntil[i] then
+         put 0 into gRingUntil[i]
+         set the visible of graphic ("sg_ring" & i) to false
+      end if
+   end repeat
+   -- 6. HUD at 4 Hz (an every-frame field write = an every-frame
+   --    relayout+redraw - the house rule)
+   if tNow < gHudNextMS then exit b2kFrame
+   put tNow + 250 into gHudNextMS
+   put empty into tS
+   repeat with i = 1 to gShots
+      put "●" after tS
+   end repeat
+   if gLoaded is true or gLiveBall is not empty then put "●" after tS
+   if tS is empty then put "-" into tS
+   put "Level " & gLevel & " / 3   ammo " & tS & "   pigs " & gPigsLeft & "   score " & gScore & "   |   " & round(b2kFrameMS() * 10) / 10 & " ms" into tHud
+   if b2kSoundStatus() is not empty then put "   [audio: " & b2kSoundStatus() & "]" after tHud
+   if b2kSoundMuted() then put "   [muted]" after tHud
+   if tHud is not gHudLast then
+      put tHud into gHudLast
+      set the text of field "sgHud" to tHud
+   end if
+end b2kFrame
+
+-- =====================================================================
+-- Mouse + keys
+-- =====================================================================
+on mouseDown
+   local tPos, dx, dy
+   if gMode is not "play" then exit mouseDown
+   if gLoaded is not true or gDragging is true then exit mouseDown
+   set the itemDelimiter to comma
+   put the mouseLoc into tPos
+   put (item 1 of tPos) - kPocketX into dx
+   put (item 2 of tPos) - kPocketY into dy
+   if sqrt(dx * dx + dy * dy) <= kGrabR then
+      put true into gDragging
+      b2kSound "stretch"
+   end if
+end mouseDown
+
+on mouseUp
+   if gMode is "menu" then
+      sgBegin
+      exit mouseUp
+   end if
+   if gMode is "won" then
+      put 0 into gScore
+      set the visible of graphic "sgShade" to false
+      set the visible of field "sgBigText" to false
+      sgBuildLevel 1
+      put "play" into gMode
+      exit mouseUp
+   end if
+   if gMode is "retry" then
+      sgRetry
+      exit mouseUp
+   end if
+   if gMode is "play" and gDragging is true then sgFire
+end mouseUp
+
+-- R retries the level (score rolls back), 1-3 jump levels, ESC pauses,
+-- M mutes. Raw events so they work even while paused.
+on rawKeyDown pKeyCode
+   if pKeyCode is 114 or pKeyCode is 82 then
+      if gMode is "play" or gMode is "retry" or gMode is "clear" then sgRetry
+      exit rawKeyDown
+   end if
+   if pKeyCode >= 49 and pKeyCode <= 51 and gMode is not "menu" then
+      set the visible of graphic "sgShade" to false
+      set the visible of field "sgBigText" to false
+      sgBuildLevel pKeyCode - 48
+      put "play" into gMode
+      exit rawKeyDown
+   end if
+   if pKeyCode is 65307 then
+      if b2kIsRunning() then
+         b2kPause
+      else
+         b2kResume
+      end if
+      exit rawKeyDown
+   end if
+   if pKeyCode is 109 or pKeyCode is 77 then
+      b2kSoundMute (not b2kSoundMuted())
+      exit rawKeyDown
+   end if
+   pass rawKeyDown
+end rawKeyDown
+
+-- =====================================================================
+-- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py
+-- - do not edit between the sentinels)
+-- =====================================================================
+-- >>> BEGIN EMBEDDED KIT >>>
+-- =====================================================================
 -- box2dxt-kit.livecodescript   ·   "Box2Dxt Kit"  (b2k...)
 --
 -- A friendly, pure-xTalk toolkit over the box2dxt extension. You work in
@@ -4811,3 +5594,4 @@ command b2kDispatchSensors
       dispatch "b2kSensorExit" to sContactObj with tS, tV
    end repeat
 end b2kDispatchSensors
+-- <<< END EMBEDDED KIT <<<

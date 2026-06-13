@@ -36,8 +36,10 @@ Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `a
 `kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`). Drop-in prebuilt
 binaries are in `prebuilt/`. The **Game Kit** (input/sprites/player/camera/sound modules, plan.md
 Phases 0-5) is implemented and user-verified on Win32; `plan.md`'s decision log is the as-built
-record. Six examples: demo, contraption builder, spike (Phase-0 harness), **platformer showcase**,
-**micro-game** (the "copy this to start a game" file), and the **self-test harness** (below).
+record. Seven examples: demo, contraption builder, spike (Phase-0 harness), **platformer showcase**,
+**micro-game** (the "copy this to start a game" file), **slingshot** (angry-birds-style tower
+knockdown — the physics core carrying a whole game with zero events and zero assets), and the
+**self-test harness** (below).
 
 ## The golden rule: the embedded-Kit sync
 
@@ -93,10 +95,13 @@ failure. Run it after **every** `.livecodescript` edit.
 pass" and let the user confirm.
 
 **The self-test harness** (`examples/box2dxt-selftest.livecodescript`) is the runtime safety net:
-~93 deterministic assertions driving the real Kit (paused world + `b2kStepOnce` hand-stepping +
-`b2kInputInject` scripted keys). The workflow for every Kit change: (1) add/extend an assertion
+~113 deterministic assertions (currently **v10**) driving the real Kit (paused world +
+`b2kStepOnce` hand-stepping + `b2kInputInject` scripted keys). The workflow for every **Kit**
+change: (1) add/extend an assertion
 that captures the new behavior, (2) **bump `kStHarnessV`** (the report header prints it, so a
-stale paste identifies itself), (3) the user clicks RUN ALL TESTS and reports. It has caught five
+stale paste identifies itself), (3) the user clicks RUN ALL TESTS and reports. **Example-only
+changes do NOT bump the harness** — the rule is conditional on Kit edits (Waves 1 and 3 shipped
+with zero Kit changes and zero bump). It has caught five
 real Kit bugs that play-testing missed; score so far is 5 Kit bugs : 5 harness bugs — expect
 first-contact arithmetic errors in new tests and write them self-diagnosing (print what was
 observed, not just FAIL).
@@ -168,6 +173,142 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
    bodies); stomp-like verdicts = recent-state windows; one-shots =
    sensor events. External player boosts go through `b2kPlayerJump`
    (a raw upward set-velocity on a grounded player gets ground-snapped).
+   Corollary (the slingshot): **impact strength = speed-poll the LIGHT
+   body** — the light body always inherits the momentum, so the poll
+   cannot be outrun; arm such polls only after a build-settle grace.
+17. **`b2kSetVelocity` WAKES the body — by design.** Never write a
+   velocity per-frame to something meant to REST (the parked-shell bug:
+   a per-frame "brake" kept it awake forever, solver + 2 FFI per frame).
+   Velocity *asserts* are only for things that must keep moving (the
+   player, a sliding shell); transitions write once, rest states write
+   nothing. A sleeping body costs the solver zero.
+18. **Two velocity-asserting bodies must never share a path.** When both
+   write their vx every frame and they collide, the asserts fight the
+   solver — visible jitter. Split patrol bands so asserting bodies
+   (bats, shells vs patrollers) cannot meet head-on.
+19. **A non-looping animation FIRES `b2kSpriteOnFinish` whoever started
+   it.** If a game wires the player's sprite finish to its respawn (the
+   hit-pose pattern), the Kit's hurt anim must be a **LOOPING twin**
+   (`hurtpose`), never the one-shot `hit` — and every `*HurtDone`
+   handler gates on its own respawn lock besides.
+20. **One-sided chain contacts judge by the CENTROID.** Restoring a
+   collision filter while a body straddles the chain line snaps it back
+   ON TOP. Restore masks only once the body has cleared the line it
+   dropped through, with a hard deadline (4x window) for blocked drops —
+   and never park a solid closer than a player-height under a one-way deck.
+21. **Filter bits: xTalk bit ops are 32-bit; Box2D's default mask reads
+   back as 2^64-1.** Clamp any mask round-trip to 4294967295 before
+   bitAnd/bitOr. Bit 2^31 is the Kit's reserved **`oneway`** chain layer:
+   `b2kDefineLayer` stops at 2^30 (31 nameable layers) and `b2kSetMask`
+   ORs the oneway bit in automatically (a custom mask must not silently
+   mean "fall through the terrain").
+22. **A `switch` on kinds: deleting a case hands the row to `default`.**
+   Keep an EMPTY case with a comment when the default would misbehave
+   (a parked shell with no case would get patrol velocity). Paired
+   fall-through cases (`case "a"` newline `case "b"`) are legal and used.
+23. **Sprites follow position only — they do not rotate.** Bodies whose
+   ROTATION matters (tumbling blocks, toppling towers) must be spawned
+   GRAPHICS (the poly/image render paths rotate); sprite faces suit
+   round things and fixed-rotation bodies only. This is why the
+   slingshot is deliberately sprite-free.
+24. **Mixed sprite grids never share a level raw.** Foreign-family
+   sheets load with `b2kSheetScale` normalisation (e.g. the 70px
+   `enemies.png` at 0.9 into the 64px platformer). Family B/C sheet
+   frame names carry their **`.png` suffix** (`"bat_fly.png"`); the
+   Kenney `-default` sheets do not.
+25. **Optional sheets gate their makers on a capability flag** (the
+   `gSpooksOK`/`gToysOK` pattern, computed once per build): a missing
+   sheet must degrade SILENTLY and the level must stay completable —
+   never let a coin or a gate depend on optional art.
+26. **Art facing polarity is statically unverifiable.** When adding a
+   new sheet's movers, pick a flip convention, note it in the example's
+   verify list, and let the OXT round report mirrored sprites.
+27. **`the result` is consumed by the NEXT command** — capture it into a
+   local immediately after every `b2kSpawn*`/maker call before calling
+   anything else (several past bugs were a stale `the result`).
+
+## The single-threaded performance playbook
+
+OXT runs everything — physics FFI, script, rendering — on ONE interpreted
+thread at ~60fps (≈16ms budget). The three real costs, in order:
+**(1) interpreter ops, (2) FFI round-trips, (3) property-set redraws**
+(each `set` of a field/control property can mean engine relayout+repaint).
+The rules, each earned by a measured regression:
+
+- **One hero snapshot per frame.** Read `b2kPosition`/`b2kPlayerState`
+  ONCE in `on b2kFrame` into globals (`gHeroPX/PY/State`); every tick
+  shares them. Eight ticks each doing their own read = ~8 needless
+  FFI/string round-trips per frame.
+- **One clock read per pass.** Hoist `the milliseconds` out of loops.
+- **HUD/field text at 4 Hz max, and only on change.** An every-frame ms
+  readout forces an every-frame field relayout+redraw — the single
+  biggest avoidable cost found in the games.
+- **Build once, write on change.** Never `create` controls mid-game
+  (creates stall under accelerated rendering — the brick-debris lesson):
+  POOL effects at build (debris, rings, dots) and park them off-world;
+  reuse by MoveTo/SetDynamic. Pre-warm any sheet frame first shown
+  mid-game (`b2kSheetEnsureIcon` at build — the lazy slice costs
+  ~250ms/frame-name).
+- **Skip redundant property sets.** The Kit's draw keys, `b2kSpriteFlipH`
+  same-value guard, icon-now guard, gate-velocity-on-change — mirror the
+  pattern for anything you add (loc writes, visibility flips).
+- **Every idle tick gates in one compare.** A feature that is absent
+  must cost a single `if` per frame (`gPlantN is 0`, `gGhostSpr is
+  empty`, `sPlayLadN > 0` …).
+- **Resolve at bind/set time, not per use.** Keycode lists resolve at
+  bind time; player knobs bake into flat locals at set time; never pay
+  name lookups in a per-frame path.
+- **Let bodies sleep** (see gotcha 17) — and remember polls
+  (`b2kOverlap*`) SEE sleeping bodies, so presence checks never need to
+  keep things awake.
+- **Defer world rebuilds out of the physics frame.** Rebuilding from
+  inside a sensor/contact dispatch is asking for trouble: `send
+  "nextLevel" to me in 80 milliseconds` (and guard the handler against
+  stale sends with a mode/lock check).
+- **Park before disable** (Wave 1 law): move a body off-world FIRST,
+  then disable — disabling in place leaves its last broadphase position
+  visible to queries for a beat.
+- **Raw handles in hot paths.** Kit-internal per-frame code uses the
+  cached body handle + raw `b2*` calls (skip the ref lookup and "x,y"
+  string packing); reserve the friendly wrappers for event-path and
+  build-time code.
+
+## Layout & game-design laws (earned in OXT rounds)
+
+- **THE LAYOUT LAW (Wave 2 closure): every interactive beat gets ~100px
+  of clear air — widen the world before squeezing a beat in.** Cramped
+  reads as "what IS all this?". When re-spacing, move each beat WHOLE
+  (chain + art + cast together) so ghost padding and machine
+  relationships survive; preserve deliberate pairings (key-by-thwomp,
+  checkpoint-by-slime) at their original offsets.
+- **Chains: solid span must equal art span.** Ghost rule (gotcha 15)
+  applied mechanically: N points = N-3 solid segments; verify
+  `sorted(xs)[1:-1]` against the tile extents (the audit script pattern).
+- **Gates must be structural** (floor-to-ceiling; the win provably
+  passes through them) · **scenery builds BEFORE actors** (the hero
+  walks in front) · **never `b2kCamGoto` before `b2kCamBounds`** (an
+  unclamped goto scroll-shifts everything built after it) · **no
+  sub-capsule slots between statics** (solver squeeze ejects through
+  walls; boundary slabs are THICK, ~256px).
+- **The knockback-vs-respawn split (Wave 2):** contact damage =
+  `b2kPlayerHurt` knockback + mercy window (`b2kPlayerHurtIs()` gates
+  hazard checks); only lethal falls (pits, kill plane) use the respawn
+  flow. An explicit `b2kPlayerControl` call cancels a knockback in
+  flight, so the two paths hand over cleanly.
+- **Self-counting totals:** coins/keys increment their totals as they
+  BUILD (`gCoinsTotal` in the makers) so totals can never drift from
+  the layout, and fallback levels' smaller totals fall out free.
+- **Ladders:** run the zone a little above a platform at the ladder's
+  top (walk-off + DOWN grabs it); zones are world state (`b2kClear`
+  wipes them).
+- **Hazard mercy patterns:** a riser never rises under the hero's feet
+  (the piranha); proximity hazards give a sprint-speed telegraph
+  (mimic wake ≥110px); unkillable hazards follow "the saw rule" (skip
+  or time them — no verdict needed).
+- **Versioned chrome:** bump `kUIVersion`-style tags whenever built
+  chrome changes so older saved stacks rebuild once; bump the
+  newest-cue guard in `*MakeSounds` when adding a tone (sounds survive
+  teardown, so the guard must key on the NEWEST name).
 
 ## The Contraption Builder (`examples/box2dxt-contraption-builder.livecodescript`)
 

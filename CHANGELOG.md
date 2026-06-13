@@ -39,6 +39,143 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 3 — bestiary I + HAUNTED HOLLOW (statically verified; awaiting
+  the OXT pass).** Six enemy archetypes and a FOURTH platformer level,
+  all example-side: **zero Kit changes, so harness v10 stays the
+  baseline** (rule 2). Design in `docs/expansion-prep.md` §10.
+  - **Snail (kickable shell):** joins the slime family as a kind chain
+    `snail -> shell -> shellslide <-> shell` — a stomp shells it, any
+    touch of the parked shell kicks it sliding 520px/s away from the
+    hero, the slide is a per-frame velocity assert that REVERSES off
+    walls (collapsed-vx poll) and bowls over every ground foe it
+    reaches; stomp the slide to park it; its sides knock back.
+  - **Bat:** roosts static under an overhang (`bat_hang`), drops when
+    the hero nears, then flies as a gravity-scale-0 body — patrol vx +
+    a proportional swoop to head height + sine bob. One stomp.
+  - **Mimic:** a `grassBlock` sitting dead still in the PURPLE biome
+    (wrong on purpose — the tell); wakes within ~90px and lunges in
+    short hops on a cooldown. One stomp.
+  - **Piranha burrows:** bodiless sprites rising from drawn mouth
+    holes on a down/rise/bite/sink cycle with the classic mercy (never
+    rises while the hero stands over the mouth). Unkillable.
+  - **Ghost:** bodiless, drifts through terrain toward the hero at
+    ~80px/s ONLY while he faces away (`b2kPlayerFacing` poll); eye
+    contact freezes it in the shy pose. The level's pressure.
+  - **Faced crushers:** `pfMakeThwomp` gains a `pFaced` flag that puts
+    the `block_idle/fall/rest` mood art (which was already the
+    machine's fallback) on L4's thwomps on purpose.
+  - **L4 "HAUNTED HOLLOW"** (3712px, 10 coins): purple biome, the
+    mimic field, the snail+slime bowling lane, the bat bar, a pit, two
+    burrows, the ghost over the back half, a faced-crusher pair around
+    a new **lava strip** hazard (`pfMakeLava`: knockback, never
+    respawn), purple steps, the flag. Win moves to `gLevel >= 4`; all
+    copy says FOUR. Spook art (`enemies.png`, the Family C sheet)
+    loads as sheet `spooks` at `b2kSheetScale 0.9` per the mixed-grids
+    law and is OPTIONAL — without it the four spook makers skip
+    silently and L4 still completes.
+- **Wave 2 closed (user-verified 2026-06-13; harness v10 all-pass) +
+  the level SPACING pass.** The one OXT note from the wave: the new
+  beats cramped the layouts. Every level stretched so each interactive
+  beat gets ~100px of clear air — now a layout law:
+  - **L1** 3712→3968px: the cloud steps no longer start at the mound's
+    foot (+128px gap), the spike pit and second act shift out, the
+    fence/bush decor moves off the bonk row.
+  - **L2** 2816→3072px: the Wave 2 ladder/ledge becomes its own beat
+    past the gate (the checkpoint used to stand INSIDE the ladder
+    tiles and the lever 6px off them); checkpoint → 1000, lever →
+    1120, saws → 1240/1430, thwomps → 1640/1840, wall → 2464.
+  - **L3** 3520→3776px: the bonk-row → saw → pit corridor was
+    wall-to-wall (gaps of 0–18px); the saw now has 88/56px of air and
+    everything from the checkpoint out shifts +128.
+  - **Micro-game L2** 1536→1664px: the exit pillar + ladder move past
+    the sweeper's reach (its far end used to graze the ladder base).
+- **New example: the SLINGSHOT** (`examples/box2dxt-slingshot.livecodescript`)
+  — an angry-birds-style tower-knockdown game, and the example that shows
+  the PHYSICS CORE carrying a whole game by itself (the platformer and
+  micro-game showcase the game modules; this one uses no player, no
+  camera, no sprites, and deliberately **no contact events at all**).
+  Drag the red ball out of the slingshot pocket (a tether-clamped pull
+  with live rubber bands and a ballistic aim preview — the dots plot the
+  same `x + v·t + a·t²/2` the world then integrates), release to fire;
+  three towers of columns/planks/crates (plus stone blocks on level 3)
+  topple for real, and the green pigs pop on a **speed poll** — the
+  light body always inherits the impact momentum, so the poll can't be
+  outrun by the solver (the doctrine's answer to post-impact zero
+  reads). Shot budget per level, 50 a block + 500 a pig + 1000 per
+  leftover shot, out-of-ammo retry with score rollback, win screen.
+  Zero assets: all visuals are colored graphics (which is also why —
+  spawned box graphics rotate with their bodies; sprites don't), all
+  sounds synthesized. Hot-path discipline: ammo/bands/dots/pop-rings
+  are pooled at build, block polls only run during a post-shot carnage
+  window, HUD at 4 Hz. Registered in the embedded-Kit sync tool.
+- **Wave 2 — player actions I (statically verified; awaiting the OXT
+  pass).** Four controller abilities land in the Kit, asserted by
+  harness **v10** (four new tests, ~20 assertions) and consumed by both
+  games:
+  - **Drop-through:** every `b2kChain`/`b2kSmoothGround` chain now
+    carries a reserved one-way collision category (bit 2³¹, nameable as
+    the `oneway` layer; `b2kDefineLayer` stops at 2³⁰ — 31 user layers —
+    and `b2kSetMask` ORs the bit in automatically so custom-masked
+    bodies still stand on terrain). DOWN+JUMP while standing on a chain
+    masks the bit off the player for `dropMs` (~260 ms); the probe
+    ignores one-way ground during the window (no phantom re-ground),
+    and the mask restores only once the capsule has CLEARED the deck it
+    dropped through (a straddling restore would snap it back on top —
+    chain contacts are one-sided, judged by the centroid), with a 4×
+    hard deadline. On solid ground DOWN+JUMP just ducks, and the press
+    is eaten. **No ABI change was needed** — `b2lc_chain_create`
+    already honors the pending shape-def filter (§9's open question,
+    resolved).
+  - **Ladder climb:** `b2kPlayerAddLadder x1,y1,x2,y2` registers polled
+    ZONES (flat numeric arrays, zero physics objects; world state —
+    `b2kClear` wipes them). In-zone UP (or DOWN while airborne) enters
+    `climb`: gravity scale parks at 0 (the body's own scale is saved
+    and restored), y runs at `climbSpeed` off the moveY axis (0 =
+    hang), x at half speed; JUMP exits with a normal jump; climbing
+    down onto ground steps off. The ground-snap is climb-exempt (rising
+    off a grounded ladder base is real motion).
+  - **Duck:** DOWN while grounded brakes to a stop at the normal decel
+    and shows the new `duck` state/anim. No hitbox change this wave
+    (capsule reshape is Wave 5).
+  - **Hurt-knockback standard:** `b2kPlayerHurt [fromX]` — an away-pop
+    (`hurtPopX`/`hurtPopY`, riding the jump flag so the ground-snap
+    can't swallow it), the `hurt` state, input suppressed until
+    `hurtMs` or the first landing after half of it (whichever is
+    LATER), then an `invulnMs` mercy window during which repeat hurts
+    no-op and `b2kPlayerHurtIs()` answers true. An explicit
+    `b2kPlayerControl` call cancels a knockback in flight (respawn
+    flows take over cleanly, no mercy granted).
+  - **Kit surface:** `b2kPlayerAnims` grows optional `duck`/`climb`/
+    `hurt` slots (old five-argument calls unchanged; sensible pose
+    fallbacks); new tuning keys `dropMs`, `climbSpeed`, `hurtPopX/Y`,
+    `hurtMs`, `invulnMs`; `b2kPlayerState()` adds `duck`/`climb`/
+    `hurt`. All new tick paths idle at one compare per frame, knobs
+    cached at set-time, and the probe's one-way classification rides
+    the body handle `b2kRayHit` already fetched — zero added FFI in
+    the steady state.
+  - **Platformer:** the knockback-vs-respawn SPLIT — slime sides, saw
+    brushes, spike tips, thwomp undersides and movers now knock back
+    (`pfOuch`, HUD counts "hits"); only pits/kill-plane falls respawn.
+    The beige hero ducks and climbs with REAL frames (the default
+    characters sheet has `duck`/`climb_a/b` — the design doc guessed
+    wrong). L2 gains a LADDER up to a bonus ledge above the gate (one
+    new coin, 9 total); the L1 bridge/clouds drop through as designed.
+    The knockback pose is a LOOPING `hurtpose` twin of `hit` — a
+    non-looping pose would fire `b2kSpriteOnFinish` → the respawn
+    mid-knockback (both games gate their `*HurtDone` on the respawn
+    lock for the same reason).
+  - **Micro-game:** the same split (sweeper/spikes knock back; falls
+    respawn; HUD + win screen count hits), a zero-asset `ladder` verb
+    (drawn rails + rungs) up the now-taller L2 exit pillar, and
+    OPTIONAL **alien skins**: when the platformer's remembered
+    Spritesheets folder is present (the game itself never prompts —
+    zero-asset stays zero-asset), the menu offers keys 1–6 (classic +
+    five alien colours from the one `aliens.png` atlas, scaled 0.7);
+    aliens duck/climb/hurt with real frames.
+  - **Hardening found en route:** `b2kChain`/`b2kAddChain` parsed
+    points without setting `itemDelimiter` (gotcha 5 — latent breakage
+    under a tab delimiter); both now set it. `b2kRayHit` stashes the
+    hit body handle it already fetched (`sRayBodyH`).
 - **Wave 1 closed (user-verified 2026-06-12); Wave 2 designed.** The
   three-level platformer is the wave's verified exit. Wave 2 — player
   actions I (drop-through, ladder climb, duck, the hurt-knockback

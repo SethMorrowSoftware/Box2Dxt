@@ -7,10 +7,11 @@ that keep the expansion as reliable as the engine underneath it.
 
 | | |
 |---|---|
-| Baseline | Kit + games user-verified; self-test harness **v9, ~102 assertions, all pass** |
+| Baseline | Kit + games user-verified; self-test harness **v10, ~113 assertions, all pass** (Wave 2 closed 2026-06-13) |
 | Assets | **LANDED (2026-06-11)** — Kenney's iconic platformer family, ~900 frames; Wave 0 catalogue below |
 | Wave 1 | **COMPLETE — user-verified 2026-06-12** (the three-level platformer; see §7) |
-| Next | **Wave 2** (player actions I) — design in **§9** |
+| Wave 2 | **COMPLETE — user-verified 2026-06-13** (player actions I, harness v10; see §9) |
+| Next | **Wave 3** (bestiary I + the haunted level) — design in **§10** |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
@@ -194,11 +195,17 @@ to Kit API (`b2kFoe…`).
    platformer's native 64px family (it has the full switch/spring/
    key/door set, style-matched); Family C debuts with content built FOR
    its 70px grid (Waves 2-3).
-2. **Wave 2 — player actions I:** drop-through, climb (ladders), duck,
-   hurt-knockback standard; alien skins selectable in the micro-game.
-   **Design prepared — see §9.** This is the first KIT-TOUCHING wave
-   of the content phase (controller states), so rule 2 applies in
-   full: harness assertions + a `kStHarnessV` bump ride every change.
+2. **Wave 2 — player actions I: COMPLETE (user-verified 2026-06-13).**
+   Drop-through, climb (ladders), duck, the hurt-knockback standard;
+   alien skins in the micro-game. Harness **v10 all-pass on the
+   user's machine** — the wave's exit criterion. One OXT round of
+   feedback: the new beats CRAMPED the levels (the L2 ladder landed
+   on the checkpoint and lever) — answered with a spacing pass
+   (L1 3968px / L2 3072px / L3 3776px; micro L2 1664px) and a new
+   LAYOUT LAW: every interactive beat gets ~100px of clear air.
+   Design in §9; as-built record in plan.md's decision log. The §9
+   ABI question resolved to NO ABI CHANGE (the shim's pending
+   shape-def filter already covers chain creation).
 3. **Wave 3 — bestiary I:** shelled (kickable!), ghost, bat, mimic,
    pipe plant, crusher-with-faces — into a platformer "haunted" section.
 4. **Wave 4 — liquids:** swim zones + lava + pit dwellers + collapsing
@@ -244,11 +251,16 @@ games + docs, statically verified, then the OXT rounds.
 - **Kit surface:** `dropMs` tuning key; internal state `drop`
   (renders as `fall`). `b2kChain`/`b2kSmoothGround` tag their chains
   with the reserved bit.
-- **OPEN QUESTION (resolve first, in the shim):** can a chain's
-  filter be set through the current ABI? If `b2lc` chain creation
-  takes no filter, this wave carries the content phase's first ABI
-  addition (chain filter args + `LC_ABI_VERSION` bump + a
-  `smoke_test.c` assertion). Budget for it.
+- **RESOLVED (2026-06-12): no ABI change needed.** `b2lc_chain_create`
+  already honors the pending shape-def filter (`b2ShapeDefFilter` →
+  `s_sd` → `cd.filter`), so the Kit tags chains at creation through
+  the existing surface. The reserved bit is 2³¹ (nameable as the
+  `oneway` layer; `b2kDefineLayer` now stops at 2³⁰ = 31 user layers,
+  and `b2kSetMask` ORs the bit in automatically). One subtlety found
+  in the build: the window's restore must wait until the capsule has
+  CLEARED the deck (one-sided chain contacts judge by centroid — a
+  timer-only restore snaps a straddling player back on top); a 4×
+  hard deadline covers drops blocked by something below.
 - **Grounding interplay:** during the window the ground probe must
   ignore one-way chains too, or the controller re-grounds mid-drop
   (the phantom-ground lesson from Phase 3, in reverse).
@@ -270,7 +282,10 @@ games + docs, statically verified, then the OXT rounds.
   zero physics objects.
 - **Kit surface:** `b2kPlayerAddLadder`, `climbSpeed` key, `climb`
   anim slot in `b2kPlayerAnims` (optional: falls back to the jump
-  pose - the beige hero has no climb frames; the ALIENS do).
+  pose). CORRECTION (build finding): the beige hero HAS climb frames
+  (`character_beige_climb_a/b` in the default chars sheet) - the
+  platformer climbs fully-frame'd; the aliens remain the micro-game's
+  showcase.
 - **Art:** `ladder_bottom/middle/top` (old tiles sheet, 64px) as pure
   decor tiles over the zone; alien `climb1/2` for skins that have it.
 - **Where it lands:** L2 - a ladder up to a new bonus ledge above the
@@ -335,3 +350,104 @@ games + docs, statically verified, then the OXT rounds.
    decision log.
 5. No regression: Wave 1's three levels still complete start to
    finish.
+
+## 10. Wave 3 design — bestiary I (prepared 2026-06-13)
+
+Six enemy archetypes and the **haunted level** they debut in. This wave
+is **all example-side** — every verdict is a poll or rides the existing
+slime/thwomp/mover machinery, and the Kit is untouched, so per rule 2
+there is **no harness bump** (v10 stays the baseline). The platformer
+grows a fourth level; "three levels to win" copy flips to four.
+
+### 10.1 The sheet: "spooks" (enemies.png, Family C)
+
+`enemies.png/.xml` carries the species the 64px foes sheet lacks:
+**ghost** (51x73; `ghost` moving + `ghost_normal` shy + hit/dead),
+**bat** (`bat_hang` 38x48 + `bat_fly` 88x37 + `bat` + hit/dead),
+**piranha** (45x60, up + `piranha_down` + hit/dead), **grassBlock**
+(71x70 + `_jump` + hit/dead — the terrain MIMIC). Frame names carry
+their `.png` suffix (same as aliens.xml). It is a ~70px-family sheet in
+a 64px-family level, so it loads as sheet `spooks` with
+`b2kSheetScale 0.9` — the documented mixed-grid normalisation; raw
+grids never mix. The **snail** (kickable shell) and the **crusher
+faces** (`block_idle/fall/rest`) already live on the native 64px foes
+sheet — no import, no scaling. If `enemies.png` is missing (an older
+folder), the spook-kind makers skip silently; the level stays
+completable (no coin or gate depends on a spook).
+
+### 10.2 The archetypes
+
+All six reuse proven pipelines. The slime FAMILY (bodies, contact
+stomp-vs-ouch, `b2kFell` cleanup) absorbs three of them as new KINDS;
+the thwomp absorbs one; two are bodiless sprites.
+
+1. **Shelled — the snail (kickable!).** A slime-family patroller
+   (anim `snailwalk`). STOMP does not kill: the snail becomes a
+   **shell** (`snail_shell` frame, patrol stops). ANY hero touch of a
+   resting shell KICKS it away from him (a 520 px/s velocity assert
+   per frame while sliding, the player-controller pattern); a wall
+   hit reverses it (poll: actual vx sign vs intent = the bounce).
+   A SLIDING shell is a bowling ball: any ground foe it overlaps dies
+   (+200), and it HURTS the hero on side contact (knockback) — stomp
+   a sliding shell to stop it. Kind chain: `snail -> shell ->
+   shellslide <-> shell`.
+2. **Ghost.** Bodiless sprite (it drifts through terrain — that is
+   the point). Chases the hero at ~80 px/s ONLY while unwatched;
+   the moment the hero FACES it (`b2kPlayerFacing` vs relative x) it
+   freezes in the shy pose (`ghost_normal`). Proximity touch =
+   knockback. Unkillable — the level's ambient dread, one per level.
+3. **Bat.** Slime-family kind with **gravity scale 0** once woken: it
+   hangs (`bat_hang`, body parked static) under an overhang until the
+   hero comes within ~150px, then drops into a fast sine-bobbing
+   patrol (`batfly` anim, velocity-driven vx + sine vy). Stompable
+   (one hit, `bat_hit` then gone); touch = knockback.
+4. **Mimic — the grassBlock.** A GRASS block sitting in a PURPLE
+   biome — wrong on purpose; haunted levels telegraph by wrongness.
+   Parked static and frameless-still until the hero comes within
+   ~90px, then it wakes (`grassBlock_jump`) and HOPS at him in short
+   lunges (velocity bursts on a cooldown while settled). Stomp kills
+   (+150); touch = knockback. Slime-family kind: `mimic ->
+   mimiclive`.
+5. **Pipe plant — the piranha.** No pipe art exists in any sheet, so
+   it is a PIT LURKER: a bodiless sprite rising from a drawn burrow
+   hole in the ground on a cycle (down ~1.6s, rise, bite ~1.2s,
+   sink), with the classic mercy — it will NOT rise while the hero
+   stands over the mouth (|dx| < 52). Hurt box only while risen.
+   Unkillable (the saw rule). Pure sprite mover + state arrays.
+6. **Crusher-with-faces.** The thwomp machine already had the face
+   art as its no-weight fallback (`gBlockFace`); `pfMakeThwomp` gains
+   a pFaced flag so L4's crushers WEAR the faces on purpose
+   (idle/fall/rest swaps are already in pfTickThwomps). Same chained
+   physics, same underside-knockback, same head-riding.
+
+### 10.3 The haunted level — L4 "HAUNTED HOLLOW" (3712px)
+
+Purple biome (`terrain_purple_*` + `grass_purple` decor — native 64px
+tiles), **lava strips** as the new ground hazard (lava_top art over a
+spike-pattern knockback sensor), one true pit, and the Wave 3 cast in
+order: a MIMIC field (two grass blocks among purple bushes), the snail
++ a slime to bowl with its shell, the BAT overhang (two hangers under
+a stone bar), the pit, a checkpoint, two PIRANHA burrows, the GHOST
+stalking the whole second half, a faced-CRUSHER pair around a lava
+strip, and purple steps to the flag. ~10 coins (self-counting), no
+key/door (L2/L3 own that beat). Spacing per the new layout law:
+every beat ~100px+ of clear air.
+
+### 10.4 Game flow
+
+`gLevel >= 4` wins; splash/help/win copy says FOUR; L1-L3 untouched
+(beyond the spacing pass). L4 inherits default player knobs (no ice).
+Knockback-vs-respawn split as everywhere: every Wave 3 touch is
+knockback; only pits/kill-plane respawn.
+
+### 10.5 Exit criteria
+
+1. Harness v10 still all-pass (no Kit change = no bump — rule 2).
+2. L4 completes start to finish with all coins; every archetype
+   behaves: snail stomps to shell, shell kicks/bowls/reverses and can
+   be stopped; ghost freezes when faced, drifts when not; bats drop
+   and bob; mimics wake and lunge; piranhas cycle and show mercy;
+   crushers wear their faces through the full cycle.
+3. No regression: L1-L3 + micro-game still complete (spacing pass
+   verified at the same time).
+4. Docs ride along: CHANGELOG, plan.md decision log, this section.
