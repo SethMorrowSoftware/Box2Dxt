@@ -710,6 +710,11 @@ command pfStartGame
    end if
    b2kPlayerSet "moveSpeed", kMoveSpeed
    b2kPlayerSet "jumpSpeed", kJumpSpeed
+   -- Wave 4 swim feel: the stroke (swimJump) is bumped over the Kit default
+   -- so the bigger 88px capsule clears the hilltop pool's bank on the way
+   -- out; all four swim knobs are live, tweak to taste in OXT
+   b2kPlayerSet "swimSpeed", 165
+   b2kPlayerSet "swimJump", 360
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
@@ -1220,6 +1225,29 @@ command pfMakeLava pL, pR
    b2kAddSensor tRef, "box"
 end pfMakeLava
 
+-- Wave 4: a SWIM basin. Registers the Kit swim zone (the controller polls
+-- it -- buoyant gravity, capped sink, UP/DOWN swim, SPACE strokes up) and
+-- draws the water as a blue rect with a bright surface line. The caller
+-- places the banks + floor slabs: the 640-tall world clamps the camera at
+-- y640, so a swim pool cannot be a pit BELOW the ground -- it is a RAISED
+-- basin between two banks (a hilltop pool). Coins layer on top (cast).
+command pfMakeWater pL, pTop, pR, pBot
+   b2kPlayerAddWater pL, pTop, pR, pBot
+   create graphic ("pf_water" & pL)
+   set the style of it to "rectangle"
+   set the rect of it to pL, pTop, pR, pBot
+   set the filled of it to true
+   set the backgroundColor of it to "92,150,205"
+   set the foregroundColor of it to "60,110,170"
+   b2kCamAdopt the long id of graphic ("pf_water" & pL)
+   create graphic ("pf_surf" & pL)
+   set the style of it to "line"
+   set the points of it to pL & comma & pTop & cr & pR & comma & pTop
+   set the lineSize of it to 3
+   set the foregroundColor of it to "165,210,245"
+   b2kCamAdopt the long id of graphic ("pf_surf" & pL)
+end pfMakeWater
+
 -- =====================================================================
 -- Wave 1 builders: springboard, bonk row, lever, key + locked door.
 -- The pattern everywhere: an invisible static HOST graphic (named pf_*,
@@ -1589,7 +1617,7 @@ end pfMakeWoodCrate
 command pfL1Scene
    local tX
    put "GREEN HILLS" into gLevelName
-   pfBounds 7552
+   pfBounds 8640                                -- extended for the Wave 4 HILLTOP POOL past the crusher alley
    pfSlab "pf_ground1", 0, 576, 2560, 640
    pfSlab "pf_ground2", 2752, 576, 3968, 640
    pfSlab "pf_ground3", 4288, 576, 7552, 640   -- the far meadow, the gauntlet, the homeward run + the GREEN CRUSHER alley
@@ -1782,6 +1810,38 @@ command pfL1Scene
       pfMakeBonk "brick", 512
       pfMakeBonk "box", 576
    end if
+   -- ===== the Wave 4 HILLTOP POOL (past the crusher alley, before the
+   -- flag): a RAISED swim basin between two earth banks. Hop up onto the
+   -- left bank (a 96px step), DIVE in, swim DOWN for the coins, then stroke
+   -- up + hold-right to HOP out the far bank and on to the flag. Banks are
+   -- visible earth slabs; the floor hides under the water rect. =====
+   pfSlab "pf_pondL", 7552, 480, 7760, 640
+   pfSlab "pf_pondR", 8160, 480, 8368, 640
+   pfSlab "pf_pondFloor", 7760, 616, 8160, 648
+   pfSlab "pf_ground4", 8368, 576, 8640, 640
+   set the backgroundColor of graphic "pf_pondL" to "150,120,82"
+   set the backgroundColor of graphic "pf_pondR" to "150,120,82"
+   set the visible of graphic "pf_pondL" to true
+   set the visible of graphic "pf_pondR" to true
+   b2kCamAdopt the long id of graphic "pf_pondL"
+   b2kCamAdopt the long id of graphic "pf_pondR"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
+      -- grass the bank tops + the far-bank flag approach so the pool reads
+      -- as a basin set into the hill (the floor stays under the water)
+      repeat with tX = 7552 to 7696 step 64
+         pfTile "terrain_grass_block_top", tX, 480
+      end repeat
+      repeat with tX = 8160 to 8304 step 64
+         pfTile "terrain_grass_block_top", tX, 480
+      end repeat
+      repeat with tX = 8368 to 8576 step 64
+         pfTile "terrain_grass_block_top", tX, 576
+      end repeat
+   else
+      set the visible of graphic "pf_ground4" to true
+      b2kCamAdopt the long id of graphic "pf_ground4"
+   end if
+   pfMakeWater 7760, 480, 8160, 640
 end pfL1Scene
 
 command pfL1Cast
@@ -1873,7 +1933,12 @@ command pfL1Cast
    -- then a quick retry at the brink, never a replay of the whole level
    pfMakeCheckpoint 3856
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
-   pfMakeGoal 7540, 544
+   -- Wave 4: the hilltop pool's coins are UNDERWATER, so the gate can only
+   -- be cleared by diving and swimming for them (then stroke out + on)
+   pfMakeCoin 7848, 556
+   pfMakeCoin 7960, 588
+   pfMakeCoin 8072, 556
+   pfMakeGoal 8520, 544
 end pfL1Cast
 
 -- =====================================================================

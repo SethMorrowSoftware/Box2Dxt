@@ -29,7 +29,9 @@
 --     stop, down+jump on solid ground does NOT launch), and the hurt
 --     knockback standard (away-pop, control window, mercy no-op)
 --   * Wave 4 liquids: SWIM in a water zone (buoyant sink capped low, a
---     repeatable JUMP stroke, UP/DOWN swim, gravity restored on exit)
+--     repeatable JUMP stroke, UP/DOWN swim, gravity restored on exit);
+--     swimming while RESTING on a submerged floor; and b2kClear wiping the
+--     zone on a level rebuild (no one is born swimming where a pool was)
 --   * input axes/edges, sprites (sheet/anim/flip/remove), tones,
 --     camera adopt/goto/off, teardown hygiene
 --
@@ -45,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "11"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "12"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -131,6 +133,8 @@ command stRunAll
    stRun "stTestDuck"
    stRun "stTestHurtKnockback"
    stRun "stTestSwim"
+   stRun "stTestSwimGrounded"
+   stRun "stTestSwimClear"
    stRun "stTestTeardown"
    try
       b2kInputInjectOff
@@ -1046,6 +1050,65 @@ command stTestSwim
    stAssert "gravity restored out of the water: free-fall beats the swim cap (vy " \
          & round(stVY(tRef)) & ")", (stVY(tRef) > 180)
 end stTestSwim
+
+-- Wave 4: SWIM while RESTING on the pool floor. The platformer's hilltop
+-- pool has a solid floor INSIDE the water, so the swimmer sinks and stands
+-- on it -- still submerged (centre in the zone), so still in the swim
+-- state, and a stroke must lift off WITHOUT the grounded-jump gate.
+command stTestSwimGrounded
+   local tRef, i, tY1
+   stNewWorld "player: swims while RESTING on a submerged floor (the pool floor)"
+   stSlab "st_pondfloor", 200, 560, 600, 620   -- the floor sits INSIDE the water
+   b2kPlayerAddWater 200, 300, 600, 600         -- water covers the floor top (y560)
+   b2kPlayerMake 400, 200, 32, 48
+   put the result into tRef
+   -- buoyant sink all the way to the floor (it never floats up unaided)
+   repeat with i = 1 to 160
+      b2kStepOnce
+      if b2kPlayerOnGround() is true then exit repeat
+   end repeat
+   stAssert "sinks and rests on the submerged floor (grounded, y " & round(stY(tRef)) & ")", \
+         (b2kPlayerOnGround() is true)
+   stAssert "...yet still SWIMMING (grounded but submerged, got " & b2kPlayerState() & ")", \
+         (b2kPlayerState() is "swim")
+   -- a stroke lifts it off the floor: underwater there is NO grounded gate
+   put stY(tRef) into tY1
+   b2kInputInject "space"
+   stStep 3
+   b2kInputInject ""
+   stAssert "a stroke lifts it off the floor (rose " & round(tY1 - stY(tRef)) & "px)", \
+         (tY1 - stY(tRef) > 6)
+end stTestSwimGrounded
+
+-- Wave 4: the LEVEL-REBUILD path. A game calls b2kClear between levels;
+-- it must wipe the water zone (via b2kPlayerForget), or the NEXT level's
+-- player would be born swimming in mid-air where the old pool used to be.
+-- This is the regression the play-tested games needed and the harness did
+-- not have: zones are WORLD state and must not survive a rebuild.
+command stTestSwimClear
+   local tRef, i
+   stNewWorld "player: b2kClear wipes the water zone (the level-rebuild path)"
+   stSlab "st_floor", 50, 760, 800, 820
+   b2kPlayerAddWater 200, 200, 600, 740
+   b2kPlayerMake 400, 120, 32, 48
+   put the result into tRef
+   repeat with i = 1 to 90
+      b2kStepOnce
+      if b2kPlayerState() is "swim" then exit repeat
+   end repeat
+   stAssert "world 1: the player swims in its water zone (got " & b2kPlayerState() & ")", \
+         (b2kPlayerState() is "swim")
+   -- the rebuild: b2kClear (what mgBuild/pfStartGame call) must clear it
+   b2kClear
+   stSlab "st_floor2", 50, 500, 800, 560
+   b2kPlayerMake 400, 200, 32, 48   -- spawned RIGHT where the old pool was
+   put the result into tRef
+   stStep 40
+   stAssert "after b2kClear: the new player does NOT swim (no stale zone, got " \
+         & b2kPlayerState() & ")", (b2kPlayerState() is not "swim")
+   stAssert "after b2kClear: gravity is normal -- it falls and lands (y " & round(stY(tRef)) & ")", \
+         (b2kPlayerOnGround() is true and stY(tRef) > 400)
+end stTestSwimClear
 
 command stTestDuck
    local tRef
