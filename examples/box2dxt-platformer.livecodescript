@@ -3847,6 +3847,16 @@ on rawKeyDown pKeyCode
       b2kSoundMute (not b2kSoundMuted())
       exit rawKeyDown
    end if
+   -- >>> DEBUG WARP (Wave 4 swim testing) -- delete this block before merge.
+   -- "0" drops the hero onto the L1 hilltop pool's left bank so the swim
+   -- is reachable without replaying the level. No-op on other levels.
+   if pKeyCode is 48 and gHero is not empty and gLevel is 1 then
+      b2kMoveTo gHero, 7620, 400
+      b2kSetVelocity gHero, 0, 0
+      b2kCamGoto 7620, 400
+      exit rawKeyDown
+   end if
+   -- <<< END DEBUG WARP
    pass rawKeyDown
 end rawKeyDown
 
