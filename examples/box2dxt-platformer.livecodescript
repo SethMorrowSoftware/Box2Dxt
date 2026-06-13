@@ -2284,7 +2284,7 @@ command pfL4Cast
    pfMakeCoin 3892, 500     -- past the powder keg (the lure: mind the blast)
    pfMakeCoin 4000, 500     -- the second snail's beat (shell it, kick it!)
    pfMakeCoin 4220, 500     -- the slime its bowled shell can flatten
-   pfMakeCoin 4400, 500     -- a THIRD snail's beat
+   pfMakeCoin 4440, 500     -- a THIRD snail's beat
    pfMakeCoin 4600, 500     -- beneath the chained crusher: grab it as you dash under
    pfMakeCoin 4780, 500     -- a FOURTH snail's beat
    pfMakeCoin 5056, 448     -- over the first purple step
@@ -2315,7 +2315,7 @@ command pfL4Cast
    pfMakeSlime 9, "normal", 4220, 4160, 4280, 576
    -- the haunted FINALE: snails used liberally (two more) around the
    -- classic chained-weight THWOMP coming back among the faced crushers
-   pfMakeSnail 10, 4400, 4340, 4460
+   pfMakeSnail 10, 4440, 4380, 4500
    pfMakeThwomp 3, 4600
    pfMakeSnail 11, 4780, 4720, 4840
    pfMakeCheckpoint 2160
