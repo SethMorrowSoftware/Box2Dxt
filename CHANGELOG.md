@@ -39,6 +39,47 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer SHOWCASE polish round (statically verified; awaiting the
+  OXT pass).** A pre-Wave-4 pass over the platformer to make it a
+  polished demo of the kit *as it stands today* — longer, better-spaced
+  levels, classic mechanics drawn from the kit's biggest UNUSED subsystem
+  (JOINTS + dynamics), and four new enemy species for variety.
+  **All example-side: zero Kit changes, so harness v10 stays the
+  baseline** (rule 2 is conditional on Kit edits).
+  - **Three sprite-faithful mechanisms, all polled HAZARDS the player
+    times or avoids (never rides — so none needs the platform-carry a
+    later wave adds):** a sagging **ROPE BRIDGE** (L1 — six dynamic planks
+    hinged end-to-end and pinned to the world at both posts, the canonical
+    Box2D bridge, with a new checkpoint at the brink); a **ROLLING
+    BOULDER** (L3 — a sprite-faced dynamic ball that slides the icy flat
+    head-on, recycled on a cycle so it never reaches the kill floor,
+    judged by a poll since it passes through the hero); an **EXPLOSIVE
+    BARREL** (L4 — a fuse-then-`b2kExplode` powder keg that scatters a
+    woodpile of loose crates). A swinging wrecking ball was prototyped and
+    **cut**: a rotating arm cannot be sprite art (gotcha 23), and the kit
+    is sprite-only for game visuals — so it was removed rather than left
+    as a plain graphic.
+  - **Four new enemy species** on the existing slime FAMILY (native 64px
+    foes art, a new `pfMakeCritter` maker + per-row speed/squash-frame
+    columns): a fast **mouse**, a slow **worm**, a **ladybug** (+ a
+    flying one via the mover table), and a **fire slime** by the L4 lava
+    (spike-type — hurts from every side). L4's PIRANHA row is now twice as
+    long (four burrows on staggered timers).
+  - **Longer, re-spaced levels** (the layout law: widen before squeezing
+    a beat in), grown across two passes to L1 5568, L2 4032, L3 4800,
+    L4 4864. Existing verified beats are preserved in place; each level's
+    walled-door / steps finale shifts as a whole. New classic acts: a L1
+    "meadow gauntlet" (a one-way cloud over two slimes + a darting fly); a
+    L2 second machine bay (a third chained crusher + an always-on sweeping
+    saw); a L3 second snow cloud + a final glacier slime; a L4 "bowling
+    lane" (a second snail to shell-and-kick + a slime to bowl over). More
+    decor and a live `awake N/M` body count on the HUD.
+  - **User review fixes:** the SNAIL faced backwards relative to travel
+    (gotcha 26 — its sheet art is mirrored vs the slimes'); a per-row
+    `gSlimeFlip` polarity column inverts only its flip. The barrel's
+    woodpile is now real CRATES (the `block_empty` sprite over invisible
+    fixed-rotation boxes, the L2 gate-crate pattern — a blast slides them
+    without the sprite-cannot-rotate problem) instead of brown rectangles.
 - **Wave 3 — bestiary I + HAUNTED HOLLOW (statically verified; awaiting
   the OXT pass).** Six enemy archetypes and a FOURTH platformer level,
   all example-side: **zero Kit changes, so harness v10 stays the

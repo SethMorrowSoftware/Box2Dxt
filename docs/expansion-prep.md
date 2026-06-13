@@ -11,7 +11,9 @@ that keep the expansion as reliable as the engine underneath it.
 | Assets | **LANDED (2026-06-11)** — Kenney's iconic platformer family, ~900 frames; Wave 0 catalogue below |
 | Wave 1 | **COMPLETE — user-verified 2026-06-12** (the three-level platformer; see §7) |
 | Wave 2 | **COMPLETE — user-verified 2026-06-13** (player actions I, harness v10; see §9) |
-| Next | **Wave 3** (bestiary I + the haunted level) — design in **§10** |
+| Wave 3 | **BUILT — statically verified 2026-06-13** (bestiary I + HAUNTED HOLLOW; see §10) |
+| Showcase polish | **BUILT — statically verified 2026-06-13** (pre-Wave-4: longer/re-spaced levels, the kit's first JOINT mechanics — rope bridge + boulder + barrel; a prototyped wrecking ball was cut as un-sprite-able — and four variety species; all example-side, zero Kit change, no harness bump) |
+| Next | **Wave 4** (liquids: swim zones + lava + pit dwellers + collapsing bridge) — see §7 |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
