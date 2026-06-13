@@ -66,8 +66,8 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     (spike-type — hurts from every side). L4's PIRANHA row is now twice as
     long (four burrows on staggered timers).
   - **Longer, re-spaced levels** (the layout law: widen before squeezing
-    a beat in), grown across three passes to L1 6336, L2 4672, L3 5312,
-    L4 5376. Existing verified beats are preserved in place; each level's
+    a beat in), grown across several passes to L1 7552, L2 5952, L3 6592,
+    L4 6656. Existing verified beats are preserved in place; each level's
     walled-door / steps finale shifts as a whole. Classic acts stacked on:
     L1 a "meadow gauntlet" + a "homeward run" (chained thwomp + snail under
     a cloud); L2 second and third machine bays (chained crushers + an
@@ -77,6 +77,17 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     chained-weight thwomps are back** in every level alongside L4's faced
     crushers, and there are more clouds, coins, and decor throughout. A
     live `awake N/M` body count on the HUD.
+  - **A marquee CRUSHER ALLEY + cloud hop closes every level** (the latest
+    pass: "show off the engine with as much pizzazz as possible"). Each
+    level's homeward stretch is now a row of FOUR tile-block thwomps the
+    hero times a dash BENEATH, biome-matched so the mechanic reads at a
+    glance — **green** blocks (L1, L2 grass), **blue** (L3 ice), **red**
+    (L4 haunted) — followed by a two-cloud HOP to the flag with coins up
+    top. Powered by a new `pTileFace` parameter on `pfMakeThwomp` (a plain
+    tile sprite, no mood-face swaps; the same drop/rest/rise/re-arm cycle,
+    so the alley never blocks the path for good). The four levels each grew
+    ~1280px for the new gauntlets; the walled-door/steps finales shifted as
+    whole units; coins and their totals self-count as the level builds.
   - **The L3 ice boulder slides ALL THE WAY** in its direction now (per
     the user: "it is an ice block/boulder") - lower friction so it coasts
     far, and its reset line moved off-screen-left (past the run, below the

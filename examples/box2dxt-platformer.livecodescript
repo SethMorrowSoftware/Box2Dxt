@@ -958,7 +958,10 @@ end pfMakeCritter
 -- kinematic rise back UP to perch height. pFaced true = the Wave 3
 -- CRUSHER look: it wears the block_idle/fall/rest FACES (the art that
 -- was this machine's fallback all along) instead of the chained weight.
-command pfMakeThwomp pIdx, pX, pFaced
+-- pTileFace (optional) overrides BOTH with a plain tiles sprite (e.g.
+-- "block_green" for the grass-biome crusher rows) - a solid block that
+-- drops, no mood-face swaps.
+command pfMakeThwomp pIdx, pX, pFaced, pTileFace
    local tName, tBody
    put "pf_blockBody" & pIdx into tName
    create graphic tName
@@ -973,7 +976,12 @@ command pfMakeThwomp pIdx, pX, pFaced
    put empty into gBlockChainA[pIdx]
    put empty into gBlockChainB[pIdx]
    put false into gBlockFace[pIdx]
-   if pFaced is true and gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
+   if pTileFace is not empty and gAssetsOK is true and b2kSheetHasFrame("tiles", pTileFace) then
+      -- a plain tile block (block_green for the green crusher rows): it
+      -- drops and rises with no mood-face swap (gBlockFace stays false)
+      b2kSpriteNew "tiles", pTileFace, pX, 200
+      put the result into gBlockSpr[pIdx]
+   else if pFaced is true and gAssetsOK is true and b2kSheetHasFrame("foes", "block_idle") then
       b2kSpriteNew "foes", "block_idle", pX, 200
       put the result into gBlockSpr[pIdx]
       put true into gBlockFace[pIdx]   -- pfTickThwomps swaps the moods
@@ -1579,10 +1587,10 @@ end pfMakeWoodCrate
 command pfL1Scene
    local tX
    put "GREEN HILLS" into gLevelName
-   pfBounds 6336
+   pfBounds 7552
    pfSlab "pf_ground1", 0, 576, 2560, 640
    pfSlab "pf_ground2", 2752, 576, 3968, 640
-   pfSlab "pf_ground3", 4288, 576, 6336, 640   -- the far meadow + the sky-island gauntlet + the homeward run
+   pfSlab "pf_ground3", 4288, 576, 7552, 640   -- the far meadow, the gauntlet, the homeward run + the GREEN CRUSHER alley
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
       repeat with tX = 0 to 2496 step 64
          if tX >= 1376 and tX <= 1696 then
@@ -1595,7 +1603,7 @@ command pfL1Scene
       repeat with tX = 2752 to 3904 step 64
          pfTile "terrain_grass_block_top", tX, 576
       end repeat
-      repeat with tX = 4288 to 6272 step 64
+      repeat with tX = 4288 to 7488 step 64
          pfTile "terrain_grass_block_top", tX, 576
       end repeat
       pfShowSlabs false
@@ -1738,6 +1746,30 @@ command pfL1Scene
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeG"
    end if
+   -- the GREEN CRUSHER ALLEY (the showcase gauntlet): a row of green-block
+   -- thwomps (in the cast) you run beneath, then a two-cloud HOP to the
+   -- flag. Both clouds ghost-padded a tile past the art each side.
+   b2kSmoothGround "7312,448" & cr & "7248,448" & cr & "7056,448" & cr & "6992,448"
+   b2kSmoothGround "7532,448" & cr & "7468,448" & cr & "7276,448" & cr & "7212,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
+      pfTile "terrain_grass_cloud_left", 7056, 448
+      pfTile "terrain_grass_cloud_middle", 7120, 448
+      pfTile "terrain_grass_cloud_right", 7184, 448
+      pfTile "terrain_grass_cloud_left", 7276, 448
+      pfTile "terrain_grass_cloud_middle", 7340, 448
+      pfTile "terrain_grass_cloud_right", 7404, 448
+   else
+      create graphic "pf_cloudledgeI"
+      set the style of it to "line"
+      set the points of it to "7056,448" & cr & "7468,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeI"
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
+      pfTile "bush", 6320, 512
+      pfTile "mushroom_red", 7488, 512
+   end if
    if gToysOK is true then
       -- the spring mid-meadow: bouncing happens in open air, well away
       -- from the left corner (flush-to-wall put the bounce against the
@@ -1770,7 +1802,12 @@ command pfL1Cast
    pfMakeCoin 5360, 500     -- the last gauntlet slime's beat
    pfMakeCoin 5700, 500     -- beneath the chained thwomp: grab it as you dash under
    pfMakeCoin 5900, 500     -- the homeward snail's beat (shell it, kick it)
-   pfMakeCoin 6136, 392     -- up on the final one-way cloud, by the flag
+   pfMakeCoin 6136, 392     -- up on the homeward-run cloud
+   pfMakeCoin 6530, 500     -- threading the GREEN CRUSHER alley: grab between drops
+   pfMakeCoin 6710, 500     -- ...and between the next pair of crushers
+   pfMakeCoin 6890, 500     -- ...and the last gap
+   pfMakeCoin 7120, 392     -- up on the first hop cloud
+   pfMakeCoin 7340, 392     -- up on the second hop cloud, by the flag
    if gToysOK is true then pfMakeCoin 240, 230   -- the sky coin (spring up)
    -- the bee tours the mound (harmless); the fly guards the cloud coin;
    -- a flying LADYBUG patrols the second-act meadow (new aerial variety)
@@ -1818,15 +1855,23 @@ command pfL1Cast
          pfAddMover tRef, 5232, 452, 80, 720, 30, 480, 34, 40, true
       end if
    end if
-   -- the HOMEWARD RUN: the classic chained-weight THWOMP returns (ride its
-   -- resting head up for the high coin), and a SNAIL to shell-and-kick
+   -- the HOMEWARD RUN: the classic chained-weight THWOMP returns (dash
+   -- under it for the coin), and a SNAIL to shell-and-kick
    pfMakeThwomp 1, 5700
    pfMakeSnail 9, 5900, 5840, 5960
+   -- the GREEN CRUSHER ALLEY (the grass biome's marquee gauntlet): a row
+   -- of four green-block thwomps you time your run beneath - each drops as
+   -- you near it, so keep moving and snatch the coins in the gaps. They
+   -- rest STATIC then rise + re-arm, never blocking the alley for good.
+   pfMakeThwomp 2, 6440, false, "block_green"
+   pfMakeThwomp 3, 6620, false, "block_green"
+   pfMakeThwomp 4, 6800, false, "block_green"
+   pfMakeThwomp 5, 6980, false, "block_green"
    -- a CHECKPOINT just before the rope bridge: a slip into the chasm is
    -- then a quick retry at the brink, never a replay of the whole level
    pfMakeCheckpoint 3856
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
-   pfMakeGoal 6280, 544
+   pfMakeGoal 7540, 544
 end pfL1Cast
 
 -- =====================================================================
@@ -1841,26 +1886,26 @@ end pfL1Cast
 command pfL2Scene
    local tX, tRef
    put "THE WORKS" into gLevelName
-   pfBounds 4672
-   pfSlab "pf_ground1", 0, 576, 4672, 640
-   pfSlab "pf_plat1", 4288, 512, 4480, 576
-   pfSlab "pf_plat2", 4480, 448, 4608, 576
+   pfBounds 5952
+   pfSlab "pf_ground1", 0, 576, 5952, 640
+   pfSlab "pf_plat1", 5568, 512, 5760, 576
+   pfSlab "pf_plat2", 5760, 448, 5888, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 4608 step 64
-         if tX >= 4288 then
+      repeat with tX = 0 to 5888 step 64
+         if tX >= 5568 then
             -- the finale plays in STONE past the walled door
             pfTile "terrain_stone_block_top", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
       end repeat
-      pfTile "terrain_stone_block_top_left", 4288, 512
-      pfTile "terrain_stone_block_top", 4352, 512
-      pfTile "terrain_stone_block_top_right", 4416, 512
-      pfTile "terrain_stone_block_top", 4480, 448
-      pfTile "terrain_stone_block_top", 4544, 448
-      pfTile "terrain_stone_block_center", 4480, 512
-      pfTile "terrain_stone_block_center", 4544, 512
+      pfTile "terrain_stone_block_top_left", 5568, 512
+      pfTile "terrain_stone_block_top", 5632, 512
+      pfTile "terrain_stone_block_top_right", 5696, 512
+      pfTile "terrain_stone_block_top", 5760, 448
+      pfTile "terrain_stone_block_top", 5824, 448
+      pfTile "terrain_stone_block_center", 5760, 512
+      pfTile "terrain_stone_block_center", 5824, 512
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -1953,9 +1998,33 @@ command pfL2Scene
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
       pfTile "bush", 3400, 512
    end if
+   -- the GREEN CRUSHER ALLEY (the works' marquee gauntlet): a row of green-
+   -- block thwomps (in the cast) you run beneath, then a two-cloud HOP to the
+   -- walled door. Both clouds ghost-padded a tile past the art each side.
+   b2kSmoothGround "5096,448" & cr & "5032,448" & cr & "4840,448" & cr & "4776,448"
+   b2kSmoothGround "5316,448" & cr & "5252,448" & cr & "5060,448" & cr & "4996,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
+      pfTile "terrain_grass_cloud_left", 4840, 448
+      pfTile "terrain_grass_cloud_middle", 4904, 448
+      pfTile "terrain_grass_cloud_right", 4968, 448
+      pfTile "terrain_grass_cloud_left", 5060, 448
+      pfTile "terrain_grass_cloud_middle", 5124, 448
+      pfTile "terrain_grass_cloud_right", 5188, 448
+   else
+      create graphic "pf_cloudledgeJ"
+      set the style of it to "line"
+      set the points of it to "4840,448" & cr & "5252,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "70,190,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeJ"
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
+      pfTile "sign", 3980, 512        -- a way-marker into the crusher alley
+      pfTile "bush", 5400, 512
+   end if
    if gToysOK is true then
       pfMakeLever 1120        -- stand here to power the FIRST sweep saw down
-      pfMakeKeyDoor 1740, 500, 4064, "yellow"
+      pfMakeKeyDoor 1740, 500, 5344, "yellow"
    end if
 end pfL2Scene
 
@@ -1971,9 +2040,15 @@ command pfL2Cast
    pfMakeCoin 3300, 500     -- the third bay's snail (shell it, kick it)
    pfMakeCoin 3600, 500     -- beneath the third chained crusher: grab it as you dash under
    pfMakeCoin 3796, 392     -- up on the third bay's one-way cloud
-   pfMakeCoin 4420, 448     -- over the first stone step
-   pfMakeCoin 4494, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 4112, 510   -- inside the door passage
+   pfMakeCoin 3950, 500     -- the fourth bay's snail (shell it, kick it)
+   pfMakeCoin 4230, 500     -- threading the GREEN CRUSHER alley: grab between drops
+   pfMakeCoin 4410, 500     -- ...and between the next pair of crushers
+   pfMakeCoin 4590, 500     -- ...and the last gap
+   pfMakeCoin 4904, 392     -- up on the first hop cloud
+   pfMakeCoin 5124, 392     -- up on the second hop cloud, before the door
+   pfMakeCoin 5700, 448     -- over the first stone step
+   pfMakeCoin 5774, 392     -- over the top step, by the flag
+   if gToysOK is true then pfMakeCoin 5392, 510   -- inside the door passage
    -- the bee patrols the breather cloud
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 2210, 310
@@ -2036,8 +2111,18 @@ command pfL2Cast
          pfAddMover tRef, 2880, 548, 92, 1050, 0, 1, 38, 42, false
       end if
    end if
+   -- the GREEN CRUSHER ALLEY (the works' marquee gauntlet): a row of four
+   -- green-block thwomps you time your run beneath - each drops as you near
+   -- it, so keep moving and snatch the coins in the gaps. They rest STATIC
+   -- then rise + re-arm, never blocking the alley for good. A fourth-bay
+   -- SNAIL guards the approach (snails liberally now).
+   pfMakeSnail 4, 3950, 3910, 3990
+   pfMakeThwomp 5, 4140, false, "block_green"
+   pfMakeThwomp 6, 4320, false, "block_green"
+   pfMakeThwomp 7, 4500, false, "block_green"
+   pfMakeThwomp 8, 4680, false, "block_green"
    pfMakeCheckpoint 1000
-   pfMakeGoal 4564, 416
+   pfMakeGoal 5844, 416
 end pfL2Cast
 
 -- =====================================================================
@@ -2051,12 +2136,12 @@ end pfL2Cast
 command pfL3Scene
    local tX
    put "FROZEN CITADEL (icy!)" into gLevelName
-   pfBounds 5312
+   pfBounds 6592
    pfSlab "pf_ground1", 0, 576, 768, 640
    pfSlab "pf_ground2", 960, 576, 1792, 640
-   pfSlab "pf_ground3", 1984, 576, 5312, 640
-   pfSlab "pf_plat1", 4640, 512, 4832, 576
-   pfSlab "pf_plat2", 4832, 448, 4960, 576
+   pfSlab "pf_ground3", 1984, 576, 6592, 640
+   pfSlab "pf_plat1", 5920, 512, 6112, 576
+   pfSlab "pf_plat2", 6112, 448, 6240, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_block_top") then
       repeat with tX = 0 to 704 step 64
          pfTile "terrain_snow_block_top", tX, 576
@@ -2064,16 +2149,16 @@ command pfL3Scene
       repeat with tX = 960 to 1728 step 64
          pfTile "terrain_snow_block_top", tX, 576
       end repeat
-      repeat with tX = 1984 to 5248 step 64
+      repeat with tX = 1984 to 6528 step 64
          pfTile "terrain_snow_block_top", tX, 576
       end repeat
-      pfTile "terrain_snow_block_top_left", 4640, 512
-      pfTile "terrain_snow_block_top", 4704, 512
-      pfTile "terrain_snow_block_top_right", 4768, 512
-      pfTile "terrain_snow_block_top", 4832, 448
-      pfTile "terrain_snow_block_top", 4896, 448
-      pfTile "terrain_snow_block_center", 4832, 512
-      pfTile "terrain_snow_block_center", 4896, 512
+      pfTile "terrain_snow_block_top_left", 5920, 512
+      pfTile "terrain_snow_block_top", 5984, 512
+      pfTile "terrain_snow_block_top_right", 6048, 512
+      pfTile "terrain_snow_block_top", 6112, 448
+      pfTile "terrain_snow_block_top", 6176, 448
+      pfTile "terrain_snow_block_center", 6112, 512
+      pfTile "terrain_snow_block_center", 6176, 512
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -2113,13 +2198,36 @@ command pfL3Scene
       set the foregroundColor of it to "200,220,240"
       b2kCamAdopt the long id of graphic "pf_cloudledgeF"
    end if
+   -- the BLUE CRUSHER ALLEY (the citadel's marquee gauntlet): a row of ice-
+   -- block thwomps (in the cast) you run beneath, then a two-cloud HOP to the
+   -- red door. Both clouds ghost-padded a tile past the art each side.
+   b2kSmoothGround "5516,448" & cr & "5452,448" & cr & "5260,448" & cr & "5196,448"
+   b2kSmoothGround "5736,448" & cr & "5672,448" & cr & "5480,448" & cr & "5416,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_cloud_left") then
+      pfTile "terrain_snow_cloud_left", 5260, 448
+      pfTile "terrain_snow_cloud_middle", 5324, 448
+      pfTile "terrain_snow_cloud_right", 5388, 448
+      pfTile "terrain_snow_cloud_left", 5480, 448
+      pfTile "terrain_snow_cloud_middle", 5544, 448
+      pfTile "terrain_snow_cloud_right", 5608, 448
+   else
+      create graphic "pf_cloudledgeK"
+      set the style of it to "line"
+      set the points of it to "5260,448" & cr & "5672,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "200,220,240"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeK"
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
+      pfTile "sign", 4440, 512        -- a way-marker into the crusher alley
+   end if
    if gToysOK is true then
       pfMakeSpring 700        -- arcs you clean over the first pit
       pfMakeBonk "brick", 1232
       pfMakeBonk "box", 1296
       pfMakeBonk "brick", 1360
       pfMakeBonk "box", 1424
-      pfMakeKeyDoor 2268, 500, 4480, "red"
+      pfMakeKeyDoor 2268, 500, 5760, "red"
    end if
 end pfL3Scene
 
@@ -2142,11 +2250,17 @@ command pfL3Cast
    pfMakeCoin 3796, 392     -- up on the second snow cloud
    pfMakeCoin 4040, 500     -- the glacier snail's beat (shell it, kick it)
    pfMakeCoin 4280, 500     -- beneath the chained thwomp: grab it as you dash under
-   pfMakeCoin 4770, 448     -- over the first snow step
-   pfMakeCoin 4865, 392     -- over the top step, by the flag
+   pfMakeCoin 4420, 500     -- the citadel snail's beat (shell it, kick it)
+   pfMakeCoin 4650, 500     -- threading the BLUE CRUSHER alley: grab between drops
+   pfMakeCoin 4830, 500     -- ...and between the next pair of crushers
+   pfMakeCoin 5010, 500     -- ...and the last gap
+   pfMakeCoin 5324, 392     -- up on the first hop cloud
+   pfMakeCoin 5544, 392     -- up on the second hop cloud, before the door
+   pfMakeCoin 6050, 448     -- over the first snow step
+   pfMakeCoin 6145, 392     -- over the top step, by the flag
    if gToysOK is true then
       pfMakeCoin 864, 300   -- over the first pit: ride the spring's arc
-      pfMakeCoin 4528, 510  -- inside the red door's passage
+      pfMakeCoin 5808, 510  -- inside the red door's passage
    end if
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
       b2kSpriteNew "foes", "saw_a", 1640, 548
@@ -2185,9 +2299,18 @@ command pfL3Cast
    -- back, guarding the run to the red door
    pfMakeSnail 4, 4040, 3980, 4100
    pfMakeThwomp 2, 4280
+   -- the BLUE CRUSHER ALLEY (the citadel's marquee gauntlet): a row of four
+   -- ice-block thwomps you time your run beneath - each drops as you near it,
+   -- so keep moving and snatch the coins in the gaps. A glacier SNAIL guards
+   -- the approach (snails liberally).
+   pfMakeSnail 5, 4420, 4390, 4450
+   pfMakeThwomp 3, 4560, false, "block_blue"
+   pfMakeThwomp 4, 4740, false, "block_blue"
+   pfMakeThwomp 5, 4920, false, "block_blue"
+   pfMakeThwomp 6, 5100, false, "block_blue"
    pfMakeCheckpoint 2048
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
-   pfMakeGoal 4920, 416
+   pfMakeGoal 6200, 416
 end pfL3Cast
 
 -- =====================================================================
@@ -2203,27 +2326,27 @@ end pfL3Cast
 command pfL4Scene
    local tX, tH, tHi
    put "HAUNTED HOLLOW (spooky!)" into gLevelName
-   pfBounds 5376
+   pfBounds 6656
    pfSlab "pf_ground1", 0, 576, 1856, 640
-   pfSlab "pf_ground2", 2048, 576, 5376, 640
-   pfSlab "pf_plat1", 4960, 512, 5152, 576
-   pfSlab "pf_plat2", 5152, 448, 5280, 576
+   pfSlab "pf_ground2", 2048, 576, 6656, 640
+   pfSlab "pf_plat1", 6240, 512, 6432, 576
+   pfSlab "pf_plat2", 6432, 448, 6560, 576
    -- the bat overhang: a stone bar the bats roost under
    pfSlab "pf_batbar", 1472, 256, 1856, 320
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_purple_block_top") then
       repeat with tX = 0 to 1792 step 64
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
-      repeat with tX = 2048 to 5312 step 64
+      repeat with tX = 2048 to 6592 step 64
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
-      pfTile "terrain_purple_block_top_left", 4960, 512
-      pfTile "terrain_purple_block_top", 5024, 512
-      pfTile "terrain_purple_block_top_right", 5088, 512
-      pfTile "terrain_purple_block_top", 5152, 448
-      pfTile "terrain_purple_block_top", 5216, 448
-      pfTile "terrain_purple_block_center", 5152, 512
-      pfTile "terrain_purple_block_center", 5216, 512
+      pfTile "terrain_purple_block_top_left", 6240, 512
+      pfTile "terrain_purple_block_top", 6304, 512
+      pfTile "terrain_purple_block_top_right", 6368, 512
+      pfTile "terrain_purple_block_top", 6432, 448
+      pfTile "terrain_purple_block_top", 6496, 448
+      pfTile "terrain_purple_block_center", 6432, 512
+      pfTile "terrain_purple_block_center", 6496, 512
       pfTile "terrain_purple_horizontal_left", 1472, 256
       pfTile "terrain_purple_horizontal_middle", 1536, 256
       pfTile "terrain_purple_horizontal_middle", 1600, 256
@@ -2267,6 +2390,32 @@ command pfL4Scene
    pfMakeWoodCrate 3688, 554
    pfMakeWoodCrate 3778, 554
    pfMakeWoodCrate 3824, 554
+   -- the RED CRUSHER ALLEY (the hollow's marquee gauntlet): a row of danger-
+   -- block thwomps (in the cast) you run beneath, then a two-cloud HOP to the
+   -- purple steps. Both clouds ghost-padded a tile past the art each side.
+   b2kSmoothGround "5956,448" & cr & "5892,448" & cr & "5700,448" & cr & "5636,448"
+   b2kSmoothGround "6176,448" & cr & "6112,448" & cr & "5920,448" & cr & "5856,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_purple_cloud_left") then
+      pfTile "terrain_purple_cloud_left", 5700, 448
+      pfTile "terrain_purple_cloud_middle", 5764, 448
+      pfTile "terrain_purple_cloud_right", 5828, 448
+      pfTile "terrain_purple_cloud_left", 5920, 448
+      pfTile "terrain_purple_cloud_middle", 5984, 448
+      pfTile "terrain_purple_cloud_right", 6048, 448
+   else
+      create graphic "pf_cloudledgeL"
+      set the style of it to "line"
+      set the points of it to "5700,448" & cr & "6112,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "150,110,190"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeL"
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
+      pfTile "sign", 4900, 512        -- a way-marker into the crusher alley
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "grass_purple") then
+      pfTile "grass_purple", 5640, 512
+   end if
 end pfL4Scene
 
 command pfL4Cast
@@ -2287,8 +2436,13 @@ command pfL4Cast
    pfMakeCoin 4440, 500     -- a THIRD snail's beat
    pfMakeCoin 4600, 500     -- beneath the chained crusher: grab it as you dash under
    pfMakeCoin 4780, 500     -- a FOURTH snail's beat
-   pfMakeCoin 5056, 448     -- over the first purple step
-   pfMakeCoin 5184, 392     -- over the top step, by the flag
+   pfMakeCoin 5090, 500     -- threading the RED CRUSHER alley: grab between drops
+   pfMakeCoin 5270, 500     -- ...and between the next pair of crushers
+   pfMakeCoin 5450, 500     -- ...and the last gap
+   pfMakeCoin 5764, 392     -- up on the first hop cloud
+   pfMakeCoin 5984, 392     -- up on the second hop cloud, by the steps
+   pfMakeCoin 6336, 448     -- over the first purple step
+   pfMakeCoin 6464, 392     -- over the top step, by the flag
    pfMakeSnail 1, 980, 880, 1080
    pfMakeSlime 2, "normal", 1255, 1180, 1330, 576
    -- split patrol bands: two flying BODIES sharing one band would
@@ -2318,8 +2472,16 @@ command pfL4Cast
    pfMakeSnail 10, 4440, 4380, 4500
    pfMakeThwomp 3, 4600
    pfMakeSnail 11, 4780, 4720, 4840
+   -- the RED CRUSHER ALLEY (the hollow's marquee gauntlet): a row of four
+   -- danger-block thwomps you time your run beneath - each drops as you near
+   -- it, so keep moving and snatch the coins in the gaps. The haunted level's
+   -- last test before the flag.
+   pfMakeThwomp 4, 5000, false, "block_red"
+   pfMakeThwomp 5, 5180, false, "block_red"
+   pfMakeThwomp 6, 5360, false, "block_red"
+   pfMakeThwomp 7, 5540, false, "block_red"
    pfMakeCheckpoint 2160
-   pfMakeGoal 5244, 416
+   pfMakeGoal 6524, 416
 end pfL4Cast
 
 
