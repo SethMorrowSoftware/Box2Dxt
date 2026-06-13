@@ -39,6 +39,31 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 4 (liquids) — SWIM, the Kit's first new player-action since
+  Wave 2 (statically verified + harness v11; awaiting the OXT pass).** A
+  new `b2kPlayerAddWater x1,y1,x2,y2` registers a polled water zone (world
+  state, wiped by `b2kClear`, exactly like the ladder zones). While the
+  player's centre is submerged the controller SWIMS: gravity drops to
+  `swimGravity` (default 0.35) so you sink slowly, the sink caps at
+  `swimMaxFall` (150 — far below the air terminal), UP/DOWN swim at
+  `swimSpeed` (150), and a JUMP press is a REPEATABLE upward STROKE
+  (`swimJump` 300) with no ground gate. A new `swim` state plus a
+  `b2kPlayerAnims` swim slot (a 9th arg, falling back to the fall pose, so
+  three-arg calls still work) drive the art. Swim is mutually exclusive
+  with the climb (the tick starts only one); leaving the zone, a hurt, or
+  teardown restores the saved gravity scale exactly once. The swim path
+  costs ONE compare per frame when no water zones exist. **Harness v11**
+  adds `stTestSwim` — a paused, hand-stepped player dives a deep pool, the
+  buoyant sink is capped low, a stroke bursts upward, UP swims up, and
+  leaving restores gravity (every value printed, so an arithmetic miss
+  self-reports). An Opus correctness review found no blockers.
+  - **The micro-game gains a third level, "THE DEEP"** — a wide pool you
+    DIVE into, with every coin underwater so the door makes you swim; the
+    optional alien skins drive their real `swim1`/`swim2` frames. Two new
+    data verbs: `water l,t,r,b` (a swim zone drawn as a blue pool with a
+    surface line) and `fish x,yTop,yBot,period` (a PIT-DWELLER — a vertical
+    bobber that breaches and dives, a knockback graze on contact). Stroke
+    up + hold-right HOPS you out onto the far bank.
 - **Platformer SHOWCASE polish round (statically verified; awaiting the
   OXT pass).** A pre-Wave-4 pass over the platformer to make it a
   polished demo of the kit *as it stands today* — longer, better-spaced

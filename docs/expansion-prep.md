@@ -13,7 +13,8 @@ that keep the expansion as reliable as the engine underneath it.
 | Wave 2 | **COMPLETE — user-verified 2026-06-13** (player actions I, harness v10; see §9) |
 | Wave 3 | **BUILT — statically verified 2026-06-13** (bestiary I + HAUNTED HOLLOW; see §10) |
 | Showcase polish | **BUILT — statically verified 2026-06-13** (pre-Wave-4: longer/re-spaced levels, the kit's first JOINT mechanics — rope bridge + boulder + barrel; a prototyped wrecking ball was cut as un-sprite-able — and four variety species; all example-side, zero Kit change, no harness bump) |
-| Next | **Wave 4** (liquids: swim zones + lava + pit dwellers + collapsing bridge) — see §7 |
+| Wave 4 | **IN PROGRESS — statically verified 2026-06-13.** SWIM landed in the Kit (`b2kPlayerAddWater` + a buoyant swim mode + `swim` state/anim; **harness v11**, Opus-reviewed clean) and the micro-game gained L3 "THE DEEP" (a swim level with a `fish` pit-dweller). DONE: swim zones, pit-dwellers (debut), and lava (already in the platformer L4). PENDING: the platformer water beat (needs a raised-bank basin — the 640-world clamps the camera at y640) + the collapsing-bridge trap |
+| Next | **finish Wave 4** (platformer pool + collapsing bridge), then Wave 5 (player actions II) — see §7 |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
