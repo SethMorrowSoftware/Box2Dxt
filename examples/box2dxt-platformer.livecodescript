@@ -1704,15 +1704,15 @@ command pfL1Scene
    -- the far-meadow GAUNTLET (the level's third act): a one-way cloud
    -- (ghost-padded a tile past the art each side - jump up for its coin,
    -- DOWN+JUMP to drop off) over a run of two slimes and a darting fly
-   b2kSmoothGround "4992,424" & cr & "4928,424" & cr & "4736,424" & cr & "4672,424"
+   b2kSmoothGround "4992,448" & cr & "4928,448" & cr & "4736,448" & cr & "4672,448"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_cloud_left") then
-      pfTile "terrain_grass_cloud_left", 4736, 424
-      pfTile "terrain_grass_cloud_middle", 4800, 424
-      pfTile "terrain_grass_cloud_right", 4864, 424
+      pfTile "terrain_grass_cloud_left", 4736, 448
+      pfTile "terrain_grass_cloud_middle", 4800, 448
+      pfTile "terrain_grass_cloud_right", 4864, 448
    else
       create graphic "pf_cloudledgeE"
       set the style of it to "line"
-      set the points of it to "4736,424" & cr & "4928,424"
+      set the points of it to "4736,448" & cr & "4928,448"
       set the lineSize of it to 4
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeE"
@@ -1747,7 +1747,7 @@ command pfL1Cast
    pfMakeCoin 3616, 500     -- the last meadow slime's beat
    pfMakeCoin 4128, 510     -- mid-bridge: grab it as the planks dip
    pfMakeCoin 4456, 500     -- the far meadow's ladybug beat
-   pfMakeCoin 4832, 384     -- up on the gauntlet's one-way cloud
+   pfMakeCoin 4832, 392     -- up on the gauntlet's one-way cloud
    pfMakeCoin 5040, 500     -- the first gauntlet slime's beat
    pfMakeCoin 5232, 500     -- under the darting fly
    pfMakeCoin 5360, 500     -- the last slime's beat, before the flag
