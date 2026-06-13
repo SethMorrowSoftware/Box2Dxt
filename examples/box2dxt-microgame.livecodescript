@@ -269,7 +269,7 @@ function mgLevelText pLevel
       put "coin 1140,540" & cr after t
       put "coin 1290,452" & cr after t
       put "coin 1430,540" & cr after t
-      put "fish 1210,404,560,1300" & cr after t
+      put "fish 1210,340,560,1300" & cr after t
       put "slab 1500,360,2000,640" & cr after t
       put "coin 1700,326" & cr after t
       put "door 1900,328" & cr after t
@@ -663,13 +663,18 @@ end mgWipeStage
 -- The per-frame game logic
 -- =====================================================================
 on b2kFrame
-   local tHud, tSecs, tState
+   local tHud, tSecs, tState, tPos, tHX, tHY
    if gHero is empty then exit b2kFrame
    set the itemDelimiter to comma
+   -- ONE hero snapshot per frame: the kill plane and both hazard ticks
+   -- share it (each re-reading would be a needless FFI round-trip)
+   put b2kPosition(gHero) into tPos
+   put item 1 of tPos into tHX
+   put item 2 of tPos into tHY
    -- kill plane: off the bottom = a fall
-   if gHurtLock is not true and (item 2 of b2kPosition(gHero)) > gWorldH + 120 then mgHurt
-   mgTickSweeps
-   mgTickFish
+   if gHurtLock is not true and tHY > gWorldH + 120 then mgHurt
+   mgTickSweeps tHX, tHY
+   mgTickFish tHX, tHY
    -- the door unlocks itself the moment the last coin is taken
    if gDoorOpen is not true and gDoor is not empty and gCoinsTotal > 0 and gCoins >= gCoinsTotal then
       put true into gDoorOpen
@@ -701,21 +706,17 @@ on b2kFrame
    end if
 end b2kFrame
 
-command mgTickSweeps
-   local i, tMS, tX, tHX, tHY, tPos
+command mgTickSweeps pHX, pHY
+   local i, tMS, tX
    if gSwpN is 0 or gSwpN is empty then exit mgTickSweeps
-   set the itemDelimiter to comma
    put the milliseconds into tMS
-   put b2kPosition(gHero) into tPos
-   put item 1 of tPos into tHX
-   put item 2 of tPos into tHY
    repeat with i = 1 to gSwpN
       if gSwpRef[i] is empty then next repeat
       put gSwpC[i] + gSwpA[i] * sin(tMS / gSwpP[i]) into tX
       b2kSpriteMoveTo gSwpRef[i], tX, gSwpY[i]
       if gHurtLock is not true and gMode is "play" then
          -- a sweeper graze knocks back, never respawns (Wave 2 split)
-         if abs(tHX - tX) < gSwpW[i] and abs(tHY - gSwpY[i]) < gSwpH[i] then mgOuch tX
+         if abs(pHX - tX) < gSwpW[i] and abs(pHY - gSwpY[i]) < gSwpH[i] then mgOuch tX
       end if
    end repeat
 end mgTickSweeps
@@ -723,20 +724,16 @@ end mgTickSweeps
 -- Wave 4 pit-dwellers: each fish bobs VERTICALLY between its yTop and yBot
 -- (the sweep pattern on the y axis), breaching the surface and diving. A
 -- graze knocks back (mgOuch), never respawns -- the Wave 2 hazard split.
-command mgTickFish
-   local i, tMS, tY, tHX, tHY, tPos
+command mgTickFish pHX, pHY
+   local i, tMS, tY
    if gFishN is 0 or gFishN is empty then exit mgTickFish
-   set the itemDelimiter to comma
    put the milliseconds into tMS
-   put b2kPosition(gHero) into tPos
-   put item 1 of tPos into tHX
-   put item 2 of tPos into tHY
    repeat with i = 1 to gFishN
       if gFishRef[i] is empty then next repeat
       put gFishYC[i] + gFishYA[i] * sin(tMS / gFishP[i]) into tY
       b2kSpriteMoveTo gFishRef[i], gFishX[i], tY
       if gHurtLock is not true and gMode is "play" then
-         if abs(tHX - gFishX[i]) < gFishW[i] and abs(tHY - tY) < gFishH[i] then mgOuch gFishX[i]
+         if abs(pHX - gFishX[i]) < gFishW[i] and abs(pHY - tY) < gFishH[i] then mgOuch gFishX[i]
       end if
    end repeat
 end mgTickFish
