@@ -1768,7 +1768,7 @@ command pfL1Cast
    pfMakeCoin 5040, 500     -- the first gauntlet slime's beat
    pfMakeCoin 5232, 500     -- under the darting fly
    pfMakeCoin 5360, 500     -- the last gauntlet slime's beat
-   pfMakeCoin 5700, 110     -- ride the chained thwomp's head up to grab it (clear of the block)
+   pfMakeCoin 5700, 500     -- beneath the chained thwomp: grab it as you dash under
    pfMakeCoin 5900, 500     -- the homeward snail's beat (shell it, kick it)
    pfMakeCoin 6136, 392     -- up on the final one-way cloud, by the flag
    if gToysOK is true then pfMakeCoin 240, 230   -- the sky coin (spring up)
@@ -1969,7 +1969,7 @@ command pfL2Cast
    pfMakeCoin 2680, 500     -- past the second bay's chained crusher
    pfMakeCoin 2880, 448     -- above the second sweeping saw: time the hop
    pfMakeCoin 3300, 500     -- the third bay's snail (shell it, kick it)
-   pfMakeCoin 3600, 110     -- ride the third chained crusher's head up to grab it
+   pfMakeCoin 3600, 500     -- beneath the third chained crusher: grab it as you dash under
    pfMakeCoin 3796, 392     -- up on the third bay's one-way cloud
    pfMakeCoin 4420, 448     -- over the first stone step
    pfMakeCoin 4494, 392     -- over the top step, by the flag
@@ -2141,7 +2141,7 @@ command pfL3Cast
    pfMakeCoin 3640, 500     -- the final glacier slime's beat
    pfMakeCoin 3796, 392     -- up on the second snow cloud
    pfMakeCoin 4040, 500     -- the glacier snail's beat (shell it, kick it)
-   pfMakeCoin 4280, 110     -- ride the chained thwomp's head up to grab it (clear of the block)
+   pfMakeCoin 4280, 500     -- beneath the chained thwomp: grab it as you dash under
    pfMakeCoin 4770, 448     -- over the first snow step
    pfMakeCoin 4865, 392     -- over the top step, by the flag
    if gToysOK is true then
@@ -2285,7 +2285,7 @@ command pfL4Cast
    pfMakeCoin 4000, 500     -- the second snail's beat (shell it, kick it!)
    pfMakeCoin 4220, 500     -- the slime its bowled shell can flatten
    pfMakeCoin 4400, 500     -- a THIRD snail's beat
-   pfMakeCoin 4600, 110     -- ride the chained crusher's head up to grab it (clear of the block)
+   pfMakeCoin 4600, 500     -- beneath the chained crusher: grab it as you dash under
    pfMakeCoin 4780, 500     -- a FOURTH snail's beat
    pfMakeCoin 5056, 448     -- over the first purple step
    pfMakeCoin 5184, 392     -- over the top step, by the flag
