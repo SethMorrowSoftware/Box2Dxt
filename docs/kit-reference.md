@@ -334,17 +334,27 @@ inside a `b2kPlayerAddLadder` zone parks gravity at 0 and runs y at
 `climbSpeed`; JUMP exits with a normal jump), and the **hurt-knockback
 standard** (`b2kPlayerHurt`, below).
 
+**Wave 4 action: swim.** While the player's centre is inside a
+`b2kPlayerAddWater` zone the controller **swims** — gravity scales down to
+`swimGravity` (buoyant), the sink caps at `swimMaxFall` (well below the air
+terminal), UP/DOWN drive vy at `swimSpeed`, and a JUMP press is a
+*repeatable* upward **stroke** (`swimJump`) with no ground gate. State reads
+`swim`; leaving the zone (or a hurt) restores the saved gravity scale
+exactly once. Mutually exclusive with the climb. Sized for a *raised-bank*
+basin — a sub-ground pit falls below the camera (see kit-guide §21).
+
 | Handler | Purpose |
 |---------|---------|
 | `b2kPlayerMake x, y, w, h [,sheet]` → control | One call: a capsule body host (`w`×`h` collision box — a visible capsule graphic, or invisible with a bound sprite of `sheet`'s first frame on top), controller armed, input on. Reports the player control. |
 | `b2kPlayerAttach ctrl` | Adopt an existing control (or sprite) as the player. A capsule body is added if it has none (then the controller also sets low friction); a body you made yourself keeps your material. Also sets fixed rotation + sleep-off and arms input. |
-| `b2kPlayerAnims idle, run, jump [,fall] [,land] [,duck] [,climb] [,hurt]` | Map states to the art's animation names (`fall` defaults to `jump`; `duck` to `idle`; `climb` and `hurt` to `jump` — sheets without those frames still read correctly). `land` is an optional non-looping touch-down flourish, held for its own duration. **Map a LOOPING animation to `hurt`** if your game uses `b2kSpriteOnFinish` on the player's art — a non-looping hurt pose fires that finish message mid-knockback. The art is the player control itself if it is a sprite, else the first sprite `b2kSpriteBind`-pinned to it. |
+| `b2kPlayerAnims idle, run, jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim]` | Map states to the art's animation names (`fall` defaults to `jump`; `duck` to `idle`; `climb` and `hurt` to `jump`; `swim` to `fall` — sheets without those frames still read correctly). `land` is an optional non-looping touch-down flourish, held for its own duration. **Map a LOOPING animation to `hurt`** if your game uses `b2kSpriteOnFinish` on the player's art — a non-looping hurt pose fires that finish message mid-knockback. The art is the player control itself if it is a sprite, else the first sprite `b2kSpriteBind`-pinned to it. |
 | `b2kPlayerSet key, value` / `b2kPlayerGet(key)` | Tuning knobs (table below). Settable any time; `b2kClear` keeps them (config, like input bindings), `b2kTeardown`/`b2kPlayerRemove` wipe them. |
 | `b2kPlayerOnGround()` | Grounded this frame (post-tick; false on the frame a jump launches). |
-| `b2kPlayerState()` | `idle` / `run` / `jump` / `fall` / `duck` / `climb` / `hurt`, plus `land` for exactly one frame on touch-down (dust puffs, sounds — read it in `on b2kFrame`). A drop-through renders as `fall`; a knockback's own landing shows no `land` tick. |
+| `b2kPlayerState()` | `idle` / `run` / `jump` / `fall` / `duck` / `climb` / `hurt` / `swim`, plus `land` for exactly one frame on touch-down (dust puffs, sounds — read it in `on b2kFrame`). A drop-through renders as `fall`; a knockback's own landing shows no `land` tick. |
 | `b2kPlayerFacing()` | 1 right / -1 left — the last horizontal intent. |
 | `b2kPlayerJump [speed]` | Programmatic jump (springs, double-jump powerups): the same launch as a pressed jump but **without** the grounded/coyote gate — the caller decides when it is allowed. |
 | `b2kPlayerAddLadder x1, y1, x2, y2` | Register a ladder **zone** (screen-px rect, any corner order; purely polled — no physics object). Zones are world state: `b2kClear` wipes them with everything else. Run the zone a little above a platform at the ladder's top so walking off that edge holding DOWN grabs it. |
+| `b2kPlayerAddWater x1, y1, x2, y2` | Register a water/**swim zone** (screen-px rect, any corner order; purely polled). World state, wiped by `b2kClear` like ladders. Top the zone a little above the drawn surface so the dive-in and surface-out break the water where the art is. The pool is a *raised basin* between banks (a sub-ground pit clamps below the camera). |
 | `b2kPlayerHurt [fromX]` | The contact-damage knockback standard: an away-pop (`hurtPopX`/`hurtPopY`, ground-snap-exempt; the sign of `fromX` vs the player picks the direction — empty pops back off the facing), the `hurt` state/anim, input suppressed until `hurtMs` *or* the first landing after half of it (whichever is **later**), then an `invulnMs` mercy window in which this command no-ops. Keep your respawn flow for **lethal** hits (pits, kill planes): contact damage knocks back, falling dies. |
 | `b2kPlayerHurtIs()` | True through the knockback *and* the mercy window — the one gate your hazard checks need. |
 | `b2kPlayerControl flag` | `false` = the controller only observes (state/ground/facing stay fresh) and writes neither velocity nor animations — cutscenes, hit poses, scripted deaths. The `maxFall` clamp stays live. `true` re-asserts the state animation. An **explicit call (either way) cancels a knockback in flight** — your respawn flow takes the body over cleanly, and no mercy window is granted. |
@@ -357,7 +367,11 @@ scale 40: `moveSpeed` 220 px/s · `accel` 1800 px/s² · `airAccel` 1100 px/s² 
 `coyoteMs` 90 · `bufferMs` 110 · `maxFall` 900 px/s · `maxSlopeDeg` 50
 (steeper than this is a wall, not ground) · `dropMs` 260 (the drop-through
 window) · `climbSpeed` 160 px/s (ladder rate; x runs at half `moveSpeed`
-while climbing) · `hurtPopX` 220 / `hurtPopY` 320 px/s (knockback launch) ·
+while climbing) · `swimSpeed` 150 / `swimJump` 300 px/s (water move speed +
+the repeatable stroke) · `swimGravity` 0.35 / `swimMaxFall` 150 (buoyancy:
+the between-stroke sink scale and its cap — `swimJump` alone sets the escape
+height, so lower IT to make climbing out harder) · `hurtPopX` 220 /
+`hurtPopY` 320 px/s (knockback launch) ·
 `hurtMs` 700 (control-off span) · `invulnMs` 900 (post-hurt mercy).
 
 ```

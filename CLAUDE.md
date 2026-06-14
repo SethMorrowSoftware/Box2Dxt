@@ -95,7 +95,7 @@ failure. Run it after **every** `.livecodescript` edit.
 pass" and let the user confirm.
 
 **The self-test harness** (`examples/box2dxt-selftest.livecodescript`) is the runtime safety net:
-~113 deterministic assertions (currently **v10**) driving the real Kit (paused world +
+~125 deterministic assertions (currently **v12**) driving the real Kit (paused world +
 `b2kStepOnce` hand-stepping + `b2kInputInject` scripted keys). The workflow for every **Kit**
 change: (1) add/extend an assertion
 that captures the new behavior, (2) **bump `kStHarnessV`** (the report header prints it, so a
@@ -226,6 +226,17 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
 27. **`the result` is consumed by the NEXT command** — capture it into a
    local immediately after every `b2kSpawn*`/maker call before calling
    anything else (several past bugs were a stale `the result`).
+28. **A physics hitbox taller than the VISIBLE sprite makes the head bump
+   things it never visually touches.** A capsule sized to the sprite FRAME
+   (not the character within it) tops out above the drawn head when the art
+   is bottom-aligned with frame headroom (Kenney's 128px characters at a
+   down-scale): the invisible "hat" hits the brick/ceiling while the visible
+   head stops short with a gap — even though the contact and the head-bump
+   poll both fire. Size the hitbox to the VISIBLE art, feet-aligned (derive
+   the bind offset from it), and have any head-reach logic read the body's
+   real half-height (a build-time global), never a hardcoded constant. The
+   platformer's brick-smash gap (round 7) was exactly this: an 88px capsule
+   over a ~76px visible character.
 
 ## The single-threaded performance playbook
 
@@ -301,6 +312,18 @@ The rules, each earned by a measured regression:
 - **Ladders:** run the zone a little above a platform at the ladder's
   top (walk-off + DOWN grabs it); zones are world state (`b2kClear`
   wipes them).
+- **Liquids / SWIM (Wave 4):** a swim pool CANNOT be a sub-ground pit —
+  `b2kCamBounds` clamps the camera at the world's bottom edge, so anything
+  below the ground line is off-screen. A swimmable pool is a RAISED basin
+  between two banks (or the whole ground raised, as the micro-game did):
+  hop in, dive for the underwater coins, stroke up + hold-forward to HOP
+  out the far bank. Water zones (`b2kPlayerAddWater`) are world state,
+  wiped by `b2kClear` like ladders. **Tuning:** `swimGravity` sets only the
+  between-stroke SINK; the single-stroke escape height is `swimJump` ALONE
+  (the stroke sets velocity directly, then full air-gravity governs the
+  apex once you break the surface). To make climbing out HARDER, lower
+  `swimJump` — raising `swimGravity` only makes you sink faster between
+  strokes.
 - **Hazard mercy patterns:** a riser never rises under the hero's feet
   (the piranha); proximity hazards give a sprint-speed telegraph
   (mimic wake ≥110px); unkillable hazards follow "the saw rule" (skip

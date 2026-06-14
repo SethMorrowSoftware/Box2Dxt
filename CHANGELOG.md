@@ -39,6 +39,47 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Wave 4 (liquids) — SWIM, the Kit's first new player-action since
+  Wave 2 (statically verified + harness v12; user play-tested in the
+  platformer).** A new `b2kPlayerAddWater x1,y1,x2,y2` registers a polled
+  water zone (world state, wiped by `b2kClear`, exactly like the ladder
+  zones). While the player's centre is submerged the controller SWIMS:
+  gravity drops to `swimGravity` so you sink slowly, the sink caps at
+  `swimMaxFall` (far below the air terminal), UP/DOWN swim at `swimSpeed`,
+  and a JUMP press is a REPEATABLE upward STROKE (`swimJump`) with no ground
+  gate. A new `swim` state plus a `b2kPlayerAnims` swim slot (a 9th arg,
+  falling back to the fall pose, so three-arg calls still work) drive the
+  art. Swim is mutually exclusive with the climb (the tick starts only
+  one); leaving the zone, a hurt, or teardown restores the saved gravity
+  scale exactly once. The swim path costs ONE compare per frame when no
+  water zones exist. Two Opus correctness reviews found no blockers.
+  - **The platformer's L1 GREEN HILLS gains a HILLTOP POOL** — the swim
+    showcase, in the level the game is actually play-tested in. A RAISED
+    swim basin between two earth banks past the crusher alley: the 640-tall
+    world clamps the camera at its bottom, so a swim pool is a basin held
+    at the surface, never a sub-ground pit. Hop in, dive for three
+    underwater coins (the gate needs them), then stroke up + hold-forward
+    to HOP out the far bank to the flag. New `pfMakeWater` helper; per the
+    playtest the water was made heavier (`swimGravity` 0.6, `swimMaxFall`
+    200, a trimmed `swimJump` 300 — `swimJump` alone sets the escape, so it
+    is the lever for "harder to climb out"). A debug warp (`0` on L1)
+    reaches the pool for fast iteration.
+  - **Fixed a pre-existing brick head-bump gap** the pool work surfaced:
+    the hero's 88px capsule was taller than its ~76px visible character
+    (128px frame headroom at a 0.75 down-scale), so heads "missed" bricks
+    by the difference even though the smash fired. The hitbox now matches
+    the art (feet-aligned, bind offset derived) and the bonk window reads
+    the real half-height instead of a hardcoded 44 (gotcha 28).
+  - **Harness v12** adds three swim tests: `stTestSwim` (dive / buoyant cap
+    / repeatable stroke / swim-up / gravity-restored-on-exit, every value
+    printed), `stTestSwimGrounded` (swim while resting on a submerged
+    floor — the pool-floor case), and `stTestSwimClear` (the level-rebuild
+    path: `b2kClear` must wipe the zone, or the next level's player is born
+    swimming in mid-air where the old pool was).
+  - The micro-game also gained an L3 "THE DEEP" swim level (data verbs
+    `water` + a `fish` pit-dweller), but it shows a white-world build issue
+    in its own example code and is set aside pending a focused pass — the
+    Kit swim itself is sound (it runs clean in the platformer).
 - **Platformer SHOWCASE polish round (statically verified; awaiting the
   OXT pass).** A pre-Wave-4 pass over the platformer to make it a
   polished demo of the kit *as it stands today* — longer, better-spaced

@@ -28,6 +28,10 @@
 --     climb (enter/hang/jump-exit, gravity restored), duck (brakes to a
 --     stop, down+jump on solid ground does NOT launch), and the hurt
 --     knockback standard (away-pop, control window, mercy no-op)
+--   * Wave 4 liquids: SWIM in a water zone (buoyant sink capped low, a
+--     repeatable JUMP stroke, UP/DOWN swim, gravity restored on exit);
+--     swimming while RESTING on a submerged floor; and b2kClear wiping the
+--     zone on a level rebuild (no one is born swimming where a pool was)
 --   * input axes/edges, sprites (sheet/anim/flip/remove), tones,
 --     camera adopt/goto/off, teardown hygiene
 --
@@ -43,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "10"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "12"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -128,6 +132,9 @@ command stRunAll
    stRun "stTestLadderClimb"
    stRun "stTestDuck"
    stRun "stTestHurtKnockback"
+   stRun "stTestSwim"
+   stRun "stTestSwimGrounded"
+   stRun "stTestSwimClear"
    stRun "stTestTeardown"
    try
       b2kInputInjectOff
@@ -991,6 +998,118 @@ command stTestLadderClimb
          (b2kPlayerOnGround() is true and stY(tRef) > 430)
 end stTestLadderClimb
 
+-- Wave 4: SWIM. A deep water zone in open air; the player dives in, the
+-- buoyant sink is capped far below the air terminal, a JUMP press strokes
+-- up (repeatable, no ground), UP swims, and leaving the zone restores
+-- gravity. All values printed, so a scale/arithmetic miss self-reports.
+command stTestSwim
+   local tRef, i, tY1, tY2, tVwet
+   stNewWorld "player: swim a water zone (buoyant sink, stroke, surface-out)"
+   stSlab "st_floor", 50, 760, 800, 820   -- a deep catch floor below the pool
+   b2kPlayerAddWater 200, 260, 400, 740    -- a deep pool, surface at y260
+   b2kPlayerMake 300, 150, 32, 48          -- spawn above the surface, in air
+   put the result into tRef
+   -- sink into the water; the swim state engages once the centre submerges
+   repeat with i = 1 to 90
+      b2kStepOnce
+      if b2kPlayerState() is "swim" then exit repeat
+   end repeat
+   stAssert "diving in enters the swim state (got " & b2kPlayerState() & ")", \
+         (b2kPlayerState() is "swim")
+   -- swim DOWN to a safe depth (headroom for the rise tests below)
+   b2kInputInject "down"
+   stStep 32
+   b2kInputInject ""
+   -- buoyant: with no input the sink is capped LOW (vs the 900 air terminal)
+   stStep 16
+   put stVY(tRef) into tVwet
+   stAssert "buoyant: the neutral sink is capped low (vy " & round(tVwet) & ")", \
+         (tVwet > 0 and tVwet < 220)
+   -- a STROKE: a jump press is a repeatable upward burst, no ground needed
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   stAssert "a stroke (jump) pushes upward (vy " & round(stVY(tRef)) & ")", \
+         (stVY(tRef) < -120)
+   -- hold UP: swims steadily up while submerged
+   put stY(tRef) into tY1
+   b2kInputInject "up"
+   stStep 16
+   put stY(tRef) into tY2
+   b2kInputInject ""
+   stAssert "holding UP swims up (" & round(tY1 - tY2) & "px in 16 steps)", \
+         (tY1 - tY2 > 20)
+   stAssert "still swimming while submerged (got " & b2kPlayerState() & ")", \
+         (b2kPlayerState() is "swim")
+   -- out of the water (teleport to dry air): swim ends, gravity returns
+   b2kMoveTo tRef, 600, 200
+   b2kSetVelocity tRef, 0, 0
+   stStep 36
+   stAssert "leaving the water leaves the swim state (got " & b2kPlayerState() & ")", \
+         (b2kPlayerState() is not "swim")
+   stAssert "gravity restored out of the water: free-fall beats the swim cap (vy " \
+         & round(stVY(tRef)) & ")", (stVY(tRef) > 180)
+end stTestSwim
+
+-- Wave 4: SWIM while RESTING on the pool floor. The platformer's hilltop
+-- pool has a solid floor INSIDE the water, so the swimmer sinks and stands
+-- on it -- still submerged (centre in the zone), so still in the swim
+-- state, and a stroke must lift off WITHOUT the grounded-jump gate.
+command stTestSwimGrounded
+   local tRef, i, tY1
+   stNewWorld "player: swims while RESTING on a submerged floor (the pool floor)"
+   stSlab "st_pondfloor", 200, 560, 600, 620   -- the floor sits INSIDE the water
+   b2kPlayerAddWater 200, 300, 600, 600         -- water covers the floor top (y560)
+   b2kPlayerMake 400, 200, 32, 48
+   put the result into tRef
+   -- buoyant sink all the way to the floor (it never floats up unaided)
+   repeat with i = 1 to 160
+      b2kStepOnce
+      if b2kPlayerOnGround() is true then exit repeat
+   end repeat
+   stAssert "sinks and rests on the submerged floor (grounded, y " & round(stY(tRef)) & ")", \
+         (b2kPlayerOnGround() is true)
+   stAssert "...yet still SWIMMING (grounded but submerged, got " & b2kPlayerState() & ")", \
+         (b2kPlayerState() is "swim")
+   -- a stroke lifts it off the floor: underwater there is NO grounded gate
+   put stY(tRef) into tY1
+   b2kInputInject "space"
+   stStep 3
+   b2kInputInject ""
+   stAssert "a stroke lifts it off the floor (rose " & round(tY1 - stY(tRef)) & "px)", \
+         (tY1 - stY(tRef) > 6)
+end stTestSwimGrounded
+
+-- Wave 4: the LEVEL-REBUILD path. A game calls b2kClear between levels;
+-- it must wipe the water zone (via b2kPlayerForget), or the NEXT level's
+-- player would be born swimming in mid-air where the old pool used to be.
+-- This is the regression the play-tested games needed and the harness did
+-- not have: zones are WORLD state and must not survive a rebuild.
+command stTestSwimClear
+   local tRef, i
+   stNewWorld "player: b2kClear wipes the water zone (the level-rebuild path)"
+   stSlab "st_floor", 50, 760, 800, 820
+   b2kPlayerAddWater 200, 200, 600, 740
+   b2kPlayerMake 400, 120, 32, 48
+   put the result into tRef
+   repeat with i = 1 to 90
+      b2kStepOnce
+      if b2kPlayerState() is "swim" then exit repeat
+   end repeat
+   stAssert "world 1: the player swims in its water zone (got " & b2kPlayerState() & ")", \
+         (b2kPlayerState() is "swim")
+   -- the rebuild: b2kClear (what mgBuild/pfStartGame call) must clear it
+   b2kClear
+   stSlab "st_floor2", 50, 500, 800, 560
+   b2kPlayerMake 400, 200, 32, 48   -- spawned RIGHT where the old pool was
+   put the result into tRef
+   stStep 40
+   stAssert "after b2kClear: the new player does NOT swim (no stale zone, got " \
+         & b2kPlayerState() & ")", (b2kPlayerState() is not "swim")
+   stAssert "after b2kClear: gravity is normal -- it falls and lands (y " & round(stY(tRef)) & ")", \
+         (b2kPlayerOnGround() is true and stY(tRef) > 400)
+end stTestSwimClear
+
 command stTestDuck
    local tRef
    stNewWorld "player: duck brakes to a stop; down+jump on solid = no launch"
@@ -1145,16 +1264,18 @@ end stTestHurtKnockback
 --         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
 --         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
 -- PLAYER  b2kPlayerMake x,y,w,h[,sheet] · b2kPlayerAttach ctrl ·
---         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt] ·
+--         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt,swim] ·
 --         b2kPlayerSet key,value · b2kPlayerGet(key) · b2kPlayerOnGround() ·
---         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt) ·
+--         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt|swim) ·
 --         b2kPlayerFacing() · b2kPlayerJump [speed] · b2kPlayerControl flag ·
---         b2kPlayerAddLadder x1,y1,x2,y2 · b2kPlayerHurt [fromX] ·
+--         b2kPlayerAddLadder x1,y1,x2,y2 · b2kPlayerAddWater x1,y1,x2,y2 ·
+--         b2kPlayerHurt [fromX] ·
 --         b2kPlayerHurtIs() (true through knockback + mercy window) ·
 --         b2kPlayer() · b2kPlayerSprite() · b2kPlayerRemove
 --         (drives axes "moveX"/"moveY" + action "jump"; rebind to remap.
 --         DOWN ducks · DOWN+JUMP on a one-way chain drops through ·
---         UP/DOWN in a ladder zone climbs · JUMP exits a climb)
+--         UP/DOWN in a ladder zone climbs · JUMP exits a climb ·
+--         in a water zone UP/DOWN swim, JUMP strokes (repeatable))
 -- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
 --         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
 --         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
@@ -1302,6 +1423,12 @@ local sPlayClimb     -- true while in the climb state (gravity scale parked at 0
 local sPlayGravSave  -- the body's gravity scale to restore on climb exit
 local sPlayLadN      -- registered ladder zones (flat numeric arrays: the
 local sPlayLadL, sPlayLadT, sPlayLadR, sPlayLadB -- ...in-zone test is pure compares)
+-- Wave 4: water zones + the swim state (a buoyant parallel to the climb)
+local sPlaySwim      -- true while submerged in a water zone (gravity scaled down)
+local sPlaySwimGravSave -- the body's gravity scale to restore on swim exit
+local sPlaySwimSpd, sPlaySwimJump, sPlaySwimGrav, sPlaySwimMaxFall -- swim tune caches
+local sPlayWatN      -- registered water zones (flat numeric arrays, like ladders)
+local sPlayWatL, sPlayWatT, sPlayWatR, sPlayWatB
 local sPlayHurt      -- true while knockback owns the controller
 local sPlayHurtEnd   -- sim-clock when hurtMs has elapsed
 local sPlayHurtHalf  -- sim-clock when half of hurtMs has elapsed (landings
@@ -4222,6 +4349,8 @@ command b2kPlayerAttach pCtrl
    put empty into sPlayDropMask
    put false into sPlayClimb
    put empty into sPlayGravSave
+   put false into sPlaySwim
+   put empty into sPlaySwimGravSave
    put false into sPlayHurt
    put 0 into sPlayHurtEnd
    put 0 into sPlayHurtHalf
@@ -4253,10 +4382,11 @@ end b2kPlayerResolveArt
 
 -- Tuning knobs (pixels, px/s, ms, degrees). Keys: moveSpeed, accel,
 -- airAccel, jumpSpeed, jumpCut, coyoteMs, bufferMs, maxFall, maxSlopeDeg,
--- dropMs (drop-through window), climbSpeed (ladder px/s), hurtPopX/
--- hurtPopY (knockback launch px/s), hurtMs (control-off span), invulnMs
--- (post-hurt mercy). Settable any time, before or after the player
--- exists; unknown keys are stored verbatim for your own use.
+-- dropMs (drop-through window), climbSpeed (ladder px/s), swimSpeed/
+-- swimJump (water px/s + stroke), swimGravity/swimMaxFall (buoyancy),
+-- hurtPopX/hurtPopY (knockback launch px/s), hurtMs (control-off span),
+-- invulnMs (post-hurt mercy). Settable any time, before or after the
+-- player exists; unknown keys are stored verbatim for your own use.
 command b2kPlayerSet pKey, pValue
    put pValue into sPlayTune[toLower(pKey)]
    b2kPlayerTuneCache
@@ -4275,6 +4405,10 @@ command b2kPlayerTuneCache
    put b2kPlayerGet("maxFall") into sPlayMaxFall
    put b2kPlayerGet("dropMs") into sPlayDropMS
    put b2kPlayerGet("climbSpeed") into sPlayClimbSpd
+   put b2kPlayerGet("swimSpeed") into sPlaySwimSpd
+   put b2kPlayerGet("swimJump") into sPlaySwimJump
+   put b2kPlayerGet("swimGravity") into sPlaySwimGrav
+   put b2kPlayerGet("swimMaxFall") into sPlaySwimMaxFall
    put b2kPlayerGet("hurtPopX") into sPlayHurtPopX
    put b2kPlayerGet("hurtPopY") into sPlayHurtPopY
    put b2kPlayerGet("hurtMs") into sPlayHurtMS
@@ -4321,6 +4455,14 @@ function b2kPlayerDefault pKey
          return 260
       case "climbspeed"
          return 160
+      case "swimspeed"
+         return 150
+      case "swimjump"
+         return 300
+      case "swimgravity"
+         return 0.35
+      case "swimmaxfall"
+         return 150
       case "hurtpopx"
          return 220
       case "hurtpopy"
@@ -4339,9 +4481,10 @@ end b2kPlayerDefault
 -- idle/run resume. NOTE: a finishing land animation dispatches the art's
 -- b2kSpriteOnFinish message like any non-looping animation would.
 -- Wave 2 slots (all optional, so old five-argument calls keep working):
--- pDuck falls back to the idle pose, pClimb and pHurt to the jump pose --
--- sheets without those frames still read correctly.
-command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pDuck, pClimb, pHurt
+-- pDuck falls back to the idle pose, pClimb and pHurt to the jump pose;
+-- the Wave 4 pSwim falls back to the fall pose -- sheets without those
+-- frames still read correctly.
+command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pDuck, pClimb, pHurt, pSwim
    put pIdle into sPlayAnims["idle"]
    put pRun into sPlayAnims["run"]
    put pJump into sPlayAnims["jump"]
@@ -4366,6 +4509,11 @@ command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pDuck, pClimb, pHurt
    else
       put pHurt into sPlayAnims["hurt"]
    end if
+   if pSwim is empty then
+      put sPlayAnims["fall"] into sPlayAnims["swim"]
+   else
+      put pSwim into sPlayAnims["swim"]
+   end if
    put empty into sPlayAnimNow   -- re-assert on the next tick
    if sPlayArt is empty then b2kPlayerResolveArt
 end b2kPlayerAnims
@@ -4384,9 +4532,9 @@ function b2kPlayerOnGround
    return (sPlayGrounded is true)
 end b2kPlayerOnGround
 
--- idle | run | jump | fall | duck | climb | hurt, plus "land" for exactly
--- one frame on touch-down from jump/fall (dust puffs, landing sounds).
--- A drop-through renders as "fall". Empty = no player.
+-- idle | run | jump | fall | duck | climb | hurt | swim, plus "land" for
+-- exactly one frame on touch-down from jump/fall (dust puffs, landing
+-- sounds). A drop-through renders as "fall". Empty = no player.
 function b2kPlayerState
    return sPlayState
 end b2kPlayerState
@@ -4431,6 +4579,25 @@ command b2kPlayerAddLadder pX1, pY1, pX2, pY2
    put max(pY1, pY2) into sPlayLadB[sPlayLadN]
 end b2kPlayerAddLadder
 
+-- Register a water ZONE (screen-px rect, any corner order). While the
+-- player's centre is inside one, the controller SWIMS: gravity drops to
+-- swimGravity (buoyant), the sink caps at swimMaxFall, UP/DOWN swim at
+-- swimSpeed, and JUMP is a repeatable upward STROKE (swimJump) -- no
+-- ground needed. Leaving the zone restores gravity. Pure polled geometry,
+-- WORLD state (b2kClear wipes them), exactly like the ladder zones.
+-- TIP: top the zone a little ABOVE the water's surface tiles, so the dive
+-- in and the surface-out break the water where the surface art sits.
+command b2kPlayerAddWater pX1, pY1, pX2, pY2
+   if pX1 is not a number or pY1 is not a number \
+         or pX2 is not a number or pY2 is not a number then exit b2kPlayerAddWater
+   if sPlayWatN is empty then put 0 into sPlayWatN
+   add 1 to sPlayWatN
+   put min(pX1, pX2) into sPlayWatL[sPlayWatN]
+   put max(pX1, pX2) into sPlayWatR[sPlayWatN]
+   put min(pY1, pY2) into sPlayWatT[sPlayWatN]
+   put max(pY1, pY2) into sPlayWatB[sPlayWatN]
+end b2kPlayerAddWater
+
 -- The knockback standard (spec section 9.4): control off, an away-pop
 -- (the sign of pFromX vs the player picks the direction; no/empty
 -- pFromX pops away from the facing), the hurt anim, control restored
@@ -4445,6 +4612,7 @@ command b2kPlayerHurt pFromX
    if b2kPlayerHurtIs() then exit b2kPlayerHurt          -- mercy window
    if sPlayControl is not true then exit b2kPlayerHurt   -- a cutscene owns the body
    if sPlayClimb is true then b2kPlayerClimbEnd sBody[sPlayRef]
+   if sPlaySwim is true then b2kPlayerSwimEnd sBody[sPlayRef]
    if pFromX is a number then
       if pFromX > sPlayPX then
          put -1 into tDir
@@ -4510,6 +4678,9 @@ command b2kPlayerForget pFull
    if sPlayClimb is true and sPlayRef is not empty and sBody[sPlayRef] is not empty then
       b2kPlayerClimbEnd sBody[sPlayRef]
    end if
+   if sPlaySwim is true and sPlayRef is not empty and sBody[sPlayRef] is not empty then
+      b2kPlayerSwimEnd sBody[sPlayRef]
+   end if
    if sPlayDropUntil is not empty and sPlayDropUntil > 0 then b2kPlayerDropRestore
    put empty into sPlayRef
    put empty into sPlayArt
@@ -4532,6 +4703,8 @@ command b2kPlayerForget pFull
    put empty into sPlayDropMask
    put false into sPlayClimb
    put empty into sPlayGravSave
+   put false into sPlaySwim
+   put empty into sPlaySwimGravSave
    put false into sPlayHurt
    put 0 into sPlayHurtEnd
    put 0 into sPlayHurtHalf
@@ -4542,6 +4715,11 @@ command b2kPlayerForget pFull
    put empty into sPlayLadT
    put empty into sPlayLadR
    put empty into sPlayLadB
+   put 0 into sPlayWatN
+   put empty into sPlayWatL
+   put empty into sPlayWatT
+   put empty into sPlayWatR
+   put empty into sPlayWatB
    if pFull is true then put empty into sPlayTune
 end b2kPlayerForget
 
@@ -4608,6 +4786,24 @@ command b2kPlayerClimbEnd pBody
    put false into sPlayClimb
 end b2kPlayerClimbEnd
 
+-- Internal: enter the swim -- gravity drops to swimGravity (buoyant; the
+-- body's own scale is saved and restored, like the climb). Mutually
+-- exclusive with the climb: the tick only ever starts one of them.
+command b2kPlayerSwimStart pBody
+   if sPlaySwim is true then exit b2kPlayerSwimStart
+   put b2BodyGravityScale(pBody) into sPlaySwimGravSave
+   b2SetGravityScale pBody, b2kNumberOr(sPlaySwimGrav, 0.35)
+   put true into sPlaySwim
+   put false into sPlayJumping
+end b2kPlayerSwimStart
+
+command b2kPlayerSwimEnd pBody
+   if sPlaySwim is not true then exit b2kPlayerSwimEnd
+   b2SetGravityScale pBody, b2kNumberOr(sPlaySwimGravSave, 1)
+   put empty into sPlaySwimGravSave
+   put false into sPlaySwim
+end b2kPlayerSwimEnd
+
 -- Internal: open the drop-through window -- take the reserved one-way
 -- bit out of the player's mask so chains (alone) stop colliding.
 command b2kPlayerDropStart
@@ -4644,7 +4840,7 @@ end b2kPlayerDropRestore
 -- frame while idle -- the tick's steady-state budget is unchanged.
 command b2kPlayerTick
    local tNow, tDT, tB, tVX, tVY, tAxis, tAxisY, tTarget, tAcc, tStep
-   local tPrevState, tWrite, tInZone, tDuck, tClimbJump, i
+   local tPrevState, tWrite, tInZone, tDuck, tClimbJump, i, tInWater
    if sPlayRef is empty then exit b2kPlayerTick
    put sBody[sPlayRef] into tB
    if tB is empty then exit b2kPlayerTick
@@ -4701,8 +4897,8 @@ command b2kPlayerTick
             put 1 into sPlayFacing
          end if
       end if
-      -- ladder presence: pure numeric compares on the probe's stashed
-      -- centre; zero zones = one compare and out
+      -- ladder + water presence: pure numeric compares on the probe's
+      -- stashed centre; zero zones of a kind = one compare and out
       put false into tInZone
       if sPlayLadN > 0 then
          repeat with i = 1 to sPlayLadN
@@ -4713,12 +4909,25 @@ command b2kPlayerTick
             end if
          end repeat
       end if
-      if sPlayClimb is not true and tInZone is true then
+      put false into tInWater
+      if sPlayWatN > 0 then
+         repeat with i = 1 to sPlayWatN
+            if sPlayPX >= sPlayWatL[i] and sPlayPX <= sPlayWatR[i] \
+                  and sPlayPY >= sPlayWatT[i] and sPlayPY <= sPlayWatB[i] then
+               put true into tInWater
+               exit repeat
+            end if
+         end repeat
+      end if
+      if sPlayClimb is not true and sPlaySwim is not true and tInZone is true then
          -- enter: UP any time in-zone; DOWN only while AIRBORNE (a
          -- grounded DOWN is a duck -- or a drop-through on a chain)
          if tAxisY is -1 or (tAxisY is 1 and sPlayGrounded is not true) then
             b2kPlayerClimbStart tB
          end if
+      end if
+      if sPlaySwim is not true and sPlayClimb is not true and tInWater is true then
+         b2kPlayerSwimStart tB   -- submerged: buoyant gravity, stroke to rise
       end if
       if sPlayClimb is true then
          if b2kActionPressed("jump") then
@@ -4754,7 +4963,33 @@ command b2kPlayerTick
             end if
          end if
       end if
-      if sPlayClimb is not true then
+      if sPlaySwim is true then
+         if tInWater is not true then
+            b2kPlayerSwimEnd tB   -- surfaced / left the pool: gravity returns
+         else
+            -- horizontal: ease vx toward axis * swimSpeed (sluggish -- the
+            -- air-accel rate gives the underwater drag)
+            put tAxis * sPlaySwimSpd into tTarget
+            put sPlayAccelA * tDT into tStep
+            if tVX < tTarget then
+               put min(tTarget, tVX + tStep) into tVX
+            else
+               put max(tTarget, tVX - tStep) into tVX
+            end if
+            -- vertical: a JUMP press is a repeatable upward STROKE (no
+            -- ground gate -- the spec's water jump); else UP/DOWN swim at
+            -- swimSpeed; else the reduced gravity sinks you, capped low
+            if b2kActionPressed("jump") then
+               put 0 - sPlaySwimJump into tVY
+            else
+               if tAxisY is not 0 then
+                  put tAxisY * sPlaySwimSpd into tVY
+               end if
+            end if
+            put true into tWrite
+         end if
+      end if
+      if sPlayClimb is not true and sPlaySwim is not true then
          -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
          put tAxis * sPlayMoveSpd into tTarget
          -- DUCK: down on the ground crouches and brakes to a stop at
@@ -4809,9 +5044,18 @@ command b2kPlayerTick
       end if
    end if
    if sPlayJumping and tVY >= 0 then put false into sPlayJumping   -- apex
-   if tVY > sPlayMaxFall then
-      put sPlayMaxFall into tVY
-      put true into tWrite
+   -- terminal velocity: the low swimMaxFall is the buoyant sink cap while
+   -- submerged; the normal maxFall (the character's terminal velocity) else
+   if sPlaySwim is true then
+      if tVY > sPlaySwimMaxFall then
+         put sPlaySwimMaxFall into tVY
+         put true into tWrite
+      end if
+   else
+      if tVY > sPlayMaxFall then
+         put sPlayMaxFall into tVY
+         put true into tWrite
+      end if
    end if
    -- GROUND-SNAP: grounded on FLAT ground, drifting upward, and we did
    -- not jump = the contact solver's push-out rebound after a hard
@@ -4823,7 +5067,7 @@ command b2kPlayerTick
    -- must use b2kPlayerJump, which sets the jump flag (b2kPlayerHurt's
    -- pop rides the same flag).
    if sPlayGrounded and sPlayJumping is not true and sPlayClimb is not true \
-         and tVY < 0 and abs(sPlayNormX) < 0.1 then
+         and sPlaySwim is not true and tVY < 0 and abs(sPlayNormX) < 0.1 then
       put 0 into tVY
       put true into tWrite
    end if
@@ -4878,6 +5122,14 @@ command b2kPlayerTick
          end if
       end if
    end if
+   -- swim OWNS the state while submerged: the machine above ran the
+   -- grounded/airborne branch (sPlayClimb is false underwater), so override
+   -- to "swim" and keep the air counter clear -- surfacing must never read
+   -- as a long fall plus a phantom land tick.
+   if sPlaySwim is true and sPlayHurt is not true then
+      put "swim" into sPlayState
+      put 0 into sPlayAir
+   end if
    -- animations: only while controlling (manual poses own the art when
    -- control is off), and never let a vanished art control abort the
    -- frame -- the loop's ticks share one try block
@@ -4896,7 +5148,7 @@ command b2kPlayerShowState pNow, pVX
    local tWant, tAnim, tAKey, tFPS, tFlip
    put sPlayState into tWant
    if pNow < sPlayHoldMS and tWant is not "jump" and tWant is not "fall" \
-         and tWant is not "hurt" and tWant is not "climb" then
+         and tWant is not "hurt" and tWant is not "climb" and tWant is not "swim" then
       put empty into tAnim   -- mid land-flourish: leave it playing
    else
       if tWant is "land" and sPlayAnims["land"] is empty then
