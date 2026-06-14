@@ -5354,9 +5354,6 @@ command b2kPlayerDuckSet pWantDuck
       b2kSetBounce sPlayRef, 0
       put tNewH / 2 into sPlayHalfH
       put true into sPlayDucked
-      -- the body CENTRE dropped by tShift to keep the FEET planted; lift the
-      -- bound art by the same amount, or the visible character sinks with it
-      if sPlayArt is not empty then subtract tShift from sSprBindDY[sPlayArt]
       b2kPlayerTuneCache   -- the probe reach follows the new (shorter) capsule
    else
       if sPlayDucked is not true then exit b2kPlayerDuckSet
@@ -5381,7 +5378,6 @@ command b2kPlayerStandUp
    b2kSetBounce sPlayRef, 0
    put sPlayStandH / 2 into sPlayHalfH
    put false into sPlayDucked
-   if sPlayArt is not empty then add tShift to sSprBindDY[sPlayArt]   -- undo the duck's art lift
    b2kPlayerTuneCache
 end b2kPlayerStandUp
 
