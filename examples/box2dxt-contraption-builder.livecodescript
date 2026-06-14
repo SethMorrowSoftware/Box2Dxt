@@ -200,6 +200,8 @@ local sSheetFlip     -- sheet -> frame key -> mirrored image id (lazy)
 local sSheetData     -- sheet -> cached source imageData (freed on teardown)
 local sSheetAlpha    -- sheet -> cached source alphaData
 local sSheetScale    -- sheet -> display scale factor (default 1; engine-resampled at slice time)
+local sSheetPath     -- sheet -> its source path/ref (the idempotent-reload + reuse key)
+local sSheetKeep     -- true = sheets survive b2kTeardown (b2kSheetPersist); assets, like sounds
 local sAnimList      -- "sheet|anim" -> CR list of frame keys
 local sAnimFPS       -- "sheet|anim" -> frames per second
 local sAnimLoop      -- "sheet|anim" -> true/false
@@ -360,7 +362,18 @@ command b2kTeardown
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
    b2kPlayerForget true   -- full: a teardown wipes the tuning too
-   b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   if sSheetKeep is true then
+      -- sheets are ASSETS that SURVIVE teardown (b2kSheetPersist), exactly
+      -- like sounds: clear only the sprite INSTANCES + dead viewports and
+      -- keep the sheet cache, so a level rebuild reuses it instead of
+      -- re-decoding/re-parsing/re-slicing (the costliest thing the Kit does).
+      b2kSpritesClear
+      b2kSpriteSweepOrphans true
+      put empty into sSheetData    -- the imageData cache re-derives lazily;
+      put empty into sSheetAlpha   -- free it like the full wipe would
+   else
+      b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   end if
    -- sounds deliberately SURVIVE teardown: clips are tiny (KBs) and
    -- deterministic, and re-synthesis cost a fifth of a second on every
    -- reset. b2kSoundsWipe purges them when you really want them gone.
@@ -2288,8 +2301,29 @@ end b2kFrameMS
 -- BUTTON whose icon is the current frame's image -- a frame switch is one
 -- property set, and every sprite of a sheet shares the same frame images.
 -- Mirrored (left-facing) frames are flip-clones, also made lazily.
--- Sheets persist until b2kTeardown; sprites are Kit-created controls, so
--- b2kClear removes them like everything else the Kit spawned.
+-- Sheets persist until b2kTeardown (unless b2kSheetPersist is on; see below);
+-- sprites are Kit-created controls, so b2kClear removes them like everything
+-- else the Kit spawned.
+
+-- Loaded sheets are ASSETS, not world state. By default b2kTeardown wipes
+-- them (a full reset), but a multi-LEVEL game reloads the same atlases every
+-- rebuild -- the costliest thing the Kit does (decode each PNG, parse each
+-- XML, re-slice every frame). Turn this ON and sheets SURVIVE b2kTeardown,
+-- exactly like synthesized sounds do, so they load ONCE per session: a level
+-- rebuild reuses them (an identical b2kSheetLoad/LoadAtlas is then a no-op),
+-- and re-warmed frames are already sliced. The Kit's source images are named
+-- deterministically (b2ksheet_<name>) and tagged with their file path, so a
+-- SAVED stack carries them: on reopen the load reuses the in-stack image
+-- (skipping the expensive decode) instead of re-importing from disk. Call
+-- b2kSheetsWipe to force a clean reload (e.g. after the user picks a new
+-- asset folder). OFF by default, so single-shot examples are unchanged.
+command b2kSheetPersist pFlag
+   put (pFlag is not false) into sSheetKeep
+end b2kSheetPersist
+
+function b2kSheetPersists
+   return (sSheetKeep is true)
+end b2kSheetPersists
 
 -- Register an image FILE as a uniform grid of pFW x pFH frames, numbered
 -- 1..N left-to-right, top-to-bottom. Reports the frame count. Sheets that
@@ -2299,9 +2333,13 @@ end b2kFrameMS
 -- packed sheets that have no Kenney-style XML.
 command b2kSheetLoad pName, pPath, pFW, pFH, pCount, pMargin, pSpacing
    local tRef
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is pPath then
+      return the number of lines of sSheetKeys[pName]   -- already loaded: reuse it
+   end if
    put b2kSheetSourceFromFile(pName, pPath) into tRef
    if tRef is empty then return 0
    b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
+   put pPath into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoad
 
@@ -2309,10 +2347,16 @@ end b2kSheetLoad
 -- grid sheet. The image is used in place and never deleted by the Kit.
 -- Same grid arguments as b2kSheetLoad (margin/spacing; 0x0 = no grid).
 command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount, pMargin, pSpacing
+   local tRef
+   put the long id of pImgRef into tRef
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tRef then
+      return the number of lines of sSheetKeys[pName]   -- already loaded: reuse it
+   end if
    b2kSheetForget pName
-   put the long id of pImgRef into sSheetSrc[pName]
+   put tRef into sSheetSrc[pName]
    put false into sSheetOwned[pName]
    b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
+   put tRef into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetFromImage
 
@@ -2362,6 +2406,9 @@ end b2kSheetAddFrame
 -- addressed BY NAME. pXmlPath defaults to the png path with ".xml".
 command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
    local tRef, tXml, tLine, tNm, tX, tY, tW, tH
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is pPngPath then
+      return the number of lines of sSheetKeys[pName]   -- already loaded: reuse it
+   end if
    if pXmlPath is empty then
       put pPngPath into pXmlPath
       set the itemDelimiter to "."
@@ -2387,6 +2434,7 @@ command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
       end if
    end repeat
    if the last char of sSheetKeys[pName] is cr then delete the last char of sSheetKeys[pName]
+   put pPngPath into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoadAtlas
 
@@ -2795,6 +2843,7 @@ command b2kSheetForget pName
    delete variable sSheetData[pName]
    delete variable sSheetAlpha[pName]
    delete variable sSheetScale[pName]
+   delete variable sSheetPath[pName]
    repeat for each key tKey in sAnimList
       if char 1 to (the number of chars of pName) + 1 of tKey is pName & "|" then
          delete variable sAnimList[tKey]
@@ -2819,6 +2868,7 @@ command b2kSheetsWipe
    put empty into sSheetData
    put empty into sSheetAlpha
    put empty into sSheetScale
+   put empty into sSheetPath
    put empty into sAnimList
    put empty into sAnimFPS
    put empty into sAnimLoop
@@ -2830,7 +2880,7 @@ end b2kSheetsWipe
 -- script is pasted in), but the controls persist -- registry cleanup can't
 -- see them, so a reopened stack would show ghost sprites frozen on their
 -- last frame. Swept by name prefix on every teardown.
-command b2kSpriteSweepOrphans
+command b2kSpriteSweepOrphans pKeepAssets
    local tAgain, i, tName, tHit
    put true into tAgain
    repeat while tAgain
@@ -2849,9 +2899,14 @@ command b2kSpriteSweepOrphans
          end if
          put false into tHit
          if char 1 to 7 of tName is "b2kspr_" then put true into tHit
-         if char 1 to 6 of tName is "b2kfr_" then put true into tHit
-         if char 1 to 6 of tName is "b2kfl_" then put true into tHit
-         if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         -- sheet ASSET images (sources + sliced frames + flips) are KEPT
+         -- when persisting (b2kSheetPersist); only sprite instances + dead
+         -- viewports go, so the sheet cache survives the teardown
+         if pKeepAssets is not true then
+            if char 1 to 6 of tName is "b2kfr_" then put true into tHit
+            if char 1 to 6 of tName is "b2kfl_" then put true into tHit
+            if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         end if
          if tHit then
             delete control i of this card
             put true into tAgain
@@ -2872,11 +2927,21 @@ end b2kSpriteSweepOrphans
 -- lockLoc only AFTER the content, so the control has auto-sized first.
 function b2kSheetSourceFromFile pName, pPath
    local tImg, tData
+   put "b2ksheet_" & pName into tImg
+   -- REUSE: a source image already decoded for this exact file -- earlier
+   -- this session, or carried inside a SAVED stack (b2kSheetPersist) -- is
+   -- the cache. Adopt it in place and skip the costly binfile decode.
+   if sSheetKeep is true and there is an image tImg \
+         and the uB2kSrcPath of image tImg is pPath and the width of image tImg >= 2 then
+      set the lockLoc of image tImg to true
+      put the long id of image tImg into sSheetSrc[pName]
+      put true into sSheetOwned[pName]
+      return sSheetSrc[pName]
+   end if
    b2kSheetForget pName
    if there is no file pPath then return empty
    put URL ("binfile:" & pPath) into tData
    if tData is empty then return empty
-   put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
@@ -2891,6 +2956,7 @@ function b2kSheetSourceFromFile pName, pPath
       return empty
    end if
    set the lockLoc of image tImg to true
+   set the uB2kSrcPath of image tImg to pPath   -- the cache key for next time
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]
@@ -2936,11 +3002,31 @@ end b2kXmlAttr
 
 -- Internal: make sure a frame's sliced image exists (lazy, cached). The
 -- source pixels are fetched once per sheet and kept until teardown.
+-- Internal: the 1-based position of a frame key in its sheet's key list --
+-- a STABLE id (load order is deterministic) used to name sliced frames so a
+-- SAVED stack can find and reuse them (b2kSheetPersist), never duplicating.
+function b2kSheetKeyIndex pSheet, pKey
+   local i, tK
+   put 0 into i
+   repeat for each line tK in sSheetKeys[pSheet]
+      add 1 to i
+      if tK is pKey then return i
+   end repeat
+   return 0
+end b2kSheetKeyIndex
+
 command b2kSheetEnsureIcon pSheet, pKey
    local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName, tScale, tW2, tH2
    if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
    put sSheetRegion[pSheet][pKey] into tRegion
    if tRegion is empty then exit b2kSheetEnsureIcon
+   put "b2kfr_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
+   -- REUSE a slice carried in a SAVED stack (b2kSheetPersist): adopt the
+   -- existing frame image rather than re-cut it from the source.
+   if sSheetKeep is true and there is an image tName then
+      put the id of image tName into sSheetIcon[pSheet][pKey]
+      exit b2kSheetEnsureIcon
+   end if
    if sSheetData[pSheet] is empty then
       put the imageData of sSheetSrc[pSheet] into sSheetData[pSheet]
       put the alphaData of sSheetSrc[pSheet] into sSheetAlpha[pSheet]
@@ -2966,7 +3052,7 @@ command b2kSheetEnsureIcon pSheet, pKey
    if the number of bytes in tFA is not tW * tH then
       put empty into tFA   -- no usable alpha: ship the frame fully opaque
    end if
-   put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
+   if there is an image tName then delete image tName   -- never duplicate a deterministic slice
    create image tName
    set the visible of it to false
    set the lockLoc of it to true
@@ -2995,11 +3081,16 @@ end b2kSheetEnsureIcon
 command b2kSheetEnsureFlip pSheet, pKey
    local tName
    if sSheetFlip[pSheet][pKey] is not empty then exit b2kSheetEnsureFlip
+   put "b2kfl_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
+   if sSheetKeep is true and there is an image tName then
+      put the id of image tName into sSheetFlip[pSheet][pKey]   -- reuse a saved flip
+      exit b2kSheetEnsureFlip
+   end if
    b2kSheetEnsureIcon pSheet, pKey
    if sSheetIcon[pSheet][pKey] is empty then exit b2kSheetEnsureFlip
    try
+      if there is an image tName then delete image tName
       clone image id sSheetIcon[pSheet][pKey]
-      put "b2kfl_" & the milliseconds & "_" & random(1000000) into tName
       set the name of it to tName
       set the visible of it to false
       flip image tName horizontal
