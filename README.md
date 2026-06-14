@@ -50,9 +50,6 @@ Box2D v3.1.0 (fetched by CMake)
    [contraption builder](examples/box2dxt-contraption-builder.livecodescript):
    a full build-and-run physics sandbox with fans, magnets, lasers, bombs,
    motors, and save/load. Game-minded? The
-   [micro-game](examples/box2dxt-microgame.livecodescript) is a complete
-   two-level platformer (menu → levels → win screen, embedded art,
-   synthesized sound), the
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
    Game Kit pushed hard — player controller (run/jump/climb/duck/swim),
    scrolling camera, spritesheets, coin puzzles, a hilltop swim pool — and the
