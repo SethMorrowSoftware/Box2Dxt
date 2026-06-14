@@ -5692,6 +5692,8 @@ on startCB
    end if
    b2kSetup 0, kDefaultGravity      -- creates the world; the loop stays stopped
    prepArena
+   sweepOrphanParts                 -- a stack saved with parts on the stage reopens to a
+                                    -- clean stage (no dead, untracked part graphics)
    b2kFrameTarget the long id of this stack
    b2kContactTarget the long id of this stack
    raiseUI
@@ -8323,12 +8325,33 @@ on clearAll
       end try
    end repeat
    put empty into gParts
+   sweepOrphanParts             -- also drop UNTRACKED part graphics (orphans), so a load
+                                -- never piles on leftovers and a rebuild leaves no dead shapes
    put empty into gFlash
    resetSceneState
    unlock screen
    put "Cleared. Pick a shape and click the canvas to place parts." into gStatus
    updateHud
 end clearAll
+
+-- Delete every PART graphic on the card, INCLUDING any not tracked in gParts
+-- (orphans -- e.g. a stack saved with parts on the stage, then reopened: their
+-- bodies are gone and gParts no longer lists them, so clearAll's gParts loop
+-- can't see them). Parts are exactly the controls tagPart stamps with a uPartId;
+-- chrome (ui_*), the arena (cb_*), and the image LIBRARY (data in the
+-- uImageLibrary property, not controls) carry none, so they are never touched.
+-- Safe to call whenever a truly clean stage is wanted (clearAll, reopen).
+on sweepOrphanParts
+   local tI
+   repeat with tI = the number of controls of this card down to 1
+      if the uPartId of control tI of this card is not empty then
+         try
+            b2kRemove control tI of this card
+         end try
+         delete control tI of this card
+      end if
+   end repeat
+end sweepOrphanParts
 
 on clearJoints
    local tI
