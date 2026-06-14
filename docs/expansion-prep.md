@@ -14,7 +14,8 @@ that keep the expansion as reliable as the engine underneath it.
 | Wave 3 | **BUILT — statically verified 2026-06-13** (bestiary I + HAUNTED HOLLOW; see §10) |
 | Showcase polish | **BUILT — statically verified 2026-06-13** (pre-Wave-4: longer/re-spaced levels, the kit's first JOINT mechanics — rope bridge + boulder + barrel; a prototyped wrecking ball was cut as un-sprite-able — and four variety species; all example-side, zero Kit change, no harness bump) |
 | Wave 4 | **SWIM user play-tested in the platformer 2026-06-14** (harness **v12**, two Opus reviews clean; see §11). The Kit gained `b2kPlayerAddWater` + a buoyant `swim` mode/state/anim; the platformer's L1 GREEN HILLS gained a **HILLTOP POOL** (a raised-bank basin — the swim showcase, where it's tested), tuned heavier and with the hero hitbox fixed to match the art (gotcha 28), all per the user's OXT pass. DONE: swim zones, pit-dwellers (the micro-game `fish`, debut), lava (already in platformer L4). CARRY-OVER: the collapsing-bridge trap, and the micro-game's L3 "THE DEEP" (built but shows an example-side white-world build issue — set aside) |
-| Next | **Wave 5 — player actions II** (wall-slide/jump, dash, double-jump; capsule reshape on duck) — see §7 and §12. Loose ends: the collapsing bridge + the micro-game L3 fix |
+| Wave 5 | **BUILT — statically verified 2026-06-14** (player actions II: double-jump `airJumps`, wall-slide/jump, dash, duck capsule-reshape, moving-platform carry — all opt-in Kit knobs, defaults unchanged; harness **v13**, six new tests; see §12). Enabled + showcased in the platformer; the micro-game was retired (focus is the platformer). Awaiting the OXT feel pass. |
+| Next | Iterate Wave 5 feel in OXT (the new moves' tuning numbers are first-pass); the collapsing-bridge trap remains a loose end |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---

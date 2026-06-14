@@ -37,8 +37,54 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   one-way platform builders at chains (chain segments are the one-sided
   primitive).
 
+### Removed
+
+- **The micro-game example (`box2dxt-microgame.livecodescript`) was
+  retired.** The repo concentrates its game work on the platformer showcase;
+  the "build a whole game" pattern it demonstrated is preserved in
+  kit-guide §20. Dropped from the embedded-Kit sync list and the example
+  lists in the README and CLAUDE.md.
+
 ### Added
 
+- **Kit: a persistent spritesheet cache (`b2kSheetPersist`) — load atlases
+  once, not per level (statically verified + harness v14).** Opt-in (default
+  off, so every other example and the harness are byte-for-byte unchanged).
+  When on, loaded sheets are assets that **survive `b2kTeardown`** (like
+  synthesized sounds): a level rebuild reuses them instead of re-decoding
+  each PNG, re-parsing each XML, and re-slicing every frame — the costliest
+  work the Kit does, previously repeated on every level transition. An
+  identical `b2kSheetLoad`/`LoadAtlas`/`FromImage` becomes a no-op, sliced
+  frames survive, and because source/frame images are named deterministically
+  (`b2ksheet_<name>` / `b2kfr_<sheet>_<n>`, tagged with the file path) a
+  **saved stack** carries the cache — on reopen the load adopts the in-stack
+  images, skipping the disk import entirely. `b2kSheetsWipe` stays the
+  explicit purge. The **platformer** turns it on at `openCard` (Shift+Reset
+  purges) to cut its between-levels load time.
+- **Wave 5 (player actions II) — five new player-controller moves
+  (statically verified + harness v13).** All **opt-in** through
+  `b2kPlayerSet` knobs whose defaults leave the pre-Wave-5 controller
+  byte-for-byte unchanged, and each idle path costs one compare per frame:
+  - **Double-jump** (`airJumps` — extra mid-air jumps, refilled on landing).
+  - **Wall-slide + wall-jump** (`wallSlideMax` caps the fall while pressing
+    into a wall; `wallJumpX`/`wallJumpY` launch up and away with a brief
+    steer-lock; a side ray runs only while airborne). New `wallslide` state.
+  - **Dash** (`dashSpeed`/`dashMs`/`dashCooldownMs` on the new `dash` action,
+    bound to SHIFT/X — a flat horizontal burst with gravity parked; yields to
+    climb/swim). New `dash` state.
+  - **Duck capsule-reshape** (`duckScale < 1` turns the Wave 2 brake-duck into
+    a feet-anchored **crawl** via `b2kReshape`, with a headroom check before
+    standing — so the hero slips under low gaps).
+  - **Moving-platform carry** (`platformCarry 1` — a grounded player inherits
+    the velocity of the moving kinematic body it rides; a vertical lift's
+    carry is exempt from the ground-snap).
+  - New helpers: `b2kPlayerHalfH()`/`b2kPlayerHalfW()` (live capsule extents,
+    serving gotcha 28), `b2kPlayerInLadder()`/`b2kPlayerInWater()` (this
+    frame's zone membership), and `b2kPlayerRespawn x,y` (teleport + zero
+    velocity + clean state). `b2kPlayerAnims` gains `wall`/`dash` slots.
+  - The **platformer showcase** turns them all on and leans each beat on one
+    (double-jump throughout, a wall-jump shaft, a dash gap, a crawl tunnel,
+    moving-platform lifts). Self-test **v13** adds six hand-stepped tests.
 - **Wave 4 (liquids) — SWIM, the Kit's first new player-action since
   Wave 2 (statically verified + harness v12; user play-tested in the
   platformer).** A new `b2kPlayerAddWater x1,y1,x2,y2` registers a polled

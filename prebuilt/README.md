@@ -4,54 +4,53 @@ Drop-in native libraries so you can run Box2Dxt without a C toolchain. Place the
 file for your platform next to your stack/standalone (or anywhere the OpenXTalk /
 LiveCode foreign-binding loader can find it), then load `box2dxt.lcb`.
 
-| Platform | File | Where |
-|----------|------|-------|
-| Linux x86-64 | `linux-x86_64/libbox2dxt.so` | committed here |
-| macOS (universal: Intel + Apple Silicon) | `libbox2dxt-macos-universal.dylib` | committed here + GitHub **Releases** |
-| Windows x64 | `box2dxt-windows-x64.dll` | committed here + GitHub **Releases** |
+| Platform | File |
+|----------|------|
+| Windows x64 | `box2dxt-windows-x64.dll` |
+| Windows x86 (32-bit) | `box2dxt-windows-x86.dll` |
+| macOS (universal: Intel + Apple Silicon) | `libbox2dxt-macos-universal.dylib` |
+| Linux x86-64 | `libbox2dxt-linux-x86_64.so` |
+| Linux i686 (32-bit) | `libbox2dxt-linux-i686.so` |
 
-When you deploy, rename the file to the bare name the loader resolves `box2dxt`
-to for your platform — **no `lib` prefix**:
+These are built from the source in this repo and report **ABI 4** — what the
+current Kit and examples need. Confirm after loading with `put b2Version()`
+(it should return `4`).
+
+## Deploy: rename to the bare name (no `lib` prefix)
+
+The `c:box2dxt>…` foreign-binding strings in `box2dxt.lcb` resolve the name
+`box2dxt` to a **bare platform filename** at run time. Rename the file you ship:
 
 | Platform | Deploy as |
 |----------|-----------|
-| Linux    | `box2dxt.so` |
-| macOS    | `box2dxt.dylib` |
-| Windows  | `box2dxt.dll` |
+| Windows | `box2dxt.dll` |
+| macOS | `box2dxt.dylib` |
+| Linux | `box2dxt.so` |
 
-That bare name is what the `c:box2dxt>…` foreign-binding strings in `box2dxt.lcb`
-resolve to at run time. Note the committed Linux file is `libbox2dxt.so`, but the
-loader asks `dlopen` for `box2dxt.so` — rename it (dropping `lib`), or you'll get
-"unable to load foreign library".
+The committed Linux file is `libbox2dxt-linux-x86_64.so`, but the loader asks
+`dlopen` for `box2dxt.so` — drop the `lib` prefix and the `-linux-x86_64`
+suffix, or you'll get "unable to load foreign library". (If a particular engine
+asks for the `lib`-prefixed name instead, provide that too — a copy or symlink
+alongside is harmless.)
 
 On **Linux** the dynamic loader does not search the stack's folder: put the file
 in a search path with `sudo cp box2dxt.so /usr/lib/ && sudo ldconfig`, place it
-next to the OXT engine binary, or set `LD_LIBRARY_PATH`. (If a specific engine
-asks for `libbox2dxt.*` instead, provide that name too — a copy or symlink.)
+next to the OXT engine binary, or set `LD_LIBRARY_PATH` before launching OXT.
 
-## Portability of the committed binaries
+> **Tip — let a script do the rename + bundling.** `tools/make-release.py`
+> assembles a ready-to-ship zip (the extension + per-platform libraries already
+> renamed to the bare name + your saved stack + an install guide). See
+> [docs/building.md](../docs/building.md#packaging-a-distribution-zip).
 
-The committed `linux-x86_64` binary is built with **SIMD disabled** (no AVX2/SSE
-requirement), so it runs on any 64-bit x86 Linux machine. It is built from the
-source in this repo and stripped. The macOS universal dylib covers both Intel
-and Apple Silicon.
+## Portability & freshness
 
-The canonical, per-tag binaries are produced by the
-[`build` GitHub Actions workflow](../.github/workflows/build.yml) on native
-runners and attached to each tagged **[Release](../../releases)** — that's the
-only way to get binaries compiled and tested on each operating system.
-
-> These committed files are convenience artifacts and can lag behind
-> `src/box2d_lc.c`. When in doubt, build from source (two `cmake` commands — see
-> [docs/building.md](../docs/building.md)) or grab the matching Release for a
-> given tag.
-
-> **Heads-up — the committed binaries are currently outdated.** They predate most
-> of the C shim: they report **ABI 3** and export only ~92 of the ~370 handlers the
-> LCB now binds, missing whole families the Kit relies on (sensors, chains, spatial
-> queries, body move-events, and more). The current Kit and examples will not run
-> against them. The contraption builder now probes `b2Version()` against the ABI it
-> needs (**4**) and shows a "rebuild from source" dialog instead of crashing mid-run
-> on the first unresolved handler. Regenerate these files — build from source, or
-> attach fresh per-tag binaries from the Release workflow (on a portable toolchain;
-> e.g. an `manylinux`/older-glibc runner for Linux) — before relying on them.
+- The macOS file is a **universal** binary (Intel + Apple Silicon). For
+  older-CPU (no-AVX2) or SSE2 builds, see the SIMD notes in
+  [docs/building.md](../docs/building.md#platform--cpu-notes).
+- These committed files are convenience artifacts and can lag behind
+  `src/box2d_lc.c`. When in doubt, confirm `put b2Version()` matches the ABI
+  your `box2dxt.lcb` expects, build from source (two `cmake` commands — see
+  [docs/building.md](../docs/building.md)), or grab the matching tagged
+  **[Release](../../releases)**, whose per-platform binaries are built and
+  tested on native runners by the
+  [`build` workflow](../.github/workflows/build.yml).

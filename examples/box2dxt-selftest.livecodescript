@@ -47,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "12"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "18"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -119,6 +119,7 @@ command stRunAll
    stRun "stTestCoyoteBuffer"
    stRun "stTestSprites"
    stRun "stTestSheetExtras"
+   stRun "stTestSheetPersist"
    stRun "stTestSounds"
    stRun "stTestCamera"
    stRun "stTestCamScrolledWrite"
@@ -135,6 +136,12 @@ command stRunAll
    stRun "stTestSwim"
    stRun "stTestSwimGrounded"
    stRun "stTestSwimClear"
+   stRun "stTestDoubleJump"
+   stRun "stTestWallJump"
+   stRun "stTestDash"
+   stRun "stTestPlatformCarry"
+   stRun "stTestDuckReshape"
+   stRun "stTestPlayerHelpers"
    stRun "stTestTeardown"
    try
       b2kInputInjectOff
@@ -183,6 +190,7 @@ end stAssert
 -- nothing advances except our hand-stepping.
 command stNewWorld pName
    b2kInputInjectOff
+   b2kSheetPersist false   -- isolate tests: a leaked persist flag must not keep sheets
    b2kTeardown
    stWipe
    put 0 into gFellCount
@@ -1188,6 +1196,253 @@ command stTestHurtKnockback
          (b2kPlayerState() is "hurt")
 end stTestHurtKnockback
 
+-- Wave 5: double-jump (airJumps). A ground jump + one mid-air jump, then
+-- the budget is spent until the next landing.
+command stTestDoubleJump
+   local tRef, i, tV1, tV2, tV3
+   stNewWorld "player: double-jump (airJumps = 1)"
+   stSlab "st_ground", 50, 500, 800, 560
+   b2kPlayerMake 300, 470, 32, 48
+   put the result into tRef
+   b2kPlayerSet "airJumps", 1
+   stStep 30
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   put round(stVY(tRef)) into tV1
+   stAssert "ground jump launched up (vy " & tV1 & ")", (tV1 < -250)
+   -- rise to the apex and begin to fall
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stVY(tRef) > 60 then exit repeat
+   end repeat
+   -- AIR-JUMP: a second press while falling re-launches up
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   put round(stVY(tRef)) into tV2
+   stAssert "double-jump re-launched mid-fall (vy " & tV2 & ")", (tV2 < -250)
+   -- the budget is spent: fall again, a THIRD press does nothing
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stVY(tRef) > 60 then exit repeat
+   end repeat
+   b2kInputInject "space"
+   stStep 2
+   b2kInputInject ""
+   put round(stVY(tRef)) into tV3
+   stAssert "no third jump - air budget spent (vy " & tV3 & " still falling)", (tV3 > 0)
+end stTestDoubleJump
+
+-- Wave 5: wall-slide caps the fall against a wall; wall-jump launches up
+-- and AWAY. The player hugs a vertical wall, holding into it while falling.
+command stTestWallJump
+   local tRef, i, tVcap, tVup, tVx
+   stNewWorld "player: wall-slide + wall-jump"
+   stSlab "st_ground", 50, 520, 800, 560
+   stSlab "st_wall", 400, 80, 440, 520        -- a vertical wall (left face x400)
+   b2kPlayerMake 380, 300, 32, 48             -- just left of the wall, airborne
+   put the result into tRef
+   b2kPlayerSet "wallJumpX", 240
+   b2kPlayerSet "wallJumpY", 380
+   b2kPlayerSet "wallSlideMax", 90
+   stStep 1
+   b2kSetVelocity tRef, 0, 400                -- a fast fall, to show the cap
+   b2kInputInject "right"                     -- press INTO the wall
+   put 0 into tVcap
+   repeat with i = 1 to 40
+      b2kStepOnce
+      if b2kPlayerState() is "wallslide" then
+         put round(stVY(tRef)) into tVcap
+         exit repeat
+      end if
+   end repeat
+   stAssert "wall-slide engaged + capped the fall (vy " & tVcap & " in 1..100)", \
+         (tVcap > 0 and tVcap <= 100)
+   -- WALL-JUMP: jump while sliding -> up and away (to the LEFT)
+   b2kInputInject "right,space"
+   stStep 2
+   b2kInputInject ""
+   put round(stVY(tRef)) into tVup
+   put round(stVX(tRef)) into tVx
+   stAssert "wall-jump launched up (vy " & tVup & ")", (tVup < -200)
+   stAssert "wall-jump pushed away from the wall (vx " & tVx & " < -80)", (tVx < -80)
+end stTestWallJump
+
+-- Wave 5: dash is a flat horizontal burst (dashSpeed) for dashMs, gated
+-- by a cooldown so it cannot re-fire immediately.
+command stTestDash
+   local tRef, i, tVmax, tState, tV2
+   stNewWorld "player: dash burst + cooldown"
+   stSlab "st_ground", 50, 500, 1200, 560
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   b2kPlayerSet "dashSpeed", 520
+   b2kPlayerSet "dashMs", 160
+   b2kPlayerSet "dashCooldownMs", 500
+   b2kInputInject "right"
+   stStep 6        -- face right, then release the direction
+   b2kInputInject ""
+   stStep 4
+   b2kInputInject "x"
+   stStep 1
+   put round(stVX(tRef)) into tVmax
+   put b2kPlayerState() into tState
+   b2kInputInject ""
+   stAssert "dash burst hit dash speed (vx " & tVmax & " > 450)", (tVmax > 450)
+   stAssert "dash state reported (got " & tState & ")", (tState is "dash")
+   stStep 20       -- run the dash out (dashMs) and decelerate
+   b2kInputInject "x"
+   stStep 1
+   put round(stVX(tRef)) into tV2
+   b2kInputInject ""
+   stAssert "cooldown blocks an immediate re-dash (vx " & tV2 & " < 300)", (tV2 < 300)
+   -- airDash OFF: the dash must NOT fire while airborne (the platformer's
+   -- "no mid-air dash"). Clear the cooldown, jump, then press dash in the air.
+   b2kPlayerSet "airDash", 0
+   b2kPlayerTuneCache
+   stStep 40
+   b2kPlayerJump 420
+   stStep 4
+   stAssert "airborne for the mid-air dash test", (b2kPlayerOnGround() is false)
+   b2kInputInject "x"
+   stStep 1
+   b2kInputInject ""
+   stAssert "airDash off: no dash mid-air (state " & b2kPlayerState() & ")", (b2kPlayerState() is not "dash")
+   stAssert "airDash off: no dash burst mid-air (vx " & round(stVX(tRef)) & ")", (abs(stVX(tRef)) < 300)
+end stTestDash
+
+-- Wave 5: a player standing on a horizontally-moving kinematic platform
+-- inherits its velocity (platformCarry, default ON).
+command stTestPlatformCarry
+   local tRef, tPlat, i, tX0, tX1, tDX
+   stNewWorld "player: moving-platform carry"
+   b2kSpawnBox 300, 400, 200, 30, "gray"
+   put the result into tPlat
+   b2kSetKinematic tPlat
+   b2kSetVelocity tPlat, 80, 0        -- drift right at 80 px/s
+   b2kPlayerMake 300, 360, 32, 48     -- settle onto the platform
+   put the result into tRef
+   b2kPlayerSet "platformCarry", 1    -- opt in (default off)
+   stStep 30
+   put stX(tRef) into tX0
+   stStep 60
+   put stX(tRef) into tX1
+   put tX1 - tX0 into tDX
+   -- 60 frames at 80 px/s = ~80px; a carried player tracks the platform
+   stAssert "player rode the platform right (~80px, got " & round(tDX) & ")", \
+         (tDX > 55 and tDX < 105)
+end stTestPlatformCarry
+
+-- Wave 5: duck capsule reshape (duckScale < 1). The capsule shrinks for a
+-- crawl, stand-up is blocked under a low ceiling, and clears once past it.
+command stTestDuckReshape
+   local tRef, tFullH, tDuckH, i
+   stNewWorld "player: duck capsule reshape (crawl)"
+   stSlab "st_ground", 50, 500, 900, 560
+   stSlab "st_ceil", 300, 400, 600, 462       -- a low ceiling (underside y462)
+   b2kPlayerMake 200, 470, 32, 48
+   put the result into tRef
+   b2kPlayerSet "duckScale", 0.5
+   put round(b2kPlayerHalfH()) into tFullH
+   stStep 20
+   b2kInputInject "down"
+   stStep 5
+   put round(b2kPlayerHalfH()) into tDuckH
+   stAssert "duck shrank the capsule (" & tFullH & " -> " & tDuckH & ")", (tDuckH < tFullH)
+   stAssert "ducked state reported (got " & b2kPlayerState() & ")", (b2kPlayerState() is "duck")
+   -- crawl RIGHT until well under the ceiling
+   b2kInputInject "down,right"
+   repeat with i = 1 to 120
+      b2kStepOnce
+      if stX(tRef) > 360 then exit repeat
+   end repeat
+   stAssert "crawled under the low ceiling (x " & round(stX(tRef)) & " > 350)", (stX(tRef) > 350)
+   -- release DOWN under the ceiling: the headroom check keeps it crouched
+   b2kInputInject "right"
+   stStep 6
+   stAssert "stand-up blocked under the ceiling (halfH " & round(b2kPlayerHalfH()) & ")", \
+         (round(b2kPlayerHalfH()) is tDuckH)
+   -- crawl out PAST the ceiling, then it can stand
+   b2kInputInject "down,right"
+   repeat with i = 1 to 160
+      b2kStepOnce
+      if stX(tRef) > 660 then exit repeat
+   end repeat
+   b2kInputInject ""
+   stStep 12
+   stAssert "stood back up past the ceiling (halfH " & round(b2kPlayerHalfH()) & ")", \
+         (round(b2kPlayerHalfH()) >= tFullH)
+end stTestDuckReshape
+
+-- Wave 5: the pure-win getters (half-extents, zone queries) + the respawn
+-- primitive (teleport + zero velocity + clean state).
+command stTestPlayerHelpers
+   local tRef
+   stNewWorld "player: half-extents, zone queries, respawn"
+   stSlab "st_ground", 50, 500, 900, 560
+   b2kPlayerMake 200, 470, 30, 50
+   put the result into tRef
+   stStep 8
+   stAssert "halfW getter (got " & round(b2kPlayerHalfW()) & " ~ 15)", (round(b2kPlayerHalfW()) is 15)
+   stAssert "halfH getter (got " & round(b2kPlayerHalfH()) & " ~ 25)", (round(b2kPlayerHalfH()) is 25)
+   stAssert "not in a ladder/water zone yet", \
+         (b2kPlayerInLadder() is false and b2kPlayerInWater() is false)
+   b2kPlayerAddWater 100, 300, 400, 560
+   b2kPlayerAddLadder 600, 300, 660, 560
+   stStep 2
+   stAssert "in the water zone now", (b2kPlayerInWater() is true)
+   -- RESPAWN to the ladder spot: velocity zeroed, the zone queries follow
+   b2kSetVelocity tRef, 200, -200
+   b2kPlayerRespawn 630, 470
+   stStep 2
+   stAssert "respawn moved the player (x " & round(stX(tRef)) & " ~ 630)", (abs(stX(tRef) - 630) < 30)
+   stAssert "respawn in the ladder zone, not water", \
+         (b2kPlayerInLadder() is true and b2kPlayerInWater() is false)
+   stAssert "respawn zeroed the horizontal speed (vx " & round(stVX(tRef)) & ")", \
+         (abs(stVX(tRef)) < 60)
+end stTestPlayerHelpers
+
+-- b2kSheetPersist: a loaded sheet survives b2kTeardown (so a multi-level
+-- game loads its atlases ONCE), an identical reload is a no-op, and the
+-- explicit b2kSheetsWipe still purges it.
+command stTestSheetPersist
+   local tN
+   stNewWorld "sheets: persist across teardown + idempotent reload"
+   b2kSheetPersist true
+   if there is an image "st_sheetsrc" then delete image "st_sheetsrc"
+   if there is an image "st_sheetsrc2" then delete image "st_sheetsrc2"
+   create image "st_sheetsrc"
+   set the visible of image "st_sheetsrc" to false
+   set the rect of image "st_sheetsrc" to 0, 0, 32, 16
+   b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc", 16, 16
+   put the result into tN
+   stAssert "grid sheet loaded with 2 frames (got " & tN & ")", (tN is 2)
+   stAssert "frame 1 present before teardown", (b2kSheetHasFrame("stpersist", 1) is true)
+   b2kTeardown
+   stAssert "sheet SURVIVES b2kTeardown (persist on)", (b2kSheetHasFrame("stpersist", 1) is true)
+   b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc", 16, 16
+   put the result into tN
+   stAssert "identical reload is a cache no-op (still 2 frames, got " & tN & ")", (tN is 2)
+   -- the idempotency key includes the grid args: a DIFFERENT grid under the
+   -- same image must rebuild, not silently keep the old grid
+   b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc", 32, 16
+   put the result into tN
+   stAssert "a changed grid rebuilds (1 frame now, got " & tN & ")", (tN is 1)
+   -- a DIFFERENT source under the same name must rebuild too
+   create image "st_sheetsrc2"
+   set the visible of image "st_sheetsrc2" to false
+   set the rect of image "st_sheetsrc2" to 0, 0, 48, 16
+   b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc2", 16, 16
+   put the result into tN
+   stAssert "a changed source rebuilds (3 frames now, got " & tN & ")", (tN is 3)
+   b2kSheetsWipe
+   stAssert "b2kSheetsWipe still purges the persisted sheet", (b2kSheetHasFrame("stpersist", 1) is false)
+   b2kSheetPersist false   -- restore the default so the later tests teardown clean
+   if there is an image "st_sheetsrc" then delete image "st_sheetsrc"
+   if there is an image "st_sheetsrc2" then delete image "st_sheetsrc2"
+end stTestSheetPersist
+
 -- =====================================================================
 -- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py
 -- - do not edit between the sentinels)
@@ -1359,6 +1614,8 @@ local sSheetFlip     -- sheet -> frame key -> mirrored image id (lazy)
 local sSheetData     -- sheet -> cached source imageData (freed on teardown)
 local sSheetAlpha    -- sheet -> cached source alphaData
 local sSheetScale    -- sheet -> display scale factor (default 1; engine-resampled at slice time)
+local sSheetPath     -- sheet -> its source path/ref (the idempotent-reload + reuse key)
+local sSheetKeep     -- true = sheets survive b2kTeardown (b2kSheetPersist); assets, like sounds
 local sAnimList      -- "sheet|anim" -> CR list of frame keys
 local sAnimFPS       -- "sheet|anim" -> frames per second
 local sAnimLoop      -- "sheet|anim" -> true/false
@@ -1440,6 +1697,31 @@ local sPlayClock     -- the player's SIM-TIME clock: summed frame ms.
                      -- on slow machines (90ms = fewer frames); sim time
                      -- keeps them frame-coherent everywhere and makes
                      -- hand-stepped tests deterministic.
+-- Wave 5 actions: double-jump, wall-slide/jump, dash, duck capsule reshape,
+-- moving-platform carry. Each is OPT-IN through a knob whose default leaves
+-- the pre-Wave-5 controller byte-for-byte unchanged, and each idle path
+-- costs ONE compare per frame (the wall side-probe casts only while the
+-- system is on AND airborne; carry reads a velocity only while grounded).
+local sPlayAirJumps     -- extra mid-air jumps allowed (airJumps knob; 0 = none)
+local sPlayAirJumpsLeft -- air jumps remaining (reset to sPlayAirJumps on ground)
+local sPlayWallOn       -- the wall system is armed (wallJumpX or wallSlideMax > 0)
+local sPlayWallJumpX, sPlayWallJumpY, sPlayWallSlideMax -- wall tune caches
+local sPlayWall         -- airborne wall touch: -1 wall on left, 1 on right, 0 none
+local sPlayWallSliding  -- true while actively wall-sliding (drives state + anim)
+local sPlayWallLockUntil -- sim-clock through which a wall-jump owns vx (no air steer)
+local sPlayDashSpd, sPlayDashMS, sPlayDashCool -- dash tune caches
+local sPlayAirDash      -- true = dash allowed in mid-air (airDash knob; false = grounded only)
+local sPlayDash         -- true while a dash is in flight (gravity parked at 0)
+local sPlayDashEnd      -- sim-clock the dash ends
+local sPlayDashReady    -- sim-clock the next dash may start (the cooldown gate)
+local sPlayDashDir      -- dash direction (the facing captured at dash start)
+local sPlayDashGravSave -- the body's gravity scale to restore when the dash ends
+local sPlayDuckScale    -- ducked capsule height as a fraction of standing (1 = no reshape)
+local sPlayDucked       -- true while the capsule is shrunk for a crawl
+local sPlayStandH       -- the full standing capsule height in px (for the duck reshape)
+local sPlayCarry        -- true = inherit a moving platform's velocity (platformCarry knob)
+local sPlayGroundBody   -- the body handle under the grounding ray (carry reads its velocity)
+local sPlayInLad, sPlayInWat -- this frame's ladder/water zone membership (exposed by getters)
 local sSndClip       -- sound name -> audioClip short name ("b2ksnd_...")
 local sSndMute       -- true = swallow play calls (a user preference; survives teardown)
 local sSndDead       -- true after a play failure: degrade to silence, never errors
@@ -1495,7 +1777,18 @@ command b2kTeardown
    if sWorld is not empty then b2DestroyWorld sWorld
    put empty into sWorld
    b2kPlayerForget true   -- full: a teardown wipes the tuning too
-   b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   if sSheetKeep is true then
+      -- sheets are ASSETS that SURVIVE teardown (b2kSheetPersist), exactly
+      -- like sounds: clear only the sprite INSTANCES + dead viewports and
+      -- keep the sheet cache, so a level rebuild reuses it instead of
+      -- re-decoding/re-parsing/re-slicing (the costliest thing the Kit does).
+      b2kSpritesClear
+      b2kSpriteSweepOrphans true
+      put empty into sSheetData    -- the imageData cache re-derives lazily;
+      put empty into sSheetAlpha   -- free it like the full wipe would
+   else
+      b2kSheetsWipe   -- sprites first: their stored long ids include the group
+   end if
    -- sounds deliberately SURVIVE teardown: clips are tiny (KBs) and
    -- deterministic, and re-synthesis cost a fifth of a second on every
    -- reset. b2kSoundsWipe purges them when you really want them gone.
@@ -3178,6 +3471,7 @@ command b2kInputOn
    put comma into sKeysPrev
    -- starter bindings; rebind freely (these only fill empty slots)
    if sKeyActions["jump"] is empty then b2kBindAction "jump", "space"
+   if sKeyActions["dash"] is empty then b2kBindAction "dash", "shift,x"
    if sAxisNeg["moveX"] is empty then b2kBindAxis "moveX", "left,a", "right,d"
    if sAxisNeg["moveY"] is empty then b2kBindAxis "moveY", "up,w", "down,s"
 end b2kInputOn
@@ -3422,8 +3716,29 @@ end b2kFrameMS
 -- BUTTON whose icon is the current frame's image -- a frame switch is one
 -- property set, and every sprite of a sheet shares the same frame images.
 -- Mirrored (left-facing) frames are flip-clones, also made lazily.
--- Sheets persist until b2kTeardown; sprites are Kit-created controls, so
--- b2kClear removes them like everything else the Kit spawned.
+-- Sheets persist until b2kTeardown (unless b2kSheetPersist is on; see below);
+-- sprites are Kit-created controls, so b2kClear removes them like everything
+-- else the Kit spawned.
+
+-- Loaded sheets are ASSETS, not world state. By default b2kTeardown wipes
+-- them (a full reset), but a multi-LEVEL game reloads the same atlases every
+-- rebuild -- the costliest thing the Kit does (decode each PNG, parse each
+-- XML, re-slice every frame). Turn this ON and sheets SURVIVE b2kTeardown,
+-- exactly like synthesized sounds do, so they load ONCE per session: a level
+-- rebuild reuses them (an identical b2kSheetLoad/LoadAtlas is then a no-op),
+-- and re-warmed frames are already sliced. The Kit's source images are named
+-- deterministically (b2ksheet_<name>) and tagged with their file path, so a
+-- SAVED stack carries them: on reopen the load reuses the in-stack image
+-- (skipping the expensive decode) instead of re-importing from disk. Call
+-- b2kSheetsWipe to force a clean reload (e.g. after the user picks a new
+-- asset folder). OFF by default, so single-shot examples are unchanged.
+command b2kSheetPersist pFlag
+   put (pFlag is not false) into sSheetKeep
+end b2kSheetPersist
+
+function b2kSheetPersists
+   return (sSheetKeep is true)
+end b2kSheetPersists
 
 -- Register an image FILE as a uniform grid of pFW x pFH frames, numbered
 -- 1..N left-to-right, top-to-bottom. Reports the frame count. Sheets that
@@ -3432,10 +3747,15 @@ end b2kFrameMS
 -- NO grid and name regions yourself with b2kSheetAddFrame -- the path for
 -- packed sheets that have no Kenney-style XML.
 command b2kSheetLoad pName, pPath, pFW, pFH, pCount, pMargin, pSpacing
-   local tRef
+   local tRef, tSig
+   put pPath & "|" & pFW & "|" & pFH & "|" & pCount & "|" & pMargin & "|" & pSpacing into tSig
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tSig then
+      return the number of lines of sSheetKeys[pName]   -- already loaded (same file+grid): reuse it
+   end if
    put b2kSheetSourceFromFile(pName, pPath) into tRef
    if tRef is empty then return 0
    b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
+   put tSig into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoad
 
@@ -3443,10 +3763,17 @@ end b2kSheetLoad
 -- grid sheet. The image is used in place and never deleted by the Kit.
 -- Same grid arguments as b2kSheetLoad (margin/spacing; 0x0 = no grid).
 command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount, pMargin, pSpacing
+   local tRef, tSig
+   put the long id of pImgRef into tRef
+   put tRef & "|" & pFW & "|" & pFH & "|" & pCount & "|" & pMargin & "|" & pSpacing into tSig
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tSig then
+      return the number of lines of sSheetKeys[pName]   -- already loaded (same image+grid): reuse it
+   end if
    b2kSheetForget pName
-   put the long id of pImgRef into sSheetSrc[pName]
+   put tRef into sSheetSrc[pName]
    put false into sSheetOwned[pName]
    b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
+   put tSig into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetFromImage
 
@@ -3495,11 +3822,15 @@ end b2kSheetAddFrame
 -- the Kenney pack format, like Spritesheets/ in this repo). Frames are
 -- addressed BY NAME. pXmlPath defaults to the png path with ".xml".
 command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
-   local tRef, tXml, tLine, tNm, tX, tY, tW, tH
+   local tRef, tXml, tLine, tNm, tX, tY, tW, tH, tSig
    if pXmlPath is empty then
       put pPngPath into pXmlPath
       set the itemDelimiter to "."
       put "xml" into item -1 of pXmlPath
+   end if
+   put pPngPath & "|" & pXmlPath into tSig
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tSig then
+      return the number of lines of sSheetKeys[pName]   -- already loaded (same png+xml): reuse it
    end if
    put URL ("file:" & pXmlPath) into tXml
    if tXml is empty then put URL ("binfile:" & pXmlPath) into tXml
@@ -3521,6 +3852,7 @@ command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
       end if
    end repeat
    if the last char of sSheetKeys[pName] is cr then delete the last char of sSheetKeys[pName]
+   put tSig into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoadAtlas
 
@@ -3929,6 +4261,7 @@ command b2kSheetForget pName
    delete variable sSheetData[pName]
    delete variable sSheetAlpha[pName]
    delete variable sSheetScale[pName]
+   delete variable sSheetPath[pName]
    repeat for each key tKey in sAnimList
       if char 1 to (the number of chars of pName) + 1 of tKey is pName & "|" then
          delete variable sAnimList[tKey]
@@ -3953,6 +4286,7 @@ command b2kSheetsWipe
    put empty into sSheetData
    put empty into sSheetAlpha
    put empty into sSheetScale
+   put empty into sSheetPath
    put empty into sAnimList
    put empty into sAnimFPS
    put empty into sAnimLoop
@@ -3964,7 +4298,7 @@ end b2kSheetsWipe
 -- script is pasted in), but the controls persist -- registry cleanup can't
 -- see them, so a reopened stack would show ghost sprites frozen on their
 -- last frame. Swept by name prefix on every teardown.
-command b2kSpriteSweepOrphans
+command b2kSpriteSweepOrphans pKeepAssets
    local tAgain, i, tName, tHit
    put true into tAgain
    repeat while tAgain
@@ -3983,9 +4317,14 @@ command b2kSpriteSweepOrphans
          end if
          put false into tHit
          if char 1 to 7 of tName is "b2kspr_" then put true into tHit
-         if char 1 to 6 of tName is "b2kfr_" then put true into tHit
-         if char 1 to 6 of tName is "b2kfl_" then put true into tHit
-         if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         -- sheet ASSET images (sources + sliced frames + flips) are KEPT
+         -- when persisting (b2kSheetPersist); only sprite instances + dead
+         -- viewports go, so the sheet cache survives the teardown
+         if pKeepAssets is not true then
+            if char 1 to 6 of tName is "b2kfr_" then put true into tHit
+            if char 1 to 6 of tName is "b2kfl_" then put true into tHit
+            if char 1 to 9 of tName is "b2ksheet_" then put true into tHit
+         end if
          if tHit then
             delete control i of this card
             put true into tAgain
@@ -4006,11 +4345,21 @@ end b2kSpriteSweepOrphans
 -- lockLoc only AFTER the content, so the control has auto-sized first.
 function b2kSheetSourceFromFile pName, pPath
    local tImg, tData
+   put "b2ksheet_" & pName into tImg
+   -- REUSE: a source image already decoded for this exact file -- earlier
+   -- this session, or carried inside a SAVED stack (b2kSheetPersist) -- is
+   -- the cache. Adopt it in place and skip the costly binfile decode.
+   if sSheetKeep is true and there is an image tImg \
+         and the uB2kSrcPath of image tImg is pPath and the width of image tImg >= 2 then
+      set the lockLoc of image tImg to true
+      put the long id of image tImg into sSheetSrc[pName]
+      put true into sSheetOwned[pName]
+      return sSheetSrc[pName]
+   end if
    b2kSheetForget pName
    if there is no file pPath then return empty
    put URL ("binfile:" & pPath) into tData
    if tData is empty then return empty
-   put "b2ksheet_" & pName into tImg
    if there is an image tImg then delete image tImg
    create image tImg
    set the visible of it to false
@@ -4025,6 +4374,7 @@ function b2kSheetSourceFromFile pName, pPath
       return empty
    end if
    set the lockLoc of image tImg to true
+   set the uB2kSrcPath of image tImg to pPath   -- the cache key for next time
    put the long id of image tImg into sSheetSrc[pName]
    put true into sSheetOwned[pName]
    return sSheetSrc[pName]
@@ -4070,11 +4420,49 @@ end b2kXmlAttr
 
 -- Internal: make sure a frame's sliced image exists (lazy, cached). The
 -- source pixels are fetched once per sheet and kept until teardown.
+-- Internal: the 1-based position of a frame key in its sheet's key list --
+-- a STABLE id (load order is deterministic) used to name sliced frames so a
+-- SAVED stack can find and reuse them (b2kSheetPersist), never duplicating.
+function b2kSheetKeyIndex pSheet, pKey
+   local i, tK
+   put 0 into i
+   repeat for each line tK in sSheetKeys[pSheet]
+      add 1 to i
+      if tK is pKey then return i
+   end repeat
+   return 0
+end b2kSheetKeyIndex
+
+-- Internal: a slice's provenance stamp. A saved frame image is only safe to
+-- reuse if it was baked from the CURRENT source (sSheetPath already encodes
+-- the file/image + grid/xml args) at the CURRENT scale. Stamped onto each
+-- slice as uB2kSig and re-checked on reuse, so a reopened stack that reuses a
+-- sheet NAME for different art, or changes a sheet's scale, re-slices instead
+-- of adopting stale pixels (the name alone is not a safe identity).
+function b2kSheetSliceSig pSheet
+   return sSheetPath[pSheet] & "|" & b2kNumberOr(sSheetScale[pSheet], 1)
+end b2kSheetSliceSig
+
 command b2kSheetEnsureIcon pSheet, pKey
    local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName, tScale, tW2, tH2
    if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
    put sSheetRegion[pSheet][pKey] into tRegion
    if tRegion is empty then exit b2kSheetEnsureIcon
+   -- Frame image name. Persisting: a DETERMINISTIC name (b2kfr_<sheet>_<n>)
+   -- lets a slice carried in a SAVED stack be found and reused -- but only if
+   -- its uB2kSig still matches (baked from the current source at the current
+   -- scale), so a reused sheet name or a changed scale re-slices rather than
+   -- show stale pixels. Off the persist path: a fresh unique name (no key
+   -- scan; the slice is wiped on teardown anyway), exactly as before.
+   if sSheetKeep is true then
+      put "b2kfr_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
+      if there is an image tName and the uB2kSig of image tName is b2kSheetSliceSig(pSheet) then
+         put the id of image tName into sSheetIcon[pSheet][pKey]
+         exit b2kSheetEnsureIcon
+      end if
+   else
+      put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
+   end if
    if sSheetData[pSheet] is empty then
       put the imageData of sSheetSrc[pSheet] into sSheetData[pSheet]
       put the alphaData of sSheetSrc[pSheet] into sSheetAlpha[pSheet]
@@ -4100,7 +4488,7 @@ command b2kSheetEnsureIcon pSheet, pKey
    if the number of bytes in tFA is not tW * tH then
       put empty into tFA   -- no usable alpha: ship the frame fully opaque
    end if
-   put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
+   if there is an image tName then delete image tName   -- never duplicate a deterministic slice
    create image tName
    set the visible of it to false
    set the lockLoc of it to true
@@ -4121,6 +4509,7 @@ command b2kSheetEnsureIcon pSheet, pKey
       set the imageData of image tName to tFD
       if tFA is not empty then set the alphaData of image tName to tFA
    end if
+   if sSheetKeep is true then set the uB2kSig of image tName to b2kSheetSliceSig(pSheet)
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 
@@ -4129,14 +4518,24 @@ end b2kSheetEnsureIcon
 command b2kSheetEnsureFlip pSheet, pKey
    local tName
    if sSheetFlip[pSheet][pKey] is not empty then exit b2kSheetEnsureFlip
+   if sSheetKeep is true then
+      put "b2kfl_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
+      if there is an image tName and the uB2kSig of image tName is b2kSheetSliceSig(pSheet) then
+         put the id of image tName into sSheetFlip[pSheet][pKey]   -- reuse a saved flip
+         exit b2kSheetEnsureFlip
+      end if
+   else
+      put "b2kfl_" & the milliseconds & "_" & random(1000000) into tName
+   end if
    b2kSheetEnsureIcon pSheet, pKey
    if sSheetIcon[pSheet][pKey] is empty then exit b2kSheetEnsureFlip
    try
+      if there is an image tName then delete image tName
       clone image id sSheetIcon[pSheet][pKey]
-      put "b2kfl_" & the milliseconds & "_" & random(1000000) into tName
       set the name of it to tName
       set the visible of it to false
       flip image tName horizontal
+      if sSheetKeep is true then set the uB2kSig of image tName to b2kSheetSliceSig(pSheet)
       put the id of image tName into sSheetFlip[pSheet][pKey]
    catch tErr
       put sSheetIcon[pSheet][pKey] into sSheetFlip[pSheet][pKey]
@@ -4327,6 +4726,7 @@ command b2kPlayerAttach pCtrl
    b2kSetSleepEnabled tRef, false   -- a player must always respond
    put (the width of tRef) / 2 into sPlayHalfW
    put (the height of tRef) / 2 into sPlayHalfH
+   put (the height of tRef) into sPlayStandH   -- full height, for the duck reshape
    put "idle" into sPlayState
    put 1 into sPlayFacing
    put false into sPlayGrounded
@@ -4356,6 +4756,20 @@ command b2kPlayerAttach pCtrl
    put 0 into sPlayHurtHalf
    put 0 into sPlayHurtLand
    put 0 into sPlayInvulnUntil
+   -- Wave 5 state starts clean (the knobs decide whether each is reachable)
+   put 0 into sPlayAirJumpsLeft
+   put 0 into sPlayWall
+   put false into sPlayWallSliding
+   put 0 into sPlayWallLockUntil
+   put false into sPlayDash
+   put 0 into sPlayDashEnd
+   put 0 into sPlayDashReady
+   put 0 into sPlayDashDir
+   put empty into sPlayDashGravSave
+   put false into sPlayDucked
+   put empty into sPlayGroundBody
+   put false into sPlayInLad
+   put false into sPlayInWat
    if sPlayLadN is empty then put 0 into sPlayLadN
    b2kPlayerTuneCache   -- bake the knobs + probe geometry for the tick
    b2kPlayerResolveArt
@@ -4385,7 +4799,12 @@ end b2kPlayerResolveArt
 -- dropMs (drop-through window), climbSpeed (ladder px/s), swimSpeed/
 -- swimJump (water px/s + stroke), swimGravity/swimMaxFall (buoyancy),
 -- hurtPopX/hurtPopY (knockback launch px/s), hurtMs (control-off span),
--- invulnMs (post-hurt mercy). Settable any time, before or after the
+-- invulnMs (post-hurt mercy). Wave 5, all OPT-IN (default = off): airJumps
+-- (extra mid-air jumps; 1 = double-jump), wallJumpX/wallJumpY (wall-jump
+-- launch px/s) + wallSlideMax (capped slide fall px/s), dashSpeed/dashMs/
+-- dashCooldownMs (the dash; bind the "dash" action), duckScale (ducked
+-- capsule height as a fraction of standing, <1 to crawl), platformCarry
+-- (1 = ride moving platforms). Settable any time, before or after the
 -- player exists; unknown keys are stored verbatim for your own use.
 command b2kPlayerSet pKey, pValue
    put pValue into sPlayTune[toLower(pKey)]
@@ -4413,6 +4832,18 @@ command b2kPlayerTuneCache
    put b2kPlayerGet("hurtPopY") into sPlayHurtPopY
    put b2kPlayerGet("hurtMs") into sPlayHurtMS
    put b2kPlayerGet("invulnMs") into sPlayInvulnMS
+   -- Wave 5 knob caches + the one-compare gates the tick reads
+   put b2kPlayerGet("airJumps") into sPlayAirJumps
+   put b2kPlayerGet("wallJumpX") into sPlayWallJumpX
+   put b2kPlayerGet("wallJumpY") into sPlayWallJumpY
+   put b2kPlayerGet("wallSlideMax") into sPlayWallSlideMax
+   put (sPlayWallJumpX > 0 or sPlayWallSlideMax > 0) into sPlayWallOn
+   put b2kPlayerGet("dashSpeed") into sPlayDashSpd
+   put b2kPlayerGet("dashMs") into sPlayDashMS
+   put b2kPlayerGet("dashCooldownMs") into sPlayDashCool
+   put (b2kPlayerGet("airDash") is not 0) into sPlayAirDash
+   put b2kPlayerGet("duckScale") into sPlayDuckScale
+   put (b2kPlayerGet("platformCarry") is not 0) into sPlayCarry
    put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into sPlayCosSlope
    if sPlayHalfW is not empty and sPlayHalfW > 0 then
       put sPlayHalfH + 4 into sPlayReach
@@ -4471,6 +4902,30 @@ function b2kPlayerDefault pKey
          return 700
       case "invulnms"
          return 900
+      -- Wave 5 (all OPT-IN: these defaults disable the feature, so an
+      -- untouched controller behaves exactly as it did before Wave 5)
+      case "airjumps"
+         return 0          -- extra mid-air jumps (1 = double-jump)
+      case "walljumpx"
+         return 0          -- away-from-wall launch px/s (0 = wall system off)
+      case "walljumpy"
+         return 0          -- up launch off a wall (0 = fall back to jumpSpeed)
+      case "wallslidemax"
+         return 0          -- capped fall px/s while hugging a wall (0 = no slide)
+      case "dashspeed"
+         return 0          -- dash px/s (0 = dash off)
+      case "dashms"
+         return 160        -- dash duration
+      case "dashcooldownms"
+         return 500        -- minimum gap between dashes
+      case "airdash"
+         return 1          -- 1 = dash works mid-air too; 0 = dash only when grounded
+      case "duckscale"
+         return 1          -- ducked capsule height / standing height (1 = no reshape)
+      case "platformcarry"
+         return 0          -- 1 = inherit a moving platform's velocity (opt-in: it
+                           -- costs 2 reads/grounded-frame and changes how a player
+                           -- rides any kinematic body), 0 = off
    end switch
    return empty
 end b2kPlayerDefault
@@ -4483,8 +4938,9 @@ end b2kPlayerDefault
 -- Wave 2 slots (all optional, so old five-argument calls keep working):
 -- pDuck falls back to the idle pose, pClimb and pHurt to the jump pose;
 -- the Wave 4 pSwim falls back to the fall pose -- sheets without those
--- frames still read correctly.
-command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pDuck, pClimb, pHurt, pSwim
+-- frames still read correctly. Wave 5 slots: pWall (wall-slide) falls back
+-- to the fall pose, pDash falls back to the run pose.
+command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pDuck, pClimb, pHurt, pSwim, pWall, pDash
    put pIdle into sPlayAnims["idle"]
    put pRun into sPlayAnims["run"]
    put pJump into sPlayAnims["jump"]
@@ -4514,6 +4970,16 @@ command b2kPlayerAnims pIdle, pRun, pJump, pFall, pLand, pDuck, pClimb, pHurt, p
    else
       put pSwim into sPlayAnims["swim"]
    end if
+   if pWall is empty then
+      put sPlayAnims["fall"] into sPlayAnims["wallslide"]
+   else
+      put pWall into sPlayAnims["wallslide"]
+   end if
+   if pDash is empty then
+      put sPlayAnims["run"] into sPlayAnims["dash"]
+   else
+      put pDash into sPlayAnims["dash"]
+   end if
    put empty into sPlayAnimNow   -- re-assert on the next tick
    if sPlayArt is empty then b2kPlayerResolveArt
 end b2kPlayerAnims
@@ -4532,9 +4998,11 @@ function b2kPlayerOnGround
    return (sPlayGrounded is true)
 end b2kPlayerOnGround
 
--- idle | run | jump | fall | duck | climb | hurt | swim, plus "land" for
--- exactly one frame on touch-down from jump/fall (dust puffs, landing
--- sounds). A drop-through renders as "fall". Empty = no player.
+-- idle | run | jump | fall | duck | climb | hurt | swim | wallslide | dash,
+-- plus "land" for exactly one frame on touch-down from jump/fall (dust
+-- puffs, landing sounds). A drop-through renders as "fall". The Wave 5
+-- states (wallslide, dash) only appear when their knobs are enabled.
+-- Empty = no player.
 function b2kPlayerState
    return sPlayState
 end b2kPlayerState
@@ -4543,6 +5011,29 @@ function b2kPlayerFacing
    if sPlayFacing is -1 then return -1
    return 1
 end b2kPlayerFacing
+
+-- The capsule's CURRENT half-extents in px (the half-height drops while
+-- the player is in a reshaped duck/crawl). Head-reach logic should read
+-- these live rather than bake a constant (gotcha 28: a hitbox taller than
+-- the visible art bumps things the head never touches).
+function b2kPlayerHalfH
+   return b2kNumberOr(sPlayHalfH, 0)
+end b2kPlayerHalfH
+
+function b2kPlayerHalfW
+   return b2kNumberOr(sPlayHalfW, 0)
+end b2kPlayerHalfW
+
+-- This frame's ladder / water zone membership (the controller computes
+-- these every tick anyway -- read them for "press UP to climb" prompts,
+-- splash effects, breath meters, without recomputing the rects yourself).
+function b2kPlayerInLadder
+   return (sPlayInLad is true)
+end b2kPlayerInLadder
+
+function b2kPlayerInWater
+   return (sPlayInWat is true)
+end b2kPlayerInWater
 
 -- Programmatic jump (springs, double-jump powerups): the same launch as a
 -- pressed jump but WITHOUT the grounded/coyote gate -- the caller decides
@@ -4613,6 +5104,7 @@ command b2kPlayerHurt pFromX
    if sPlayControl is not true then exit b2kPlayerHurt   -- a cutscene owns the body
    if sPlayClimb is true then b2kPlayerClimbEnd sBody[sPlayRef]
    if sPlaySwim is true then b2kPlayerSwimEnd sBody[sPlayRef]
+   if sPlayDash is true then b2kPlayerDashEnd sBody[sPlayRef]
    if pFromX is a number then
       if pFromX > sPlayPX then
          put -1 into tDir
@@ -4660,9 +5152,49 @@ command b2kPlayerControl pFlag
       put false into sPlayHurt
       put 0 into sPlayHurtLand
    end if
+   -- a dash parks gravity at 0 and is ended only by its own tick, which
+   -- stops running when control goes off -- so end it here or the parked
+   -- gravity (and the held vy) leak into the cutscene.
+   if sPlayControl is not true and sPlayDash is true \
+         and sPlayRef is not empty and sBody[sPlayRef] is not empty then
+      b2kPlayerDashEnd sBody[sPlayRef]
+   end if
    -- returning control must re-assert the state anim over any manual pose
    if sPlayControl then put empty into sPlayAnimNow
 end b2kPlayerControl
+
+-- Teleport the player to a screen-px point and reset it to a clean
+-- standing idle: velocity zeroed; the jump/hurt/dash/climb/swim/drop/duck
+-- state cleared; the air and air-jump budgets refreshed. This is the
+-- respawn most games hand-roll (b2kMoveTo + b2kSetVelocity + clearing a
+-- pile of flags) in one call. Tuning and zones are kept (world/config
+-- state). Empty pX/pY reuse the current centre (an in-place reset).
+command b2kPlayerRespawn pX, pY
+   local tB
+   if sPlayRef is empty or sBody[sPlayRef] is empty then exit b2kPlayerRespawn
+   put sBody[sPlayRef] into tB
+   if sPlayClimb is true then b2kPlayerClimbEnd tB
+   if sPlaySwim is true then b2kPlayerSwimEnd tB
+   if sPlayDash is true then b2kPlayerDashEnd tB
+   if sPlayDropUntil is not empty and sPlayDropUntil > 0 then b2kPlayerDropRestore
+   if sPlayDucked is true then b2kPlayerStandUp
+   put b2kNumberOr(pX, sPlayPX) into pX
+   put b2kNumberOr(pY, sPlayPY) into pY
+   b2kMoveTo sPlayRef, pX, pY
+   b2kSetVelocity sPlayRef, 0, 0
+   put true into sPlayControl
+   put false into sPlayJumping
+   put false into sPlayHurt
+   put 0 into sPlayHurtLand
+   put 0 into sPlayInvulnUntil
+   put false into sPlayGrounded
+   put 0 into sPlayAir
+   put 0 into sPlayWallLockUntil
+   put false into sPlayWallSliding
+   put sPlayAirJumps into sPlayAirJumpsLeft
+   put "idle" into sPlayState
+   put empty into sPlayAnimNow   -- re-assert the idle pose next tick
+end b2kPlayerRespawn
 
 -- Tear down the controller, tuning included. The body and sprite remain
 -- yours: remove them with b2kRemove / b2kSpriteRemove as usual.
@@ -4680,6 +5212,9 @@ command b2kPlayerForget pFull
    end if
    if sPlaySwim is true and sPlayRef is not empty and sBody[sPlayRef] is not empty then
       b2kPlayerSwimEnd sBody[sPlayRef]
+   end if
+   if sPlayDash is true and sPlayRef is not empty and sBody[sPlayRef] is not empty then
+      b2kPlayerDashEnd sBody[sPlayRef]
    end if
    if sPlayDropUntil is not empty and sPlayDropUntil > 0 then b2kPlayerDropRestore
    put empty into sPlayRef
@@ -4710,6 +5245,21 @@ command b2kPlayerForget pFull
    put 0 into sPlayHurtHalf
    put 0 into sPlayHurtLand
    put 0 into sPlayInvulnUntil
+   -- Wave 5 state (the body keeps any reshaped duck size -- it is yours
+   -- now; b2kClear removes it, teardown removes everything)
+   put 0 into sPlayAirJumpsLeft
+   put 0 into sPlayWall
+   put false into sPlayWallSliding
+   put 0 into sPlayWallLockUntil
+   put false into sPlayDash
+   put 0 into sPlayDashEnd
+   put 0 into sPlayDashReady
+   put 0 into sPlayDashDir
+   put empty into sPlayDashGravSave
+   put false into sPlayDucked
+   put empty into sPlayGroundBody
+   put false into sPlayInLad
+   put false into sPlayInWat
    put 0 into sPlayLadN
    put empty into sPlayLadL
    put empty into sPlayLadT
@@ -4737,6 +5287,7 @@ command b2kPlayerProbe pBody, pVY
    put false into sPlayGrounded
    put false into sPlayOnOneWay
    put false into sPlayDropSeen
+   put empty into sPlayGroundBody
    set the itemDelimiter to comma
    -- raw reads with the caller's body handle: the probe runs every
    -- frame, so it skips the ref->body lookup and the "x,y" string pack.
@@ -4762,6 +5313,7 @@ command b2kPlayerProbe pBody, pVY
             put true into sPlayOnOneWay   -- standing on a chain: drop eligible
          end if
          put true into sPlayGrounded
+         put sRayBodyH into sPlayGroundBody  -- the platform under us (carry)
          put sRayNX into sPlayNormX          -- flat vs slope, for ground-snap
          put sPlayClock into sPlayGroundMS   -- the sim clock, not wall time
          exit b2kPlayerProbe
@@ -4833,6 +5385,93 @@ command b2kPlayerDropRestore
    put empty into sPlayDropMask
 end b2kPlayerDropRestore
 
+-- Internal (Wave 5): enter the dash -- gravity parks at 0 (saved/restored
+-- like the climb) so the burst is a flat horizontal zip; the tick holds vx
+-- at dashSpeed for dashMs, then b2kPlayerDashEnd restores gravity. The
+-- cooldown (dashReady) gates the next start.
+command b2kPlayerDashStart pBody
+   if sPlayDash is true then exit b2kPlayerDashStart
+   put b2BodyGravityScale(pBody) into sPlayDashGravSave
+   b2SetGravityScale pBody, 0
+   put true into sPlayDash
+   put sPlayFacing into sPlayDashDir
+   put sPlayClock + sPlayDashMS into sPlayDashEnd
+   put sPlayClock + sPlayDashMS + sPlayDashCool into sPlayDashReady
+   put false into sPlayJumping
+end b2kPlayerDashStart
+
+command b2kPlayerDashEnd pBody
+   if sPlayDash is not true then exit b2kPlayerDashEnd
+   b2SetGravityScale pBody, b2kNumberOr(sPlayDashGravSave, 1)
+   put empty into sPlayDashGravSave
+   put false into sPlayDash
+end b2kPlayerDashEnd
+
+-- Internal (Wave 5): a single horizontal ray toward the input/facing side.
+-- A near-vertical hit within a capsule-width is a wall -> sPlayWall = the
+-- side (-1 left, 1 right; 0 = none). Runs only while the wall system is on
+-- AND the player is airborne, so the steady-state budget is untouched.
+command b2kPlayerWallProbe pBody, pAxis
+   local tDir
+   put 0 into sPlayWall
+   if pAxis is 0 then
+      put sPlayFacing into tDir
+   else
+      put pAxis into tDir
+   end if
+   set the itemDelimiter to comma
+   get b2kRayHit(sPlayPX, sPlayPY, sPlayPX + tDir * (sPlayHalfW + 4), sPlayPY)
+   if sRayNX is not empty and abs(sRayNX) > 0.7 and abs(sRayNY) < 0.6 then
+      put tDir into sPlayWall
+   end if
+end b2kPlayerWallProbe
+
+-- Internal (Wave 5): enter/leave the reshaped crawl (only when duckScale
+-- < 1). Entering shrinks the capsule FEET-ANCHORED (drop the centre by
+-- half the height lost so the feet stay planted); standing waits for
+-- headroom (a ray up from the crouched top), so a low ceiling keeps you
+-- crawling. b2kReshape resets the material, so friction/bounce are re-set.
+command b2kPlayerDuckSet pWantDuck
+   local tNewH, tShift, tNeed
+   if sPlayRef is empty then exit b2kPlayerDuckSet
+   if pWantDuck is true then
+      if sPlayDucked is true or sPlayDuckScale >= 1 then exit b2kPlayerDuckSet
+      put max(8, round(sPlayStandH * sPlayDuckScale)) into tNewH
+      put (sPlayStandH - tNewH) / 2 into tShift
+      set the height of sPlayRef to tNewH
+      b2kMoveTo sPlayRef, sPlayPX, sPlayPY + tShift
+      b2kReshape sPlayRef, "capsule"
+      b2kSetFriction sPlayRef, 0.08
+      b2kSetBounce sPlayRef, 0
+      put tNewH / 2 into sPlayHalfH
+      put true into sPlayDucked
+      b2kPlayerTuneCache   -- the probe reach follows the new (shorter) capsule
+   else
+      if sPlayDucked is not true then exit b2kPlayerDuckSet
+      put sPlayStandH - (the height of sPlayRef) into tNeed
+      set the itemDelimiter to comma
+      get b2kRayHit(sPlayPX, sPlayPY - sPlayHalfH, sPlayPX, sPlayPY - sPlayHalfH - tNeed - 2)
+      if sRayNY is not empty then exit b2kPlayerDuckSet   -- a ceiling: stay crawling
+      b2kPlayerStandUp
+   end if
+end b2kPlayerDuckSet
+
+-- Internal (Wave 5): restore the capsule to standing height, feet planted.
+-- Used by the duck exit (with headroom) and by b2kPlayerRespawn (forced).
+command b2kPlayerStandUp
+   local tShift
+   if sPlayDucked is not true or sPlayRef is empty then exit b2kPlayerStandUp
+   put (sPlayStandH - (the height of sPlayRef)) / 2 into tShift
+   set the height of sPlayRef to sPlayStandH
+   b2kMoveTo sPlayRef, sPlayPX, sPlayPY - tShift
+   b2kReshape sPlayRef, "capsule"
+   b2kSetFriction sPlayRef, 0.08
+   b2kSetBounce sPlayRef, 0
+   put sPlayStandH / 2 into sPlayHalfH
+   put false into sPlayDucked
+   b2kPlayerTuneCache
+end b2kPlayerStandUp
+
 -- Internal: the per-frame controller. Loop order: input -> PLAYER ->
 -- sprites -> camera, so it reads this frame's edges and the sprite tick
 -- applies the anim it picks. Exits in one compare when unused. The
@@ -4841,6 +5480,7 @@ end b2kPlayerDropRestore
 command b2kPlayerTick
    local tNow, tDT, tB, tVX, tVY, tAxis, tAxisY, tTarget, tAcc, tStep
    local tPrevState, tWrite, tInZone, tDuck, tClimbJump, i, tInWater
+   local tOnLift, tPVX, tPVY   -- Wave 5: platform-carry scratch
    if sPlayRef is empty then exit b2kPlayerTick
    put sBody[sPlayRef] into tB
    if tB is empty then exit b2kPlayerTick
@@ -4857,6 +5497,9 @@ command b2kPlayerTick
    put b2BodyVX(tB) * sScale into tVX
    put 0 - (b2BodyVY(tB) * sScale) into tVY
    b2kPlayerProbe tB, tVY
+   -- a touch of ground refills the air-jump budget (Wave 5; idle when
+   -- airJumps is 0, the default)
+   if sPlayGrounded is true then put sPlayAirJumps into sPlayAirJumpsLeft
    -- the drop window's bookkeeping runs UNGATED (a hurt or control-off
    -- mid-drop must never strand the mask without its one-way bit). The
    -- mask returns when the clock has run AND the capsule has cleared the
@@ -4884,6 +5527,7 @@ command b2kPlayerTick
    end if
    put false into tWrite
    put false into tDuck
+   put false into tOnLift
    if sPlayControl is true and sPlayHurt is not true then
       put sFrameMS / 1000 into tDT
       if tDT <= 0 then put 1 / 60 into tDT
@@ -4919,6 +5563,34 @@ command b2kPlayerTick
             end if
          end repeat
       end if
+      put tInZone into sPlayInLad   -- exposed by b2kPlayerInLadder/InWater
+      put tInWater into sPlayInWat
+      -- DASH (Wave 5): a flat horizontal burst that overrides normal
+      -- movement for dashMs, then hands back. Idle in one compare when
+      -- dashSpeed is 0; yields to climb/swim (it ends on entering either).
+      if sPlayDash is true then
+         if tNow >= sPlayDashEnd or tInWater is true or tInZone is true then
+            b2kPlayerDashEnd tB
+         else
+            put sPlayDashDir into sPlayFacing   -- face the dash, not late input
+            put sPlayDashDir * sPlayDashSpd into tVX
+            put 0 into tVY
+            put true into tWrite
+         end if
+      end if
+      if sPlayDash is not true and sPlayDashSpd > 0 and tNow >= sPlayDashReady \
+            and (sPlayAirDash is true or sPlayGrounded is true) \
+            and sPlayClimb is not true and sPlaySwim is not true \
+            and tInZone is not true and tInWater is not true \
+            and b2kActionPressed("dash") then
+         b2kPlayerDashStart tB
+         put sPlayDashDir * sPlayDashSpd into tVX
+         put 0 into tVY
+         put true into tWrite
+      end if
+      -- everything below (climb/swim entry + the three movement modes) is
+      -- suspended while a dash owns the body
+      if sPlayDash is not true then
       if sPlayClimb is not true and sPlaySwim is not true and tInZone is true then
          -- enter: UP any time in-zone; DOWN only while AIRBORNE (a
          -- grounded DOWN is a duck -- or a drop-through on a chain)
@@ -4992,25 +5664,59 @@ command b2kPlayerTick
       if sPlayClimb is not true and sPlaySwim is not true then
          -- horizontal: accelerate vx toward axis * moveSpeed (air = airAccel)
          put tAxis * sPlayMoveSpd into tTarget
-         -- DUCK: down on the ground crouches and brakes to a stop at
-         -- the normal decel (the hitbox keeps its size this wave)
+         -- DUCK: down on the ground. With duckScale < 1 the capsule
+         -- reshapes to a CRAWL (slow movement, shorter hitbox -- so you
+         -- can slip under a low gap); otherwise the Wave 2 duck brakes to
+         -- a stop with the hitbox unchanged.
          if tAxisY is 1 and sPlayGrounded is true then
             put true into tDuck
-            put 0 into tTarget
+            if sPlayDuckScale < 1 then
+               b2kPlayerDuckSet true
+               put tAxis * sPlayMoveSpd * 0.5 into tTarget   -- crawl, not brake
+            else
+               put 0 into tTarget
+            end if
+         end if
+         if tDuck is not true and sPlayDucked is true then b2kPlayerDuckSet false
+         -- PLATFORM CARRY (Wave 5): inherit the ground body's velocity so a
+         -- moving platform carries you (static ground reads 0 -> no effect).
+         -- A vertical lift's carry exempts the ground-snap below.
+         if sPlayCarry is true and sPlayGrounded is true and sPlayGroundBody is not empty then
+            put b2BodyVX(sPlayGroundBody) * sScale into tPVX
+            put 0 - (b2BodyVY(sPlayGroundBody) * sScale) into tPVY
+            add tPVX to tTarget
+            if tPVY is not 0 and sPlayJumping is not true then
+               put tPVY into tVY
+               put true into tOnLift
+            end if
          end if
          if sPlayGrounded then
             put sPlayAccelG into tAcc
          else
             put sPlayAccelA into tAcc
          end if
-         put tAcc * tDT into tStep
-         if tVX < tTarget then
-            put min(tTarget, tVX + tStep) into tVX
-         else
-            put max(tTarget, tVX - tStep) into tVX
+         -- a wall-jump owns vx briefly (sPlayWallLockUntil): skip the air
+         -- steer so the away-launch carries clear before control resumes
+         if tNow >= sPlayWallLockUntil then
+            put tAcc * tDT into tStep
+            if tVX < tTarget then
+               put min(tTarget, tVX + tStep) into tVX
+            else
+               put max(tTarget, tVX - tStep) into tVX
+            end if
          end if
          put true into tWrite
          if tClimbJump is not true and b2kActionPressed("jump") then put tNow into sPlayPressMS
+         -- WALL slide (Wave 5; airborne only, one ray when the system is
+         -- armed): hugging a wall while falling caps the fall at wallSlideMax
+         put false into sPlayWallSliding
+         if sPlayWallOn is true and sPlayGrounded is not true then
+            b2kPlayerWallProbe tB, tAxis
+            if sPlayWall is not 0 and tAxis is sPlayWall and tVY > 0 and sPlayWallSlideMax > 0 then
+               if tVY > sPlayWallSlideMax then put sPlayWallSlideMax into tVY
+               put true into sPlayWallSliding
+            end if
+         end if
          if tDuck is true then
             -- a press while crouched: on a ONE-WAY CHAIN it drops
             -- through (dropMs of no chain collision); on solid ground
@@ -5025,14 +5731,38 @@ command b2kPlayerTick
                put 0 into sPlayPressMS
             end if
          else
-            -- jump: a buffered press fires while grounded-or-coyote
+            -- a buffered press, in priority: WALL-JUMP > ground/coyote
+            -- jump > air-jump (the double-jump). The wall and air branches
+            -- idle (their knobs are 0) unless the game enables them.
             if sPlayPressMS > 0 and tNow - sPlayPressMS <= sPlayBuffer then
-               if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= sPlayCoyote) then
-                  put 0 - sPlayJumpSpd into tVY
+               if sPlayWallOn is true and sPlayWall is not 0 \
+                     and sPlayGrounded is not true and sPlayWallJumpX > 0 then
+                  -- WALL-JUMP: up + away from the wall, with a brief steer
+                  -- lock so the launch carries before air control resumes
+                  put sPlayWallJumpY into tStep
+                  if tStep <= 0 then put sPlayJumpSpd into tStep
+                  put 0 - tStep into tVY
+                  put (0 - sPlayWall) * sPlayWallJumpX into tVX
+                  put 0 - sPlayWall into sPlayFacing
                   put true into sPlayJumping
-                  put false into sPlayGrounded   -- airborne from this frame on
-                  put 0 into sPlayGroundMS       -- consume coyote
-                  put 0 into sPlayPressMS        -- consume the buffer
+                  put tNow + 180 into sPlayWallLockUntil
+                  put 0 into sPlayPressMS
+               else
+                  if sPlayGrounded or (sPlayGroundMS > 0 and tNow - sPlayGroundMS <= sPlayCoyote) then
+                     put 0 - sPlayJumpSpd into tVY
+                     put true into sPlayJumping
+                     put false into sPlayGrounded   -- airborne from this frame on
+                     put 0 into sPlayGroundMS       -- consume coyote
+                     put 0 into sPlayPressMS        -- consume the buffer
+                  else
+                     if sPlayAirJumps > 0 and sPlayAirJumpsLeft > 0 then
+                        -- DOUBLE / AIR JUMP: airborne, no ground or coyote
+                        put 0 - sPlayJumpSpd into tVY
+                        put true into sPlayJumping
+                        subtract 1 from sPlayAirJumpsLeft
+                        put 0 into sPlayPressMS
+                     end if
+                  end if
                end if
             end if
          end if
@@ -5041,6 +5771,7 @@ command b2kPlayerTick
             put tVY * sPlayJumpCut into tVY
             put false into sPlayJumping
          end if
+      end if
       end if
    end if
    if sPlayJumping and tVY >= 0 then put false into sPlayJumping   -- apex
@@ -5067,7 +5798,7 @@ command b2kPlayerTick
    -- must use b2kPlayerJump, which sets the jump flag (b2kPlayerHurt's
    -- pop rides the same flag).
    if sPlayGrounded and sPlayJumping is not true and sPlayClimb is not true \
-         and sPlaySwim is not true and tVY < 0 and abs(sPlayNormX) < 0.1 then
+         and sPlaySwim is not true and tOnLift is not true and tVY < 0 and abs(sPlayNormX) < 0.1 then
       put 0 into tVY
       put true into tWrite
    end if
@@ -5112,11 +5843,15 @@ command b2kPlayerTick
             put 0 into sPlayAir
          else
             add 1 to sPlayAir
-            if sPlayJumping is true or sPlayAir >= 2 then
-               if tVY < 0 then
-                  put "jump" into sPlayState
-               else
-                  put "fall" into sPlayState
+            if sPlayWallSliding is true then
+               put "wallslide" into sPlayState   -- Wave 5: clinging a wall
+            else
+               if sPlayJumping is true or sPlayAir >= 2 then
+                  if tVY < 0 then
+                     put "jump" into sPlayState
+                  else
+                     put "fall" into sPlayState
+                  end if
                end if
             end if
          end if
@@ -5128,6 +5863,12 @@ command b2kPlayerTick
    -- as a long fall plus a phantom land tick.
    if sPlaySwim is true and sPlayHurt is not true then
       put "swim" into sPlayState
+      put 0 into sPlayAir
+   end if
+   -- a dash OWNS the state outright (it yields to swim/climb, so it can
+   -- never be underwater -- this safely overrides last)
+   if sPlayDash is true then
+      put "dash" into sPlayState
       put 0 into sPlayAir
    end if
    -- animations: only while controlling (manual poses own the art when
@@ -5148,7 +5889,8 @@ command b2kPlayerShowState pNow, pVX
    local tWant, tAnim, tAKey, tFPS, tFlip
    put sPlayState into tWant
    if pNow < sPlayHoldMS and tWant is not "jump" and tWant is not "fall" \
-         and tWant is not "hurt" and tWant is not "climb" and tWant is not "swim" then
+         and tWant is not "hurt" and tWant is not "climb" and tWant is not "swim" \
+         and tWant is not "wallslide" and tWant is not "dash" then
       put empty into tAnim   -- mid land-flourish: leave it playing
    else
       if tWant is "land" and sPlayAnims["land"] is empty then

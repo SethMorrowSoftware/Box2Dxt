@@ -4,6 +4,11 @@ This guide takes you from nothing to a running, draggable physics scene in
 **OpenXTalk (OXT)** — or any compatible **LiveCode 9.6.3+** IDE. It assumes no
 C toolchain: you'll use a prebuilt native library.
 
+> **Just want to *play*, not code?** If you were handed the prebuilt **platformer
+> package** (a zip with the extension, the native libraries, and a saved
+> `platformer.livecode`), open its `INSTALL.md` and follow three steps — no
+> scripting. This guide is for building your *own* scenes from scratch.
+
 - [1. Get the native library](#1-get-the-native-library)
 - [2. Load the extension](#2-load-the-extension)
 - [3. Sanity check](#3-sanity-check)
@@ -25,11 +30,11 @@ file for your platform from [`prebuilt/`](../prebuilt/) (or from the
 |----------|----------|--------------|
 | Windows x64 | `prebuilt/box2dxt-windows-x64.dll` | `box2dxt.dll` |
 | macOS (Intel/Apple Silicon) | `prebuilt/libbox2dxt-macos-universal.dylib` | `box2dxt.dylib` |
-| Linux x86-64 | `prebuilt/linux-x86_64/libbox2dxt.so` | `box2dxt.so` |
+| Linux x86-64 | `prebuilt/libbox2dxt-linux-x86_64.so` | `box2dxt.so` |
 
 OXT's loader resolves the name `box2dxt` to the **bare platform filename with no
 `lib` prefix** (the table above). This bites on Linux especially: the committed
-file is `libbox2dxt.so`, but OXT asks `dlopen` for `box2dxt.so` — leaving the
+file is `libbox2dxt-linux-x86_64.so`, but OXT asks `dlopen` for `box2dxt.so` — leaving the
 `lib` prefix on is the single most common cause of "unable to load foreign
 library".
 
@@ -116,6 +121,18 @@ you can **drag** them with the mouse. That's it — a live physics scene.
 builds static walls around the card edges, and starts the loop. From there,
 `b2kSpawnBall`/`b2kSpawnBox` create controls *and* their bodies in one go.
 
+**Try a few more things** in the Message Box while the card is open:
+
+```
+b2kSpawnCapsule 220, 60, 70, 28, "teal"   -- a pill-shaped body
+put the result into tPill                  -- every b2kSpawn… reports its ref
+b2kImpulse tPill, 0, -12                    -- a sharp upward kick (mass-aware)
+b2kSpawnBox 320, 40, 50, 50, "purple"      -- drop another box in
+```
+
+Negative `y` is *up* here (screen coordinates). The
+[Kit Reference](kit-reference.md) lists the full spawn / force / query surface.
+
 ## 5. Attach controls you designed in the IDE
 
 Prefer to draw your objects in the IDE? Attach physics to **any** control —
@@ -183,7 +200,7 @@ of the [Kit](kit-reference.md).
 | `b2Version()` throws / "handler not found" | The extension isn't loaded. Re-add and **Load** `box2dxt.lcb` in the Extension Manager. |
 | First `b2…` call (or `b2Version()`) errors **"unable to load foreign library"** | The native library isn't found or is misnamed. Use the **no-`lib`** bare name: `box2dxt.dll` / `box2dxt.dylib` / `box2dxt.so`. On **Linux** the stack folder isn't searched — put it in `/usr/lib` then run `sudo ldconfig`, or place it next to the OXT engine. (Tip: launching OXT from a terminal prints `dlopen failed <name>` showing the exact filename it wants.) |
 | `b2Version()` returns a different number | Your `box2dxt.lcb` and native library are from different versions. Rebuild/redownload both from the same tag. |
-| Library won't load on an older PC (Linux/Windows) | Use the committed SIMD-disabled `prebuilt/` binary, or build with `-DBOX2D_DISABLE_SIMD=ON` (see [building.md](building.md)). |
+| Library won't load on an older PC (Linux/Windows) | The CPU may lack AVX2. Build with `-DBOX2D_DISABLE_SIMD=ON` (see [building.md](building.md#platform--cpu-notes)), or grab a Release binary built for older CPUs. |
 | Bodies jitter or behave non-deterministically | You're stepping with a variable timestep. Let the Kit drive the loop, or step in fixed 1/60 s chunks (see [API Reference → Notes](api-reference.md#notes-and-gotchas)). |
 | Objects fly off instantly / explode | Sizes are wrong for Box2D's MKS units. Keep moving objects roughly 4–400 px at the default 40 px/m scale. |
 
@@ -191,6 +208,7 @@ of the [Kit](kit-reference.md).
 
 - [**Kit Guide**](kit-guide.md) — the complete, teach-you-everything walkthrough of the `b2k…` toolkit, with runnable examples.
 - [Kit Reference](kit-reference.md) — the same `b2k…` API as quick-lookup tables.
+- **Example games** — beyond the demo, [`examples/`](../examples/) ships a full **platformer**, an angry-birds-style **slingshot**, and a **contraption builder**, each a single self-contained paste. Hand one to someone else as a zero-setup zip with [`tools/make-release.py`](building.md#packaging-a-distribution-zip).
 - [API Reference](api-reference.md) — the low-level `b2…` API and units/gotchas.
 - [Architecture](architecture.md) — how it all works under the hood.
 - [Building](building.md) — compile the native library yourself.

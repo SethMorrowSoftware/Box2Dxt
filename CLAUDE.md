@@ -36,9 +36,9 @@ Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `a
 `kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`). Drop-in prebuilt
 binaries are in `prebuilt/`. The **Game Kit** (input/sprites/player/camera/sound modules, plan.md
 Phases 0-5) is implemented and user-verified on Win32; `plan.md`'s decision log is the as-built
-record. Seven examples: demo, contraption builder, spike (Phase-0 harness), **platformer showcase**,
-**micro-game** (the "copy this to start a game" file), **slingshot** (angry-birds-style tower
-knockdown — the physics core carrying a whole game with zero events and zero assets), and the
+record. Six examples: demo, contraption builder, spike (Phase-0 harness), **platformer showcase**
+(the Game Kit pushed hard — the focus of this repo's game work), **slingshot** (angry-birds-style
+tower knockdown — the physics core carrying a whole game with zero events and zero assets), and the
 **self-test harness** (below).
 
 ## The golden rule: the embedded-Kit sync
