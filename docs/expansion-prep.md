@@ -13,8 +13,8 @@ that keep the expansion as reliable as the engine underneath it.
 | Wave 2 | **COMPLETE — user-verified 2026-06-13** (player actions I, harness v10; see §9) |
 | Wave 3 | **BUILT — statically verified 2026-06-13** (bestiary I + HAUNTED HOLLOW; see §10) |
 | Showcase polish | **BUILT — statically verified 2026-06-13** (pre-Wave-4: longer/re-spaced levels, the kit's first JOINT mechanics — rope bridge + boulder + barrel; a prototyped wrecking ball was cut as un-sprite-able — and four variety species; all example-side, zero Kit change, no harness bump) |
-| Wave 4 | **IN PROGRESS — statically verified 2026-06-13.** SWIM landed in the Kit (`b2kPlayerAddWater` + a buoyant swim mode + `swim` state/anim; **harness v11**, Opus-reviewed clean) and the micro-game gained L3 "THE DEEP" (a swim level with a `fish` pit-dweller). DONE: swim zones, pit-dwellers (debut), and lava (already in the platformer L4). PENDING: the platformer water beat (needs a raised-bank basin — the 640-world clamps the camera at y640) + the collapsing-bridge trap |
-| Next | **finish Wave 4** (platformer pool + collapsing bridge), then Wave 5 (player actions II) — see §7 |
+| Wave 4 | **SWIM user play-tested in the platformer 2026-06-14** (harness **v12**, two Opus reviews clean; see §11). The Kit gained `b2kPlayerAddWater` + a buoyant `swim` mode/state/anim; the platformer's L1 GREEN HILLS gained a **HILLTOP POOL** (a raised-bank basin — the swim showcase, where it's tested), tuned heavier and with the hero hitbox fixed to match the art (gotcha 28), all per the user's OXT pass. DONE: swim zones, pit-dwellers (the micro-game `fish`, debut), lava (already in platformer L4). CARRY-OVER: the collapsing-bridge trap, and the micro-game's L3 "THE DEEP" (built but shows an example-side white-world build issue — set aside) |
+| Next | **Wave 5 — player actions II** (wall-slide/jump, dash, double-jump; capsule reshape on duck) — see §7 and §12. Loose ends: the collapsing bridge + the micro-game L3 fix |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
@@ -211,8 +211,9 @@ to Kit API (`b2kFoe…`).
    shape-def filter already covers chain creation).
 3. **Wave 3 — bestiary I:** shelled (kickable!), ghost, bat, mimic,
    pipe plant, crusher-with-faces — into a platformer "haunted" section.
-4. **Wave 4 — liquids:** swim zones + lava + pit dwellers + collapsing
-   bridge; a water level in the micro-game (level 3).
+4. **Wave 4 — liquids:** swim zones (done — the platformer's hilltop pool)
+   + lava (already in L4) + pit dwellers (the micro-game fish) + the
+   collapsing bridge (carry-over). As-built record in §11.
 5. **Wave 5 — player actions II:** wall-slide/jump, dash, double-jump
    powerup (boxItem delivers it), platform carry.
 6. **Wave 6 — bestiary II + promotion:** chaser, lunger, spider, saws;
@@ -454,3 +455,129 @@ knockback; only pits/kill-plane respawn.
 3. No regression: L1-L3 + micro-game still complete (spacing pass
    verified at the same time).
 4. Docs ride along: CHANGELOG, plan.md decision log, this section.
+
+## 11. Wave 4 — liquids (swim) — as built (2026-06-14)
+
+The first new player-action since Wave 2, built as a faithful parallel to
+the ladder/climb system and **user play-tested in the platformer**.
+
+### 11.1 The swim feature (Kit)
+
+- **`b2kPlayerAddWater x1,y1,x2,y2`** — a polled water zone (flat
+  `sPlayWat*` arrays, parallel to `sPlayLad*`); world state, wiped by
+  `b2kClear`/`b2kPlayerForget`, surviving an attach — exactly like ladders.
+- **`swim` mode** — while the centre is in a zone: gravity scales to
+  `swimGravity` (the body's own scale is saved and restored exactly once,
+  like the climb), the sink caps at `swimMaxFall`, UP/DOWN drive vy at
+  `swimSpeed`, and a JUMP press is a *repeatable* upward STROKE of
+  `swimJump` (no grounded/coyote/buffer gate). The `swim` state overrides
+  the grounded/airborne machine and clears `sPlayAir`, so surfacing is not
+  a phantom land. A 9th `pSwim` arg on `b2kPlayerAnims` falls back to fall.
+- **Mutual exclusion with climb** — both park gravity via *separate* saves,
+  so the start gates check BOTH flags and two saves never fight. The tick
+  costs ONE compare/frame when no water zones exist.
+- Knobs (`swimSpeed`/`swimJump`/`swimGravity`/`swimMaxFall`) cached in
+  `b2kPlayerTuneCache`. Two Opus correctness reviews (the Kit change; the
+  micro-game + harness) — no blockers.
+
+### 11.2 The layout law: a swim pool is a RAISED basin
+
+`b2kCamBounds` clamps the camera at the world's bottom edge, so a sub-ground
+pit is off-screen. A swimmable pool is therefore a **raised basin between
+two banks** (the platformer) or the whole ground raised (the micro-game):
+hop in, dive for the underwater coins (which FORCE the swim via the
+coin-gate), then stroke up + hold-forward to hop out the far bank.
+
+### 11.3 Playtest tuning + the swimGravity/swimJump lesson
+
+The pool felt too floaty (you could pop straight out), so it was made
+heavier: `swimGravity` 0.6, `swimMaxFall` 200, `swimJump` 300. The lesson
+worth keeping: **`swimGravity` sets only the between-stroke SINK; the
+single-stroke escape height is `swimJump` ALONE** (the stroke writes
+velocity directly, then full air-gravity governs the apex once you break the
+surface). The lever for "harder to climb out" is `swimJump`, not gravity.
+
+### 11.4 The brick head-bump fix (gotcha 28)
+
+The pool work surfaced a pre-existing regression: the hero's 88px capsule
+was taller than its ~76px visible character (128px frame headroom at a 0.75
+down-scale), so the invisible "hat" hit bricks while the visible head sat
+~12px low (the bonk still fired). Fixed by sizing the hitbox to the art
+(`tH` 88→76, `tDY` derived to keep the feet planted) and reading the body's
+real half-height (`gHeroHalfH`) in the bonk window — see gotcha 28.
+
+### 11.5 Harness v12
+
+- `stTestSwim` — dive / buoyant cap / repeatable stroke / swim-up /
+  gravity-restored-on-exit, every value printed.
+- `stTestSwimGrounded` — swim while resting on a submerged floor (the
+  pool-floor case): still `swim`, a stroke lifts off with no grounded gate.
+- `stTestSwimClear` — the level-rebuild path: `b2kClear` must wipe the zone,
+  or the next level's player is born swimming where the old pool was.
+
+### 11.6 Status / loose ends
+
+- The platformer's L1 hilltop pool is the user-tested swim showcase; a
+  `0`-key debug warp (delete-before-merge sentinel) reaches it fast.
+- The micro-game's L3 "THE DEEP" (data verbs `water` + `fish`) is built but
+  shows an example-side **white-world build issue** (set aside — the Kit
+  swim is sound). To revisit: the L3 build path in `mgBuild` / the new verbs.
+- The **collapsing-bridge** trap (the last named Wave 4 mechanic) is carried
+  to the loose-ends list.
+
+## 12. Wave 5 design — player actions II (prepared 2026-06-14)
+
+The next wave: four moves that extend the controller. All are KIT changes
+(harness bumps), each a parallel to an existing tick path — reuse the
+start-gate discipline that keeps swim/climb from fighting.
+
+### 12.1 Wall-slide / wall-jump
+
+- **Detect:** a side probe (mirror the ground ray) reports a wall contact on
+  the facing side while airborne and pressing toward it — a new `sPlayOnWall`
+  (+ side), polled like grounding.
+- **Slide:** while wall-pressed and falling, cap the descent at a new
+  `wallSlideMax` (a velocity assert, like the swim sink).
+- **Jump:** a JUMP press while sliding launches up-and-away (`wallJumpX`/
+  `wallJumpY`), consuming the press, with a brief control-lock so the
+  away-velocity is not instantly cancelled (the knockback hand-off pattern).
+- **State `wallslide`** + a 10th `b2kPlayerAnims` slot (falls back to fall).
+
+### 12.2 Dash
+
+- A direction + a new "dash" action (bound like "jump") gives a fast
+  horizontal burst (`dashSpeed`) for `dashMs`, then decays, gated by
+  `dashCooldownMs`; air-dash optional (one per airtime). **State `dash`** —
+  a velocity assert for its window (gotcha 17: it must keep moving). A dash
+  into water/ladder yields to swim/climb (those modes win, as over walk).
+
+### 12.3 Double-jump (powerup-delivered)
+
+- The "?-box" (boxItem) delivers a double-jump charge. An airborne
+  `b2kPlayerJump` gated on a charge count (`sPlayAirJumps`, reset on
+  landing) — reuses the gate-free `b2kPlayerJump`, so it is mostly
+  bookkeeping + the pickup. A pickup, not a permanent knob.
+
+### 12.4 Duck capsule reshape (deferred from Wave 2 by design)
+
+- Wave 2's duck brakes but keeps the hitbox; Wave 5 shrinks the capsule to
+  crawl under low gaps. The hard part is gotcha 28's cousin — a
+  **bottom-anchored** reshape (keep the FEET planted as the capsule
+  shortens) — and restoring it only when a ceiling probe finds headroom.
+  New `duckHeight` knob.
+
+### 12.5 Harness plan
+
+One self-diagnosing test per move: wall-slide caps the fall + wall-jump
+launches away + leaves the state; dash bursts to `dashSpeed`, decays, and
+respects the cooldown; double-jump fires once airborne and re-arms on
+landing; duck-reshape shrinks the probed half-height and restores only under
+headroom. Bump `kStHarnessV` per the rule.
+
+### 12.6 Exit criteria
+
+1. Harness all-pass (new states + the existing suite).
+2. Each move feels right in the platformer (the test bed) and composes with
+   swim/climb/duck/knockback without fighting (the start-gate discipline).
+3. Docs ride along (CHANGELOG, plan.md, this section).
+4. No regression: every existing level still completes.

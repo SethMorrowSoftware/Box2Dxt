@@ -673,13 +673,14 @@ end openCard
 ```
 
 That is a complete, well-tuned character — arrows/WASD run, space jumps,
-DOWN ducks, one-way decks drop through, ladders climb (§21). Feel lives in
-`b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`, `jumpSpeed`,
-`jumpCut`, `coyoteMs`, `bufferMs`, `maxFall`, `maxSlopeDeg`, plus Wave 2's
-`dropMs`, `climbSpeed`, `hurtPopX/Y`, `hurtMs`, `invulnMs`); read the
+DOWN ducks, one-way decks drop through, ladders climb, water swims (§21).
+Feel lives in `b2kPlayerSet` knobs (`moveSpeed`, `accel`, `airAccel`,
+`jumpSpeed`, `jumpCut`, `coyoteMs`, `bufferMs`, `maxFall`, `maxSlopeDeg`,
+plus Wave 2's `dropMs`, `climbSpeed`, `hurtPopX/Y`, `hurtMs`, `invulnMs`,
+and Wave 4's `swimSpeed`/`swimJump`/`swimGravity`/`swimMaxFall`); read the
 character back with `b2kPlayerState()`
-(`idle`/`run`/`jump`/`fall`/`duck`/`climb`/`hurt`, plus `land` for exactly
-one frame on touch-down — perfect for dust and sound),
+(`idle`/`run`/`jump`/`fall`/`duck`/`climb`/`hurt`/`swim`, plus `land` for
+exactly one frame on touch-down — perfect for dust and sound),
 `b2kPlayerOnGround()` and `b2kPlayerFacing()`. Already have a body or
 sprite? `b2kPlayerAttach` adopts it instead of making one. Springs,
 bounces and powerups call `b2kPlayerJump 700` — always use it for external
@@ -1076,7 +1077,7 @@ Play order: `openCard` builds level 1 and shows the menu → click →
 
 ---
 
-## 21. Player actions: duck, drop-through, ladders, knockback
+## 21. Player actions: duck, drop-through, ladders, knockback, swim
 
 Wave 2 builds four standard platformer verbs into the controller. They
 cost nothing until used (each idles at one compare per frame) and they
@@ -1128,6 +1129,29 @@ knockback ends in a pit. One art note: if your game uses
 `b2kSpriteOnFinish` on the player's sprite (the respawn-on-finish
 pattern), map a **looping** animation to the `hurt` anim slot — a
 non-looping pose would finish mid-knockback and fire your respawn.
+
+**Swim** (Wave 4) is the buoyant parallel to the climb. `b2kPlayerAddWater
+x1,y1,x2,y2` registers a water *zone* (polled presence, world state, wiped
+by `b2kClear` like a ladder). While the player's centre is submerged the
+`swim` state owns the controller: gravity scales to `swimGravity` (the
+body's own scale is saved and restored, so a game-tuned floatiness
+survives), the sink caps at `swimMaxFall`, UP/DOWN swim at `swimSpeed`, and
+a JUMP press is a *repeatable* upward **stroke** of `swimJump` — no
+grounded/coyote/buffer gate. Leaving the zone or a hurt restores gravity;
+swim and climb are mutually exclusive (the tick starts only one). Map a
+swim frame with `b2kPlayerAnims`'s ninth argument (it falls back to the
+`fall`/`jump` pose, so a sheet without one still reads).
+
+Two things the OXT rounds taught: **(1) tuning** — `swimGravity` sets only
+how fast you sink *between* strokes; the single-stroke escape height is
+`swimJump` ALONE (the stroke sets velocity directly, then full air-gravity
+governs the apex once you break the surface), so to make climbing out of a
+pool harder, lower `swimJump`, not the gravity. **(2) layout** — a swim
+pool can't be a pit *below* the ground, because `b2kCamBounds` clamps the
+camera at the world's bottom edge and anything lower is off-screen; build
+the pool as a RAISED basin between two banks (or raise the whole ground, as
+the micro-game does), then hop in, dive for the coins, and stroke up +
+hold-forward to hop out the far bank.
 
 ---
 
@@ -1244,11 +1268,11 @@ Optional arguments are in `[…]`.
 
 ### Player (the platformer controller)
 `b2kPlayerMake x,y,w,h [,sheet]` · `b2kPlayerAttach ctrl` ·
-`b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt]` ·
+`b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim]` ·
 `b2kPlayerSet key,value` ·
 `b2kPlayerGet(key)` `[f]` · `b2kPlayerOnGround()` `[f]` · `b2kPlayerState()` `[f]` ·
 `b2kPlayerFacing()` `[f]` · `b2kPlayerJump [speed]` · `b2kPlayerControl flag` ·
-`b2kPlayerAddLadder x1,y1,x2,y2` · `b2kPlayerHurt [fromX]` ·
+`b2kPlayerAddLadder x1,y1,x2,y2` · `b2kPlayerAddWater x1,y1,x2,y2` · `b2kPlayerHurt [fromX]` ·
 `b2kPlayerHurtIs()` `[f]` ·
 `b2kPlayer()` `[f]` · `b2kPlayerSprite()` `[f]` · `b2kPlayerRemove`
 

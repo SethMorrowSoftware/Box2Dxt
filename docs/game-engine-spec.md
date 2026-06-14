@@ -361,9 +361,9 @@ Input module and writes `b2kSetVelocity` x / preserves y.
 | `b2kPlayerMake pX, pY, pW, pH [,pSheet]` → control | One call: sprite (or plain capsule graphic if no sheet), capsule body, controller defaults, input armed. Reports the control. |
 | `b2kPlayerAttach pCtrl` | Adopt an existing control/sprite as the player (capsule body added if it has none). |
 | `b2kPlayerSet pKey, pValue` / `b2kPlayerGet(pKey)` | Tuning knobs (table below). |
-| `b2kPlayerAnims pIdle, pRun, pJump, pFall [,pLand]` | Map controller states to sheet animations; auto-`FlipH` from facing. |
+| `b2kPlayerAnims pIdle, pRun, pJump, pFall [,pLand] [,pDuck] [,pClimb] [,pHurt] [,pSwim]` | Map controller states to sheet animations; auto-`FlipH` from facing. (Wave 2-4 slots are optional fallbacks — see kit-reference.) |
 | `b2kPlayerOnGround()` → bool | Grounded this frame (post-tick). |
-| `b2kPlayerState()` → word | `idle` / `run` / `jump` / `fall` (+ `land` transition tick). |
+| `b2kPlayerState()` → word | `idle` / `run` / `jump` / `fall` / `duck` / `climb` / `hurt` / `swim` (+ `land` transition tick). |
 | `b2kPlayerFacing()` → 1 / -1 | Last horizontal intent. |
 | `b2kPlayerJump [pSpeed]` | Programmatic jump (springs, double-jump powerups) — respects the same state machine. |
 | `b2kPlayerControl pFlag` | Enable/disable input→motion (cutscenes; physics continues). |
@@ -396,11 +396,11 @@ automatically when `b2kPlayerAnims` is set.
 segments are one-sided exactly the way platformers need — a capsule rises
 through from below and lands on top (`b2kChain`/`b2kSmoothGround`, top surface
 listed right-to-left; plain `b2kWall` segments are two-sided and cannot do
-this). **Explicitly deferred** (designed-for, not in v1): moving-platform
-velocity carry (v1 relies on friction), player-initiated drop-through
-(pressing down to fall through a ledge — needs a brief collision-mask window),
-wall-jump/slide, swim zones, multiple simultaneous players (state is
-per-control already; only the input bindings are global).
+this). **Explicitly deferred** (designed-for, not in v1) — several have
+since landed: **drop-through** and **ladders** in Wave 2, **SWIM zones** in
+Wave 4. Still ahead: moving-platform velocity carry (v1 relies on friction),
+**wall-jump/slide** and **dash** (Wave 5), multiple simultaneous players
+(state is per-control already; only the input bindings are global).
 
 ## 7. Module: Camera
 

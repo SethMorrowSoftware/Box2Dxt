@@ -54,8 +54,8 @@ Box2D v3.1.0 (fetched by CMake)
    two-level platformer (menu → levels → win screen, embedded art,
    synthesized sound), the
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
-   Game Kit pushed hard — player controller, scrolling camera, spritesheets,
-   coin puzzles — and the
+   Game Kit pushed hard — player controller (run/jump/climb/duck/swim),
+   scrolling camera, spritesheets, coin puzzles, a hilltop swim pool — and the
    [slingshot](examples/box2dxt-slingshot.livecodescript) is pure physics
    joy: catapult cannonballs into toppling towers, angry-birds style
    (three levels, ballistic aim preview, zero assets). And the
