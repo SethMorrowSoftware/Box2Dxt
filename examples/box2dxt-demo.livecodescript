@@ -5485,6 +5485,7 @@ constant kLabels     = "Playground,Pyramid,Cradle,Bridge,Vehicle,Lidar"
 constant kTools      = "box,ball,capsule,poly,bomb"
 constant kToolLabels = "Box,Ball,Capsule,Poly,Bomb"
 constant kMaxDrops = 70
+constant kDemoUIVersion = "1"  -- bump when buildUI's chrome changes; older saved stacks rebuild it once
 
 -- ---------------------------------------------------------------------
 on preOpenCard
@@ -5505,7 +5506,10 @@ on startBox2DDemo
    set the loc of this stack to the screenLoc
    set the backgroundColor of this card to "22,24,30"
    put "box" into gTool
-   buildUI
+   if not demoChromeBuilt() then     -- build the chrome once; it persists in the saved stack
+      buildUI
+      set the uDemoUIVersion of this stack to kDemoUIVersion
+   end if
    switchScene "playground"
 end startBox2DDemo
 
@@ -6310,6 +6314,14 @@ end newStaticBar
 -- =====================================================================
 -- UI
 -- =====================================================================
+-- The chrome (top bar, scene/tool buttons, HUD, help bar) is generated once and
+-- saved with the stack; this reports whether that persisted UI is present and
+-- current, so startBox2DDemo skips the rebuild on reopen. A kDemoUIVersion bump
+-- (after the demo's chrome changes) rebuilds it once on the next open.
+function demoChromeBuilt
+   return (there is a button "ui_scene_playground") and (the uDemoUIVersion of this stack is kDemoUIVersion)
+end demoChromeBuilt
+
 on buildUI
    clearUI
    local tWide, tI, tScene, tTool, tX
