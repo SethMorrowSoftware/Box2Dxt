@@ -23,22 +23,26 @@
 --      stack property; Shift+Reset re-asks; Cancel = placeholder shapes).
 --
 -- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
---           full) · DOWN/S ducks - and DOWN+JUMP on a one-way deck
---           (bridge, clouds) DROPS THROUGH it · UP/DOWN at the L2
---           ladder CLIMBS (JUMP lets go) · the MOUSE DRAGS the crate
---           (chained weights are NOT draggable) · R restarts the
---           CURRENT level · ESC pauses · M mutes the synthesized sound
+--           full) · jump AGAIN in mid-air = DOUBLE JUMP · jump off a wall
+--           you are sliding = WALL JUMP · SHIFT or X = DASH (a flat zip) ·
+--           DOWN/S ducks/CRAWLS (shorter, fits low gaps) - and DOWN+JUMP
+--           on a one-way deck (bridge, clouds) DROPS THROUGH it · UP/DOWN
+--           at the L2 ladder CLIMBS (JUMP lets go) · ride the moving LIFTS
+--           (they carry you) · the MOUSE DRAGS the crate (chained weights
+--           are NOT draggable) · R restarts the CURRENT level · ESC pauses
+--           · M mutes the synthesized sound
 --
 -- THE FOUR LEVELS (every beat holds a coin; the flag advances):
---   LEVEL 1  GREEN HILLS (6336px) - movement + the toys: the
+--   LEVEL 1  GREEN HILLS (8640px) - movement + the toys: the
 --            SPRINGBOARD mid-meadow (sky coin above; a 42px hop for
 --            non-bouncers), the BONK ROW (headbutt ?-boxes, SMASH bricks
 --            into debris), the one-way BRIDGE over a spike slime, the
 --            slope MOUND, one-way CLOUDS with the fly, the bee, the
---            SPIKE PIT, a fast MOUSE, a flying ladybug - then the
---            finale: a sagging ROPE BRIDGE (hinged planks) over a chasm
---            and a ladybug on the far meadow to the flag.
---   LEVEL 2  THE WORKS (4672px) - the machines: drag the
+--            SPIKE PIT, a fast MOUSE, the Wave 5 CRAWL TUNNEL (a low
+--            overhang - duck/DOWN to crawl under for a hidden coin), a
+--            flying ladybug - then the rope-bridge finale over a chasm,
+--            the crusher alley, and the hilltop SWIM POOL to the flag.
+--   LEVEL 2  THE WORKS (5952px) - the machines: drag the
 --            CRATE onto the yellow BUTTON to open the gate (coin in
 --            the gateway), the Wave 2 LADDER up to its bonus ledge,
 --            the red CHECKPOINT, the saw LEVER (STAND at it to power
@@ -46,18 +50,22 @@
 --            both SAWS, a crawling WORM, THWOMP ALLEY (chained weights:
 --            ride the second one's head to the top coin; grab the
 --            YELLOW KEY between them), a breather cloud with its bee,
---            and the WALLED DOOR - a stone
+--            the Wave 5 LIFT BAY (its signature: RIDE the moving deck
+--            across the grinder for a mid-bay coin - platform-carry),
+--            then the crusher alley and the WALLED DOOR - a stone
 --            curtain to the ceiling, so the stone steps, the coins and
 --            the FLAG behind it are reachable ONLY through the door.
---   LEVEL 3  FROZEN CITADEL (5312px) - everything at once,
---            on ICE (~15% acceleration: momentum rules): a ladybug,
---            spring over the first spiked pit, a bonk row, the first
---            sweeping saw, a second spiked pit, a checkpoint, a thwomp
---            guarding the RED key, the glacier run (a SECOND always-on
---            saw under a snow cloud) with a ROLLING BOULDER that slides
---            the ice head-on (leap it), the red walled door, snow
---            steps, the final flag.
---   LEVEL 4  HAUNTED HOLLOW (5376px) - WAVE 3's bestiary in
+--   LEVEL 3  FROZEN CITADEL (6592px) - everything at once,
+--            on ICE (~15% acceleration: momentum rules): the Wave 5
+--            WALL-JUMP SHAFT (its signature: climb two ice pillars to a
+--            top coin - or double-jump the slot), a ladybug, spring
+--            over the first spiked pit, a bonk row, the first sweeping
+--            saw, a second spiked pit, a checkpoint, a thwomp guarding
+--            the RED key, the glacier run (a SECOND always-on saw under
+--            a snow cloud) with a ROLLING BOULDER that slides the ice
+--            head-on (leap it), the blue crusher alley, the red walled
+--            door, snow steps, the final flag.
+--   LEVEL 4  HAUNTED HOLLOW (6656px) - WAVE 3's bestiary in
 --            the purple biome: a MIMIC field (grass blocks that do
 --            not belong - they wake and lunge), the SNAIL (stomp it
 --            into a SHELL, kick the shell, bowl the slime down the
@@ -65,9 +73,11 @@
 --            and swoop), a pit, a long FOUR-burrow PIRANHA row (they
 --            will not rise under your feet), the shy GHOST that drifts
 --            closer while you face away, two faced CRUSHERS around a
---            LAVA strip, a smouldering FIRE SLIME, the POWDER KEG bay
---            (an explosive barrel + woodpile, scattered by b2kExplode),
---            purple steps, the last flag.
+--            LAVA strip crossed by the Wave 5 LAVA LIFT (ride the deck
+--            over the lava, or double-jump it), a smouldering FIRE
+--            SLIME, the POWDER KEG bay (an explosive barrel + woodpile,
+--            scattered by b2kExplode), the red crusher alley (its
+--            signature gauntlet), purple steps, the last flag.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -129,7 +139,7 @@
 --  12. THE LEVEL FLOW: flag on L1/L2 banners "LEVEL N CLEAR!" and the
 --      next level builds ~1.2s later (outside the physics frame); R
 --      restarts only the CURRENT level; the final dialog shows TOTAL
---      time and falls across all three; Play again is a fresh L1 run.
+--      time and falls across all four; Play again is a fresh L1 run.
 --      The boundaries audit rides pfBounds: every level gets thick
 --      side slabs PLUS edge wall segments PLUS the matching camera
 --      clamp - check you cannot leave the world on any level.
@@ -182,6 +192,30 @@
 --      art): a fast MOUSE (L1), a slow WORM (L2), a LADYBUG (L1/L3), a
 --      FIRE SLIME by the lava (L4, spike-type - hurts every side). The
 --      HUD now shows "awake N/M" bodies (watch it fall as things sleep).
+--  16. WAVE 5 MOVES (the Kit controller's new abilities, on everywhere;
+--      each level leans on one new beat - all example-side, zero Kit
+--      change). DOUBLE JUMP: a second jump fires in mid-air (clears the
+--      taller beats). WALL JUMP: hug a wall while airborne to slow the
+--      fall, then jump to launch up-and-away. DASH (SHIFT or X): a flat
+--      horizontal burst on a cooldown. CRAWL: DOWN reshapes the capsule
+--      shorter (b2kPlayerHalfH drops) to fit low gaps. PLATFORM CARRY: a
+--      grounded hero on a moving lift inherits its velocity. The signature
+--      beats: L1 CRAWL TUNNEL (duck under the 52px overhang for the coin -
+--      or jump over the bar; never blocks the path); L2 LIFT BAY (jump the
+--      pedestal, RIDE the deck across the grinder for the mid-bay coin,
+--      step off the far pedestal - a fall onto the grinder is a recoverable
+--      knockback; the ~200px gap is also double-jumpable); L3 WALL-JUMP
+--      SHAFT (climb the two floating ice pillars to the top coin - a
+--      straight double-jump up the slot also reaches it, so it is never
+--      trick-only; walk under the pillars unobstructed); L4 LAVA LIFT (ride
+--      the deck over the lava between the crushers for the mid-lava coin -
+--      or double-jump the 128px strip; a fall onto the lava is a knockback,
+--      recoverable). EVERY new-move coin is also reachable WITHOUT the
+--      trick (double-jump/crawl are universal), so no level can dead-end.
+--      FEEL is unverifiable statically - tune the Wave 5 knobs in OXT and
+--      confirm: the lifts carry you (stand still and drift with the deck),
+--      a crouched hero clears the L1 bar a standing one cannot, and the L3
+--      slot is climbable by wall-jumps AND by a plain double-jump.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -190,7 +224,7 @@ local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
 local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
--- the three-level game: which level, its width/name, and the banked
+-- the four-level game: which level, its width/name, and the banked
 -- totals carried across level clears for the final win screen
 local gLevel, gLevelW, gLevelName, gTotalFalls, gSecsBank
 local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
@@ -234,6 +268,14 @@ local gSlimeSpeed, gSlimeFlat, gSlimeFlip
 local gBoulderN, gBoulderB, gBoulderSpr, gBoulderHomeX, gBoulderHomeY
 local gBoulderResetX, gBoulderT, gBoulderHurtR, gBoulderGrace, gBoulderVX
 local gBarrelN, gBarrelB, gBarrelSpr, gBarrelX, gBarrelY, gBarrelState, gBarrelT
+-- Wave 5 showcase: the moving-platform LIFT (platform-carry). A KINEMATIC
+-- box driven by VELOCITY (carry reads b2BodyVX, so a position-driven body
+-- would report zero velocity and never carry its rider). pfTickLift flips
+-- each lift's vx at its min/max endpoints (write-on-change only - a resting
+-- lift must keep moving, so it ASSERTS velocity, but only at the turns).
+-- gLiftVX caches the last-written vx so the tick never re-sets an unchanged
+-- velocity (gotcha 17). Indexed 1..gLiftN.
+local gLiftN, gLift, gLiftMin, gLiftMax, gLiftSpeed, gLiftVX
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -609,6 +651,13 @@ command pfStartGame
    put empty into gBarrelY
    put empty into gBarrelState
    put empty into gBarrelT
+   -- the Wave 5 moving-platform lifts start the run empty/idle
+   put 0 into gLiftN
+   put empty into gLift
+   put empty into gLiftMin
+   put empty into gLiftMax
+   put empty into gLiftSpeed
+   put empty into gLiftVX
    -- per-critter speed + squash frame + facing polarity (slime columns)
    put empty into gSlimeSpeed
    put empty into gSlimeFlat
@@ -740,7 +789,7 @@ command pfStartGame
    b2kPlayerSet "dashMs", 150
    b2kPlayerSet "dashCooldownMs", 420
    b2kPlayerSet "duckScale", 0.6      -- DOWN now CRAWLS (shorter hitbox) under low gaps
-   b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (L2 lift, L3 raft)
+   b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (L2 lift bay, L4 lava lift)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
@@ -1472,7 +1521,7 @@ end pfMakeSpikes
 
 -- The goal flag: BLUE while coins remain, GOLD (pfGainCoin) when the
 -- level is sweepable - touch it then to clear the level (or win, on
--- level three).
+-- level four).
 command pfMakeGoal pX, pY
    local tRef
    put empty into tRef
@@ -1632,13 +1681,41 @@ command pfMakeWoodCrate pX, pY
    end if
 end pfMakeWoodCrate
 
+-- A moving-platform LIFT (the Wave 5 platform-carry showcase): a KINEMATIC
+-- box at (pX,pY) that patrols horizontally pMinX..pMaxX at pSpeed px/sec. A
+-- grounded player standing on it INHERITS its velocity (b2kPlayerSet
+-- "platformCarry" is on for the whole showcase), so it ferries the hero
+-- across the hazard below. It MUST move by VELOCITY, not by repositioning:
+-- the carry reads the body's vx, and a position-driven kinematic reports
+-- zero velocity (no carry). Sleep is disabled so it never naps at a turn.
+-- A kinematic box is a graphic (no rotation, gotcha 23), so a plain visible
+-- slab reads fine - the metal-deck colour suits a machine bay. Wiped with
+-- the world (b2kTeardown/b2kClear) like every spawned body.
+command pfMakeLift pX, pY, pW, pH, pMinX, pMaxX, pSpeed
+   local tRef, tIdx
+   b2kSpawnBox pX, pY, pW, pH, "120,128,140"
+   put the result into tRef
+   if tRef is empty then exit pfMakeLift
+   add 1 to gLiftN
+   put gLiftN into tIdx
+   b2kSetKinematic tRef
+   b2kSetSleepEnabled tRef, false   -- a lift that naps at a turn would strand its rider
+   b2kSetVelocity tRef, pSpeed, 0   -- initial drift toward pMaxX (signed pSpeed)
+   put tRef into gLift[tIdx]
+   put pMinX into gLiftMin[tIdx]
+   put pMaxX into gLiftMax[tIdx]
+   put pSpeed into gLiftSpeed[tIdx]
+   put pSpeed into gLiftVX[tIdx]    -- the last vx written (write-on-change cache)
+end pfMakeLift
+
 -- =====================================================================
--- LEVEL 1 - "GREEN HILLS" (6336px). Movement and the Wave 1 toys:
+-- LEVEL 1 - "GREEN HILLS" (8640px). Movement and the Wave 1 toys:
 -- springboard + sky coin, the bonk row, the one-way bridge over the
 -- spike slime, the slope mound, two one-way clouds, the spike pit, a
--- skittering MOUSE and a flying ladybug, then the showcase finale: a
--- sagging ROPE BRIDGE (hinged planks) over a real chasm and a ladybug
--- ambling the far meadow to the flag.
+-- skittering MOUSE, the Wave 5 CRAWL TUNNEL (duck under a low overhang
+-- for a hidden coin) and a flying ladybug, then the showcase finale: a
+-- sagging ROPE BRIDGE (hinged planks) over a real chasm, the crusher
+-- alley and the hilltop swim pool to the flag.
 -- =====================================================================
 command pfL1Scene
    local tX
@@ -1680,6 +1757,24 @@ command pfL1Scene
       set the lineSize of it to 4
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeC"
+   end if
+   -- the CRAWL TUNNEL (level 1's Wave 5 beat - DOWN now reshapes the capsule
+   -- shorter, FEET-ANCHORED, so the hero can CRAWL under a low overhang a
+   -- standing hero cannot clear). The bar bottom is at y515: the standing
+   -- 76px capsule (head ~y500) is BLOCKED, the ducked ~46px one (head ~y530)
+   -- slips through the ~61px gap with margin to spare. A coin waits inside
+   -- (cast). The bar is only ~60px tall, so a jump/double-jump also tops it
+   -- (no dead end) - but the coin under it is the crawl's reward. Built as a
+   -- visible earth bar (a solid grass block, like the bat-bar overhang on L4).
+   pfSlab "pf_crawlbar", 3300, 455, 3492, 515
+   set the backgroundColor of graphic "pf_crawlbar" to "90,150,72"
+   set the visible of graphic "pf_crawlbar" to true
+   b2kCamAdopt the long id of graphic "pf_crawlbar"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_center") then
+      set the visible of graphic "pf_crawlbar" to false   -- the tiles carry the face
+      pfTile "terrain_grass_block_center", 3300, 451
+      pfTile "terrain_grass_block_center", 3364, 451
+      pfTile "terrain_grass_block_center", 3428, 451
    end if
    pfMakeSpikes 2560, 2752
    -- the one-way bridge (GHOST RULE: the chain runs one tile past the
@@ -1881,6 +1976,7 @@ command pfL1Cast
    pfMakeCoin 2876, 500     -- the second act's slime beat
    pfMakeCoin 3076, 500     -- the skittering mouse's beat
    pfMakeCoin 3232, 392     -- on the rest cloud
+   pfMakeCoin 3396, 548     -- inside the CRAWL TUNNEL: duck (DOWN) to slip under for it
    pfMakeCoin 3616, 500     -- the last meadow slime's beat
    pfMakeCoin 4128, 510     -- mid-bridge: grab it as the planks dip
    pfMakeCoin 4456, 500     -- the far meadow's ladybug beat
@@ -1968,13 +2064,14 @@ command pfL1Cast
 end pfL1Cast
 
 -- =====================================================================
--- LEVEL 2 - "THE WORKS" (4672px). The machines: crate + button gate,
+-- LEVEL 2 - "THE WORKS" (5952px). The machines: crate + button gate,
 -- the Wave 2 ladder to its bonus ledge, the stand-to-flip saw lever,
 -- both saws, a crawling WORM, chained thwomps, a breather cloud with its
 -- bee, a SECOND machine bay (another chained crusher + an always-on
--- sweeping saw), then the yellow key and the walled door, stone steps to
--- the flag. Spaced so every machine is its own beat (round-6: cramped
--- reads as "what IS all this?").
+-- sweeping saw), the Wave 5 LIFT BAY (the signature: ride the moving deck
+-- over a grinder), then the crusher alley, the yellow key and the walled
+-- door, stone steps to the flag. Spaced so every machine is its own beat
+-- (round-6: cramped reads as "what IS all this?").
 -- =====================================================================
 command pfL2Scene
    local tX, tRef
@@ -2071,8 +2168,46 @@ command pfL2Scene
    -- crusher + the always-on sweeping saw are built in the CAST)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
       pfTile "sign", 2400, 512
-      pfTile "bush", 3160, 512
+      pfTile "bush", 2720, 512        -- moved clear of the LIFT BAY (3010..3210)
    end if
+   -- ===== THE LIFT BAY (level 2's signature finale - the Wave 5 PLATFORM-
+   -- CARRY showcase). A GRINDER strip runs along the floor; two boarding
+   -- pedestals flank it. The moving LIFT (built in the cast) shuttles the
+   -- pedestal tops, so you jump up onto the left pedestal, RIDE the deck
+   -- across the grinder (its velocity carries you - stand still and you
+   -- drift with it), grab the mid-bay coin, and step off the right pedestal.
+   -- The grinder hurts (pfOuch knockback, recoverable) so the floor route is
+   -- blocked; but a running DOUBLE JUMP also clears the ~200px, so the bay is
+   -- never a dead end. Built as scenery (behind the hero). =====
+   pfSlab "pf_liftpedL", 2920, 489, 3010, 576
+   pfSlab "pf_liftpedR", 3210, 489, 3300, 576
+   set the backgroundColor of graphic "pf_liftpedL" to "96,104,118"
+   set the backgroundColor of graphic "pf_liftpedR" to "96,104,118"
+   set the visible of graphic "pf_liftpedL" to true
+   set the visible of graphic "pf_liftpedR" to true
+   b2kCamAdopt the long id of graphic "pf_liftpedL"
+   b2kCamAdopt the long id of graphic "pf_liftpedR"
+   -- the grinder: a visible danger strip on the floor + a hurt sensor over
+   -- it (the y548 top sits at the floor line, like the lava sensor, so it
+   -- catches a walker but never the deck/rider gliding above at y~500)
+   create graphic "pf_grinder"
+   set the style of it to "rectangle"
+   set the rect of it to 3010, 556, 3210, 576
+   set the filled of it to true
+   set the backgroundColor of it to "200,70,70"
+   b2kCamAdopt the long id of graphic "pf_grinder"
+   create graphic "pf_grindersens"
+   set the style of it to "rectangle"
+   set the rect of it to 3016, 548, 3204, 632
+   set the visible of it to false
+   set the uPfHazardFlag of the long id of graphic "pf_grindersens" to true
+   b2kAddSensor the long id of graphic "pf_grindersens", "box"
+   -- the bay's moving deck: a kinematic platform shuttling 3020..3200 at
+   -- 60px/s between the pedestals. A grounded hero on it inherits its
+   -- velocity (platformCarry), so it ferries him over the grinder to the far
+   -- pedestal. Built here in the SCENE (before the hero) so the deck layers
+   -- BEHIND him - he rides ON it, drawn in front, never hidden by the deck.
+   pfMakeLift 3020, 500, 96, 22, 3020, 3200, 60
    -- a THIRD machine run: a snail + another chained crusher (in the cast)
    -- under a one-way cloud (ghost-padded a tile past the art each side)
    b2kSmoothGround "3956,448" & cr & "3892,448" & cr & "3700,448" & cr & "3636,448"
@@ -2130,6 +2265,7 @@ command pfL2Cast
    pfMakeCoin 2210, 392     -- on the breather cloud (the bee patrols it)
    pfMakeCoin 2680, 500     -- past the second bay's chained crusher
    pfMakeCoin 2880, 448     -- above the second sweeping saw: time the hop
+   pfMakeCoin 3110, 465     -- mid-LIFT-BAY: grab it as the deck carries you across the grinder
    pfMakeCoin 3300, 500     -- the third bay's snail (shell it, kick it)
    pfMakeCoin 3600, 500     -- beneath the third chained crusher: grab it as you dash under
    pfMakeCoin 3796, 392     -- up on the third bay's one-way cloud
@@ -2219,12 +2355,14 @@ command pfL2Cast
 end pfL2Cast
 
 -- =====================================================================
--- LEVEL 3 - "FROZEN CITADEL" (5312px). Everything at once, on ICE:
--- snow ground with quarter-strength player acceleration (momentum!), a
--- ladybug, the spring arcs over the first spiked pit, a bonk row, the
--- sweeping saw, a second spiked pit, a thwomp guarding the RED key,
--- then the GLACIER RUN where a ROLLING BOULDER slides the ice head-on
--- (leap it!), the red walled door, snow steps to the flag.
+-- LEVEL 3 - "FROZEN CITADEL" (6592px). Everything at once, on ICE:
+-- snow ground with quarter-strength player acceleration (momentum!), the
+-- Wave 5 WALL-JUMP SHAFT (climb two ice pillars to a top coin, or
+-- double-jump the slot), a ladybug, the spring arcs over the first spiked
+-- pit, a bonk row, the sweeping saw, a second spiked pit, a thwomp
+-- guarding the RED key, then the GLACIER RUN where a ROLLING BOULDER
+-- slides the ice head-on (leap it!), the blue crusher alley, the red
+-- walled door, snow steps to the flag.
 -- =====================================================================
 command pfL3Scene
    local tX
@@ -2258,6 +2396,24 @@ command pfL3Scene
    end if
    pfMakeSpikes 768, 960
    pfMakeSpikes 1792, 1984
+   -- ===== THE WALL-JUMP SHAFT (level 3's signature vertical beat - the
+   -- Wave 5 WALL-SLIDE + WALL-JUMP). Two FLOATING ice pillars form a slot
+   -- over the opening run: hug one, jump to launch up-and-away, alternate
+   -- pillar to pillar to climb to the coin at the top. The pillars float
+   -- (bottoms at y460), so the hero walks UNDER them at ground level
+   -- unobstructed - the main path is never blocked. And the slot coin sits
+   -- where a straight DOUBLE JUMP up the gap also reaches it, so a player
+   -- who has not mastered wall-jumps is never locked out (no dead end, the
+   -- coin is never trick-only). Wall-jumping is just the elegant way up.
+   -- Built on ground1 (the run to the spring), before the first pit. =====
+   pfSlab "pf_wjShaftL", 300, 220, 318, 460
+   pfSlab "pf_wjShaftR", 410, 220, 428, 460
+   set the backgroundColor of graphic "pf_wjShaftL" to "150,180,210"
+   set the backgroundColor of graphic "pf_wjShaftR" to "150,180,210"
+   set the visible of graphic "pf_wjShaftL" to true
+   set the visible of graphic "pf_wjShaftR" to true
+   b2kCamAdopt the long id of graphic "pf_wjShaftL"
+   b2kCamAdopt the long id of graphic "pf_wjShaftR"
    -- the glacier run (the level's second act): a snow cloud rest above
    -- the second sweeping saw's stretch
    b2kSmoothGround "3008,448" & cr & "2944,448" & cr & "2752,448" & cr & "2688,448"
@@ -2331,6 +2487,7 @@ command pfL3Cast
    -- with each rebuild, so only this level skates)
    b2kPlayerSet "accel", 260
    b2kPlayerSet "airAccel", 480
+   pfMakeCoin 364, 340      -- atop the WALL-JUMP SHAFT: wall-jump up the slot (or double-jump straight up)
    pfMakeCoin 1100, 500     -- the ladybug's beat, after the spring landing
    pfMakeCoin 1300, 500     -- under the bonk row
    pfMakeCoin 1640, 448     -- above the first sweeping saw
@@ -2407,13 +2564,15 @@ command pfL3Cast
 end pfL3Cast
 
 -- =====================================================================
--- LEVEL 4 - "HAUNTED HOLLOW" (5376px). Wave 3's bestiary in the purple
+-- LEVEL 4 - "HAUNTED HOLLOW" (6656px). Wave 3's bestiary in the purple
 -- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
 -- whose kicked shell bowls a slime over, the BAT overhang, a pit, a long
 -- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a pair of
--- faced CRUSHERS around a lava strip, a smouldering FIRE SLIME, then the
--- POWDER KEG bay (an explosive barrel + woodpile, scattered by
--- b2kExplode), purple steps to the flag. Every beat spaced per the
+-- faced CRUSHERS around a lava strip crossed by the Wave 5 LAVA LIFT
+-- (ride the deck over the lava, or double-jump it), a smouldering FIRE
+-- SLIME, then the POWDER KEG bay (an explosive barrel + woodpile,
+-- scattered by b2kExplode), the red crusher alley (the signature
+-- gauntlet), purple steps to the flag. Every beat spaced per the
 -- layout law (~100px+ of clear air).
 -- =====================================================================
 command pfL4Scene
@@ -2474,6 +2633,13 @@ command pfL4Scene
       pfTile "sign", 2980, 512        -- a way-marker past the piranha row
    end if
    pfMakeLava 3136, 3264
+   -- the LAVA LIFT (the Wave 5 platform-carry showcase, hollow edition): a
+   -- moving deck that ferries the hero across the lava strip between the two
+   -- faced crushers. Its patrol (3150..3250) stays clear of either crusher's
+   -- drop zone, so it never meets a slam. Ride it for the mid-lava coin; or,
+   -- since a running DOUBLE JUMP clears the 128px strip, leap it the old way
+   -- (no dead end). A slip onto the lava is a knockback (pfOuch), recoverable.
+   pfMakeLift 3150, 510, 80, 22, 3150, 3250, 70
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
    -- explosive barrel amid a woodpile of loose crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
@@ -2526,9 +2692,9 @@ command pfL4Cast
    pfMakeCoin 3892, 500     -- past the powder keg (the lure: mind the blast)
    pfMakeCoin 4000, 500     -- the second snail's beat (shell it, kick it!)
    pfMakeCoin 4220, 500     -- the slime its bowled shell can flatten
-   pfMakeCoin 4440, 500     -- a THIRD snail's beat
+   pfMakeCoin 4440, 500     -- on the run up to the chained crusher
    pfMakeCoin 4600, 500     -- beneath the chained crusher: grab it as you dash under
-   pfMakeCoin 4780, 500     -- a FOURTH snail's beat
+   pfMakeCoin 4780, 500     -- past the crusher, into the red alley
    pfMakeCoin 5090, 500     -- threading the RED CRUSHER alley: grab between drops
    pfMakeCoin 5270, 500     -- ...and between the next pair of crushers
    pfMakeCoin 5450, 500     -- ...and the last gap
@@ -2560,11 +2726,10 @@ command pfL4Cast
    -- and a slime its sliding shell flattens - the haunted level escalates
    pfMakeSnail 8, 4000, 3940, 4060
    pfMakeSlime 9, "normal", 4220, 4160, 4280, 576
-   -- the haunted FINALE: snails used liberally (two more) around the
-   -- classic chained-weight THWOMP coming back among the faced crushers
-   pfMakeSnail 10, 4440, 4380, 4500
+   -- the haunted FINALE: the classic chained-weight THWOMP comes back among
+   -- the faced crushers. (Trimmed from four snails to two for the showcase
+   -- pass - the bowling-lane snail above is plenty; the alley reads cleaner.)
    pfMakeThwomp 3, 4600
-   pfMakeSnail 11, 4780, 4720, 4840
    -- the RED CRUSHER ALLEY (the hollow's marquee gauntlet): a row of four
    -- danger-block thwomps you time your run beneath - each drops as you near
    -- it, so keep moving and snatch the coins in the gaps. The haunted level's
@@ -2697,6 +2862,7 @@ on b2kFrame
    pfTickPlants
    pfTickGhost
    pfTickBoulder
+   pfTickLift
    pfTickBarrel
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
    -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
@@ -3372,6 +3538,32 @@ command pfTickBoulder
       end if
    end repeat
 end pfTickBoulder
+
+-- Patrol the moving-platform lifts: bounce each off its min/max endpoints.
+-- WRITE-ON-CHANGE only - a lift must keep moving (so it asserts velocity),
+-- but re-setting an unchanged vx every frame is the parked-shell mistake
+-- (gotcha 17: a needless wake + 2 FFI per frame). The rider inherits the
+-- velocity automatically (platformCarry), so there is no per-rider work
+-- here. One clock-free pass: endpoints are positions, no time math needed.
+command pfTickLift
+   local i, tPos, tX, tV
+   if gLiftN is 0 or gLiftN is empty then exit pfTickLift
+   set the itemDelimiter to comma
+   repeat with i = 1 to gLiftN
+      if gLift[i] is empty then next repeat
+      put b2kPosition(gLift[i]) into tPos
+      if tPos is empty then next repeat
+      put item 1 of tPos into tX
+      put gLiftVX[i] into tV
+      -- past an endpoint while still heading that way: reverse the drift
+      if tV > 0 and tX >= gLiftMax[i] then put - gLiftSpeed[i] into tV
+      if tV < 0 and tX <= gLiftMin[i] then put gLiftSpeed[i] into tV
+      if tV is not gLiftVX[i] then
+         b2kSetVelocity gLift[i], tV, 0   -- the ONLY per-lift write, at the turn
+         put tV into gLiftVX[i]
+      end if
+   end repeat
+end pfTickLift
 
 -- The powder keg: idle until the hero is near, then the fuse lights
 -- (bomb_active); a beat later b2kExplode scatters the woodpile, knocks the
