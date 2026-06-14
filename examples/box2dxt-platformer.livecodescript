@@ -2217,21 +2217,10 @@ command pfL2Scene
    b2kCamAdopt the long id of graphic "pf_liftpedR"
    pfTextureSlab "pf_liftpedL", "terrain_stone_block_center"   -- stone pedestals, not flat grey
    pfTextureSlab "pf_liftpedR", "terrain_stone_block_center"
-   -- the grinder: a visible danger strip on the floor + a hurt sensor over
-   -- it (the y548 top sits at the floor line, like the lava sensor, so it
-   -- catches a walker but never the deck/rider gliding above at y~500)
-   create graphic "pf_grinder"
-   set the style of it to "rectangle"
-   set the rect of it to 3010, 556, 3210, 576
-   set the filled of it to true
-   set the backgroundColor of it to "200,70,70"
-   b2kCamAdopt the long id of graphic "pf_grinder"
-   create graphic "pf_grindersens"
-   set the style of it to "rectangle"
-   set the rect of it to 3016, 548, 3204, 632
-   set the visible of it to false
-   set the uPfHazardFlag of the long id of graphic "pf_grindersens" to true
-   b2kAddSensor the long id of graphic "pf_grindersens", "box"
+   -- the bay's floor hazard, drawn as LAVA (sheet art, not a flat-red GRC):
+   -- pfMakeLava lays the lava tiles + a hurt sensor whose top sits at the floor
+   -- line (y548), so it catches a walker but never the deck/rider above at y~500
+   pfMakeLava 3010, 3210
    -- the bay's moving deck: a kinematic platform shuttling 3020..3200 at
    -- 60px/s between the pedestals. A grounded hero on it inherits its
    -- velocity (platformCarry), so it ferries him over the grinder to the far
@@ -2677,14 +2666,19 @@ command pfL4Scene
    -- (no dead end). A slip onto the lava is a knockback (pfOuch), recoverable.
    pfMakeLift 3150, 510, 80, 22, 3150, 3250, 70
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
-   -- explosive barrel amid a woodpile of loose crates. Coming near lights
+   -- explosive barrel ringed by a small PYRAMID of crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
    -- demo until now) scatters the pile and clears the barrel.
    pfMakeBarrel 3732, 550
-   pfMakeWoodCrate 3642, 554
+   -- the pyramid: a four-crate base flanking the barrel, a crate bridging each
+   -- outer pair, and one capping the barrel (dynamic + fixed-rotation, so it holds)
+   pfMakeWoodCrate 3644, 554
    pfMakeWoodCrate 3688, 554
-   pfMakeWoodCrate 3778, 554
-   pfMakeWoodCrate 3824, 554
+   pfMakeWoodCrate 3776, 554
+   pfMakeWoodCrate 3820, 554
+   pfMakeWoodCrate 3666, 510
+   pfMakeWoodCrate 3798, 510
+   pfMakeWoodCrate 3732, 502
    -- the RED CRUSHER ALLEY (the hollow's marquee gauntlet): a row of danger-
    -- block thwomps (in the cast) you run beneath, then a two-cloud HOP to the
    -- purple steps. Both clouds ghost-padded a tile past the art each side.
