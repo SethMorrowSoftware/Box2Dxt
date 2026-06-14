@@ -8,6 +8,7 @@ new platform/architecture). Most users can skip this and grab a
 - [Build](#build)
 - [Run the tests](#run-the-tests)
 - [Output files](#output-files)
+- [Packaging a distribution zip](#packaging-a-distribution-zip)
 - [Platform & CPU notes](#platform--cpu-notes)
 - [Continuous integration](#continuous-integration)
 
@@ -73,6 +74,36 @@ The FFI binding strings in `src/box2dxt.lcb` use the base name `box2dxt`, which
 the loader maps to these platform names. Deploy the file next to your stack or
 standalone (when you build a standalone, bundle the matching platform library
 with it).
+
+## Packaging a distribution zip
+
+To hand someone a ready-to-run game (no repo, no toolchain, no internet),
+bundle the extension, the per-platform native libraries, a built **and saved**
+stack, and the end-user install guide into one zip. `tools/make-release.py`
+does it:
+
+```sh
+# Build & SAVE the stack in OXT first (e.g. the platformer), then:
+python3 tools/make-release.py --stack /path/to/platformer.livecode
+# -> dist/box2dxt-platformer.zip
+```
+
+It copies `src/box2dxt.lcb` and `dist/INSTALL.md`, renames each `prebuilt/`
+library to the bare name the loader wants under `lib/`, and adds your saved
+stack — producing:
+
+```
+box2dxt-platformer/
+├── INSTALL.md             # the three-step end-user install guide
+├── box2dxt.lcb
+├── platformer.livecode    # your --stack
+└── lib/box2dxt.{dll,dylib,so}
+```
+
+Override a library with `--win` / `--mac` / `--linux` (e.g. an SSE2 or
+older-glibc build); `--check` validates the inputs without writing the zip.
+The recipient just follows `INSTALL.md`: drop their platform's `lib/` file
+beside the stack, **Load** `box2dxt.lcb`, open the stack.
 
 ## Platform & CPU notes
 
