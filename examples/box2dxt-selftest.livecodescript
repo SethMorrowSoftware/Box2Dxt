@@ -47,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "14"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "15"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -1394,26 +1394,40 @@ end stTestPlayerHelpers
 -- game loads its atlases ONCE), an identical reload is a no-op, and the
 -- explicit b2kSheetsWipe still purges it.
 command stTestSheetPersist
-   local tBefore, tReload
+   local tN
    stNewWorld "sheets: persist across teardown + idempotent reload"
    b2kSheetPersist true
    if there is an image "st_sheetsrc" then delete image "st_sheetsrc"
+   if there is an image "st_sheetsrc2" then delete image "st_sheetsrc2"
    create image "st_sheetsrc"
    set the visible of image "st_sheetsrc" to false
    set the rect of image "st_sheetsrc" to 0, 0, 32, 16
    b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc", 16, 16
-   put the result into tBefore
-   stAssert "grid sheet loaded with 2 frames (got " & tBefore & ")", (tBefore is 2)
+   put the result into tN
+   stAssert "grid sheet loaded with 2 frames (got " & tN & ")", (tN is 2)
    stAssert "frame 1 present before teardown", (b2kSheetHasFrame("stpersist", 1) is true)
    b2kTeardown
    stAssert "sheet SURVIVES b2kTeardown (persist on)", (b2kSheetHasFrame("stpersist", 1) is true)
    b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc", 16, 16
-   put the result into tReload
-   stAssert "identical reload is a cache no-op (still 2 frames, got " & tReload & ")", (tReload is 2)
+   put the result into tN
+   stAssert "identical reload is a cache no-op (still 2 frames, got " & tN & ")", (tN is 2)
+   -- the idempotency key includes the grid args: a DIFFERENT grid under the
+   -- same image must rebuild, not silently keep the old grid
+   b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc", 32, 16
+   put the result into tN
+   stAssert "a changed grid rebuilds (1 frame now, got " & tN & ")", (tN is 1)
+   -- a DIFFERENT source under the same name must rebuild too
+   create image "st_sheetsrc2"
+   set the visible of image "st_sheetsrc2" to false
+   set the rect of image "st_sheetsrc2" to 0, 0, 48, 16
+   b2kSheetFromImage "stpersist", the long id of image "st_sheetsrc2", 16, 16
+   put the result into tN
+   stAssert "a changed source rebuilds (3 frames now, got " & tN & ")", (tN is 3)
    b2kSheetsWipe
    stAssert "b2kSheetsWipe still purges the persisted sheet", (b2kSheetHasFrame("stpersist", 1) is false)
    b2kSheetPersist false   -- restore the default so the later tests teardown clean
    if there is an image "st_sheetsrc" then delete image "st_sheetsrc"
+   if there is an image "st_sheetsrc2" then delete image "st_sheetsrc2"
 end stTestSheetPersist
 
 -- =====================================================================
@@ -3719,14 +3733,15 @@ end b2kSheetPersists
 -- NO grid and name regions yourself with b2kSheetAddFrame -- the path for
 -- packed sheets that have no Kenney-style XML.
 command b2kSheetLoad pName, pPath, pFW, pFH, pCount, pMargin, pSpacing
-   local tRef
-   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is pPath then
-      return the number of lines of sSheetKeys[pName]   -- already loaded: reuse it
+   local tRef, tSig
+   put pPath & "|" & pFW & "|" & pFH & "|" & pCount & "|" & pMargin & "|" & pSpacing into tSig
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tSig then
+      return the number of lines of sSheetKeys[pName]   -- already loaded (same file+grid): reuse it
    end if
    put b2kSheetSourceFromFile(pName, pPath) into tRef
    if tRef is empty then return 0
    b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
-   put pPath into sSheetPath[pName]
+   put tSig into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoad
 
@@ -3734,16 +3749,17 @@ end b2kSheetLoad
 -- grid sheet. The image is used in place and never deleted by the Kit.
 -- Same grid arguments as b2kSheetLoad (margin/spacing; 0x0 = no grid).
 command b2kSheetFromImage pName, pImgRef, pFW, pFH, pCount, pMargin, pSpacing
-   local tRef
+   local tRef, tSig
    put the long id of pImgRef into tRef
-   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tRef then
-      return the number of lines of sSheetKeys[pName]   -- already loaded: reuse it
+   put tRef & "|" & pFW & "|" & pFH & "|" & pCount & "|" & pMargin & "|" & pSpacing into tSig
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tSig then
+      return the number of lines of sSheetKeys[pName]   -- already loaded (same image+grid): reuse it
    end if
    b2kSheetForget pName
    put tRef into sSheetSrc[pName]
    put false into sSheetOwned[pName]
    b2kSheetGridRegions pName, pFW, pFH, pCount, pMargin, pSpacing
-   put tRef into sSheetPath[pName]
+   put tSig into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetFromImage
 
@@ -3792,14 +3808,15 @@ end b2kSheetAddFrame
 -- the Kenney pack format, like Spritesheets/ in this repo). Frames are
 -- addressed BY NAME. pXmlPath defaults to the png path with ".xml".
 command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
-   local tRef, tXml, tLine, tNm, tX, tY, tW, tH
-   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is pPngPath then
-      return the number of lines of sSheetKeys[pName]   -- already loaded: reuse it
-   end if
+   local tRef, tXml, tLine, tNm, tX, tY, tW, tH, tSig
    if pXmlPath is empty then
       put pPngPath into pXmlPath
       set the itemDelimiter to "."
       put "xml" into item -1 of pXmlPath
+   end if
+   put pPngPath & "|" & pXmlPath into tSig
+   if sSheetKeep is true and sSheetKeys[pName] is not empty and sSheetPath[pName] is tSig then
+      return the number of lines of sSheetKeys[pName]   -- already loaded (same png+xml): reuse it
    end if
    put URL ("file:" & pXmlPath) into tXml
    if tXml is empty then put URL ("binfile:" & pXmlPath) into tXml
@@ -3821,7 +3838,7 @@ command b2kSheetLoadAtlas pName, pPngPath, pXmlPath
       end if
    end repeat
    if the last char of sSheetKeys[pName] is cr then delete the last char of sSheetKeys[pName]
-   put pPngPath into sSheetPath[pName]
+   put tSig into sSheetPath[pName]
    return the number of lines of sSheetKeys[pName]
 end b2kSheetLoadAtlas
 
@@ -4402,17 +4419,35 @@ function b2kSheetKeyIndex pSheet, pKey
    return 0
 end b2kSheetKeyIndex
 
+-- Internal: a slice's provenance stamp. A saved frame image is only safe to
+-- reuse if it was baked from the CURRENT source (sSheetPath already encodes
+-- the file/image + grid/xml args) at the CURRENT scale. Stamped onto each
+-- slice as uB2kSig and re-checked on reuse, so a reopened stack that reuses a
+-- sheet NAME for different art, or changes a sheet's scale, re-slices instead
+-- of adopting stale pixels (the name alone is not a safe identity).
+function b2kSheetSliceSig pSheet
+   return sSheetPath[pSheet] & "|" & b2kNumberOr(sSheetScale[pSheet], 1)
+end b2kSheetSliceSig
+
 command b2kSheetEnsureIcon pSheet, pKey
    local tRegion, tX, tY, tW, tH, tSW, tRowPx, tFD, tFA, y, tName, tScale, tW2, tH2
    if sSheetIcon[pSheet][pKey] is not empty then exit b2kSheetEnsureIcon
    put sSheetRegion[pSheet][pKey] into tRegion
    if tRegion is empty then exit b2kSheetEnsureIcon
-   put "b2kfr_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
-   -- REUSE a slice carried in a SAVED stack (b2kSheetPersist): adopt the
-   -- existing frame image rather than re-cut it from the source.
-   if sSheetKeep is true and there is an image tName then
-      put the id of image tName into sSheetIcon[pSheet][pKey]
-      exit b2kSheetEnsureIcon
+   -- Frame image name. Persisting: a DETERMINISTIC name (b2kfr_<sheet>_<n>)
+   -- lets a slice carried in a SAVED stack be found and reused -- but only if
+   -- its uB2kSig still matches (baked from the current source at the current
+   -- scale), so a reused sheet name or a changed scale re-slices rather than
+   -- show stale pixels. Off the persist path: a fresh unique name (no key
+   -- scan; the slice is wiped on teardown anyway), exactly as before.
+   if sSheetKeep is true then
+      put "b2kfr_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
+      if there is an image tName and the uB2kSig of image tName is b2kSheetSliceSig(pSheet) then
+         put the id of image tName into sSheetIcon[pSheet][pKey]
+         exit b2kSheetEnsureIcon
+      end if
+   else
+      put "b2kfr_" & the milliseconds & "_" & random(1000000) into tName
    end if
    if sSheetData[pSheet] is empty then
       put the imageData of sSheetSrc[pSheet] into sSheetData[pSheet]
@@ -4460,6 +4495,7 @@ command b2kSheetEnsureIcon pSheet, pKey
       set the imageData of image tName to tFD
       if tFA is not empty then set the alphaData of image tName to tFA
    end if
+   if sSheetKeep is true then set the uB2kSig of image tName to b2kSheetSliceSig(pSheet)
    put the id of image tName into sSheetIcon[pSheet][pKey]
 end b2kSheetEnsureIcon
 
@@ -4468,10 +4504,14 @@ end b2kSheetEnsureIcon
 command b2kSheetEnsureFlip pSheet, pKey
    local tName
    if sSheetFlip[pSheet][pKey] is not empty then exit b2kSheetEnsureFlip
-   put "b2kfl_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
-   if sSheetKeep is true and there is an image tName then
-      put the id of image tName into sSheetFlip[pSheet][pKey]   -- reuse a saved flip
-      exit b2kSheetEnsureFlip
+   if sSheetKeep is true then
+      put "b2kfl_" & pSheet & "_" & b2kSheetKeyIndex(pSheet, pKey) into tName
+      if there is an image tName and the uB2kSig of image tName is b2kSheetSliceSig(pSheet) then
+         put the id of image tName into sSheetFlip[pSheet][pKey]   -- reuse a saved flip
+         exit b2kSheetEnsureFlip
+      end if
+   else
+      put "b2kfl_" & the milliseconds & "_" & random(1000000) into tName
    end if
    b2kSheetEnsureIcon pSheet, pKey
    if sSheetIcon[pSheet][pKey] is empty then exit b2kSheetEnsureFlip
@@ -4481,6 +4521,7 @@ command b2kSheetEnsureFlip pSheet, pKey
       set the name of it to tName
       set the visible of it to false
       flip image tName horizontal
+      if sSheetKeep is true then set the uB2kSig of image tName to b2kSheetSliceSig(pSheet)
       put the id of image tName into sSheetFlip[pSheet][pKey]
    catch tErr
       put sSheetIcon[pSheet][pKey] into sSheetFlip[pSheet][pKey]
