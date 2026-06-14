@@ -9,3 +9,4 @@ __pycache__/
 # built zip are artifacts -- dist/INSTALL.md is the tracked source.
 /dist/*.zip
 /dist/*.livecode
+/dist/*.oxtstack

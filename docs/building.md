@@ -78,32 +78,37 @@ with it).
 ## Packaging a distribution zip
 
 To hand someone a ready-to-run game (no repo, no toolchain, no internet),
-bundle the extension, the per-platform native libraries, a built **and saved**
-stack, and the end-user install guide into one zip. `tools/make-release.py`
-does it:
+bundle the source (extension + C shim + Kit), the per-platform native
+libraries, the demo's spritesheets, a built **and saved** stack, and the
+end-user install guide into one zip. `tools/make-release.py` does it:
 
 ```sh
 # Build & SAVE the stack in OXT first (e.g. the platformer), then:
-python3 tools/make-release.py --stack /path/to/platformer.livecode
-# -> dist/box2dxt-platformer.zip
+python3 tools/make-release.py --stack /path/to/NewPlateformerDemo.oxtstack
+# -> dist/NewPlateformerDemo.zip
 ```
 
-It copies `src/box2dxt.lcb` and `dist/INSTALL.md`, renames each `prebuilt/`
-library to the bare name the loader wants under `lib/`, and adds your saved
-stack — producing:
+It copies `src/box2dxt.lcb` / `box2d_lc.c` / `box2dxt-kit.livecodescript` into
+`source/`, renames each `prebuilt/` library to the bare name the loader wants
+under `libraries/`, copies the platformer's `Spritesheets/` art into
+`spritesheets/`, adds `dist/INSTALL.md`, and drops your saved stack at the
+root — producing:
 
 ```
-box2dxt-platformer/
-├── INSTALL.md             # the three-step end-user install guide
-├── box2dxt.lcb
-├── platformer.livecode    # your --stack
-└── lib/box2dxt.{dll,dylib,so}
+NewPlateformerDemo/
+├── NewPlateformerDemo.oxtstack    # your --stack
+├── INSTALL.md                     # the three-step end-user install guide
+├── source/      box2dxt.lcb, box2d_lc.c, box2dxt-kit.livecodescript
+├── libraries/   box2dxt.{dll,dylib,so}
+└── spritesheets/  the demo's PNG + XML sheets
 ```
 
 Override a library with `--win` / `--mac` / `--linux` (e.g. an SSE2 or
-older-glibc build); `--check` validates the inputs without writing the zip.
-The recipient just follows `INSTALL.md`: drop their platform's `lib/` file
-beside the stack, **Load** `box2dxt.lcb`, open the stack.
+older-glibc build), the art folder with `--sheets`, or the stack's in-zip name
+with `--stack-name`; `--check` validates the inputs without writing the zip.
+The recipient follows `INSTALL.md`: drop their platform's `libraries/` file
+beside the stack, **Load** `source/box2dxt.lcb`, open the stack, and point its
+first-run prompt at `spritesheets/`.
 
 ## Platform & CPU notes
 
