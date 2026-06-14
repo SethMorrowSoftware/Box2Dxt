@@ -47,6 +47,20 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Kit: a persistent spritesheet cache (`b2kSheetPersist`) — load atlases
+  once, not per level (statically verified + harness v14).** Opt-in (default
+  off, so every other example and the harness are byte-for-byte unchanged).
+  When on, loaded sheets are assets that **survive `b2kTeardown`** (like
+  synthesized sounds): a level rebuild reuses them instead of re-decoding
+  each PNG, re-parsing each XML, and re-slicing every frame — the costliest
+  work the Kit does, previously repeated on every level transition. An
+  identical `b2kSheetLoad`/`LoadAtlas`/`FromImage` becomes a no-op, sliced
+  frames survive, and because source/frame images are named deterministically
+  (`b2ksheet_<name>` / `b2kfr_<sheet>_<n>`, tagged with the file path) a
+  **saved stack** carries the cache — on reopen the load adopts the in-stack
+  images, skipping the disk import entirely. `b2kSheetsWipe` stays the
+  explicit purge. The **platformer** turns it on at `openCard` (Shift+Reset
+  purges) to cut its between-levels load time.
 - **Wave 5 (player actions II) — five new player-controller moves
   (statically verified + harness v13).** All **opt-in** through
   `b2kPlayerSet` knobs whose defaults leave the pre-Wave-5 controller
