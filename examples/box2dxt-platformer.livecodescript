@@ -792,9 +792,10 @@ command pfStartGame
    b2kPlayerSet "wallJumpX", 240      -- WALL JUMP: launch away from a wall...
    b2kPlayerSet "wallJumpY", 430      -- ...and up (matches the ground jump)
    b2kPlayerSet "wallSlideMax", 120   -- ...after a slowed slide down it
-   b2kPlayerSet "dashSpeed", 560      -- DASH (SHIFT or X): a flat ground/air zip
+   b2kPlayerSet "dashSpeed", 560      -- DASH (SHIFT or X): a flat GROUND zip
    b2kPlayerSet "dashMs", 150
    b2kPlayerSet "dashCooldownMs", 420
+   b2kPlayerSet "airDash", 0          -- no mid-air dash: DASH only fires while grounded
    b2kPlayerSet "duckScale", 1        -- DOWN brakes to a stop in place (no hitbox reshape)
    b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (L2 lift bay, L4 lava lift)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
@@ -2572,7 +2573,10 @@ command pfL4Scene
    put "HAUNTED HOLLOW (spooky!)" into gLevelName
    pfBounds 6656
    pfSlab "pf_ground1", 0, 576, 1856, 640
-   pfSlab "pf_ground2", 2048, 576, 6656, 640
+   -- the ground BREAKS at the lava pit (3136..3264): two slabs with a gap, so
+   -- the LAVA strip below is an open hazard you ride the lift / double-jump over
+   pfSlab "pf_ground2", 2048, 576, 3136, 640
+   pfSlab "pf_ground3", 3264, 576, 6656, 640
    pfSlab "pf_plat1", 6240, 512, 6432, 576
    pfSlab "pf_plat2", 6432, 448, 6560, 576
    -- the bat overhang: a stone bar the bats roost under
@@ -2582,6 +2586,7 @@ command pfL4Scene
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
       repeat with tX = 2048 to 6592 step 64
+         if tX >= 3136 and tX < 3264 then next repeat   -- leave the LAVA PIT open
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
       pfTile "terrain_purple_block_top_left", 6240, 512
@@ -4327,6 +4332,7 @@ local sPlayWall         -- airborne wall touch: -1 wall on left, 1 on right, 0 n
 local sPlayWallSliding  -- true while actively wall-sliding (drives state + anim)
 local sPlayWallLockUntil -- sim-clock through which a wall-jump owns vx (no air steer)
 local sPlayDashSpd, sPlayDashMS, sPlayDashCool -- dash tune caches
+local sPlayAirDash      -- true = dash allowed in mid-air (airDash knob; false = grounded only)
 local sPlayDash         -- true while a dash is in flight (gravity parked at 0)
 local sPlayDashEnd      -- sim-clock the dash ends
 local sPlayDashReady    -- sim-clock the next dash may start (the cooldown gate)
@@ -7457,6 +7463,7 @@ command b2kPlayerTuneCache
    put b2kPlayerGet("dashSpeed") into sPlayDashSpd
    put b2kPlayerGet("dashMs") into sPlayDashMS
    put b2kPlayerGet("dashCooldownMs") into sPlayDashCool
+   put (b2kPlayerGet("airDash") is not 0) into sPlayAirDash
    put b2kPlayerGet("duckScale") into sPlayDuckScale
    put (b2kPlayerGet("platformCarry") is not 0) into sPlayCarry
    put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into sPlayCosSlope
@@ -7533,6 +7540,8 @@ function b2kPlayerDefault pKey
          return 160        -- dash duration
       case "dashcooldownms"
          return 500        -- minimum gap between dashes
+      case "airdash"
+         return 1          -- 1 = dash works mid-air too; 0 = dash only when grounded
       case "duckscale"
          return 1          -- ducked capsule height / standing height (1 = no reshape)
       case "platformcarry"
@@ -8192,6 +8201,7 @@ command b2kPlayerTick
          end if
       end if
       if sPlayDash is not true and sPlayDashSpd > 0 and tNow >= sPlayDashReady \
+            and (sPlayAirDash is true or sPlayGrounded is true) \
             and sPlayClimb is not true and sPlaySwim is not true \
             and tInZone is not true and tInWater is not true \
             and b2kActionPressed("dash") then

@@ -286,6 +286,7 @@ local sPlayWall         -- airborne wall touch: -1 wall on left, 1 on right, 0 n
 local sPlayWallSliding  -- true while actively wall-sliding (drives state + anim)
 local sPlayWallLockUntil -- sim-clock through which a wall-jump owns vx (no air steer)
 local sPlayDashSpd, sPlayDashMS, sPlayDashCool -- dash tune caches
+local sPlayAirDash      -- true = dash allowed in mid-air (airDash knob; false = grounded only)
 local sPlayDash         -- true while a dash is in flight (gravity parked at 0)
 local sPlayDashEnd      -- sim-clock the dash ends
 local sPlayDashReady    -- sim-clock the next dash may start (the cooldown gate)
@@ -3416,6 +3417,7 @@ command b2kPlayerTuneCache
    put b2kPlayerGet("dashSpeed") into sPlayDashSpd
    put b2kPlayerGet("dashMs") into sPlayDashMS
    put b2kPlayerGet("dashCooldownMs") into sPlayDashCool
+   put (b2kPlayerGet("airDash") is not 0) into sPlayAirDash
    put b2kPlayerGet("duckScale") into sPlayDuckScale
    put (b2kPlayerGet("platformCarry") is not 0) into sPlayCarry
    put cos(b2kPlayerGet("maxSlopeDeg") * kPI / 180) into sPlayCosSlope
@@ -3492,6 +3494,8 @@ function b2kPlayerDefault pKey
          return 160        -- dash duration
       case "dashcooldownms"
          return 500        -- minimum gap between dashes
+      case "airdash"
+         return 1          -- 1 = dash works mid-air too; 0 = dash only when grounded
       case "duckscale"
          return 1          -- ducked capsule height / standing height (1 = no reshape)
       case "platformcarry"
@@ -4151,6 +4155,7 @@ command b2kPlayerTick
          end if
       end if
       if sPlayDash is not true and sPlayDashSpd > 0 and tNow >= sPlayDashReady \
+            and (sPlayAirDash is true or sPlayGrounded is true) \
             and sPlayClimb is not true and sPlaySwim is not true \
             and tInZone is not true and tInWater is not true \
             and b2kActionPressed("dash") then
