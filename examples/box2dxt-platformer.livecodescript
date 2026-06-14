@@ -25,7 +25,7 @@
 -- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
 --           full) · jump AGAIN in mid-air = DOUBLE JUMP · jump off a wall
 --           you are sliding = WALL JUMP · SHIFT or X = DASH (a flat zip) ·
---           DOWN/S ducks/CRAWLS (shorter, fits low gaps) - and DOWN+JUMP
+--           DOWN/S ducks (brakes to a stop in place) - and DOWN+JUMP
 --           on a one-way deck (bridge, clouds) DROPS THROUGH it · UP/DOWN
 --           at the L2 ladder CLIMBS (JUMP lets go) · ride the moving LIFTS
 --           (they carry you) · the MOUSE DRAGS the crate (chained weights
@@ -38,8 +38,7 @@
 --            non-bouncers), the BONK ROW (headbutt ?-boxes, SMASH bricks
 --            into debris), the one-way BRIDGE over a spike slime, the
 --            slope MOUND, one-way CLOUDS with the fly, the bee, the
---            SPIKE PIT, a fast MOUSE, the Wave 5 CRAWL TUNNEL (a low
---            overhang - duck/DOWN to crawl under for a hidden coin), a
+--            SPIKE PIT, a fast MOUSE, a coin on the open meadow run, a
 --            flying ladybug - then the rope-bridge finale over a chasm,
 --            the crusher alley, and the hilltop SWIM POOL to the flag.
 --   LEVEL 2  THE WORKS (5952px) - the machines: drag the
@@ -197,11 +196,10 @@
 --      change). DOUBLE JUMP: a second jump fires in mid-air (clears the
 --      taller beats). WALL JUMP: hug a wall while airborne to slow the
 --      fall, then jump to launch up-and-away. DASH (SHIFT or X): a flat
---      horizontal burst on a cooldown. CRAWL: DOWN reshapes the capsule
---      shorter (b2kPlayerHalfH drops) to fit low gaps. PLATFORM CARRY: a
---      grounded hero on a moving lift inherits its velocity. The signature
---      beats: L1 CRAWL TUNNEL (duck under the 52px overhang for the coin -
---      or jump over the bar; never blocks the path); L2 LIFT BAY (jump the
+--      horizontal burst on a cooldown. DUCK: DOWN brakes to a stop in place.
+--      PLATFORM CARRY: a grounded hero on a moving lift inherits its
+--      velocity. The signature beats: L1 has a coin on the open meadow run;
+--      L2 LIFT BAY (jump the
 --      pedestal, RIDE the deck across the grinder for the mid-bay coin,
 --      step off the far pedestal - a fall onto the grinder is a recoverable
 --      knockback; the ~200px gap is also double-jumpable); L3 WALL-JUMP
@@ -211,7 +209,7 @@
 --      the deck over the lava between the crushers for the mid-lava coin -
 --      or double-jump the 128px strip; a fall onto the lava is a knockback,
 --      recoverable). EVERY new-move coin is also reachable WITHOUT the
---      trick (double-jump/crawl are universal), so no level can dead-end.
+--      trick (the double-jump is universal), so no level can dead-end.
 --      FEEL is unverifiable statically - tune the Wave 5 knobs in OXT and
 --      confirm: the lifts carry you (stand still and drift with the deck),
 --      a crouched hero clears the L1 bar a standing one cannot, and the L3
@@ -797,7 +795,7 @@ command pfStartGame
    b2kPlayerSet "dashSpeed", 560      -- DASH (SHIFT or X): a flat ground/air zip
    b2kPlayerSet "dashMs", 150
    b2kPlayerSet "dashCooldownMs", 420
-   b2kPlayerSet "duckScale", 0.6      -- DOWN now CRAWLS (shorter hitbox) under low gaps
+   b2kPlayerSet "duckScale", 1        -- DOWN brakes to a stop in place (no hitbox reshape)
    b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (L2 lift bay, L4 lava lift)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
@@ -817,7 +815,7 @@ command pfStartGame
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN crawls under low gaps (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 4: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Four levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 4: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Four levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -1767,24 +1765,9 @@ command pfL1Scene
       set the foregroundColor of it to "70,190,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeC"
    end if
-   -- the CRAWL TUNNEL (level 1's Wave 5 beat - DOWN now reshapes the capsule
-   -- shorter, FEET-ANCHORED, so the hero can CRAWL under a low overhang a
-   -- standing hero cannot clear). The bar bottom is at y515: the standing
-   -- 76px capsule (head ~y500) is BLOCKED, the ducked ~46px one (head ~y530)
-   -- slips through the ~61px gap with margin to spare. A coin waits inside
-   -- (cast). The bar is only ~60px tall, so a jump/double-jump also tops it
-   -- (no dead end) - but the coin under it is the crawl's reward. Built as a
-   -- visible earth bar (a solid grass block, like the bat-bar overhang on L4).
-   pfSlab "pf_crawlbar", 3364, 455, 3556, 515
-   set the backgroundColor of graphic "pf_crawlbar" to "90,150,72"
-   set the visible of graphic "pf_crawlbar" to true
-   b2kCamAdopt the long id of graphic "pf_crawlbar"
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_center") then
-      set the visible of graphic "pf_crawlbar" to false   -- the tiles carry the face
-      pfTile "terrain_grass_block_center", 3364, 451
-      pfTile "terrain_grass_block_center", 3428, 451
-      pfTile "terrain_grass_block_center", 3492, 451
-   end if
+   -- (a low CRAWL overhang once sat here for the Wave 5 crawl move; DOWN is now
+   -- a simple in-place brake, so the overhang is gone and its coin -- cast on
+   -- the open run below -- is grabbed just by running past it)
    pfMakeSpikes 2560, 2752
    -- the one-way bridge (GHOST RULE: the chain runs one tile past the
    -- deck on each side - 688..1072 under art 752..1008)
@@ -1985,7 +1968,7 @@ command pfL1Cast
    pfMakeCoin 2876, 500     -- the second act's slime beat
    pfMakeCoin 3076, 500     -- the skittering mouse's beat
    pfMakeCoin 3232, 392     -- on the rest cloud
-   pfMakeCoin 3460, 548     -- inside the CRAWL TUNNEL: duck (DOWN) to slip under for it
+   pfMakeCoin 3460, 500     -- on the open run (was the crawl-tunnel reward); grab it running past
    pfMakeCoin 3616, 500     -- the last meadow slime's beat
    pfMakeCoin 4128, 510     -- mid-bridge: grab it as the planks dip
    pfMakeCoin 4456, 500     -- the far meadow's ladybug beat
