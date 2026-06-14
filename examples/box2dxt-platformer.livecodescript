@@ -1775,15 +1775,15 @@ command pfL1Scene
    -- (cast). The bar is only ~60px tall, so a jump/double-jump also tops it
    -- (no dead end) - but the coin under it is the crawl's reward. Built as a
    -- visible earth bar (a solid grass block, like the bat-bar overhang on L4).
-   pfSlab "pf_crawlbar", 3300, 455, 3492, 515
+   pfSlab "pf_crawlbar", 3364, 455, 3556, 515
    set the backgroundColor of graphic "pf_crawlbar" to "90,150,72"
    set the visible of graphic "pf_crawlbar" to true
    b2kCamAdopt the long id of graphic "pf_crawlbar"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_center") then
       set the visible of graphic "pf_crawlbar" to false   -- the tiles carry the face
-      pfTile "terrain_grass_block_center", 3300, 451
       pfTile "terrain_grass_block_center", 3364, 451
       pfTile "terrain_grass_block_center", 3428, 451
+      pfTile "terrain_grass_block_center", 3492, 451
    end if
    pfMakeSpikes 2560, 2752
    -- the one-way bridge (GHOST RULE: the chain runs one tile past the
@@ -1985,7 +1985,7 @@ command pfL1Cast
    pfMakeCoin 2876, 500     -- the second act's slime beat
    pfMakeCoin 3076, 500     -- the skittering mouse's beat
    pfMakeCoin 3232, 392     -- on the rest cloud
-   pfMakeCoin 3396, 548     -- inside the CRAWL TUNNEL: duck (DOWN) to slip under for it
+   pfMakeCoin 3460, 548     -- inside the CRAWL TUNNEL: duck (DOWN) to slip under for it
    pfMakeCoin 3616, 500     -- the last meadow slime's beat
    pfMakeCoin 4128, 510     -- mid-bridge: grab it as the planks dip
    pfMakeCoin 4456, 500     -- the far meadow's ladybug beat
@@ -8075,6 +8075,9 @@ command b2kPlayerDuckSet pWantDuck
       b2kSetBounce sPlayRef, 0
       put tNewH / 2 into sPlayHalfH
       put true into sPlayDucked
+      -- the body CENTRE dropped by tShift to keep the FEET planted; lift the
+      -- bound art by the same amount, or the visible character sinks with it
+      if sPlayArt is not empty then subtract tShift from sSprBindDY[sPlayArt]
       b2kPlayerTuneCache   -- the probe reach follows the new (shorter) capsule
    else
       if sPlayDucked is not true then exit b2kPlayerDuckSet
@@ -8099,6 +8102,7 @@ command b2kPlayerStandUp
    b2kSetBounce sPlayRef, 0
    put sPlayStandH / 2 into sPlayHalfH
    put false into sPlayDucked
+   if sPlayArt is not empty then add tShift to sSprBindDY[sPlayArt]   -- undo the duck's art lift
    b2kPlayerTuneCache
 end b2kPlayerStandUp
 

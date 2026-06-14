@@ -47,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "15"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "16"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -142,6 +142,7 @@ command stRunAll
    stRun "stTestPlatformCarry"
    stRun "stTestDuckReshape"
    stRun "stTestPlayerHelpers"
+   stRun "stTestPlayerDuck"
    stRun "stTestTeardown"
    try
       b2kInputInjectOff
@@ -1389,6 +1390,54 @@ command stTestPlayerHelpers
    stAssert "respawn zeroed the horizontal speed (vx " & round(stVX(tRef)) & ")", \
          (abs(stVX(tRef)) < 60)
 end stTestPlayerHelpers
+
+-- Wave 5 DUCK: the crawl shrinks the capsule and drops the body CENTRE to keep
+-- the FEET planted, so the bound art must be LIFTED by the same amount or it
+-- sinks through the floor (the platformer's "ducking puts me below ground"
+-- report). Drives the duck/stand UNITS directly -- the per-frame tick is not
+-- run here, so it sets the cached centre (sPlayPX/PY) its probe would, and
+-- reads the bound art's offset (sSprBindDY) to confirm the compensation.
+command stTestPlayerDuck
+   local tArt, tDy0, tH0, tStand, tNewH, tShift, tBot0, tBotD, tBotU
+   stNewWorld "player: duck plants the feet + lifts the bound art"
+   if there is an image "st_duckart" then delete image "st_duckart"
+   create image "st_duckart"
+   set the visible of image "st_duckart" to false
+   set the rect of image "st_duckart" to 0, 0, 32, 64
+   b2kSheetFromImage "stduck", the long id of image "st_duckart", 32, 64
+   b2kPlayerMake 200, 300, 40, 64, "stduck"
+   put b2kPlayerSprite() into tArt
+   b2kPlayerSet "duckScale", 0.6
+   b2kPlayerTuneCache
+   put sSprBindDY[tArt] into tDy0
+   put b2kPlayerHalfH() into tH0          -- 32 (standing half-height)
+   put 64 into tStand                     -- the height passed to b2kPlayerMake
+   put max(8, round(tStand * 0.6)) into tNewH
+   put (tStand - tNewH) / 2 into tShift
+   put stY(b2kPlayer()) + tH0 into tBot0  -- standing hitbox bottom (screen y)
+   stAssert "player got a bound art sprite", (tArt is not empty)
+   put stX(b2kPlayer()) into sPlayPX      -- the tick's probe would set these
+   put stY(b2kPlayer()) into sPlayPY
+   b2kPlayerDuckSet true
+   put stY(b2kPlayer()) + b2kPlayerHalfH() into tBotD
+   stAssert "duck shrank the hitbox (halfH " & round(b2kPlayerHalfH()) & " < " & round(tH0) & ")", \
+         (b2kPlayerHalfH() < tH0 - 1)
+   stAssert "duck planted the feet (bottom " & round(tBotD) & " ~ " & round(tBot0) & ")", \
+         (abs(tBotD - tBot0) < 3)
+   stAssert "duck lifted the art by tShift (bindDY " & sSprBindDY[tArt] & " ~ " & (tDy0 - tShift) & ")", \
+         (abs(sSprBindDY[tArt] - (tDy0 - tShift)) < 1)
+   put stX(b2kPlayer()) into sPlayPX      -- refresh to the DUCKED centre
+   put stY(b2kPlayer()) into sPlayPY
+   b2kPlayerStandUp
+   put stY(b2kPlayer()) + b2kPlayerHalfH() into tBotU
+   stAssert "standup restored the hitbox (halfH " & round(b2kPlayerHalfH()) & " ~ " & round(tH0) & ")", \
+         (abs(b2kPlayerHalfH() - tH0) < 1)
+   stAssert "standup planted the feet (bottom " & round(tBotU) & " ~ " & round(tBot0) & ")", \
+         (abs(tBotU - tBot0) < 3)
+   stAssert "standup restored the art bind (bindDY " & sSprBindDY[tArt] & " ~ " & tDy0 & ")", \
+         (abs(sSprBindDY[tArt] - tDy0) < 1)
+   if there is an image "st_duckart" then delete image "st_duckart"
+end stTestPlayerDuck
 
 -- b2kSheetPersist: a loaded sheet survives b2kTeardown (so a multi-level
 -- game loads its atlases ONCE), an identical reload is a no-op, and the
@@ -5428,6 +5477,9 @@ command b2kPlayerDuckSet pWantDuck
       b2kSetBounce sPlayRef, 0
       put tNewH / 2 into sPlayHalfH
       put true into sPlayDucked
+      -- the body CENTRE dropped by tShift to keep the FEET planted; lift the
+      -- bound art by the same amount, or the visible character sinks with it
+      if sPlayArt is not empty then subtract tShift from sSprBindDY[sPlayArt]
       b2kPlayerTuneCache   -- the probe reach follows the new (shorter) capsule
    else
       if sPlayDucked is not true then exit b2kPlayerDuckSet
@@ -5452,6 +5504,7 @@ command b2kPlayerStandUp
    b2kSetBounce sPlayRef, 0
    put sPlayStandH / 2 into sPlayHalfH
    put false into sPlayDucked
+   if sPlayArt is not empty then add tShift to sSprBindDY[sPlayArt]   -- undo the duck's art lift
    b2kPlayerTuneCache
 end b2kPlayerStandUp
 
