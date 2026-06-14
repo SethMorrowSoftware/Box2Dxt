@@ -343,15 +343,33 @@ terminal), UP/DOWN drive vy at `swimSpeed`, and a JUMP press is a
 exactly once. Mutually exclusive with the climb. Sized for a *raised-bank*
 basin — a sub-ground pit falls below the camera (see kit-guide §21).
 
+**Wave 5 actions**, each **opt-in** through a knob (the defaults leave the
+controller byte-for-byte as above, and every idle path is one compare per
+frame): **double-jump** (`airJumps` — extra mid-air jumps, refilled on
+landing), **wall-slide + wall-jump** (`wallSlideMax` caps the fall while you
+press into a wall; `wallJumpX`/`wallJumpY` launch up and away with a brief
+steer lock — states `wallslide` and a side ray that runs only while airborne),
+**dash** (`dashSpeed` on the new `dash` action — a flat horizontal burst for
+`dashMs` with gravity parked, cooldown-gated; state `dash`; yields to
+climb/swim), **duck capsule reshape** (`duckScale < 1` turns the Wave 2 brake
+into a real **crawl** — a feet-anchored `b2kReshape` to a shorter capsule with
+a headroom check before standing), and **platform carry** (`platformCarry 1` —
+a grounded player inherits the velocity of the moving kinematic body it rides;
+a vertical lift's carry is exempt from the ground-snap). The marquee
+showcase is the **platformer example**.
+
 | Handler | Purpose |
 |---------|---------|
 | `b2kPlayerMake x, y, w, h [,sheet]` → control | One call: a capsule body host (`w`×`h` collision box — a visible capsule graphic, or invisible with a bound sprite of `sheet`'s first frame on top), controller armed, input on. Reports the player control. |
 | `b2kPlayerAttach ctrl` | Adopt an existing control (or sprite) as the player. A capsule body is added if it has none (then the controller also sets low friction); a body you made yourself keeps your material. Also sets fixed rotation + sleep-off and arms input. |
-| `b2kPlayerAnims idle, run, jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim]` | Map states to the art's animation names (`fall` defaults to `jump`; `duck` to `idle`; `climb` and `hurt` to `jump`; `swim` to `fall` — sheets without those frames still read correctly). `land` is an optional non-looping touch-down flourish, held for its own duration. **Map a LOOPING animation to `hurt`** if your game uses `b2kSpriteOnFinish` on the player's art — a non-looping hurt pose fires that finish message mid-knockback. The art is the player control itself if it is a sprite, else the first sprite `b2kSpriteBind`-pinned to it. |
+| `b2kPlayerAnims idle, run, jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim] [,wall] [,dash]` | Map states to the art's animation names (`fall` defaults to `jump`; `duck` to `idle`; `climb` and `hurt` to `jump`; `swim` and `wall` to `fall`; `dash` to `run` — sheets without those frames still read correctly). `land` is an optional non-looping touch-down flourish, held for its own duration. **Map a LOOPING animation to `hurt`** if your game uses `b2kSpriteOnFinish` on the player's art — a non-looping hurt pose fires that finish message mid-knockback. The art is the player control itself if it is a sprite, else the first sprite `b2kSpriteBind`-pinned to it. |
 | `b2kPlayerSet key, value` / `b2kPlayerGet(key)` | Tuning knobs (table below). Settable any time; `b2kClear` keeps them (config, like input bindings), `b2kTeardown`/`b2kPlayerRemove` wipe them. |
 | `b2kPlayerOnGround()` | Grounded this frame (post-tick; false on the frame a jump launches). |
-| `b2kPlayerState()` | `idle` / `run` / `jump` / `fall` / `duck` / `climb` / `hurt` / `swim`, plus `land` for exactly one frame on touch-down (dust puffs, sounds — read it in `on b2kFrame`). A drop-through renders as `fall`; a knockback's own landing shows no `land` tick. |
+| `b2kPlayerState()` | `idle` / `run` / `jump` / `fall` / `duck` / `climb` / `hurt` / `swim` / `wallslide` / `dash`, plus `land` for exactly one frame on touch-down (dust puffs, sounds — read it in `on b2kFrame`). A drop-through renders as `fall`; a knockback's own landing shows no `land` tick. The Wave 5 states (`wallslide`, `dash`) appear only when their knobs are enabled. |
 | `b2kPlayerFacing()` | 1 right / -1 left — the last horizontal intent. |
+| `b2kPlayerHalfH()` / `b2kPlayerHalfW()` | The capsule's **current** half-extents in px — the half-height drops while in a reshaped duck/crawl. Read these live for head-reach logic (never bake a constant: a hitbox taller than the visible art bumps things the head never touches). |
+| `b2kPlayerInLadder()` / `b2kPlayerInWater()` | This frame's ladder / water zone membership (the controller computes them every tick anyway) — for "press UP to climb" prompts, splash effects, a breath meter. |
+| `b2kPlayerRespawn x, y` | Teleport to a screen-px point and reset to a clean standing idle: velocity zeroed; the jump/hurt/dash/climb/swim/drop/duck state cleared; the air and air-jump budgets refreshed. The respawn most games hand-roll (move + zero velocity + clear a pile of flags) in one call. Tuning and zones are kept. Empty `x`/`y` reset in place. |
 | `b2kPlayerJump [speed]` | Programmatic jump (springs, double-jump powerups): the same launch as a pressed jump but **without** the grounded/coyote gate — the caller decides when it is allowed. |
 | `b2kPlayerAddLadder x1, y1, x2, y2` | Register a ladder **zone** (screen-px rect, any corner order; purely polled — no physics object). Zones are world state: `b2kClear` wipes them with everything else. Run the zone a little above a platform at the ladder's top so walking off that edge holding DOWN grabs it. |
 | `b2kPlayerAddWater x1, y1, x2, y2` | Register a water/**swim zone** (screen-px rect, any corner order; purely polled). World state, wiped by `b2kClear` like ladders. Top the zone a little above the drawn surface so the dive-in and surface-out break the water where the art is. The pool is a *raised basin* between banks (a sub-ground pit clamps below the camera). |
@@ -373,6 +391,19 @@ the between-stroke sink scale and its cap — `swimJump` alone sets the escape
 height, so lower IT to make climbing out harder) · `hurtPopX` 220 /
 `hurtPopY` 320 px/s (knockback launch) ·
 `hurtMs` 700 (control-off span) · `invulnMs` 900 (post-hurt mercy).
+
+**Wave 5 action keys** — all **opt-in** (these defaults leave the controller
+exactly as above): `airJumps` 0 (extra mid-air jumps; **1 = double-jump**,
+refilled on landing) · `wallJumpX` 0 / `wallJumpY` 0 (wall-jump launch px/s,
+away + up; `wallJumpX > 0` arms the **wall system**, `wallJumpY` falls back to
+`jumpSpeed`) · `wallSlideMax` 0 (capped fall px/s while pressing into a wall —
+the `wallslide` state) · `dashSpeed` 0 (a flat horizontal burst on the **`dash`
+action**, default keys SHIFT/X; `0` = off) / `dashMs` 160 / `dashCooldownMs`
+500 · `duckScale` 1 (ducked capsule height ÷ standing; **< 1 reshapes to a
+crawl** so the hero slips under low gaps — feet-anchored, with a headroom check
+before standing) · `platformCarry` 0 (**1** = a grounded player inherits the
+velocity of a moving kinematic platform it rides; costs two reads per
+grounded frame, and changes how a player rides *any* kinematic body).
 
 ```
 -- a playable character in four lines (after b2kQuickStart + sheet load):

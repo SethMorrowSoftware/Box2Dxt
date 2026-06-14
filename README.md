@@ -51,8 +51,9 @@ Box2D v3.1.0 (fetched by CMake)
    a full build-and-run physics sandbox with fans, magnets, lasers, bombs,
    motors, and save/load. Game-minded? The
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
-   Game Kit pushed hard — player controller (run/jump/climb/duck/swim),
-   scrolling camera, spritesheets, coin puzzles, a hilltop swim pool — and the
+   Game Kit pushed hard — player controller (run, double-jump, wall-jump,
+   dash, climb, crawl, swim), scrolling camera, spritesheets, moving
+   platforms, coin puzzles, a hilltop swim pool — and the
    [slingshot](examples/box2dxt-slingshot.livecodescript) is pure physics
    joy: catapult cannonballs into toppling towers, angry-birds style
    (three levels, ballistic aim preview, zero assets). And the

@@ -1022,11 +1022,14 @@ joints, smooth chain terrain, and a per-frame motor driven by the keyboard.
 
 ## 20. Building a whole game (the micro-game pattern)
 
-`examples/box2dxt-microgame.livecodescript` is a complete game — start
-screen, two levels, a win screen — in a few hundred lines of card logic,
-with nothing to install beyond the extension (the hero sheet is embedded
-base64; every sound is `b2kToneMake`d). It is the file to copy when you
-start your own game. Its skeleton is four ideas:
+The **micro-game pattern** is the recommended skeleton for a green-field
+game on the Kit: a complete game — start screen, levels, a win screen — in a
+few hundred lines of card logic, with nothing to install beyond the
+extension (embed the hero sheet as base64; synthesize every sound with
+`b2kToneMake`). A dedicated micro-game example once shipped this verbatim;
+the repo now concentrates its game work on the **platformer showcase**, but
+the pattern below is exactly the one to copy when you start your own game.
+Its skeleton is four ideas:
 
 **1. A game-state machine, gated by `b2kPlayerControl`.** One `gMode`
 local (`menu` / `play` / `won`) decides what clicks and keys mean. The
@@ -1149,9 +1152,54 @@ governs the apex once you break the surface), so to make climbing out of a
 pool harder, lower `swimJump`, not the gravity. **(2) layout** — a swim
 pool can't be a pit *below* the ground, because `b2kCamBounds` clamps the
 camera at the world's bottom edge and anything lower is off-screen; build
-the pool as a RAISED basin between two banks (or raise the whole ground, as
-the micro-game does), then hop in, dive for the coins, and stroke up +
-hold-forward to hop out the far bank.
+the pool as a RAISED basin between two banks (or raise the whole ground),
+then hop in, dive for the coins, and stroke up + hold-forward to hop out the
+far bank.
+
+### Wave 5 actions: double-jump, wall-jump, dash, crawl, carry
+
+The Wave 5 moves are all **opt-in** through `b2kPlayerSet` knobs — the
+defaults leave the controller exactly as the Wave 2/4 chapters describe, and
+each idle path costs one compare per frame, so you only pay for what you turn
+on. Turn them on for a modern-feeling platformer:
+
+```
+b2kPlayerSet "airJumps", 1            -- a second jump in mid-air (double-jump)
+b2kPlayerSet "wallJumpX", 240         -- wall-slide + wall-jump (away + up)...
+b2kPlayerSet "wallJumpY", 430
+b2kPlayerSet "wallSlideMax", 120      -- ...the slowed slide down a wall
+b2kPlayerSet "dashSpeed", 560         -- DASH on the "dash" action (SHIFT/X)
+b2kPlayerSet "duckScale", 0.6         -- DOWN now CRAWLS under a low gap
+b2kPlayerSet "platformCarry", 1       -- ride a moving kinematic platform
+```
+
+- **`airJumps`** is the air-jump budget, refilled on every landing — `1` is a
+  classic double-jump, `2` a triple. (For a *powerup* double-jump, grant it
+  with `b2kPlayerJump` from a sensor instead.)
+- **Wall moves** arm when `wallJumpX > 0` (or `wallSlideMax > 0`). While
+  airborne and pressing INTO a wall you `wallslide` (the fall caps at
+  `wallSlideMax`); JUMP launches up and away with a brief steer-lock so the
+  launch carries clear. `wallJumpY` falls back to `jumpSpeed`.
+- **Dash** is a flat horizontal burst (gravity parked) on the `dash` action
+  — bound to SHIFT/X by default; rebind with `b2kBindAction "dash", …`. It
+  runs `dashMs`, then `dashCooldownMs` must pass before the next, and it
+  yields to climb/swim.
+- **`duckScale < 1`** turns the Wave 2 brake-duck into a real **crawl**: the
+  capsule reshapes (feet-anchored) to that fraction of its standing height,
+  so you fit under a low overhead, and stands back up only when there's
+  headroom. Read the live half-height with `b2kPlayerHalfH()` for any
+  head-reach logic, and size crawl gaps against it.
+- **`platformCarry 1`** makes a grounded player inherit the velocity of the
+  moving kinematic body under it — so a moving platform *carries* you instead
+  of sliding out from under. The platform must move by **velocity** (a
+  kinematic body with `b2kSetVelocity`), not by position, because carry reads
+  that velocity; flip the velocity at the patrol endpoints (write-on-change).
+
+New conveniences: `b2kPlayerHalfH()`/`b2kPlayerHalfW()` (live capsule
+extents), `b2kPlayerInLadder()`/`b2kPlayerInWater()` (this frame's zone
+membership, for prompts/effects), and `b2kPlayerRespawn x, y` (teleport +
+zero velocity + clean state in one call). The **platformer example** is the
+marquee showcase for all of these.
 
 ---
 
