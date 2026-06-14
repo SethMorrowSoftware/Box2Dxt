@@ -47,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "16"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "17"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -143,6 +143,7 @@ command stRunAll
    stRun "stTestDuckReshape"
    stRun "stTestPlayerHelpers"
    stRun "stTestPlayerDuck"
+   stRun "stTestReshapeFilter"
    stRun "stTestTeardown"
    try
       b2kInputInjectOff
@@ -1439,6 +1440,26 @@ command stTestPlayerDuck
    if there is an image "st_duckart" then delete image "st_duckart"
 end stTestPlayerDuck
 
+-- b2kReshape must CARRY the collision filter across the rebuild. A body mid
+-- drop-through has its one-way bit cleared (b2kPlayerDropStart); a crawl-duck
+-- reshape that reset the filter would default the bit back ON and snap the body
+-- up onto the platform it is falling through (gotcha 20) -- the Wave 5
+-- drop-through-while-crawling bug.
+command stTestReshapeFilter
+   local tRef, tSh
+   stNewWorld "reshape: keeps the collision filter (so a drop survives a duck)"
+   b2kSpawnBox 200, 200, 40, 40
+   put the result into tRef
+   put sShapeH[tRef] into tSh
+   stAssert "spawned box has a shape", (tSh is not empty)
+   b2SetShapeFilter tSh, 1, 5, 0          -- category 1, a CUSTOM mask (5), no group
+   stAssert "filter set to mask 5 (got " & b2ShapeFilterMask(tSh) & ")", (b2ShapeFilterMask(tSh) is 5)
+   b2kReshape tRef, "ball"                -- reshape the body, as the crawl-duck does
+   put sShapeH[tRef] into tSh             -- a NEW shape handle after the rebuild
+   stAssert "reshape kept the mask (got " & b2ShapeFilterMask(tSh) & " ~ 5)", (b2ShapeFilterMask(tSh) is 5)
+   stAssert "reshape kept the category (got " & b2ShapeFilterCategory(tSh) & " ~ 1)", (b2ShapeFilterCategory(tSh) is 1)
+end stTestReshapeFilter
+
 -- b2kSheetPersist: a loaded sheet survives b2kTeardown (so a multi-level
 -- game loads its atlases ONCE), an identical reload is a no-op, and the
 -- explicit b2kSheetsWipe still purges it.
@@ -2330,7 +2351,7 @@ end b2kSetDensity
 -- Resize the control's graphic first, then re-apply materials afterwards.
 command b2kReshape pControl, pShape
    local tRef, tBody, tOld, tHw, tHh, tWm, tHm, tR, tL, tHoriz, tCx, tCy, p, lx, ly, tCount, tNewVerts
-   local tWx, tWy, tWa
+   local tWx, tWy, tWa, tFCat, tFMask, tFGrp
    put the long id of pControl into tRef
    if sBody[tRef] is empty then exit b2kReshape
    put sBody[tRef] into tBody
@@ -2338,6 +2359,12 @@ command b2kReshape pControl, pShape
    -- is never momentarily shapeless and a rejected shape leaves the original
    -- intact (any joints on the body stay valid throughout).
    put sShapeH[tRef] into tOld
+   put empty into tFCat                 -- carry the old shape's collision FILTER across
+   if tOld is not empty then
+      put b2ShapeFilterCategory(tOld) into tFCat
+      put b2ShapeFilterMask(tOld) into tFMask
+      put b2ShapeFilterGroup(tOld) into tFGrp
+   end if
    put empty into sShapeH[tRef]
    b2ShapeDefEnableSensorEvents true   -- keep the reshaped body detectable by sensors
    if sSensor[tRef] is true then b2ShapeDefSensor true   -- a sensor stays a sensor after reshaping
@@ -2410,6 +2437,14 @@ command b2kReshape pControl, pShape
          end if
    end switch
    if tOld is not empty then b2DestroyShape tOld   -- now safe to release the old shape
+   -- A reshape must NOT silently reset collision layers: a body mid drop-through
+   -- has its one-way bit cleared (b2kPlayerDropStart), and defaulting it back ON
+   -- snaps the body up onto the platform it is falling through (gotcha 20). Clamp
+   -- Box2D's 2^64-1 default mask to the 32 Kit bits first (gotcha 21).
+   if tFCat is not empty and sShapeH[tRef] is not empty then
+      if tFMask > 4294967295 then put 4294967295 into tFMask
+      b2SetShapeFilter sShapeH[tRef], tFCat, tFMask, tFGrp
+   end if
    -- The size/outline changed but the body need not have moved, so the move-event
    -- sync would skip it (an at-rest body produces no move event). Bust the
    -- pose-keyed draw cache and redraw at the body's current pose right now so the
