@@ -885,6 +885,39 @@ command pfSlab pName, pL, pT, pR, pB
    b2kAddStatic the long id of graphic pName
 end pfSlab
 
+-- Skin a STATIC slab with sheet art instead of a flat colour: a COPY of the
+-- frame image stretched to the slab's exact rect, so the collision size never
+-- changes. The texture is a pf_* image (pfWipeStage clears it next build), laid
+-- in at build time only -- the camera scroll is 0 then, so the slab's rect reads
+-- as world coords and the adopt preserves the position. No assets or a missing
+-- frame: this no-ops and the slab keeps its colour (the placeholder fallback).
+command pfTextureSlab pSlab, pFrame
+   local tSpr, tImg, tName
+   if gAssetsOK is not true then exit pfTextureSlab
+   if there is no graphic pSlab then exit pfTextureSlab
+   if not b2kSheetHasFrame("tiles", pFrame) then exit pfTextureSlab
+   b2kSpriteNew "tiles", pFrame, -3000, -3000   -- a throwaway sprite carries the sliced frame as its icon
+   put the result into tSpr
+   if tSpr is empty then exit pfTextureSlab
+   put the icon of tSpr into tImg
+   if tImg is empty or there is no image id tImg then
+      b2kSpriteRemove tSpr
+      exit pfTextureSlab
+   end if
+   put "pf_tex_" & (the short name of graphic pSlab) into tName
+   if there is an image tName then delete image tName
+   lock screen
+   clone image id tImg
+   set the name of the last image to tName
+   set the rect of image tName to the rect of graphic pSlab   -- stretch to fit
+   set the visible of image tName to true   -- the sliced frame source is hidden; the copy shows
+   set the lockLoc of image tName to true
+   b2kSpriteRemove tSpr
+   set the visible of graphic pSlab to false   -- the texture stands in for the flat fill
+   b2kCamAdopt the long id of image tName
+   unlock screen
+end pfTextureSlab
+
 command pfShowSlabs pFlag
    local tC
    set the itemDelimiter to comma
@@ -1939,6 +1972,8 @@ command pfL1Scene
    set the visible of graphic "pf_pondR" to true
    b2kCamAdopt the long id of graphic "pf_pondL"
    b2kCamAdopt the long id of graphic "pf_pondR"
+   pfTextureSlab "pf_pondL", "terrain_stone_block_center"   -- sheet art instead of the flat banks
+   pfTextureSlab "pf_pondR", "terrain_stone_block_center"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
       -- grass the bank tops + the far-bank flag approach so the pool reads
       -- as a basin set into the hill (the floor stays under the water)
@@ -2180,6 +2215,8 @@ command pfL2Scene
    set the visible of graphic "pf_liftpedR" to true
    b2kCamAdopt the long id of graphic "pf_liftpedL"
    b2kCamAdopt the long id of graphic "pf_liftpedR"
+   pfTextureSlab "pf_liftpedL", "terrain_stone_block_center"   -- stone pedestals, not flat grey
+   pfTextureSlab "pf_liftpedR", "terrain_stone_block_center"
    -- the grinder: a visible danger strip on the floor + a hurt sensor over
    -- it (the y548 top sits at the floor line, like the lava sensor, so it
    -- catches a walker but never the deck/rider gliding above at y~500)
@@ -2407,6 +2444,8 @@ command pfL3Scene
    set the visible of graphic "pf_wjShaftR" to true
    b2kCamAdopt the long id of graphic "pf_wjShaftL"
    b2kCamAdopt the long id of graphic "pf_wjShaftR"
+   pfTextureSlab "pf_wjShaftL", "terrain_snow_block_center"   -- icy pillars, not flat blue
+   pfTextureSlab "pf_wjShaftR", "terrain_snow_block_center"
    -- the glacier run (the level's second act): a snow cloud rest above
    -- the second sweeping saw's stretch
    b2kSmoothGround "3008,448" & cr & "2944,448" & cr & "2752,448" & cr & "2688,448"
