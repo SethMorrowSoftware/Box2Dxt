@@ -710,11 +710,15 @@ command pfStartGame
    end if
    b2kPlayerSet "moveSpeed", kMoveSpeed
    b2kPlayerSet "jumpSpeed", kJumpSpeed
-   -- Wave 4 swim feel: the stroke (swimJump) is bumped over the Kit default
-   -- so the bigger 88px capsule clears the hilltop pool's bank on the way
-   -- out; all four swim knobs are live, tweak to taste in OXT
+   -- Wave 4 swim feel: heavier than the Kit defaults. swimGravity (the
+   -- sink between strokes) is well up so the water feels weighty; swimJump
+   -- (the stroke) is the ONLY thing that sets the escape height, so it is
+   -- trimmed back -- you must swim to the bank and stroke to climb out, not
+   -- bob straight up. All four are live; tune to taste in OXT.
    b2kPlayerSet "swimSpeed", 165
-   b2kPlayerSet "swimJump", 360
+   b2kPlayerSet "swimJump", 300
+   b2kPlayerSet "swimGravity", 0.6
+   b2kPlayerSet "swimMaxFall", 200
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
