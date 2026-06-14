@@ -213,6 +213,7 @@ local gBonkMS, gPlateSpr
 -- the per-frame hero snapshot (read ONCE in b2kFrame; every tick
 -- shares it - each b2kPosition/b2kPlayerState is an FFI round-trip)
 local gHeroPX, gHeroPY, gHeroState, gJumpMS
+local gHeroHalfH        -- the hero capsule's half-height (head reach for bonks)
 local gDebrisNext, gDebrisUntil
 local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
 local gHasKey, gKeySpr, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB
@@ -674,13 +675,20 @@ command pfStartGame
    if gAssetsOK is true then
       b2kSheetScale "chars", 0.75
       put 48 into tW
-      put 88 into tH
-      put -4 into tDY
+      -- the 128px character frame is bottom-aligned with headroom, so an
+      -- 88px hitbox topped out ABOVE the visible head -- heads "missed"
+      -- bricks by that headroom. 76 matches the art; tDY keeps the FEET on
+      -- the ground (sprite half = 128*0.75/2 = 48 vs hitbox half tH/2).
+      -- If the head still gaps under bricks, lower tH a touch; if it sinks
+      -- INTO them, raise it. tDY + gHeroHalfH follow automatically.
+      put 76 into tH
+      put (tH div 2) - 48 into tDY
    else
       put 36 into tW
       put 60 into tH
       put -2 into tDY
    end if
+   put tH / 2 into gHeroHalfH   -- bonks reach the brick at the real head
    create graphic "pf_heroBody"
    set the style of it to "rectangle"
    set the rect of it to 120 - tW div 2, 480 - tH div 2, 120 + tW div 2, 480 + tH div 2
@@ -3121,7 +3129,7 @@ command pfTickBonks
    if gBonkN is 0 or gBonkN is empty then exit pfTickBonks
    if gHurtLock is true then exit pfTickBonks
    put gHeroPX into tHX
-   put gHeroPY - 44 into tHead
+   put gHeroPY - gHeroHalfH into tHead   -- the real capsule top (head)
    if tHead < 440 or tHead > 468 then exit pfTickBonks
    if the milliseconds < gBonkMS then exit pfTickBonks
    if gHeroState is not "jump" and (gJumpMS is 0 or gJumpMS is empty or the milliseconds - gJumpMS > 160) then exit pfTickBonks
