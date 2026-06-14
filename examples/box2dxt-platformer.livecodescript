@@ -727,6 +727,20 @@ command pfStartGame
    b2kPlayerSet "swimJump", 300
    b2kPlayerSet "swimGravity", 0.6
    b2kPlayerSet "swimMaxFall", 200
+   -- Wave 5 moves, on for the whole showcase (each beat below leans on one;
+   -- all stay live everywhere). The Kit falls the wall-slide pose back to
+   -- the fall/jump frame and the dash pose to the run frame -- the beige
+   -- hero has no dedicated wall/dash art -- so they read correctly. Tune in
+   -- OXT to taste: these are first-pass feel numbers.
+   b2kPlayerSet "airJumps", 1         -- DOUBLE JUMP (a second jump in mid-air)
+   b2kPlayerSet "wallJumpX", 240      -- WALL JUMP: launch away from a wall...
+   b2kPlayerSet "wallJumpY", 430      -- ...and up (matches the ground jump)
+   b2kPlayerSet "wallSlideMax", 120   -- ...after a slowed slide down it
+   b2kPlayerSet "dashSpeed", 560      -- DASH (SHIFT or X): a flat ground/air zip
+   b2kPlayerSet "dashMs", 150
+   b2kPlayerSet "dashCooldownMs", 420
+   b2kPlayerSet "duckScale", 0.6      -- DOWN now CRAWLS (shorter hitbox) under low gaps
+   b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (L2 lift, L3 raft)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
@@ -745,7 +759,7 @@ command pfStartGame
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps (tap = hop, hold = full), DOWN ducks - DOWN+JUMP drops through bridges/clouds - UP/DOWN" & cr & "climbs ladders (JUMP lets go). R restarts, ESC pauses, M mutes, MOUSE drags the crate. LEVEL " & gLevel & " of 4: " & gLevelName & "." & cr & "Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag to advance. Four levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN crawls under low gaps (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 4: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Four levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
