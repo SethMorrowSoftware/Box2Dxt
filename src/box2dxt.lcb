@@ -130,7 +130,7 @@ private foreign handler _contact_begin_b(in pI as CInt) returns CInt binds to "c
 private foreign handler _contact_end_a(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_end_a!cdecl"
 private foreign handler _contact_end_b(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_end_b!cdecl"
 
--- ===== ABI v3 additions: foreign bindings ===========================
+-- ===== Extended foreign bindings (added at ABI v3; current ABI is 4) =====
 -- shape-def builder (one-shot extras applied by the next shape creation)
 private foreign handler _shapedef_reset() returns nothing binds to "c:box2dxt>b2lc_shapedef_reset!cdecl"
 private foreign handler _shapedef_set_sensor(in pF as CInt) returns nothing binds to "c:box2dxt>b2lc_shapedef_set_sensor!cdecl"
@@ -1165,7 +1165,7 @@ public handler b2ContactEndBodyB(in pIndex as Integer) returns Integer
 end handler
 
 -- =====================================================================
--- ABI v3 additions: public API
+-- Extended public API (added at ABI v3; current ABI is 4)
 -- =====================================================================
 
 -- ---- shape-def builder (one-shot; consumed by the next shape creation) ----

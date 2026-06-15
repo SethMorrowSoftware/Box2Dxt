@@ -66,7 +66,8 @@ This guide is entirely about the **Kit** layer.
 ## 2. Install and your first scene
 
 **Requirements:** the `box2dxt` extension loaded. Check with `put b2Version()`
-— it should return `3`. The Kit runs in OpenXTalk and LiveCode 9.6.3+.
+— it should return `4` (the shim ABI version, unrelated to Box2D's own 3.1.0).
+The Kit runs in OpenXTalk and LiveCode 9.6.3+.
 
 **Install:** paste the contents of `src/box2dxt-kit.livecodescript` into your
 card or stack script. (Or save it as a library stack and `start using` it.)
@@ -812,7 +813,7 @@ b2kSetCollisionGroup tWheelB, -1
 ### Just these two
 
 ```livecode
-b2kNoCollide tArm, tBody)    -- exempt one specific pair (a filter joint
+b2kNoCollide tArm, tBody    -- exempt one specific pair (a filter joint)
 ```
 
 ---
@@ -1214,9 +1215,13 @@ A few things that trip up LiveCode/OpenXTalk users specifically:
   (`type`, `name`, `layer`, `number`, `time`, `id`, `mode`…) are reserved. The
   Kit prefixes everything (`b2k…`, internal `s…`); prefix **your** variables too
   (`tBox`, `gScore`) so you never collide with a keyword.
-- **`get` vs. `put` for functions that return.** `b2kSpawn…`, `b2kGrab`, and the
-  joint constructors *return* a value. Use `put … into tVar` to keep it, or
-  `get …` to discard it. Calling them as a bare statement is a syntax error.
+- **`the result` for commands, `()` for functions.** Most value-returning Kit
+  handlers — `b2kSpawn…`, the joint constructors (`b2kHinge`, `b2kWeld`, …),
+  `b2kAddSensor` — are **commands**: call them as a bare statement and read
+  `the result` on the very next line (`b2kSpawnBox 100,80,40,40` then
+  `put the result into tBox`). A few are true **functions** (`b2kGrab`,
+  `b2kPosition`, the getters): call those with `()` — `put b2kGrab(x,y) into tVar`.
+  Don't mix the two forms.
 - **Custom properties stick to objects.** A handy pattern is to stash per-object
   data as `set the uColor of tBox to …` and read it back later — the Kit and the
   examples use `u…` custom properties throughout.
@@ -1227,8 +1232,10 @@ A few things that trip up LiveCode/OpenXTalk users specifically:
 
 ## 23. Complete API index
 
-Every public handler, grouped. `[f]` marks a **function** (returns a value — call
-it with `()` / `get` / `put`); everything else is a **command** (a statement).
+Every public handler, grouped. `[f]` marks a handler that **returns a value** —
+either a *function* (call with `()` / `get` / `put`) or a value-returning
+*command* (call as a statement, then read `the result`; see §22 and
+kit-reference.md for which is which). Unmarked handlers are plain commands.
 Optional arguments are in `[…]`.
 
 ### World & lifecycle
@@ -1316,7 +1323,7 @@ Optional arguments are in `[…]`.
 
 ### Player (the platformer controller)
 `b2kPlayerMake x,y,w,h [,sheet]` · `b2kPlayerAttach ctrl` ·
-`b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim]` ·
+`b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim] [,wall] [,dash]` ·
 `b2kPlayerSet key,value` ·
 `b2kPlayerGet(key)` `[f]` · `b2kPlayerOnGround()` `[f]` · `b2kPlayerState()` `[f]` ·
 `b2kPlayerFacing()` `[f]` · `b2kPlayerJump [speed]` · `b2kPlayerControl flag` ·

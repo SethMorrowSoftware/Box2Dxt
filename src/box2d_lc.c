@@ -1058,7 +1058,7 @@ LC_API int b2lc_cast_ray_closest(int w, double x1, double y1, double x2, double 
     s_ray_hit = s_ray_body = s_ray_shape = 0;
     s_ray_px = s_ray_py = s_ray_nx = s_ray_ny = s_ray_frac = 0;
     b2WorldId wid = worlds_get(w);
-    if (!b2World_IsValid(wid)) return 0;
+    if (!b2World_IsValid(wid) || !finite2(x1, y1) || !finite2(x2, y2)) return 0;
     b2RayResult r = b2World_CastRayClosest(wid, v2(x1, y1), v2(x2 - x1, y2 - y1), b2DefaultQueryFilter());
     if (r.hit) {
         s_ray_hit  = 1;
@@ -1457,7 +1457,7 @@ static double s_shapeRay[5];   /* px, py, nx, ny, fraction */
 LC_API int b2lc_shape_raycast(int s, double x1, double y1, double x2, double y2) {
     s_shapeRayHit = 0; memset(s_shapeRay, 0, sizeof s_shapeRay);
     b2ShapeId id = shapes_get(s);
-    if (!b2Shape_IsValid(id)) return 0;
+    if (!b2Shape_IsValid(id) || !finite2(x1, y1) || !finite2(x2, y2)) return 0;
     b2RayCastInput in; in.origin = v2(x1, y1); in.translation = v2(x2 - x1, y2 - y1); in.maxFraction = 1.0f;
     b2CastOutput out = b2Shape_RayCast(id, &in);
     if (out.hit) {
@@ -1502,7 +1502,7 @@ static b2Vec2 s_chain[LC_MAX_CHAIN];
 static int    s_chainCnt = 0;
 static b2ShapeId *s_chainSeg = NULL; static int s_chainSegCap = 0, s_chainSegCnt = 0;
 LC_API void b2lc_chain_begin(void) { s_chainCnt = 0; }
-LC_API void b2lc_chain_add_point(double x, double y) { if (s_chainCnt < LC_MAX_CHAIN) s_chain[s_chainCnt++] = v2(x, y); }
+LC_API void b2lc_chain_add_point(double x, double y) { if (s_chainCnt < LC_MAX_CHAIN && finite2(x, y)) s_chain[s_chainCnt++] = v2(x, y); }
 static void retire_chain_segments(b2ChainId id) {
     if (!b2Chain_IsValid(id)) return;
     int n = b2Chain_GetSegmentCount(id);
@@ -1532,8 +1532,8 @@ LC_API int b2lc_chain_create(int b, int isLoop, double friction, double restitut
     cd.points = s_chain;
     cd.count = s_chainCnt;
     b2SurfaceMaterial mat = b2DefaultSurfaceMaterial();
-    mat.friction = (float)friction;
-    mat.restitution = (float)restitution;
+    mat.friction = (float)nonneg_or(friction, 0.0);        /* reject NaN/Inf/negative — match the shape paths */
+    mat.restitution = (float)nonneg_or(restitution, 0.0);
     cd.materials = &mat;
     cd.materialCount = 1;
     cd.isLoop = isLoop ? true : false;
@@ -1559,9 +1559,9 @@ LC_API void b2lc_chain_destroy(int c) {
     chains_free_handle(c);
 }
 LC_API int  b2lc_chain_is_valid(int c)  { return b2Chain_IsValid(chains_get(c)) ? 1 : 0; }
-LC_API void b2lc_chain_set_friction(int c, double f)    { b2ChainId id = chains_get(c); if (b2Chain_IsValid(id)) b2Chain_SetFriction(id, (float)f); }
+LC_API void b2lc_chain_set_friction(int c, double f)    { b2ChainId id = chains_get(c); if (b2Chain_IsValid(id) && finite1(f) && f >= 0.0) b2Chain_SetFriction(id, (float)f); }
 LC_API double b2lc_chain_friction(int c)                { b2ChainId id = chains_get(c); return b2Chain_IsValid(id) ? (double)b2Chain_GetFriction(id) : 0.0; }
-LC_API void b2lc_chain_set_restitution(int c, double r) { b2ChainId id = chains_get(c); if (b2Chain_IsValid(id)) b2Chain_SetRestitution(id, (float)r); }
+LC_API void b2lc_chain_set_restitution(int c, double r) { b2ChainId id = chains_get(c); if (b2Chain_IsValid(id) && finite1(r) && r >= 0.0) b2Chain_SetRestitution(id, (float)r); }
 LC_API double b2lc_chain_restitution(int c)             { b2ChainId id = chains_get(c); return b2Chain_IsValid(id) ? (double)b2Chain_GetRestitution(id) : 0.0; }
 LC_API int b2lc_chain_segment_count(int c) {
     b2ChainId id = chains_get(c);
@@ -1769,7 +1769,7 @@ LC_API int b2lc_query_overlap_point(int w, double x, double y) {
 LC_API int b2lc_query_overlap_circle(int w, double cx, double cy, double r) {
     q_reset();
     b2WorldId wid = worlds_get(w);
-    if (!b2World_IsValid(wid)) return 0;
+    if (!b2World_IsValid(wid) || !finite3(cx, cy, r) || r < 0.0) return 0;
     b2Vec2 pt = v2(cx, cy);
     b2ShapeProxy proxy = b2MakeProxy(&pt, 1, (float)r);
     b2World_OverlapShape(wid, &proxy, b2DefaultQueryFilter(), overlap_cb, NULL);
@@ -1778,7 +1778,7 @@ LC_API int b2lc_query_overlap_circle(int w, double cx, double cy, double r) {
 LC_API int b2lc_query_overlap_shape(int w, double radius) {
     q_reset();
     b2WorldId wid = worlds_get(w);
-    if (!b2World_IsValid(wid) || s_polyCnt < 1) return 0;
+    if (!b2World_IsValid(wid) || s_polyCnt < 1 || !finite1(radius) || radius < 0.0) return 0;
     b2ShapeProxy proxy = b2MakeProxy(s_poly, s_polyCnt, (float)radius);
     b2World_OverlapShape(wid, &proxy, b2DefaultQueryFilter(), overlap_cb, NULL);
     return s_qCnt;
@@ -1786,7 +1786,7 @@ LC_API int b2lc_query_overlap_shape(int w, double radius) {
 LC_API int b2lc_query_raycast_all(int w, double x1, double y1, double x2, double y2) {
     q_reset();
     b2WorldId wid = worlds_get(w);
-    if (!b2World_IsValid(wid)) return 0;
+    if (!b2World_IsValid(wid) || !finite2(x1, y1) || !finite2(x2, y2)) return 0;
     b2World_CastRay(wid, v2(x1, y1), v2(x2 - x1, y2 - y1), b2DefaultQueryFilter(), cast_cb, NULL);
     if (s_qCnt > 1) qsort(s_q, (size_t)s_qCnt, sizeof(LcQRow), q_cmp_frac);
     return s_qCnt;
@@ -1794,7 +1794,7 @@ LC_API int b2lc_query_raycast_all(int w, double x1, double y1, double x2, double
 LC_API int b2lc_query_shapecast(int w, double radius, double dx, double dy) {
     q_reset();
     b2WorldId wid = worlds_get(w);
-    if (!b2World_IsValid(wid) || s_polyCnt < 1) return 0;
+    if (!b2World_IsValid(wid) || s_polyCnt < 1 || !finite3(radius, dx, dy) || radius < 0.0) return 0;
     b2ShapeProxy proxy = b2MakeProxy(s_poly, s_polyCnt, (float)radius);
     b2World_CastShape(wid, &proxy, v2(dx, dy), b2DefaultQueryFilter(), cast_cb, NULL);
     if (s_qCnt > 1) qsort(s_q, (size_t)s_qCnt, sizeof(LcQRow), q_cmp_frac);

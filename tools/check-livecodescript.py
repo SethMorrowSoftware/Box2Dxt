@@ -14,9 +14,10 @@ It checks the canonical Kit and every example stack for:
      ``setprop`` / ``before`` / ``after`` has a matching ``end <name>``.
   3. Control-structure balance — every block ``if … then`` / ``repeat`` /
      ``switch`` / ``try`` is closed by its ``end`` inside the handler that opens
-     it. (Logical lines are reassembled across ``\\`` continuations and comments
-     are stripped first, so multi-line ``if … then`` and ``else if`` do not
-     false-positive.)
+     it, and a stray/extra ``end if`` (more closes than block-``if`` opens) is
+     flagged. (Logical lines are reassembled across ``\\`` continuations and
+     comments are stripped first, so multi-line ``if … then`` and ``else if`` do
+     not false-positive.)
 
 And it shells out to ``sync-embedded-kit.py --check`` so a single run also proves
 the embedded Kit copies have not drifted.
@@ -127,7 +128,15 @@ def check_structure(text):
             kind = toks[1]
             if kind == "if":
                 if ctrl and ctrl[-1][0] == "if":
-                    ctrl.pop()                   # else: hybrid chain / stray — leniently ignore
+                    ctrl.pop()
+                else:
+                    # A hybrid if / else-if / end-if chain keeps its single pushed
+                    # 'if' frame until the 'end if', so reaching here means more
+                    # 'end if' closes than block-'if' opens: a stray/extra or
+                    # misplaced 'end if'. OXT rejects an 'end if' with no open if.
+                    errors.append(
+                        f"  L{lineno}: stray/extra 'end if' in handler '{handler[0]}' (no open block 'if')"
+                    )
             elif ctrl and ctrl[-1][0] == kind:
                 ctrl.pop()
             else:

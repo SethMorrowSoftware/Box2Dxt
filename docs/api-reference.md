@@ -236,7 +236,7 @@ rendering into an LCB widget canvas, rather than one control per body.
 
 **Extending the binding.** See [architecture.md](architecture.md#extending-the-binding)
 for the step-by-step recipe (add a `b2lc_*` C function, a `foreign handler`, and
-a public wrapper; bump `LC_ABI_VERSION`; rebuild). As of ABI `3` the binding
+a public wrapper; bump `LC_ABI_VERSION`; rebuild). The binding (ABI 4)
 covers the full Box2D v3.1 **live-object** surface (chains, sensors, filtering,
 hit & body-move events, shape casts, motor/filter joints, world tuning, mass
 data, …). What's intentionally **not** wrapped: pre-solve / custom-filter

@@ -118,7 +118,7 @@ Exposing more of Box2D is mechanical. To add a handler:
 Add a smoke-test assertion in `tests/smoke_test.c` for anything non-trivial so CI
 exercises it on every platform.
 
-As of ABI `3` the binding already covers the full Box2D v3.1 **live-object**
+The binding (currently ABI 4) covers the full Box2D v3.1 **live-object**
 surface. The newer additions reuse a few shared shim patterns worth knowing when
 you extend further:
 

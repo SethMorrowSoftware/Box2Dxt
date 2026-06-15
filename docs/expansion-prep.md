@@ -7,7 +7,7 @@ that keep the expansion as reliable as the engine underneath it.
 
 | | |
 |---|---|
-| Baseline | Kit + games user-verified; self-test harness **v10, ~113 assertions, all pass** (Wave 2 closed 2026-06-13) |
+| Baseline | Kit + games user-verified; self-test harness **v10, ~113 assertions, all pass** (Wave 2 closed 2026-06-13; the harness has since grown to **v18, 177 assertions** — the figures below are historical Wave checkpoints) |
 | Assets | **LANDED (2026-06-11)** — Kenney's iconic platformer family, ~900 frames; Wave 0 catalogue below |
 | Wave 1 | **COMPLETE — user-verified 2026-06-12** (the three-level platformer; see §7) |
 | Wave 2 | **COMPLETE — user-verified 2026-06-13** (player actions I, harness v10; see §9) |

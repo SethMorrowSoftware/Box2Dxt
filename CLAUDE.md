@@ -27,7 +27,7 @@ Box2D v3.1.0 (fetched by CMake)
 - **LCB binding** (`src/box2dxt.lcb`, `library org.openxtalk.box2dxt`): declares `foreign handler`
   bindings to the shared library and public `b2PascalCase` handlers callable from xTalk. This API
   speaks **metres and radians**; body type codes are `0=static, 1=kinematic, 2=dynamic`.
-- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (260+ `b2k*`
+- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (300+ `b2k*`
   handlers incl. the game modules: input, sprites, player controller, camera) that speaks
   **screen pixels and degrees**, binds bodies to LiveCode controls, and runs the animation
   loop. This is what the examples and most users actually call.
@@ -95,7 +95,7 @@ failure. Run it after **every** `.livecodescript` edit.
 pass" and let the user confirm.
 
 **The self-test harness** (`examples/box2dxt-selftest.livecodescript`) is the runtime safety net:
-~125 deterministic assertions (currently **v12**) driving the real Kit (paused world +
+~177 deterministic assertions (currently **v18**) driving the real Kit (paused world +
 `b2kStepOnce` hand-stepping + `b2kInputInject` scripted keys). The workflow for every **Kit**
 change: (1) add/extend an assertion
 that captures the new behavior, (2) **bump `kStHarnessV`** (the report header prints it, so a
@@ -145,9 +145,13 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
    OXT reports "missing end if" at the handler's end. Chains like
    `if c then s1` / `else s2` (statement on the else line) are fine. The
    static checker's dangling-else gate flags the broken pairing.
-11. **Declare `local` only at the top of a handler.** A `local` nested inside
-   an `if`/`repeat` block has broken OXT compilation of the entire script.
-   Keep all declarations together at the handler's top.
+11. **Prefer declaring `local` at the top of a handler** (house style, not a
+   hard compiler rule). Keeping all declarations together at the handler's top
+   is the convention and a hedge against stricter OXT builds. A `local` nested
+   inside an `if`/`repeat` block was once suspected of breaking OXT compilation,
+   but the in-use OXT build tolerates it (several ship in the examples, e.g. the
+   contraption builder and demo), so the static checker deliberately does NOT
+   flag nested `local`. Still: when you add code, declare at the top.
 12. **Scrolled-group coordinates are visual.** `the loc`/`rect` of a grouped
    control is reported and set SCROLL-ADJUSTED on OXT, so a per-frame write
    of world coordinates into a scrolled group cancels the pan (objects
