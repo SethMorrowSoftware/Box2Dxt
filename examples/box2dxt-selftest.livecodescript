@@ -47,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "18"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "19"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -124,6 +124,7 @@ command stRunAll
    stRun "stTestCamera"
    stRun "stTestCamScrolledWrite"
    stRun "stTestEngineContracts"
+   stRun "stTestLoaderHelper"
    stRun "stTestMaterialsJoints"
    stRun "stTestFiltering"
    stRun "stTestQueries"
@@ -275,6 +276,21 @@ end stVX
 -- =====================================================================
 -- The tests
 -- =====================================================================
+-- The Kit auto-preloads the native library on Linux via b2LoadNativeLibHere
+-- (gated in b2kSetup so it only fires when the platform is Linux). The helper
+-- is POSIX-only, so it must NEVER run off Linux -- exercise it only there, and
+-- elsewhere just record that the gate skips it. On Linux this also proves the
+-- realpath/dlopen bindings resolve (a bad binding would throw and FAIL here).
+command stTestLoaderHelper
+   if the platform is "Linux" then
+      put b2LoadNativeLibHere() into tR
+      stAssert "b2LoadNativeLibHere returns a 0/1 flag without error (got " & tR & ")", \
+         (tR is 0 or tR is 1)
+   else
+      stAssert "loader auto-preload is Linux-gated (skipped on " & the platform & ")", true
+   end if
+end stTestLoaderHelper
+
 command stTestWorld
    local tRef, tY1, tVy
    stNewWorld "world & fixed-step determinism"
@@ -1733,6 +1749,12 @@ constant kPI = 3.14159265358979
 -- World / lifecycle
 -- =====================================================================
 command b2kSetup pGravityX, pGravityY
+   -- On Linux the engine will not find box2dxt.so sitting beside it on its own,
+   -- so preload it from the engine's OWN folder before the first physics call.
+   -- LINUX-ONLY on purpose: b2LoadNativeLibHere uses POSIX calls that do not
+   -- exist on Windows, and Windows/macOS already load the library from beside
+   -- the stack/app -- so the platform check keeps it from ever firing there.
+   if the platform is "Linux" then get b2LoadNativeLibHere()
    b2kTeardown
    if pGravityX is empty then put 0 into pGravityX
    if pGravityY is empty then put -10 into pGravityY
