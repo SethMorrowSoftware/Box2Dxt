@@ -388,3 +388,79 @@ pre.code code { color: var(--ink); }
   .stackdiag .win { transform: none !important; }
   #physics { height: 300px; }
 }
+
+/* ===========================================================
+   Documentation pages (rendered from docs/*.md)
+   =========================================================== */
+.doc-wrap {
+  display: grid; grid-template-columns: 232px minmax(0, 1fr);
+  gap: 28px; align-items: start;
+  max-width: var(--maxw); margin-inline: auto;
+  padding: 28px 22px 64px;
+}
+.doc-side { position: sticky; top: 54px; }
+.doc-side-inner {
+  background: var(--card); border: var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); padding: 14px;
+}
+.doc-side .label { display: block; color: var(--ink-faint); margin: 2px 0 10px; }
+.doc-side a {
+  display: block; padding: 7px 10px; border-radius: 6px;
+  font-size: 0.92rem; color: var(--ink-soft);
+}
+.doc-side a:hover { background: rgba(0,0,0,0.05); color: var(--ink); }
+.doc-side a.active { background: var(--orange); color: #fff; font-weight: 600; }
+
+.doc-win { box-shadow: var(--shadow); min-width: 0; }
+.doc-win .win-body { padding: clamp(20px, 3vw, 36px); }
+
+/* prose */
+.prose { color: var(--ink-soft); font-size: 1rem; line-height: 1.72; }
+.prose > :first-child { margin-top: 0; }
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5 { color: var(--ink); }
+.prose h1 { font-size: clamp(1.8rem, 3.5vw, 2.3rem); margin: 0 0 16px; }
+.prose h2 { font-size: 1.5rem; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: var(--line); }
+.prose h3 { font-size: 1.2rem; margin: 30px 0 10px; }
+.prose h4 { font-size: 1.04rem; margin: 22px 0 8px; }
+.prose h2, .prose h3, .prose h4 { scroll-margin-top: 54px; }
+.prose p { margin: 0 0 15px; }
+.prose strong { color: var(--ink); }
+.prose a { color: var(--orange-d); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 2px; }
+.prose a:hover { background: var(--hl); text-decoration: none; }
+.prose ul, .prose ol { margin: 0 0 15px; padding-left: 24px; }
+.prose li { margin: 5px 0; }
+.prose li > ul, .prose li > ol { margin: 5px 0; }
+.prose ul li::marker { color: var(--orange); }
+.prose ol li::marker { color: var(--orange-d); font-family: var(--mono); font-weight: 600; }
+.prose pre {
+  margin: 0 0 16px; padding: 15px 18px; overflow-x: auto;
+  background: var(--card); border: var(--line); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+.prose pre code { font-family: var(--mono); font-size: 0.82rem; line-height: 1.65; background: none; border: 0; padding: 0; color: var(--ink); }
+.prose blockquote {
+  margin: 0 0 16px; padding: 12px 16px;
+  border: var(--line); border-left: 5px solid var(--orange);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(232,112,42,0.07);
+}
+.prose blockquote > :last-child { margin-bottom: 0; }
+.prose hr { border: 0; border-top: 2px dashed var(--ink); opacity: 0.35; margin: 28px 0; }
+.prose img { max-width: 100%; }
+.md-tablewrap { overflow-x: auto; margin: 0 0 18px; }
+.prose table {
+  border-collapse: collapse; width: 100%; font-size: 0.9rem;
+  background: var(--card); border: var(--line); border-radius: var(--radius-sm); overflow: hidden;
+}
+.prose th, .prose td { padding: 8px 12px; border: 1.5px solid var(--ink); text-align: left; vertical-align: top; }
+.prose thead th { background: var(--ink); color: var(--paper); font-family: var(--pixel); font-size: 0.6rem; letter-spacing: 0.03em; }
+.prose tbody tr:nth-child(even) { background: rgba(0,0,0,0.03); }
+.prose .docs-grid h4 { color: var(--ink); margin: 0 0 5px; }
+
+@media (max-width: 920px) {
+  .doc-wrap { grid-template-columns: 1fr; gap: 18px; }
+  .doc-side { position: static; }
+  .doc-side-inner { display: flex; flex-wrap: wrap; gap: 4px; }
+  .doc-side .label { width: 100%; }
+  .doc-side a { font-size: 0.84rem; padding: 6px 9px; }
+}

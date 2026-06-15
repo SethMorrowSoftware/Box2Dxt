@@ -13,10 +13,31 @@ stacking crates. Retro motifs, modern layout discipline.
 
 ```
 website/
-├── index.html   # the page (menu bar + window-framed "cards")
-├── styles.css   # the paper/ink/orange design system + Mac window chrome
-└── app.js       # menu toggle + the interactive hero crate-physics toy
+├── index.html   # the landing page (menu bar + window-framed "cards")
+├── styles.css   # the paper/ink/orange design system + Mac window chrome + .prose
+├── app.js       # menu toggle + the interactive hero crate-physics toy
+└── docs/        # the full manual, rendered from docs/*.md (generated)
+    ├── index.html          # the manual overview
+    └── <doc>.html          # one styled page per docs/*.md
 ```
+
+## The docs are rendered from Markdown
+
+The pages under `website/docs/` are **generated** from the repository's
+`docs/*.md` by [`tools/build-docs.py`](../tools/build-docs.py) — a small,
+dependency-free Markdown→HTML converter (no `pip`/network needed). The site
+links to these styled pages instead of raw `.md` files on GitHub, so readers
+stay in one consistent experience.
+
+Re-run it whenever a doc changes:
+
+```sh
+python3 tools/build-docs.py      # rewrites website/docs/*.html
+```
+
+> Don't hand-edit `website/docs/*.html` — they're overwritten on the next
+> build. Edit the source `docs/*.md` and regenerate. The GitHub Pages workflow
+> runs the generator before every deploy, so the live site never goes stale.
 
 ## View it locally
 

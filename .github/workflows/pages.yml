@@ -7,6 +7,8 @@ on:
     branches: [main]
     paths:
       - "website/**"
+      - "docs/**"
+      - "tools/build-docs.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -30,6 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Regenerate the styled doc pages from docs/*.md so the deploy is never
+      # stale (no extra dependencies — the generator is pure-Python stdlib).
+      - run: python3 tools/build-docs.py
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website
