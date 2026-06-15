@@ -457,10 +457,27 @@ pre.code code { color: var(--ink); }
 .prose tbody tr:nth-child(even) { background: rgba(0,0,0,0.03); }
 .prose .docs-grid h4 { color: var(--ink); margin: 0 0 5px; }
 
+.doc-side-gh {
+  margin-top: 8px; padding-top: 10px !important;
+  border-top: 1.5px dashed var(--ink);
+  color: var(--orange-d) !important; font-weight: 600;
+}
+
+/* pared-down docs section on the home page: 3 guides + a deeper link */
+.docs-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.docs-more { margin-top: 18px; text-align: center; color: var(--ink-soft); font-size: 0.93rem; }
+.docs-more a { color: var(--orange-d); font-weight: 600; text-decoration: underline; text-decoration-thickness: 2px; }
+.prose .docs-grid-3 .doc h4 { font-size: 1rem; }
+
 @media (max-width: 920px) {
   .doc-wrap { grid-template-columns: 1fr; gap: 18px; }
   .doc-side { position: static; }
   .doc-side-inner { display: flex; flex-wrap: wrap; gap: 4px; }
   .doc-side .label { width: 100%; }
   .doc-side a { font-size: 0.84rem; padding: 6px 9px; }
+  .doc-side-gh { flex-basis: 100%; }
+  .docs-grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 680px) {
+  .docs-grid-3 { grid-template-columns: 1fr; }
 }

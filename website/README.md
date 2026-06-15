@@ -16,18 +16,23 @@ website/
 ├── index.html   # the landing page (menu bar + window-framed "cards")
 ├── styles.css   # the paper/ink/orange design system + Mac window chrome + .prose
 ├── app.js       # menu toggle + the interactive hero crate-physics toy
-└── docs/        # the full manual, rendered from docs/*.md (generated)
+└── docs/        # the user-facing guides, rendered from docs/*.md (generated)
     ├── index.html          # the manual overview
-    └── <doc>.html          # one styled page per docs/*.md
+    └── <doc>.html          # getting-started, kit-guide, kit-reference
 ```
 
 ## The docs are rendered from Markdown
 
 The pages under `website/docs/` are **generated** from the repository's
 `docs/*.md` by [`tools/build-docs.py`](../tools/build-docs.py) — a small,
-dependency-free Markdown→HTML converter (no `pip`/network needed). The site
-links to these styled pages instead of raw `.md` files on GitHub, so readers
-stay in one consistent experience.
+dependency-free Markdown→HTML converter (no `pip`/network needed).
+
+**Only the user-facing guides are hosted on the site** — Getting started, the
+Kit guide, and the Kit reference (the `DOCS` list in the generator). The deeper
+material (the raw `b2…` API, architecture, build-from-source, the design/roadmap
+docs — the `EXTERNAL` list) is intentionally left on GitHub and linked from the
+manual overview; doc-to-doc links pointing at those are rewritten to GitHub
+automatically. To host or unhost a doc, move it between `DOCS` and `EXTERNAL`.
 
 Re-run it whenever a doc changes:
 

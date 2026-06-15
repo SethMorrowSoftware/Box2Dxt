@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Getting started — Box2Dxt docs</title>
-<meta name="description" content="Zero to a draggable scene, plus troubleshooting.">
+<meta name="description" content="Install the library and build your first draggable scene.">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,11 +31,7 @@
 <a href="getting-started.html" class="active">Getting started</a>
 <a href="kit-guide.html">Kit guide</a>
 <a href="kit-reference.html">Kit reference</a>
-<a href="api-reference.html">API reference</a>
-<a href="architecture.html">Architecture</a>
-<a href="game-engine-spec.html">Game engine spec</a>
-<a href="expansion-prep.html">Expansion prep</a>
-<a href="building.html">Building</a></div></aside>
+<a class="doc-side-gh" href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/docs" target="_blank" rel="noopener">Full docs on GitHub →</a></div></aside>
 <article class="win doc-win">
   <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">getting-started.md</span><span class="win-box"></span></div>
   <div class="win-body prose"><h1 id="getting-started-with-box2dxt">Getting Started with Box2Dxt</h1>
@@ -62,7 +58,7 @@
 <li><strong>Linux:</strong> the dynamic loader does <strong>not</strong> search the stack's folder. Copy the file to a search path and refresh the cache: ``<code> sudo cp box2dxt.so /usr/lib/ &amp;&amp; sudo ldconfig </code>`<code> (or place it next to the OXT engine binary, or add its folder to </code>LD_LIBRARY_PATH` before launching OXT).</li>
 </ul>
 <blockquote><p>If a particular engine asks for the <code>lib</code>-prefixed name instead, provide that too — a copy or symlink alongside is harmless.</p></blockquote>
-<blockquote><p>Prefer building it yourself? See <a href="building.html">building.md</a>. It's two <code>cmake</code> commands.</p></blockquote>
+<blockquote><p>Prefer building it yourself? See <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md">building.md</a>. It's two <code>cmake</code> commands.</p></blockquote>
 <h2 id="2-load-the-extension">2. Load the extension</h2>
 <p><code>src/box2dxt.lcb</code> is the extension that exposes the <code>b2…</code> handlers.</p>
 <ul>
@@ -128,15 +124,15 @@ b2kStart                                      -- begin the loop</code></pre>
 <div class="md-tablewrap"><table><thead><tr><th>Scene</th><th>Shows off</th></tr></thead><tbody><tr><td><strong>Playground</strong></td><td>boxes, a ball, a capsule, polygons, a hinged <strong>pendulum</strong>, a powered <strong>windmill</strong> (hinge motor), and a <strong>see-saw</strong></td></tr><tr><td><strong>Pyramid</strong></td><td>a tall stack; pick the <strong>Bomb</strong> tool and click beside it for a blast</td></tr><tr><td><strong>Cradle</strong></td><td>a Newton's cradle — hinge joints + restitution</td></tr><tr><td><strong>Bridge</strong></td><td>a plank bridge of hinge joints you can load up</td></tr><tr><td><strong>Vehicle</strong></td><td>a car (wheel joints + motor + spring suspension) you <strong>drive with ←/→</strong> over bumps</td></tr><tr><td><strong>Lidar</strong></td><td>a live <strong>ray-cast</strong> scanner that follows your mouse and stops each ray at the nearest shape</td></tr></tbody></table></div>
 <p>Across every scene you can <strong>drag</strong> any dynamic body, <strong>click empty space</strong> to drop the selected shape (Box/Ball/Capsule/Poly/Bomb), and bodies <strong>flash white</strong> the instant they begin touching (contact events). A HUD shows live FPS and body count. The whole demo is written with <code>b2k…</code> calls — read it as a worked example of the <a href="kit-reference.html">Kit</a>.</p>
 <h2 id="troubleshooting">Troubleshooting</h2>
-<div class="md-tablewrap"><table><thead><tr><th>Symptom</th><th>Likely cause &amp; fix</th></tr></thead><tbody><tr><td><code>b2Version()</code> throws / "handler not found"</td><td>The extension isn't loaded. Re-add and <strong>Load</strong> <code>box2dxt.lcb</code> in the Extension Manager.</td></tr><tr><td>First <code>b2…</code> call (or <code>b2Version()</code>) errors <strong>"unable to load foreign library"</strong></td><td>The native library isn't found or is misnamed. Use the <strong>no-<code>lib</code></strong> bare name: <code>box2dxt.dll</code> / <code>box2dxt.dylib</code> / <code>box2dxt.so</code>. On <strong>Linux</strong> the stack folder isn't searched — put it in <code>/usr/lib</code> then run <code>sudo ldconfig</code>, or place it next to the OXT engine. (Tip: launching OXT from a terminal prints <code>dlopen failed &lt;name&gt;</code> showing the exact filename it wants.)</td></tr><tr><td><code>b2Version()</code> returns a different number</td><td>Your <code>box2dxt.lcb</code> and native library are from different versions. Rebuild/redownload both from the same tag.</td></tr><tr><td>Library won't load on an older PC (Linux/Windows)</td><td>The CPU may lack AVX2. Build with <code>-DBOX2D_DISABLE_SIMD=ON</code> (see <a href="building.html#platform--cpu-notes">building.md</a>), or grab a Release binary built for older CPUs.</td></tr><tr><td>Bodies jitter or behave non-deterministically</td><td>You're stepping with a variable timestep. Let the Kit drive the loop, or step in fixed 1/60 s chunks (see <a href="api-reference.html#notes-and-gotchas">API Reference → Notes</a>).</td></tr><tr><td>Objects fly off instantly / explode</td><td>Sizes are wrong for Box2D's MKS units. Keep moving objects roughly 4–400 px at the default 40 px/m scale.</td></tr></tbody></table></div>
+<div class="md-tablewrap"><table><thead><tr><th>Symptom</th><th>Likely cause &amp; fix</th></tr></thead><tbody><tr><td><code>b2Version()</code> throws / "handler not found"</td><td>The extension isn't loaded. Re-add and <strong>Load</strong> <code>box2dxt.lcb</code> in the Extension Manager.</td></tr><tr><td>First <code>b2…</code> call (or <code>b2Version()</code>) errors <strong>"unable to load foreign library"</strong></td><td>The native library isn't found or is misnamed. Use the <strong>no-<code>lib</code></strong> bare name: <code>box2dxt.dll</code> / <code>box2dxt.dylib</code> / <code>box2dxt.so</code>. On <strong>Linux</strong> the stack folder isn't searched — put it in <code>/usr/lib</code> then run <code>sudo ldconfig</code>, or place it next to the OXT engine. (Tip: launching OXT from a terminal prints <code>dlopen failed &lt;name&gt;</code> showing the exact filename it wants.)</td></tr><tr><td><code>b2Version()</code> returns a different number</td><td>Your <code>box2dxt.lcb</code> and native library are from different versions. Rebuild/redownload both from the same tag.</td></tr><tr><td>Library won't load on an older PC (Linux/Windows)</td><td>The CPU may lack AVX2. Build with <code>-DBOX2D_DISABLE_SIMD=ON</code> (see <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md#platform--cpu-notes">building.md</a>), or grab a Release binary built for older CPUs.</td></tr><tr><td>Bodies jitter or behave non-deterministically</td><td>You're stepping with a variable timestep. Let the Kit drive the loop, or step in fixed 1/60 s chunks (see <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md#notes-and-gotchas">API Reference → Notes</a>).</td></tr><tr><td>Objects fly off instantly / explode</td><td>Sizes are wrong for Box2D's MKS units. Keep moving objects roughly 4–400 px at the default 40 px/m scale.</td></tr></tbody></table></div>
 <h2 id="where-to-go-next">Where to go next</h2>
 <ul>
 <li><a href="kit-guide.html"><strong>Kit Guide</strong></a> — the complete, teach-you-everything walkthrough of the <code>b2k…</code> toolkit, with runnable examples.</li>
 <li><a href="kit-reference.html">Kit Reference</a> — the same <code>b2k…</code> API as quick-lookup tables.</li>
-<li><strong>Example games</strong> — beyond the demo, <a href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/examples"><code>examples/</code></a> ships a full <strong>platformer</strong>, an angry-birds-style <strong>slingshot</strong>, and a <strong>contraption builder</strong>, each a single self-contained paste. Hand one to someone else as a zero-setup zip with <a href="building.html#packaging-a-distribution-zip"><code>tools/make-release.py</code></a>.</li>
-<li><a href="api-reference.html">API Reference</a> — the low-level <code>b2…</code> API and units/gotchas.</li>
-<li><a href="architecture.html">Architecture</a> — how it all works under the hood.</li>
-<li><a href="building.html">Building</a> — compile the native library yourself.</li>
+<li><strong>Example games</strong> — beyond the demo, <a href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/examples"><code>examples/</code></a> ships a full <strong>platformer</strong>, an angry-birds-style <strong>slingshot</strong>, and a <strong>contraption builder</strong>, each a single self-contained paste. Hand one to someone else as a zero-setup zip with <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md#packaging-a-distribution-zip"><code>tools/make-release.py</code></a>.</li>
+<li><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md">API Reference</a> — the low-level <code>b2…</code> API and units/gotchas.</li>
+<li><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/architecture.md">Architecture</a> — how it all works under the hood.</li>
+<li><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md">Building</a> — compile the native library yourself.</li>
 </ul></div>
 </article>
 </main>

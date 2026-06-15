@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kit reference — Box2Dxt docs</title>
-<meta name="description" content="Every b2k… handler, one line each.">
+<meta name="description" content="Every b2k… call, one line each — keep it open while you build.">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,11 +31,7 @@
 <a href="getting-started.html">Getting started</a>
 <a href="kit-guide.html">Kit guide</a>
 <a href="kit-reference.html" class="active">Kit reference</a>
-<a href="api-reference.html">API reference</a>
-<a href="architecture.html">Architecture</a>
-<a href="game-engine-spec.html">Game engine spec</a>
-<a href="expansion-prep.html">Expansion prep</a>
-<a href="building.html">Building</a></div></aside>
+<a class="doc-side-gh" href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/docs" target="_blank" rel="noopener">Full docs on GitHub →</a></div></aside>
 <article class="win doc-win">
   <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">kit-reference.md</span><span class="win-box"></span></div>
   <div class="win-body prose"><h1 id="box2dxt-kit-reference-b2k">Box2Dxt Kit Reference (<code>b2k…</code>)</h1>
@@ -179,7 +175,7 @@ b2kToneMake &quot;win&quot;, &quot;523,659,784,1047&quot;, 110   -- a little fan
 <li>Keep moving objects a sensible on-screen size (default scale 40 px/m, so roughly <strong>4–400 px</strong>).</li>
 <li>Graphic boxes/polygons and <strong>dynamic images rotate</strong> with their body (images via <code>the angle</code>). Buttons, fields, and other controls follow position only and have their rotation locked, so the simulation stays consistent with the upright render.</li>
 <li>The Kit render loop uses Box2D body-move events, so it only considers bodies that moved in the latest step, avoids per-body awake/position polling for sleeping objects, and skips redraws when the rounded screen pixel/angle did not change.</li>
-<li>When you need something the Kit doesn't expose, drop to the <a href="api-reference.html">core <code>b2…</code> API</a>: <code>b2kWorld()</code> returns the world and <code>b2kBodyOf(control)</code> the body, and <code>b2kToWorldX/Y(px)</code> / <code>b2kToScreenX/Y(m)</code> convert between screen pixels and Box2D metres — so you can mix both layers.</li>
+<li>When you need something the Kit doesn't expose, drop to the <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md">core <code>b2…</code> API</a>: <code>b2kWorld()</code> returns the world and <code>b2kBodyOf(control)</code> the body, and <code>b2kToWorldX/Y(px)</code> / <code>b2kToScreenX/Y(m)</code> convert between screen pixels and Box2D metres — so you can mix both layers.</li>
 </ul></div>
 </article>
 </main>

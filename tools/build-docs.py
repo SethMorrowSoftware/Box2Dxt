@@ -19,18 +19,24 @@ SRC = ROOT / "docs"
 OUT = ROOT / "website" / "docs"
 GH = "https://github.com/SethMorrowSoftware/Box2Dxt"
 
-# order + titles + one-line blurbs (drives the sidebar and the docs index)
+# Host only the approachable, user-facing docs. The deeper/internal material
+# (raw API, architecture, build-from-source, design/roadmap) stays on GitHub —
+# links to those .md files are rewritten to GitHub automatically.
 DOCS = [
-    ("getting-started", "Getting started", "Zero to a draggable scene, plus troubleshooting."),
-    ("kit-guide",       "Kit guide",       "The friendly b2k… layer, taught start to finish."),
-    ("kit-reference",   "Kit reference",   "Every b2k… handler, one line each."),
-    ("api-reference",   "API reference",   "The raw b2… extension surface."),
-    ("architecture",    "Architecture",    "The three layers, handles, units, the ABI."),
-    ("game-engine-spec","Game engine spec","The Game Kit — input, sprites, player, camera, sound."),
-    ("expansion-prep",  "Expansion prep",  "The intake plan for the asset pack and action waves."),
-    ("building",        "Building",        "Compile the native library yourself with CMake."),
+    ("getting-started", "Getting started", "Install the library and build your first draggable scene."),
+    ("kit-guide",       "Kit guide",       "The friendly b2k… layer, taught step by step."),
+    ("kit-reference",   "Kit reference",   "Every b2k… call, one line each — keep it open while you build."),
 ]
 TITLES = {k: (t, d) for k, t, d in DOCS}
+
+# Shown on the manual overview as "going deeper" — these live on GitHub.
+EXTERNAL = [
+    ("API reference",    "The raw b2… extension surface.",        "api-reference.md"),
+    ("Architecture",     "How the three layers fit together.",    "architecture.md"),
+    ("Game engine spec", "The Game Kit design, in depth.",        "game-engine-spec.md"),
+    ("Building",         "Compile the native library yourself.",  "building.md"),
+    ("Expansion prep",   "The internal roadmap & intake plan.",   "expansion-prep.md"),
+]
 
 
 # --------------------------------------------------------------------------- #
@@ -298,6 +304,7 @@ def sidebar(active):
     for key, title, _ in DOCS:
         cls = ' class="active"' if key == active else ""
         rows.append(f'<a href="{key}.html"{cls}>{title}</a>')
+    rows.append(f'<a class="doc-side-gh" href="{GH}/tree/main/docs" target="_blank" rel="noopener">Full docs on GitHub →</a>')
     return ('<aside class="doc-side"><div class="doc-side-inner"><span class="label">THE MANUAL</span>'
             + "\n".join(rows) + "</div></aside>")
 
@@ -348,9 +355,14 @@ def doc_page(key):
 
 
 def index_page():
+    nums = ["①", "②", "③"]
     cards = "\n".join(
-        f'<a class="doc" href="{k}.html"><h4>{t}</h4><p>{html.escape(d)}</p></a>'
-        for k, t, d in DOCS
+        f'<a class="doc" href="{k}.html"><h4>{nums[i]} {t}</h4><p>{html.escape(d)}</p></a>'
+        for i, (k, t, d) in enumerate(DOCS)
+    )
+    deeper = "\n".join(
+        f'<li><a href="{GH}/blob/main/docs/{path}" target="_blank" rel="noopener">{t}</a> — {html.escape(d)}</li>'
+        for t, d, path in EXTERNAL
     )
     main = f"""<main class="doc-wrap">
 {sidebar("index")}
@@ -358,12 +370,15 @@ def index_page():
   <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">the manual</span><span class="win-box"></span></div>
   <div class="win-body prose">
     <h1>The Box2Dxt manual</h1>
-    <p>Everything you need to go from a blank stack to a running physics game — all in one place, no jumping out to GitHub. Start with <a href="getting-started.html">Getting started</a>, then keep the <a href="kit-reference.html">Kit reference</a> handy.</p>
-    <div class="docs-grid" style="margin-top:22px">{cards}</div>
+    <p>New here? You only need two things: <a href="getting-started.html">Getting started</a> to install Box2Dxt and drop your first body, then the <a href="kit-guide.html">Kit guide</a> to learn the rest. Keep the <a href="kit-reference.html">Kit reference</a> open while you build.</p>
+    <div class="docs-grid docs-grid-3" style="margin-top:22px">{cards}</div>
+    <h2>Going deeper</h2>
+    <p>The low-level <code>b2…</code> API, the engine internals, and build-from-source notes are for the curious — they live on GitHub:</p>
+    <ul>{deeper}</ul>
   </div>
 </article>
 </main>"""
-    return shell("Documentation", "The complete Box2Dxt documentation, in one styled place.", "index", main)
+    return shell("Documentation", "The Box2Dxt guides — install, learn the Kit, and a quick reference.", "index", main)
 
 
 def main():

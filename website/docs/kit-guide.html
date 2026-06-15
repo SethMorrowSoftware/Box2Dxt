@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kit guide — Box2Dxt docs</title>
-<meta name="description" content="The friendly b2k… layer, taught start to finish.">
+<meta name="description" content="The friendly b2k… layer, taught step by step.">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,11 +31,7 @@
 <a href="getting-started.html">Getting started</a>
 <a href="kit-guide.html" class="active">Kit guide</a>
 <a href="kit-reference.html">Kit reference</a>
-<a href="api-reference.html">API reference</a>
-<a href="architecture.html">Architecture</a>
-<a href="game-engine-spec.html">Game engine spec</a>
-<a href="expansion-prep.html">Expansion prep</a>
-<a href="building.html">Building</a></div></aside>
+<a class="doc-side-gh" href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/docs" target="_blank" rel="noopener">Full docs on GitHub →</a></div></aside>
 <article class="win doc-win">
   <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">kit-guide.md</span><span class="win-box"></span></div>
   <div class="win-body prose"><h1 id="box2dxt-kit--the-complete-guide">Box2Dxt Kit — The Complete Guide</h1>
@@ -503,7 +499,7 @@ put b2kAwakeBodyCount()    -- awake dynamic bodies (native count)</code></pre>
 put b2kBodyOf(tBox)            -- the underlying b2… body handle for a control
 put b2kToWorldX(the mouseH)    -- screen px -&gt; Box2D metres (and b2kToWorldY)
 put b2kToScreenX(2.5)          -- Box2D metres -&gt; screen px (and b2kToScreenY)</code></pre>
-<p>With the world and a body handle plus the converters, every raw <code>b2…</code> call (see <a href="api-reference.html"><code>api-reference.md</code></a>) is available — set an exotic shape property, then let the Kit keep drawing the control each frame.</p>
+<p>With the world and a body handle plus the converters, every raw <code>b2…</code> call (see <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md"><code>api-reference.md</code></a>) is available — set an exotic shape property, then let the Kit keep drawing the control each frame.</p>
 <hr>
 <h2 id="19-a-complete-worked-example-a-little-car">19. A complete worked example: a little car</h2>
 <p>Putting it together — a two-wheeled car on smooth ground that you drive with the arrow keys. Paste into a card script with the Kit installed.</p>
@@ -653,7 +649,7 @@ b2kPlayerSet &quot;platformCarry&quot;, 1       -- ride a moving kinematic platf
 <h3 id="internal-helpers-you-usually-wont-call-these">Internal helpers (you usually won't call these)</h3>
 <p>The Kit also defines handlers it uses on your behalf — the loop and renderer (<code>b2kSync</code>, <code>b2kDrawPoly</code>, <code>b2kDrawBall</code>, <code>b2kDrawImage</code>, <code>b2kDispatchContacts</code>, <code>b2kDispatchSensors</code>), construction primitives (<code>b2kEdge</code>, <code>b2kRegister</code>, <code>b2kResetTables</code>), and math helpers (<code>b2kLocalAnchor</code>, <code>b2kQueryToControls</code>, <code>b2kCorner</code>, <code>b2kCapsuleVerts</code>). They're listed here for completeness; reach for the public handlers above instead.</p>
 <hr>
-<p><em>See also:</em> <a href="getting-started.html"><code>getting-started.md</code></a> · <a href="kit-reference.html"><code>kit-reference.md</code></a> (quick tables) · <a href="api-reference.html"><code>api-reference.md</code></a> (the core <code>b2…</code> layer) · <a href="architecture.html"><code>architecture.md</code></a> (how the three layers fit together).</p></div>
+<p><em>See also:</em> <a href="getting-started.html"><code>getting-started.md</code></a> · <a href="kit-reference.html"><code>kit-reference.md</code></a> (quick tables) · <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md"><code>api-reference.md</code></a> (the core <code>b2…</code> layer) · <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/architecture.md"><code>architecture.md</code></a> (how the three layers fit together).</p></div>
 </article>
 </main>
 <footer class="footer"><div class="wrap footer-bottom" style="border-top:none;margin-top:0">
