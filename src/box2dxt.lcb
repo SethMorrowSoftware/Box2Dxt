@@ -442,8 +442,8 @@ private foreign handler _query_normal_y(in pI as CInt) returns CDouble binds to 
 private foreign handler _query_fraction(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_fraction!cdecl"
 
 -- ---- native loader assist (Linux) ----------------------------------
--- The ONLY two bindings that do NOT target the box2dxt shim: they bind to
--- the platform's own dynamic loader (dlopen/dlerror), resolved from the
+-- The ONLY three bindings that do NOT target the box2dxt shim: they bind to
+-- the platform's own loader/libc (dlopen/dlerror/realpath), resolved from the
 -- host process's global symbol table. That is the whole point -- they must
 -- be callable BEFORE box2dxt.so is loadable, so a script can preload the
 -- shim by absolute path. On Linux the engine hands the bare name
@@ -459,6 +459,10 @@ private foreign handler _query_fraction(in pI as CInt) returns CDouble binds to 
 -- dlopen still lives in libdl -> "c:libdl.so.2>dlopen!cdecl".
 private foreign handler _dlopen(in pPath as ZStringNative, in pFlags as CInt) returns optional Pointer binds to "c:>dlopen!cdecl"
 private foreign handler _dlerror() returns optional ZStringNative binds to "c:>dlerror!cdecl"
+-- realpath("/proc/self/exe", nil) -> the running engine's own executable path
+-- on Linux; used to locate the engine folder for the automatic preload below
+-- (_ensureLib). Returns nothing off Linux (no /proc), self-gating the feature.
+private foreign handler _realpath(in pPath as ZStringNative, in pResolved as optional Pointer) returns optional ZStringNative binds to "c:>realpath!cdecl"
 
 -- small bool -> int helper (no foreign call, so no unsafe needed)
 private handler bi(in pB as Boolean) returns Integer
@@ -468,12 +472,56 @@ private handler bi(in pB as Boolean) returns Integer
    return 0
 end handler
 
+-- ---- automatic engine-folder preload (Linux) -----------------------
+-- Make the extension load box2dxt.so from the ENGINE'S OWN folder, so a user
+-- just drops the library beside the OXT engine (or bundles it in a standalone)
+-- and it works -- no /usr/lib, no sudo, no LD_LIBRARY_PATH, no script calls.
+-- We read the engine's own path (realpath /proc/self/exe), strip to its
+-- folder, and preload "<folder>/box2dxt.so" by absolute path BEFORE any
+-- c:box2dxt> binding resolves; the engine's later bare-name load then finds
+-- the already-resident copy. Off Linux realpath returns nothing and this
+-- no-ops (Windows/macOS already load from beside the stack/app). Requires the
+-- library's soname to be "box2dxt.so" (-DBOX2DXT_BARE_SONAME) or the resident
+-- copy will not match the bare-name request. Cheap to repeat (dlopen of a
+-- resident lib just bumps its refcount), so it runs straight from the natural
+-- first-call gateways (b2Version, checkABI) with no module-state guard.
+private handler _ensureLib()
+   variable tExe as optional String
+   variable tPath as String
+   variable tLen as Integer
+   variable tCut as Integer
+   variable i as Integer
+   variable tLib as String
+   variable tHandle as optional Pointer
+   unsafe
+      put _realpath("/proc/self/exe", nothing) into tExe
+   end unsafe
+   if tExe is not nothing then
+      put tExe into tPath
+      put the number of chars in tPath into tLen
+      put 0 into tCut
+      repeat with i from 1 up to tLen
+         if char i of tPath is "/" then
+            put i into tCut
+         end if
+      end repeat
+      if tCut > 0 then
+         put char 1 to tCut of tPath into tLib
+         put tLib & "box2dxt.so" into tLib
+         unsafe
+            put _dlopen(tLib, 258) into tHandle
+         end unsafe
+      end if
+   end if
+end handler
+
 -- =====================================================================
 -- Public API (callable from xTalk / OpenXTalk Script)
 -- =====================================================================
 
 public handler b2Version() returns Integer
    variable tR as Integer
+   _ensureLib()
    unsafe
       put _abi_version() into tR
    end unsafe
@@ -486,6 +534,7 @@ end handler
 -- clear, catchable error instead.
 private handler checkABI()
    variable tV as Integer
+   _ensureLib()
    unsafe
       put _abi_version() into tV
    end unsafe
