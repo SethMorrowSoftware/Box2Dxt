@@ -460,8 +460,8 @@ private foreign handler _query_fraction(in pI as CInt) returns CDouble binds to 
 private foreign handler _dlopen(in pPath as ZStringNative, in pFlags as CInt) returns optional Pointer binds to "c:>dlopen!cdecl"
 private foreign handler _dlerror() returns optional ZStringNative binds to "c:>dlerror!cdecl"
 -- realpath("/proc/self/exe", nil) -> the running engine's own executable path
--- on Linux; used to locate the engine folder for the automatic preload below
--- (_ensureLib). Returns nothing off Linux (no /proc), self-gating the feature.
+-- on Linux; used by the b2LoadNativeLibHere helper below to locate the engine
+-- folder. Returns nothing off Linux (no /proc). Only ever called on Linux.
 private foreign handler _realpath(in pPath as ZStringNative, in pResolved as optional Pointer) returns optional ZStringNative binds to "c:>realpath!cdecl"
 
 -- small bool -> int helper (no foreign call, so no unsafe needed)
@@ -472,20 +472,22 @@ private handler bi(in pB as Boolean) returns Integer
    return 0
 end handler
 
--- ---- automatic engine-folder preload (Linux) -----------------------
--- Make the extension load box2dxt.so from the ENGINE'S OWN folder, so a user
--- just drops the library beside the OXT engine (or bundles it in a standalone)
--- and it works -- no /usr/lib, no sudo, no LD_LIBRARY_PATH, no script calls.
--- We read the engine's own path (realpath /proc/self/exe), strip to its
--- folder, and preload "<folder>/box2dxt.so" by absolute path BEFORE any
--- c:box2dxt> binding resolves; the engine's later bare-name load then finds
--- the already-resident copy. Off Linux realpath returns nothing and this
--- no-ops (Windows/macOS already load from beside the stack/app). Requires the
--- library's soname to be "box2dxt.so" (-DBOX2DXT_BARE_SONAME) or the resident
--- copy will not match the bare-name request. Cheap to repeat (dlopen of a
--- resident lib just bumps its refcount), so it runs straight from the natural
--- first-call gateways (b2Version, checkABI) with no module-state guard.
-private handler _ensureLib()
+-- ---- engine-folder preload (Linux helper) --------------------------
+-- Locate the running engine's OWN folder (realpath /proc/self/exe), strip to
+-- its directory, and preload "<dir>/box2dxt.so" by absolute path -- so a user
+-- can just drop the library beside the OXT engine (or bundle it in a
+-- standalone) and a later bare-name bind resolves to it (no /usr/lib, no sudo,
+-- no LD_LIBRARY_PATH). Returns 1 if a library was loaded, else 0.
+--
+-- LINUX ONLY, and deliberately NOT auto-fired: realpath/dlopen are POSIX, so
+-- call this ONLY when the platform is Linux (e.g. the Kit gates it with
+-- `the platform is "Linux"`). It is intentionally NOT invoked from
+-- b2Version/checkABI -- those run on every platform, and touching the POSIX
+-- bindings on Windows/macOS would error (those platforms already load the
+-- library from beside the stack/app anyway). Requires the library's soname to
+-- be "box2dxt.so" (-DBOX2DXT_BARE_SONAME) or the resident copy will not match
+-- the engine's bare-name request.
+public handler b2LoadNativeLibHere() returns Integer
    variable tExe as optional String
    variable tPath as String
    variable tLen as Integer
@@ -496,23 +498,29 @@ private handler _ensureLib()
    unsafe
       put _realpath("/proc/self/exe", nothing) into tExe
    end unsafe
-   if tExe is not nothing then
-      put tExe into tPath
-      put the number of chars in tPath into tLen
-      put 0 into tCut
-      repeat with i from 1 up to tLen
-         if char i of tPath is "/" then
-            put i into tCut
-         end if
-      end repeat
-      if tCut > 0 then
-         put char 1 to tCut of tPath into tLib
-         put tLib & "box2dxt.so" into tLib
-         unsafe
-            put _dlopen(tLib, 258) into tHandle
-         end unsafe
-      end if
+   if tExe is nothing then
+      return 0
    end if
+   put tExe into tPath
+   put the number of chars in tPath into tLen
+   put 0 into tCut
+   repeat with i from 1 up to tLen
+      if char i of tPath is "/" then
+         put i into tCut
+      end if
+   end repeat
+   if tCut is 0 then
+      return 0
+   end if
+   put char 1 to tCut of tPath into tLib
+   put tLib & "box2dxt.so" into tLib
+   unsafe
+      put _dlopen(tLib, 258) into tHandle
+   end unsafe
+   if tHandle is nothing then
+      return 0
+   end if
+   return 1
 end handler
 
 -- =====================================================================
@@ -521,7 +529,6 @@ end handler
 
 public handler b2Version() returns Integer
    variable tR as Integer
-   _ensureLib()
    unsafe
       put _abi_version() into tR
    end unsafe
@@ -534,7 +541,6 @@ end handler
 -- clear, catchable error instead.
 private handler checkABI()
    variable tV as Integer
-   _ensureLib()
    unsafe
       put _abi_version() into tV
    end unsafe
