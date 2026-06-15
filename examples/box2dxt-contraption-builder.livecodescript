@@ -319,12 +319,6 @@ constant kPI = 3.14159265358979
 -- World / lifecycle
 -- =====================================================================
 command b2kSetup pGravityX, pGravityY
-   -- On Linux the engine will not find box2dxt.so sitting beside it on its own,
-   -- so preload it from the engine's OWN folder before the first physics call.
-   -- LINUX-ONLY on purpose: b2LoadNativeLibHere uses POSIX calls that do not
-   -- exist on Windows, and Windows/macOS already load the library from beside
-   -- the stack/app -- so the platform check keeps it from ever firing there.
-   if the platform is "Linux" then get b2LoadNativeLibHere()
    b2kTeardown
    if pGravityX is empty then put 0 into pGravityX
    if pGravityY is empty then put -10 into pGravityY
