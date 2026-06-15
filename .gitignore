@@ -10,6 +10,3 @@ __pycache__/
 /dist/*.zip
 /dist/*.livecode
 /dist/*.oxtstack
-
-# assembled extension package (run tools/package-extension.py)
-dist/box2dxt-extension/
