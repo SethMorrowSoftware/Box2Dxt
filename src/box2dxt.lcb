@@ -441,6 +441,25 @@ private foreign handler _query_normal_x(in pI as CInt) returns CDouble binds to 
 private foreign handler _query_normal_y(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_normal_y!cdecl"
 private foreign handler _query_fraction(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_fraction!cdecl"
 
+-- ---- native loader assist (Linux) ----------------------------------
+-- The ONLY two bindings that do NOT target the box2dxt shim: they bind to
+-- the platform's own dynamic loader (dlopen/dlerror), resolved from the
+-- host process's global symbol table. That is the whole point -- they must
+-- be callable BEFORE box2dxt.so is loadable, so a script can preload the
+-- shim by absolute path. On Linux the engine hands the bare name
+-- "box2dxt.so" to dlopen and never searches the stack's folder; preloading
+-- the exact file first puts it in the process, so the engine's later
+-- bare-name load finds the already-resident copy (matched by soname --
+-- build with -DBOX2DXT_BARE_SONAME=ON so that soname is "box2dxt.so").
+-- Bindings resolve on first use, so these are harmless dead weight on
+-- Windows/macOS as long as nothing calls them there (the engine already
+-- finds the library next to the stack on those platforms).
+-- If OXT cannot bind "c:>dlopen", swap the empty library token for your
+-- libc: glibc >= 2.34 -> "c:libc.so.6>dlopen!cdecl"; older glibc or where
+-- dlopen still lives in libdl -> "c:libdl.so.2>dlopen!cdecl".
+private foreign handler _dlopen(in pPath as ZStringNative, in pFlags as CInt) returns optional Pointer binds to "c:>dlopen!cdecl"
+private foreign handler _dlerror() returns optional ZStringNative binds to "c:>dlerror!cdecl"
+
 -- small bool -> int helper (no foreign call, so no unsafe needed)
 private handler bi(in pB as Boolean) returns Integer
    if pB then
@@ -473,6 +492,42 @@ private handler checkABI()
    if tV is not 4 then
       throw "box2dxt: incompatible native library (binding needs ABI 4) - update libbox2dxt / box2dxt.dll"
    end if
+end handler
+
+-- ---- native loader assist -------------------------------------------
+-- Preload the native shim by ABSOLUTE path so the engine's later bare-name
+-- load resolves to the already-resident copy. Lets a Linux script point at
+-- box2dxt.so sitting next to the stack (no /usr/lib, no sudo, no
+-- LD_LIBRARY_PATH). Returns 1 on success, 0 on failure (then call
+-- b2LoadNativeLibError for the reason). The library MUST have been built
+-- with a soname of "box2dxt.so" (see -DBOX2DXT_BARE_SONAME) or the match
+-- fails silently. Flags 258 = RTLD_NOW (2) | RTLD_GLOBAL (256) on Linux:
+-- resolve every symbol now and expose them globally so the bare-name
+-- bindings bind to them. Intended for Linux; gate the call to Linux when
+-- wiring it into the Kit (the dlopen binding will not resolve on Windows).
+public handler b2LoadNativeLib(in pPath as String) returns Integer
+   variable tHandle as optional Pointer
+   unsafe
+      put _dlopen(pPath, 258) into tHandle
+   end unsafe
+   if tHandle is nothing then
+      return 0
+   end if
+   return 1
+end handler
+
+-- The last loader error string ("" if none) -- makes a failed
+-- b2LoadNativeLib self-diagnosing (wrong path vs. could-not-load) instead
+-- of a bare 0.
+public handler b2LoadNativeLibError() returns String
+   variable tErr as optional String
+   unsafe
+      put _dlerror() into tErr
+   end unsafe
+   if tErr is nothing then
+      return ""
+   end if
+   return tErr
 end handler
 
 -- ---- world ----------------------------------------------------------
