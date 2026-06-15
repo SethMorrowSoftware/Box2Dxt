@@ -11,11 +11,26 @@ chrome, and the card/stack metaphor as the actual layout. The one signature
 colour is the Box2D crate-orange, and the hero demo is a pile of tumbling,
 stacking crates. Retro motifs, modern layout discipline.
 
+**The landing page IS a HyperCard stack.** Instead of one long scroll, the
+home page is a stack of cards you flip through, one at a time:
+
+- **Navigate** with the menu, the Home-card launcher, the ◄ / ► card-nav bar,
+  the title-bar Home box, or the keyboard (`←` `→` flip, `H` home, `M` message).
+- **Card-flip transitions** (dissolve + directional slide; an iris for Home),
+  honouring `prefers-reduced-motion`.
+- **Deep links + history**: each card has a hash (`#examples`) and Back/Forward
+  work. The doc pages' menu links jump straight to the right card.
+- **The Message Box** — a HyperTalk-ish console (press `M`). Try `go to
+  examples`, `next` / `prev` / `home`, `spawn a crate`, `reset`, `gravity`,
+  `help`.
+- **Graceful fallback**: an inline `<html class="js">` flag gates single-card
+  mode, so with JavaScript off the cards simply stack into a normal scroll page.
+
 ```
 website/
 ├── index.html   # the landing page (menu bar + window-framed "cards")
 ├── styles.css   # the paper/ink/orange design system + Mac window chrome + .prose
-├── app.js       # menu toggle + the interactive hero crate-physics toy
+├── app.js       # crate-physics toy + the card-stack navigation + Message Box
 └── docs/        # the user-facing guides, rendered from docs/*.md (generated)
     ├── index.html          # the manual overview
     └── <doc>.html          # getting-started, kit-guide, kit-reference

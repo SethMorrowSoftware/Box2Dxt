@@ -481,3 +481,127 @@ pre.code code { color: var(--ink); }
 @media (max-width: 680px) {
   .docs-grid-3 { grid-template-columns: 1fr; }
 }
+
+/* ===========================================================
+   The HyperCard stack (home page)
+   =========================================================== */
+.desktop {
+  min-height: calc(100vh - 44px);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px; padding: 20px 18px 14px;
+}
+.stack-deck { position: relative; width: 100%; max-width: 1060px; }
+/* the "rest of the stack" peeking out behind the active card */
+.stack-deck::before, .stack-deck::after {
+  content: ""; position: absolute; inset: 0; z-index: 0;
+  background: var(--card); border: var(--line); border-radius: var(--radius);
+}
+.stack-deck::after  { transform: translate(6px, 7px) rotate(-0.5deg); }
+.stack-deck::before { transform: translate(12px, 13px) rotate(0.55deg); }
+.stack-win { position: relative; z-index: 1; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+
+.win-home { cursor: pointer; padding: 0; transition: background .12s; }
+.win-home:hover, .win-home:focus-visible { background: var(--orange); outline: none; }
+
+.stack-body { position: relative; background: var(--card); }
+.card { padding: clamp(22px, 3.2vw, 40px); }
+.card-h { font-size: clamp(1.55rem, 3.2vw, 2.35rem); margin-bottom: 14px; }
+.card-lead { color: var(--ink-soft); max-width: 64ch; margin-bottom: 22px; }
+.card .cardnum { display: inline-block; margin-bottom: 14px; }
+
+/* single-card mode (JS on) */
+.js .stack-body { height: min(650px, 72vh); overflow: hidden; }
+.js .card {
+  position: absolute; inset: 0; overflow-y: auto;
+  opacity: 0; visibility: hidden;
+}
+.js .card.is-active { opacity: 1; visibility: visible; z-index: 2; }
+@media (prefers-reduced-motion: no-preference) {
+  .js .card { transition: opacity .3s ease, transform .3s ease; }
+}
+
+/* HOME card */
+.home-grid { display: grid; grid-template-columns: 1.04fr 1fr; gap: clamp(22px, 3.5vw, 46px); align-items: center; }
+.home-copy h1 { font-size: clamp(2rem, 4.4vw, 3.3rem); margin-bottom: 16px; }
+.home-copy h1 .amp { color: var(--orange); font-style: italic; }
+.flip-hint { margin-top: 20px; font-size: 0.82rem; color: var(--ink-faint); line-height: 1.9; }
+kbd {
+  font-family: var(--mono); font-size: 0.74em; color: var(--ink);
+  background: #fff; border: 1.5px solid var(--ink); border-bottom-width: 3px;
+  border-radius: 5px; padding: 1px 6px; margin: 0 1px;
+}
+.launcher {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
+  margin-top: 26px; padding-top: 20px; border-top: 2px dashed rgba(23,20,13,.25);
+}
+.launcher .label { color: var(--ink-faint); margin-right: 4px; }
+.lbtn {
+  font-family: var(--sans); font-weight: 600; font-size: 0.86rem; color: var(--ink);
+  background: var(--card); border: var(--line); border-radius: 999px;
+  padding: 7px 15px; cursor: pointer; box-shadow: 2px 2px 0 var(--ink);
+  transition: transform .06s, box-shadow .06s, background .12s, color .12s;
+}
+.lbtn:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); background: var(--orange); color: #fff; }
+.lbtn:active { transform: translate(2px,2px); box-shadow: 0 0 0 var(--ink); }
+
+.card-next { margin-top: 22px; color: var(--ink-soft); }
+.link-go {
+  background: none; border: 0; cursor: pointer; padding: 0; font: inherit;
+  color: var(--orange-d); font-weight: 600;
+  text-decoration: underline; text-decoration-thickness: 2px;
+}
+.about-ticks { margin-top: 8px; }
+
+/* card navigation bar */
+.cardbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-top: var(--line); background: var(--card);
+}
+.navbtn {
+  font-family: var(--sans); font-weight: 600; font-size: 0.82rem; color: var(--ink);
+  background: #fff; border: 1.5px solid var(--ink); border-radius: 7px;
+  padding: 6px 12px; cursor: pointer; box-shadow: 2px 2px 0 var(--ink);
+  transition: transform .06s, box-shadow .06s, background .12s, color .12s;
+}
+.navbtn:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); background: var(--orange); color: #fff; }
+.navbtn:active { transform: translate(2px,2px); box-shadow: 0 0 0 var(--ink); }
+.nav-arrow { font-family: var(--mono); }
+.cardcount { font-family: var(--pixel); font-size: 0.6rem; color: var(--ink-soft); padding: 0 6px; white-space: nowrap; }
+.cc-sep { color: var(--ink-faint); }
+.msg-toggle { margin-left: auto; }
+
+/* the message box (HyperTalk-ish console) */
+.msgbox[hidden] { display: none; }
+.msgbox {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 12px; border-top: var(--line);
+  background: repeating-linear-gradient(45deg, rgba(232,112,42,.06) 0 8px, transparent 8px 16px), var(--card);
+}
+.msgbox .label { color: var(--ink-faint); flex: none; }
+#msgInput {
+  flex: 1; min-width: 0; font-family: var(--mono); font-size: 0.86rem; color: var(--ink);
+  background: #fff; border: 1.5px solid var(--ink); border-radius: 6px; padding: 7px 11px;
+}
+#msgInput:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+.msg-out { font-family: var(--mono); font-size: 0.76rem; color: var(--orange-d); flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* desktop footer line + menu active state */
+.deskfoot { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; font-family: var(--pixel); font-size: 0.54rem; color: var(--ink-faint); text-align: center; }
+.deskfoot a { color: var(--ink-soft); }
+.deskfoot a:hover { color: var(--ink); }
+.deskfoot-sep { opacity: .5; }
+.menu-links a.active { background: var(--ink); color: var(--paper); }
+
+@media (max-width: 920px) {
+  .home-grid { grid-template-columns: 1fr; }
+  .home-demo { order: -1; }
+}
+@media (max-width: 680px) {
+  .desktop { min-height: 0; padding: 14px 12px; justify-content: flex-start; }
+  .js .stack-body { height: min(560px, 78vh); }
+  .stack-deck::before, .stack-deck::after { display: none; }
+  .lbtn { font-size: 0.8rem; padding: 6px 12px; }
+  .cardbar { flex-wrap: wrap; }
+  .msg-out { display: none; }
+}
