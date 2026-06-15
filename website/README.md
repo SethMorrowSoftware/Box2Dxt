@@ -4,11 +4,18 @@ A small, self-contained marketing site for Box2Dxt. No build step, no
 framework, no required network dependencies — it's three static files plus a
 live physics demo written in plain JavaScript.
 
+**Personality: HyperCard heritage.** The site leans into the xTalk lineage —
+warm "paper" background, classic-Mac window chrome (striped title bars, square
+close boxes), hard ink borders with solid offset shadows, a pixel font for
+chrome, and the card/stack metaphor as the actual layout. The one signature
+colour is the Box2D crate-orange, and the hero demo is a pile of tumbling,
+stacking crates. Retro motifs, modern layout discipline.
+
 ```
 website/
-├── index.html   # the page
-├── styles.css   # dark, modern theme (palette echoes the project's own demos)
-└── app.js       # mobile nav + the interactive hero physics toy
+├── index.html   # the page (menu bar + window-framed "cards")
+├── styles.css   # the paper/ink/orange design system + Mac window chrome
+└── app.js       # menu toggle + the interactive hero crate-physics toy
 ```
 
 ## View it locally
@@ -53,11 +60,15 @@ The site will be served at `https://sethmorrowsoftware.github.io/Box2Dxt/`.
 
 Everything is hand-written and dependency-free:
 
-- Copy lives directly in `index.html`.
-- The colour palette and layout are CSS custom properties at the top of
-  `styles.css` (`--orange`, `--teal`, `--purple`, …).
-- The hero demo is a compact impulse-based circle solver in `app.js`; tune the
-  constants near the top (`GRAV`, `REST`, `MAX_BODIES`, …).
+- Copy lives directly in `index.html` (sections are styled as numbered
+  "cards" inside Mac windows — the `.win` / `.win-bar` components).
+- The palette and tokens are CSS custom properties at the top of `styles.css`
+  (`--paper`, `--ink`, `--orange`, plus `--blue` / `--green` / `--red` / `--hl`).
+  Fonts: Space Grotesk (display/body), JetBrains Mono (code), Silkscreen (the
+  pixel chrome).
+- The hero demo is a compact impulse-based solver in `app.js` — circle
+  colliders for stability, rendered as rotating crates + a few cannonballs.
+  Tune the constants near the top (`GRAV`, `REST`, `MAX_BODIES`, `CRATES`, …).
 
 If you change any GitHub link, the repository slug `SethMorrowSoftware/Box2Dxt`
 appears throughout `index.html`.
