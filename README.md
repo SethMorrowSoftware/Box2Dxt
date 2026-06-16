@@ -38,12 +38,13 @@ Box2D v3.1.0 (fetched by CMake)
 
 ## Quick start
 
-1. **Get the native library** for your platform from [`prebuilt/`](prebuilt/)
-   (or [Releases](../../releases)) and rename it to the bare name the loader
-   expects — `box2dxt.dll` / `box2dxt.dylib` / `box2dxt.so` (no `lib` prefix).
-2. **Load the extension** `box2dxt.lcb` in the Extension Manager.
-3. **Sanity check:** `put b2Version()` in the Message Box should print `4`.
-4. **Run a demo:** paste all of
+1. **Install the extension:** open [`src/box2dxt.lcb`](src/box2dxt.lcb) in OXT's
+   Extension Builder and click **Package** → install the resulting `box2dxt.lce`.
+   The native library for your platform is bundled inside
+   (`src/code/<arch>-<platform>/`), so it loads automatically — no separate
+   download, no rename, no `sudo`, no `/usr/lib`.
+2. **Sanity check:** `put b2Version()` in the Message Box should print `4`.
+3. **Run a demo:** paste all of
    [`examples/box2dxt-demo.livecodescript`](examples/box2dxt-demo.livecodescript)
    into a stack script and reopen the card — six interactive scenes, from a
    Newton's cradle to a drivable car. Or try the flagship

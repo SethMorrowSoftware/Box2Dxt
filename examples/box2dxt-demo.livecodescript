@@ -309,6 +309,7 @@ constant kPI = 3.14159265358979
 -- World / lifecycle
 -- =====================================================================
 command b2kSetup pGravityX, pGravityY
+   b2kEnsureNativeLib
    b2kTeardown
    if pGravityX is empty then put 0 into pGravityX
    if pGravityY is empty then put -10 into pGravityY
@@ -329,6 +330,42 @@ command b2kSetup pGravityX, pGravityY
    put empty into sKillY
    b2kEventsReset
 end b2kSetup
+
+-- Point the engine at the native library so the c:box2dxt> foreign bindings
+-- resolve on EVERY platform and IDE -- including OXT Lite, whose stripped IDE
+-- does not auto-scan an extension's code/ folder. the revLibraryMapping is the
+-- exact name->path table the engine consults when loading a foreign-handler
+-- library (engine resolver MCEngineLoadLibrary); seeding it ourselves means no
+-- /usr/lib, no LD_LIBRARY_PATH, no sudo, no code/ packaging, on Linux/macOS/
+-- Windows alike. The library ships next to the stack under its bare name
+-- (box2dxt.{so,dll,dylib}); if it is there we map it, otherwise we leave the
+-- engine's own search untouched (so the historical "beside the engine" path on
+-- Win/macOS still works). Raw b2* callers that do not use the Kit can set the
+-- same mapping themselves before their first b2 call.
+command b2kEnsureNativeLib
+   local tStackFile, tDir, tName, tPath, tOldDelim
+   put the effective filename of this stack into tStackFile
+   if tStackFile is empty then exit b2kEnsureNativeLib
+   switch the platform
+      case "Win32"
+         put "box2dxt.dll" into tName
+         break
+      case "MacOS"
+         put "box2dxt.dylib" into tName
+         break
+      default
+         put "box2dxt.so" into tName   -- Linux and friends
+         break
+   end switch
+   put the itemDelimiter into tOldDelim
+   set the itemDelimiter to slash
+   put item 1 to -2 of tStackFile into tDir
+   set the itemDelimiter to tOldDelim
+   put tDir & slash & tName into tPath
+   if there is a file tPath then
+      set the revLibraryMapping["box2dxt"] to tPath
+   end if
+end b2kEnsureNativeLib
 
 command b2kResetTables
    put empty into sBody

@@ -24,6 +24,13 @@ Box2D v3.1.0 (fetched by CMake)
   `double`, booleans as `int`. Every handle is validated with Box2D's `b2*_IsValid` before use,
   so a stale/0 handle is a **harmless no-op** (getters return 0), never a crash. Exported C ABI
   symbols keep the historical **`b2lc_` prefix** for binary stability — **never rename them**.
+  The shim compiles into one shared library (`libbox2dxt.{so,dylib,dll}`) that **ships bundled
+  INSIDE the extension** under `src/code/<arch>-<platform>/box2dxt.{so,dll,dylib}` (bare token,
+  no `lib` prefix; platform-ids `x86_64-linux` / `x86-linux` / `x86_64-win32` / `x86-win32` /
+  `universal-mac`, architecture FIRST, Windows `-win32` for both bitnesses). `tools/package-extension.py`
+  lays the `prebuilt/` binaries into that tree; installing the packaged extension makes the engine
+  resolve the `c:box2dxt>` bindings via `the revLibraryMapping` automatically — **no loose library,
+  no rename, no sudo/`/usr/lib`/`LD_LIBRARY_PATH`** (see `docs/building.md`).
 - **LCB binding** (`src/box2dxt.lcb`, `library org.openxtalk.box2dxt`): declares `foreign handler`
   bindings to the shared library and public `b2PascalCase` handlers callable from xTalk. This API
   speaks **metres and radians**; body type codes are `0=static, 1=kinematic, 2=dynamic`.
@@ -33,8 +40,11 @@ Box2D v3.1.0 (fetched by CMake)
   loop. This is what the examples and most users actually call.
 
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
-`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`). Drop-in prebuilt
-binaries are in `prebuilt/`. The **Game Kit** (input/sprites/player/camera/sound modules, plan.md
+`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`). Prebuilt per-platform
+binaries are in `prebuilt/` — the SOURCE `tools/package-extension.py` lays into the extension's
+`src/code/<arch>-<platform>/` tree; the install is the packaged extension, not a loose drop-in (a
+loose `box2dxt.{so,dll,dylib}` beside a saved stack is only the dev/fallback path, mapped at runtime
+by the Kit's `b2kEnsureNativeLib`). The **Game Kit** (input/sprites/player/camera/sound modules, plan.md
 Phases 0-5) is implemented and user-verified on Win32; `plan.md`'s decision log is the as-built
 record. Six examples: demo, contraption builder, spike (Phase-0 harness), **platformer showcase**
 (the Game Kit pushed hard — the focus of this repo's game work), **slingshot** (angry-birds-style

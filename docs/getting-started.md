@@ -2,15 +2,15 @@
 
 This guide takes you from nothing to a running, draggable physics scene in
 **OpenXTalk (OXT)** — or any compatible **LiveCode 9.6.3+** IDE. It assumes no
-C toolchain: you'll use a prebuilt native library.
+C toolchain: you install a prebuilt extension (the native library is bundled in).
 
 > **Just want to *play*, not code?** If you were handed the prebuilt **platformer
-> package** (a zip with the extension, the native libraries, and a saved
-> `platformer.livecode`), open its `INSTALL.md` and follow three steps — no
-> scripting. This guide is for building your *own* scenes from scratch.
+> package** (a zip with the extension — native library bundled in — and a saved
+> stack), open its `INSTALL.md` and follow two steps — no scripting. This guide
+> is for building your *own* scenes from scratch.
 
-- [1. Get the native library](#1-get-the-native-library)
-- [2. Load the extension](#2-load-the-extension)
+- [1. Install the extension](#1-install-the-extension)
+- [2. Load it while developing](#2-load-it-while-developing)
 - [3. Sanity check](#3-sanity-check)
 - [4. Your first scene (the Kit)](#4-your-first-scene-the-kit)
 - [5. Attach controls you designed in the IDE](#5-attach-controls-you-designed-in-the-ide)
@@ -20,56 +20,39 @@ C toolchain: you'll use a prebuilt native library.
 
 ---
 
-## 1. Get the native library
+## 1. Install the extension
 
-Box2Dxt is a real physics engine compiled to a native shared library. Grab the
-file for your platform from [`prebuilt/`](../prebuilt/) (or from the
-[Releases](../../releases) page for a specific version):
+Box2Dxt is a real physics engine compiled to a native library — and that library
+ships **inside the extension**, so there's nothing to download, rename, or place
+by hand. Installing the extension is the only setup step, and it's identical on
+Windows, macOS, and Linux:
 
-| Platform | Download | Rename it to |
-|----------|----------|--------------|
-| Windows x64 | `prebuilt/box2dxt-windows-x64.dll` | `box2dxt.dll` |
-| macOS (Intel/Apple Silicon) | `prebuilt/libbox2dxt-macos-universal.dylib` | `box2dxt.dylib` |
-| Linux x86-64 | `prebuilt/libbox2dxt-linux-x86_64.so` | `box2dxt.so` |
+1. In OXT, open **Tools → Extension Builder** and open
+   [`src/box2dxt.lcb`](../src/box2dxt.lcb).
+2. Click **Package** — this rolls the per-platform libraries (committed under
+   `src/code/<arch>-<platform>/`) into a `box2dxt.lce` — then install that `.lce`
+   via **Tools → Extension Manager**.
 
-OXT's loader resolves the name `box2dxt` to the **bare platform filename with no
-`lib` prefix** (the table above). This bites on Linux especially: the committed
-file is `libbox2dxt-linux-x86_64.so`, but OXT asks `dlopen` for `box2dxt.so` — leaving the
-`lib` prefix on is the single most common cause of "unable to load foreign
-library".
+The engine then loads the correct library for your platform automatically —
+**no `/usr/lib`, no `sudo`, no `LD_LIBRARY_PATH`, no renaming.**
 
-**Put the renamed file where the loader looks at run time:**
+> The committed `prebuilt/` binaries are the *source* of those bundled libraries;
+> `python3 tools/package-extension.py` lays them into `src/code/` (already done in
+> the repo). Prefer building the library yourself? See [building.md](building.md).
 
-- **Windows / macOS:** next to the stack you're editing works.
-- **Linux:** the dynamic loader does **not** search the stack's folder. Copy the
-  file to a search path and refresh the cache:
-  ```
-  sudo cp box2dxt.so /usr/lib/ && sudo ldconfig
-  ```
-  (or place it next to the OXT engine binary, or add its folder to
-  `LD_LIBRARY_PATH` before launching OXT).
+## 2. Load it while developing
 
-> If a particular engine asks for the `lib`-prefixed name instead, provide that
-> too — a copy or symlink alongside is harmless.
+You don't have to repackage on every edit:
 
-> Prefer building it yourself? See [building.md](building.md). It's two `cmake`
-> commands.
+- **Extension Builder → Test** compiles and loads `src/box2dxt.lcb` in place — it
+  reads the `code/` folder beside the `.lcb`, so the native library loads too.
+- **From script:** `load extension from file (the defaultFolder & "/box2dxt.lcb")`
+- **No-packaging fallback:** drop `box2dxt.{so,dll,dylib}` (bare name) next to your
+  **saved** stack; the Kit points the engine at it on `b2kSetup`, so even Linux
+  needs no system path.
 
-## 2. Load the extension
-
-`src/box2dxt.lcb` is the extension that exposes the `b2…` handlers.
-
-- **From the IDE:** *Tools → Extension Manager* → add `src/box2dxt.lcb`, then
-  **Load** it. (During development you can also use *Tools → Extension Builder →
-  Test* to compile and load it in one step.)
-- **From script:**
-
-  ```
-  load extension from file (the defaultFolder & "/box2dxt.lcb")
-  ```
-
-Foreign bindings resolve on **first use**, so the native library only has to be
-findable when a `b2…` handler actually runs — not when the extension loads.
+Foreign bindings resolve on **first use**, so the library only has to be in place
+by the time a `b2…` handler first runs — not when the extension loads.
 
 ## 3. Sanity check
 
@@ -198,7 +181,7 @@ of the [Kit](kit-reference.md).
 | Symptom | Likely cause & fix |
 |---------|--------------------|
 | `b2Version()` throws / "handler not found" | The extension isn't loaded. Re-add and **Load** `box2dxt.lcb` in the Extension Manager. |
-| First `b2…` call (or `b2Version()`) errors **"unable to load foreign library"** | The native library isn't found or is misnamed. Use the **no-`lib`** bare name: `box2dxt.dll` / `box2dxt.dylib` / `box2dxt.so`. On **Linux** the stack folder isn't searched — put it in `/usr/lib` then run `sudo ldconfig`, or place it next to the OXT engine. (Tip: launching OXT from a terminal prints `dlopen failed <name>` showing the exact filename it wants.) |
+| First `b2…` call (or `b2Version()`) errors **"unable to load foreign library"** | The extension loaded without its bundled library. Install the **packaged** extension (Extension Builder → **Package** `src/box2dxt.lcb` → install the `.lce`), or **Test** it with the `code/` folder beside the `.lcb`. Quick fallback: drop `box2dxt.{dll,dylib,so}` (bare name) next to your **saved** stack. (Tip: launch OXT from a terminal — it prints `dlopen failed <name>` showing the filename it wants.) |
 | `b2Version()` returns a different number | Your `box2dxt.lcb` and native library are from different versions. Rebuild/redownload both from the same tag. |
 | Library won't load on an older PC (Linux/Windows) | The CPU may lack AVX2. Build with `-DBOX2D_DISABLE_SIMD=ON` (see [building.md](building.md#platform--cpu-notes)), or grab a Release binary built for older CPUs. |
 | Bodies jitter or behave non-deterministically | You're stepping with a variable timestep. Let the Kit drive the loop, or step in fixed 1/60 s chunks (see [API Reference → Notes](api-reference.md#notes-and-gotchas)). |

@@ -31,11 +31,23 @@ How the pieces fit, why the shim exists, and how to extend the binding.
 
 - **`src/box2d_lc.c` + Box2D** compile together into one shared library,
   `box2dxt` (`libbox2dxt.so` / `.dylib` / `box2dxt.dll`). The shim exports flat C
-  functions prefixed `b2lc_*`.
+  functions prefixed `b2lc_*`. This library **ships bundled inside the extension**,
+  in `src/code/<arch>-<platform>/box2dxt.{so,dll,dylib}` (bare token, no `lib`
+  prefix; platform-ids `x86_64-linux`, `x86-linux`, `x86_64-win32`, `x86-win32`,
+  `universal-mac` — architecture first, Windows `-win32` for both bitnesses).
+  `tools/package-extension.py` populates that tree from `prebuilt/`.
 - **`src/box2dxt.lcb`** is the xTalk Builder (LCB) extension. It declares
   `private foreign handler` bindings to the `b2lc_*` symbols
   (`binds to "c:box2dxt>b2lc_…!cdecl"`) and wraps each in a friendly public
-  `b2…` handler that scripts call directly.
+  `b2…` handler that scripts call directly. The engine resolves the
+  `c:box2dxt>` library through **`the revLibraryMapping`** — a name→path table the
+  IDE populates by scanning the extension's `code/<arch>-<platform>/` folder when
+  the extension is installed, so the right library loads automatically per
+  platform with no loose file to place. (The old "drop the `.so` on a search
+  path / `sudo cp /usr/lib` / `LD_LIBRARY_PATH`" approach was a workaround for not
+  packaging the library into the extension.) For quick dev without packaging, the
+  Kit's `b2kEnsureNativeLib` seeds the same `revLibraryMapping["box2dxt"]` entry
+  from a `box2dxt.{so,dll,dylib}` sitting next to a saved stack.
 - **`src/box2dxt-kit.livecodescript`** is optional pure-xTalk sugar (`b2k…`) on
   top of the `b2…` API.
 
@@ -112,8 +124,11 @@ Exposing more of Box2D is mechanical. To add a handler:
    `public handler b2YourThing(…)` wrapper that calls it (and tolerates `0`
    handles like the rest).
 3. **Bump `LC_ABI_VERSION`** in the shim if the exported ABI changed.
-4. **Rebuild** the native library (see [building.md](building.md)) and reload the
-   extension.
+4. **Rebuild** the native library (see [building.md](building.md)), re-run
+   `tools/package-extension.py` to refresh the bundled `src/code/<arch>-<platform>/`
+   copy, then re-Package (or **Test**) the extension so the new library loads. (For
+   quick iteration, dropping the rebuilt `box2dxt.{so,dll,dylib}` beside a saved
+   stack picks it up via `b2kEnsureNativeLib` without repackaging.)
 
 Add a smoke-test assertion in `tests/smoke_test.c` for anything non-trivial so CI
 exercises it on every platform.
