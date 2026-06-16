@@ -47,7 +47,7 @@ local gRep, gPass, gFail, gFellCount, gRunning
 local gMsgEnters, gMsgContacts   -- message-path counters (vs polling)
 
 constant kStUIVersion = "1"
-constant kStHarnessV = "21"  -- bump on EVERY harness change: the report
+constant kStHarnessV = "22"  -- bump on EVERY harness change: the report
                              -- header prints it, so a stale paste is
                              -- visible at a glance
 
@@ -105,6 +105,8 @@ command stRunAll
    put empty into gRep
    put 0 into gPass
    put 0 into gFail
+   b2kEnsureNativeLib   -- map box2dxt.{so,dll,dylib} (beside this stack) before
+                        -- the header b2Version() call, which precedes b2kSetup
    stOut "Box2Dxt Kit self-test v" & kStHarnessV & " - " & the long date && the time
    stOut "engine ABI " & b2Version() & "   (every test builds its own world)"
    stRun "stTestWorld"
