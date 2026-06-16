@@ -213,8 +213,9 @@
 --      reachable WITHOUT the trick (the double-jump is universal), so no
 --      level can dead-end. FEEL is unverifiable statically - tune the Wave 5
 --      knobs in OXT and confirm: the L2 lift carries you (stand still and
---      drift with the deck), a crouched hero clears the L1 bar a standing one
---      cannot, and the L3 slot is climbable by wall-jumps AND a double-jump.
+--      drift with the deck), DOWN brakes a running hero to a stop in place
+--      (no hitbox reshape this build), and the L3 slot is climbable by
+--      wall-jumps AND a plain double-jump.
 --  17. WAVE 4 COLLAPSING BRIDGE (L4, over the lava - the wave's last named
 --      mechanic): three planks at the old lift height between the faced
 --      crushers. Standing on a plank reddens it + CREAKS, then ~0.3s later it
@@ -1828,8 +1829,7 @@ end pfMakeLift
 -- LEVEL 1 - "GREEN HILLS" (8640px). Movement and the Wave 1 toys:
 -- springboard + sky coin, the bonk row, the one-way bridge over the
 -- spike slime, the slope mound, two one-way clouds, the spike pit, a
--- skittering MOUSE, the Wave 5 CRAWL TUNNEL (duck under a low overhang
--- for a hidden coin) and a flying ladybug, then the showcase finale: a
+-- skittering MOUSE and a flying ladybug, then the showcase finale: a
 -- sagging ROPE BRIDGE (hinged planks) over a real chasm, the crusher
 -- alley and the hilltop swim pool to the flag.
 -- =====================================================================

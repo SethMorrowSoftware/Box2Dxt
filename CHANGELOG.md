@@ -36,6 +36,14 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   blocked from below on either winding). Both docs now say so and point
   one-way platform builders at chains (chain segments are the one-sided
   primitive).
+- **Platformer: levels now hug their CONTENT, so the hero can no longer walk
+  off into dead ground at either end.** `pfBounds` built its thick slabs, edge
+  wall segments and camera clamp at the raw WORLD width, leaving walkable
+  emptiness before each spawn (hero at x 120 vs a wall at x 0) and after each
+  flag (up to ~390px past L3's). It now takes the content edges (just past the
+  spawn, just past the flag); the per-frame edge failsafe follows, and the side
+  slabs grew taller so no Wave-5 double-/wall-jump rounds their corners.
+  Example-only.
 
 ### Removed
 
@@ -83,8 +91,9 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     frame's zone membership), and `b2kPlayerRespawn x,y` (teleport + zero
     velocity + clean state). `b2kPlayerAnims` gains `wall`/`dash` slots.
   - The **platformer showcase** turns them all on and leans each beat on one
-    (double-jump throughout, a wall-jump shaft, a dash gap, a crawl tunnel,
-    moving-platform lifts). Self-test **v13** adds six hand-stepped tests.
+    (double-jump throughout, a wall-jump shaft, a dash gap, the L2 lift bay;
+    DOWN stays the Wave 2 brake-duck, not the crawl-reshape). Self-test **v13**
+    adds six hand-stepped tests.
 - **Wave 4 (liquids) — SWIM, the Kit's first new player-action since
   Wave 2 (statically verified + harness v12; user play-tested in the
   platformer).** A new `b2kPlayerAddWater x1,y1,x2,y2` registers a polled
@@ -108,8 +117,7 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     to HOP out the far bank to the flag. New `pfMakeWater` helper; per the
     playtest the water was made heavier (`swimGravity` 0.6, `swimMaxFall`
     200, a trimmed `swimJump` 300 — `swimJump` alone sets the escape, so it
-    is the lever for "harder to climb out"). A debug warp (`0` on L1)
-    reaches the pool for fast iteration.
+    is the lever for "harder to climb out").
   - **Fixed a pre-existing brick head-bump gap** the pool work surfaced:
     the hero's 88px capsule was taller than its ~76px visible character
     (128px frame headroom at a 0.75 down-scale), so heads "missed" bricks
@@ -126,6 +134,15 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     `water` + a `fish` pit-dweller), but it shows a white-world build issue
     in its own example code and is set aside pending a focused pass — the
     Kit swim itself is sound (it runs clean in the platformer).
+  - **The COLLAPSING BRIDGE — Wave 4's last named mechanic — is now built.**
+    New `pfMakeCollapseBridge`/`pfTickCollapse`: static planks crumble a beat
+    after the grounded hero stands on one (CREAK then SMASH, dropping the plank
+    and its rider into the lava), re-park static before the kill floor can
+    destroy them, and the whole bridge re-forms once the hero retreats to the
+    near bank. It crosses L4's lava pit in place of the lava lift (the gap
+    already existed; a fall is the recoverable pfOuch; a running double-jump
+    still clears the strip; platform-carry stays showcased by the L2 lift bay).
+    Example-only — no Kit change.
 - **Platformer SHOWCASE polish round (statically verified; awaiting the
   OXT pass).** A pre-Wave-4 pass over the platformer to make it a
   polished demo of the kit *as it stands today* — longer, better-spaced
