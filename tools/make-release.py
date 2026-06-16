@@ -5,18 +5,26 @@ The zip is self-contained and matches dist/INSTALL.md:
 
     NewPlateformerDemo.oxtstack    (your saved stack -- --stack)
     INSTALL.md
-    source/      box2dxt.lcb, box2d_lc.c, box2dxt-kit.livecodescript
-    libraries/   box2dxt.dll, box2dxt.dylib, box2dxt.so  (renamed to the bare name)
+    box2dxt.lce                    (optional prebuilt extension -- --lce)
+    extension/   box2dxt.lcb + code/<arch>-<platform>/box2dxt.{so,dll,dylib}
+    source/      box2d_lc.c, box2dxt-kit.livecodescript   (reference)
     spritesheets/  the platformer's PNG + XML sheets
+
+The native library ships INSIDE the extension (the code/ tree), so the recipient
+installs one extension and the engine loads the right per-platform library
+automatically -- no loose .so/.dll/.dylib, no rename, no sudo, no /usr/lib. The
+extension/ folder comes straight from src/ (src/box2dxt.lcb + src/code/, which
+tools/package-extension.py populates from prebuilt/). If you have already built
+a .lce in OXT's Extension Builder, pass it with --lce to drop it in too, so
+testers can install in one click instead of Packaging it themselves.
 
 The only thing this script can't produce is the *saved* stack -- build and save
 it in OXT first, then point --stack at it:
 
     python3 tools/make-release.py --stack ~/Desktop/NewPlateformerDemo.oxtstack
+    python3 tools/make-release.py --stack ~/Desktop/Demo.oxtstack --lce ~/box2dxt.lce
 
-By default the native libraries come from prebuilt/ (the committed ABI-4
-binaries) and the art from Spritesheets/. Override the libs with --win / --mac /
---linux, or the art folder with --sheets. --check validates the inputs only.
+--check validates the inputs only.
 """
 
 import argparse
@@ -26,15 +34,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# the extension, the C shim, and the Kit  ->  source/
-SOURCE_FILES = ["box2dxt.lcb", "box2d_lc.c", "box2dxt-kit.livecodescript"]
-
-# bare deploy name  ->  default committed binary  (goes to libraries/)
-DEFAULT_LIBS = {
-    "box2dxt.dll": "prebuilt/box2dxt-windows-x64.dll",
-    "box2dxt.dylib": "prebuilt/libbox2dxt-macos-universal.dylib",
-    "box2dxt.so": "prebuilt/libbox2dxt-linux-x86_64.so",
-}
+# Reference copies of the C shim and the Kit (the .lcb lives under extension/).
+SOURCE_FILES = ["box2d_lc.c", "box2dxt-kit.livecodescript"]
 
 # the spritesheets the platformer loads (PNG + XML each)  ->  spritesheets/
 PLATFORMER_SHEETS = [
@@ -59,20 +60,35 @@ def rel(src):
 def main():
     ap = argparse.ArgumentParser(description="Build the Box2Dxt platformer distribution zip.")
     ap.add_argument("--stack", help="path to the built & saved platformer stack (.oxtstack)")
+    ap.add_argument("--lce", help="optional prebuilt extension to drop in (box2dxt.lce, built in OXT)")
     ap.add_argument("--out", default="dist/NewPlateformerDemo.zip", help="output zip path")
     ap.add_argument("--top", default="NewPlateformerDemo", help="top-level folder name inside the zip")
     ap.add_argument("--stack-name", default="NewPlateformerDemo.oxtstack", help="filename the stack gets inside the zip (the guide refers to this name)")
     ap.add_argument("--sheets", default="Spritesheets", help="folder holding the platformer's spritesheets")
-    ap.add_argument("--win", help="override the Windows library (-> libraries/box2dxt.dll)")
-    ap.add_argument("--mac", help="override the macOS library (-> libraries/box2dxt.dylib)")
-    ap.add_argument("--linux", help="override the Linux library (-> libraries/box2dxt.so)")
     ap.add_argument("--check", action="store_true", help="validate inputs only; do not write the zip")
     args = ap.parse_args()
 
     items = []  # (arcname-relative-to-top, source Path)
     problems = []
 
-    # source/ : the extension, the C shim, the Kit
+    # extension/ : the .lcb plus its bundled per-platform native libraries (code/).
+    # This is the whole point -- the lib travels inside the extension.
+    lcb = REPO / "src" / "box2dxt.lcb"
+    if lcb.is_file():
+        items.append(("extension/box2dxt.lcb", lcb))
+    else:
+        problems.append("missing src/box2dxt.lcb")
+
+    code_dir = REPO / "src" / "code"
+    code_libs = sorted(code_dir.rglob("box2dxt.*")) if code_dir.is_dir() else []
+    if code_libs:
+        for lib in code_libs:
+            items.append((f"extension/code/{lib.relative_to(code_dir).as_posix()}", lib))
+    else:
+        problems.append("missing src/code/<arch>-<platform>/box2dxt.* "
+                        "(run: python3 tools/package-extension.py)")
+
+    # source/ : the C shim and the Kit, for reference / rebuilding.
     for name in SOURCE_FILES:
         src = REPO / "src" / name
         if src.is_file():
@@ -87,14 +103,13 @@ def main():
     else:
         problems.append("missing dist/INSTALL.md")
 
-    # libraries/ : the per-platform native libs, renamed to the bare name
-    overrides = {"box2dxt.dll": args.win, "box2dxt.dylib": args.mac, "box2dxt.so": args.linux}
-    for bare, default_rel in DEFAULT_LIBS.items():
-        src = Path(overrides[bare]).expanduser() if overrides[bare] else (REPO / default_rel)
-        if src.is_file():
-            items.append((f"libraries/{bare}", src))
+    # box2dxt.lce : optional prebuilt extension, at the root
+    if args.lce:
+        lce = Path(args.lce).expanduser()
+        if lce.is_file():
+            items.append(("box2dxt.lce", lce))
         else:
-            problems.append(f"missing library for libraries/{bare}: {src}")
+            problems.append(f"--lce is not a file: {lce}")
 
     # spritesheets/ : the demo's art (PNG + XML pairs)
     sheets_dir = Path(args.sheets).expanduser()
@@ -127,7 +142,7 @@ def main():
 
     print(f"Release contents (top folder: {args.top}/):")
     for arc, src in items:
-        print(f"  {arc:<34} <- {rel(src)}  ({human(src.stat().st_size)})")
+        print(f"  {arc:<40} <- {rel(src)}  ({human(src.stat().st_size)})")
 
     if args.check:
         print("\n--check: inputs valid" + ("" if stack else " (no --stack given; a real build needs one)") + ".")
