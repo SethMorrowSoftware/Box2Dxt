@@ -72,8 +72,8 @@
 --            and swoop), a pit, a long FOUR-burrow PIRANHA row (they
 --            will not rise under your feet), the shy GHOST that drifts
 --            closer while you face away, two faced CRUSHERS around a
---            LAVA strip crossed by the Wave 5 LAVA LIFT (ride the deck
---            over the lava, or double-jump it), a smouldering FIRE
+--            LAVA strip crossed by a COLLAPSING BRIDGE (cross the
+--            crumbling planks fast, or double-jump it), a smouldering FIRE
 --            SLIME, the POWDER KEG bay (an explosive barrel + woodpile,
 --            scattered by b2kExplode), the red crusher alley (its
 --            signature gauntlet), purple steps, the last flag.
@@ -207,15 +207,24 @@
 --      knockback; the ~200px gap is also double-jumpable); L3 WALL-JUMP
 --      SHAFT (climb the two floating ice pillars to the top coin - a
 --      straight double-jump up the slot also reaches it, so it is never
---      trick-only; walk under the pillars unobstructed); L4 LAVA LIFT (ride
---      the deck over the lava between the crushers for the mid-lava coin -
---      or double-jump the 128px strip; a fall onto the lava is a knockback,
---      recoverable). EVERY new-move coin is also reachable WITHOUT the
---      trick (the double-jump is universal), so no level can dead-end.
---      FEEL is unverifiable statically - tune the Wave 5 knobs in OXT and
---      confirm: the lifts carry you (stand still and drift with the deck),
---      a crouched hero clears the L1 bar a standing one cannot, and the L3
---      slot is climbable by wall-jumps AND by a plain double-jump.
+--      trick-only; walk under the pillars unobstructed). PLATFORM CARRY is
+--      demoed by the L2 lift bay above; L4's lava crossing is now the Wave 4
+--      COLLAPSING BRIDGE (item 17), not a lift. EVERY new-move coin is also
+--      reachable WITHOUT the trick (the double-jump is universal), so no
+--      level can dead-end. FEEL is unverifiable statically - tune the Wave 5
+--      knobs in OXT and confirm: the L2 lift carries you (stand still and
+--      drift with the deck), a crouched hero clears the L1 bar a standing one
+--      cannot, and the L3 slot is climbable by wall-jumps AND a double-jump.
+--  17. WAVE 4 COLLAPSING BRIDGE (L4, over the lava - the wave's last named
+--      mechanic): three planks at the old lift height between the faced
+--      crushers. Standing on a plank reddens it + CREAKS, then ~0.3s later it
+--      DROPS into the lava (SMASH) - so KEEP MOVING; grab the mid-lava coin
+--      mid-cross. A slip onto the lava is a recoverable knockback (pfOuch);
+--      retreat to the near bank and the bridge RE-FORMS for another try. A
+--      running double-jump still clears the 128px strip (no dead-end). VERIFY
+--      in OXT: planks drop a beat after you stand (not instantly, not never),
+--      the bridge re-forms after a knockback, and the coin is grabbable on
+--      the way across; tune the 0.3s crumble in pfTickCollapse to taste.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -277,6 +286,12 @@ local gBarrelN, gBarrelB, gBarrelSpr, gBarrelX, gBarrelY, gBarrelState, gBarrelT
 -- gLiftVX caches the last-written vx so the tick never re-sets an unchanged
 -- velocity (gotcha 17). Indexed 1..gLiftN.
 local gLiftN, gLift, gLiftMin, gLiftMax, gLiftSpeed, gLiftVX
+-- Wave 4's last named mechanic: the COLLAPSING BRIDGE (L4, over the lava).
+-- Static planks that crumble a beat after the hero stands on one and re-form
+-- when he retreats to the near bank. gCollapseStep = plank width; gCollapseDirty
+-- gates the re-form so the idle case is one compare.
+local gCollapseN, gCollapseB, gCollapseHomeX, gCollapseState, gCollapseT
+local gCollapseL, gCollapseR, gCollapseY, gCollapseStep, gCollapseDirty
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -672,6 +687,9 @@ command pfStartGame
    put empty into gBarrelY
    put empty into gBarrelState
    put empty into gBarrelT
+   -- the collapsing bridge starts empty (only L4 builds one)
+   put 0 into gCollapseN
+   put false into gCollapseDirty
    -- the Wave 5 moving-platform lifts start the run empty/idle
    put 0 into gLiftN
    put empty into gLift
@@ -811,7 +829,7 @@ command pfStartGame
    b2kPlayerSet "dashCooldownMs", 420
    b2kPlayerSet "airDash", 0          -- no mid-air dash: DASH only fires while grounded
    b2kPlayerSet "duckScale", 1        -- DOWN brakes to a stop in place (no hitbox reshape)
-   b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (L2 lift bay, L4 lava lift)
+   b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (the L2 lift bay)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
@@ -1646,6 +1664,43 @@ command pfMakeBridge pL, pR, pY, pPlanks
    end repeat
    if tPrev is not empty then b2kHinge tPrev, empty, pR, pY   -- the far post
 end pfMakeBridge
+
+-- The COLLAPSING BRIDGE (Wave 4's last named mechanic): pPlanks static planks
+-- spanning pL..pR at height pY. Standing on one CREAKS it, then a beat later
+-- it drops dynamic into whatever is below (here, the L4 lava) - keep moving or
+-- go down with it. Built static and re-formed by pfTickCollapse once the hero
+-- is back on the near bank, so a knockback (or a backtrack) always gets a whole
+-- bridge for the next try. Visible GRAPHIC planks, not sprites: a falling plank
+-- reads right as it drops (gotcha 23 - sprites do not rotate), and b2kMoveTo
+-- redraws each as it re-forms (a static body is not frame-synced).
+command pfMakeCollapseBridge pL, pR, pY, pPlanks
+   local i, tPW, tW, tCx, tName, tRef
+   if pPlanks is empty then put 3 into pPlanks
+   put (pR - pL) / pPlanks into tPW
+   put round(tPW) - 2 into tW
+   put pL into gCollapseL
+   put pR into gCollapseR
+   put pY into gCollapseY
+   put tPW into gCollapseStep
+   put pPlanks into gCollapseN
+   put false into gCollapseDirty
+   repeat with i = 1 to pPlanks
+      put pL + (i - 0.5) * tPW into tCx
+      put "pf_plank" & i into tName
+      create graphic tName
+      set the style of it to "rectangle"
+      set the rect of it to tCx - tW / 2, pY - 7, tCx + tW / 2, pY + 7
+      set the filled of it to true
+      set the backgroundColor of it to "150,112,62"
+      put the long id of graphic tName into tRef
+      b2kAddStatic tRef
+      b2kCamAdopt tRef
+      put tRef into gCollapseB[i]
+      put tCx into gCollapseHomeX[i]
+      put "set" into gCollapseState[i]
+      put 0 into gCollapseT[i]
+   end repeat
+end pfMakeCollapseBridge
 
 -- A ROLLING BOULDER: a dynamic ball released across the ground (a flat
 -- icy SLIDE on level 3, signed pVX) toward the hero, who must outrun or
@@ -2609,8 +2664,8 @@ end pfL3Cast
 -- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
 -- whose kicked shell bowls a slime over, the BAT overhang, a pit, a long
 -- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a pair of
--- faced CRUSHERS around a lava strip crossed by the Wave 5 LAVA LIFT
--- (ride the deck over the lava, or double-jump it), a smouldering FIRE
+-- faced CRUSHERS around a lava strip crossed by a COLLAPSING BRIDGE
+-- (cross the crumbling planks fast, or double-jump it), a smouldering FIRE
 -- SLIME, then the POWDER KEG bay (an explosive barrel + woodpile,
 -- scattered by b2kExplode), the red crusher alley (the signature
 -- gauntlet), purple steps to the flag. Every beat spaced per the
@@ -2678,13 +2733,16 @@ command pfL4Scene
       pfTile "sign", 2980, 512        -- a way-marker past the piranha row
    end if
    pfMakeLava 3136, 3264
-   -- the LAVA LIFT (the Wave 5 platform-carry showcase, hollow edition): a
-   -- moving deck that ferries the hero across the lava strip between the two
-   -- faced crushers. Its patrol (3150..3250) stays clear of either crusher's
-   -- drop zone, so it never meets a slam. Ride it for the mid-lava coin; or,
-   -- since a running DOUBLE JUMP clears the 128px strip, leap it the old way
-   -- (no dead end). A slip onto the lava is a knockback (pfOuch), recoverable.
-   pfMakeLift 3150, 510, 80, 22, 3150, 3250, 70
+   -- the COLLAPSING BRIDGE (Wave 4's last named mechanic) across the lava:
+   -- three planks at the old lift height (clear of the lava sensor's 548 top)
+   -- between the two faced crushers, whose slams land on the banks clear of
+   -- the span. Each plank you stand on CREAKS and a beat later DROPS into the
+   -- lava - so keep MOVING (grab the mid-lava coin on the way across). A
+   -- running DOUBLE JUMP still clears the 128px strip the old way (no dead
+   -- end); a slip onto the lava is a knockback (pfOuch), and retreating to the
+   -- near bank re-forms the bridge for another try. Platform-carry stays
+   -- showcased by the L2 lift bay.
+   pfMakeCollapseBridge 3136, 3264, 510, 3
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
    -- explosive barrel ringed by a small PYRAMID of crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
@@ -2913,6 +2971,7 @@ on b2kFrame
    pfTickGhost
    pfTickBoulder
    pfTickLift
+   pfTickCollapse
    pfTickBarrel
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
    -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
@@ -3614,6 +3673,67 @@ command pfTickLift
       end if
    end repeat
 end pfTickLift
+
+-- The collapsing bridge: a GROUNDED hero centred over a "set" plank starts
+-- its short crumble timer (the plank reddens + CREAKS); a beat later it drops
+-- dynamic into the lava (SMASH) and the rider goes with it. A fallen plank
+-- re-parks STATIC far below before the kill floor eats it (it must survive to
+-- re-form). When the hero is back on the near bank the whole bridge re-forms.
+-- O(1) out when no bridge exists; the common live case is a few array reads.
+command pfTickCollapse
+   local i, tPos, tY, tMS, tCx
+   if gCollapseN is 0 or gCollapseN is empty then exit pfTickCollapse
+   set the itemDelimiter to comma
+   put the milliseconds into tMS
+   -- re-form the whole bridge once the hero retreats to the near bank (a
+   -- knockback off the lava, or a deliberate backtrack) - only after
+   -- something actually crumbled, so the idle case stays one compare
+   if gCollapseDirty is true and gHeroPX < gCollapseL - 60 then
+      put false into gCollapseDirty
+      repeat with i = 1 to gCollapseN
+         if gCollapseB[i] is empty then next repeat
+         b2kSetStatic gCollapseB[i]
+         b2kMoveTo gCollapseB[i], gCollapseHomeX[i], gCollapseY
+         set the backgroundColor of gCollapseB[i] to "150,112,62"
+         put "set" into gCollapseState[i]
+         put 0 into gCollapseT[i]
+      end repeat
+      exit pfTickCollapse
+   end if
+   repeat with i = 1 to gCollapseN
+      if gCollapseB[i] is empty then next repeat
+      switch gCollapseState[i]
+         case "set"
+            put gCollapseHomeX[i] into tCx
+            if b2kPlayerOnGround() and abs(gHeroPX - tCx) < gCollapseStep * 0.5 \
+                  and gHeroPY > gCollapseY - 90 and gHeroPY < gCollapseY - 20 then
+               put "shaking" into gCollapseState[i]
+               put tMS + 300 into gCollapseT[i]
+               put true into gCollapseDirty
+               set the backgroundColor of gCollapseB[i] to "205,95,55"
+               b2kSound "creak"
+            end if
+            break
+         case "shaking"
+            if tMS >= gCollapseT[i] then
+               put "falling" into gCollapseState[i]
+               b2kSetDynamic gCollapseB[i]   -- gravity (+ the rider) takes it down
+               b2kSound "smash"
+            end if
+            break
+         case "falling"
+            put b2kPosition(gCollapseB[i]) into tPos
+            if tPos is empty then next repeat
+            put item 2 of tPos into tY
+            if tY > 660 then
+               put "gone" into gCollapseState[i]
+               b2kSetStatic gCollapseB[i]
+               b2kMoveTo gCollapseB[i], gCollapseHomeX[i], 2000   -- parked below; static, so the kill floor ignores it
+            end if
+            break
+      end switch
+   end repeat
+end pfTickCollapse
 
 -- The powder keg: idle until the hero is near, then the fuse lights
 -- (bomb_active); a beat later b2kExplode scatters the woodpile, knocks the
