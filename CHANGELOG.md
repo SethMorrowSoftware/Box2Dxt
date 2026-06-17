@@ -10,6 +10,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer (OXT round 3): the ROOT cause of the drifting coins and flags —
+  cast sprites were born scroll-shifted.** The camera `b2kCamGoto` ran *before*
+  the hero and the cast, so every create-once cast sprite (coins, flags,
+  checkpoints, the barnacle) was created while the view was already scrolled and
+  landed offset on the user's engine — pond coins pushed off-centre, flag and
+  checkpoint POLES drifting to step edges or hovering "unattached". Bound bodies
+  (hero, slimes) re-sync every frame, so they were always fine; static pickups
+  never re-sync. Fix: build the WHOLE world (scenery, hero AND cast) at scroll 0,
+  then `b2kCamGoto` exactly **once, after the cast** — matching how the
+  correctly-placed terrain was always built. The flag plant drops back to 8px
+  (it had been bumped to 16 to fight the now-removed offset), and the L1 pond's
+  underwater coins are grouped more centrally (`7880/7960/8040`).
+
 - **Platformer (OXT round 2): the L3 wall-jump shaft reads as a real beat now.**
   The two pillars were a stretched thin slab; rebuilt as crisp 64px ICE-BLOCK
   columns framing a clear slot, and the slot coin is now built in the SCENE
