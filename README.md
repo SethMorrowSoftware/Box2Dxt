@@ -52,9 +52,12 @@ Box2D v3.1.0 (fetched by CMake)
    a full build-and-run physics sandbox with fans, magnets, lasers, bombs,
    motors, and save/load. Game-minded? The
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
-   Game Kit pushed hard — player controller (run, double-jump, wall-jump,
-   dash, climb, crawl, swim), scrolling camera, spritesheets, moving
-   platforms, coin puzzles, a hilltop swim pool — and the
+   Game Kit pushed hard — five scrolling levels (grass, stone, ice, haunted,
+   desert) with a full player controller (run, double-jump, wall-jump, dash,
+   duck, climb, swim, drop-through, platform-carry), a bestiary (bats, a
+   mimic, piranhas, a ghost, a kickable snail shell, crushers, and more),
+   joints (rope bridge, boulder, exploding barrel, collapsing bridge),
+   spritesheets, and synthesized audio — and the
    [slingshot](examples/box2dxt-slingshot.livecodescript) is pure physics
    joy: catapult cannonballs into toppling towers, angry-birds style
    (three levels, ballistic aim preview, zero assets). And the
@@ -92,9 +95,13 @@ x86) on every push; see [docs/building.md](docs/building.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the layer conventions, the
-embedded-Kit sync rule, and the static checks
-(`python3 tools/check-livecodescript.py`) that gate every change.
+The three layers and their conventions are in
+[docs/architecture.md](docs/architecture.md); the build is in
+[docs/building.md](docs/building.md). The Kit is the single source of truth —
+after editing `src/box2dxt-kit.livecodescript`, re-sync the embedded copies
+with `python3 tools/sync-embedded-kit.py`. Two static gates run on every change
+(and in CI): `python3 tools/check-livecodescript.py` (the script layer) and
+`python3 tools/sync-embedded-kit.py --check` (embedded-Kit drift).
 
 ## License
 

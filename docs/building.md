@@ -116,12 +116,12 @@ the recipient a one-step install with the right native library bundled in — no
 loose libraries to place.
 
 To instead hand someone a ready-to-run game as a single self-contained zip (no
-repo, no toolchain, no internet, no extension install step), bundle the source
-(extension + C shim + Kit), the per-platform native libraries under their bare
-name, the demo's spritesheets, a built **and saved** stack, and the end-user
-install guide. `tools/make-release.py` does it — the recipient runs straight from
-the unzipped folder, with the Kit's `b2kEnsureNativeLib` mapping the
-beside-the-stack library at runtime (the dev/fallback path, no install needed):
+repo, no toolchain, no internet), bundle the extension (the `.lcb` plus its
+`code/<arch>-<platform>/` native libraries), the C shim + Kit for reference, the
+demo's spritesheets, a built **and saved** stack, and the end-user install guide.
+`tools/make-release.py` does it — the native library travels **inside the
+extension**, so the recipient installs one extension and the engine loads the
+right per-platform library automatically (no loose library to place):
 
 ```sh
 # Build & SAVE the stack in OXT first (e.g. the platformer), then:
@@ -129,33 +129,37 @@ python3 tools/make-release.py --stack /path/to/NewPlateformerDemo.oxtstack
 # -> dist/NewPlateformerDemo.zip
 ```
 
-It copies `src/box2dxt.lcb` / `box2d_lc.c` / `box2dxt-kit.livecodescript` into
-`source/`, renames each `prebuilt/` library to the bare name the Kit maps under
-`libraries/`, copies the platformer's `Spritesheets/` art into `spritesheets/`,
-adds `dist/INSTALL.md`, and drops your saved stack at the root — producing:
+It copies `src/box2dxt.lcb` together with its whole `src/code/` tree into
+`extension/` (run `tools/package-extension.py` first to populate it), copies
+`box2d_lc.c` / `box2dxt-kit.livecodescript` into `source/` for reference, copies
+the platformer's `Spritesheets/` art into `spritesheets/`, adds `dist/INSTALL.md`,
+and drops your saved stack at the root — producing:
 
 ```
 NewPlateformerDemo/
 ├── NewPlateformerDemo.oxtstack    # your --stack
-├── INSTALL.md                     # the three-step end-user install guide
-├── source/      box2dxt.lcb, box2d_lc.c, box2dxt-kit.livecodescript
-├── libraries/   box2dxt.{dll,dylib,so}
+├── INSTALL.md                     # the end-user install guide
+├── box2dxt.lce                    # optional prebuilt extension (only with --lce)
+├── extension/   box2dxt.lcb + code/<arch>-<platform>/box2dxt.{so,dll,dylib}
+├── source/      box2d_lc.c, box2dxt-kit.livecodescript   (reference)
 └── spritesheets/  the demo's PNG + XML sheets
 ```
 
-Override a library with `--win` / `--mac` / `--linux` (e.g. an SSE2 or
-older-glibc build), the art folder with `--sheets`, or the stack's in-zip name
-with `--stack-name`; `--check` validates the inputs without writing the zip.
-The recipient follows `INSTALL.md`: drop their platform's `libraries/` file
-beside the stack, **Load** `source/box2dxt.lcb`, open the stack, and point its
+Pass `--lce /path/to/box2dxt.lce` to drop a prebuilt extension in too (so testers
+can install in one click instead of Packaging `extension/box2dxt.lcb`
+themselves); override the art folder with `--sheets`, the stack's in-zip name
+with `--stack-name`, or the output path with `--out`; `--check` validates the
+inputs without writing the zip. The recipient follows `INSTALL.md`: install the
+`.lce` (or open `extension/box2dxt.lcb` in the Extension Builder and **Package**
+it — keeping its `code/` folder alongside), open the stack, and point its
 first-run prompt at `spritesheets/`.
 
 ## Platform & CPU notes
 
 - **AVX2 / SIMD.** Box2D assumes **AVX2** on x64 by default. If your binary must
   run on older CPUs, configure Box2D with `-DBOX2D_DISABLE_SIMD=ON` (slower) or
-  an SSE2 build. The committed `prebuilt/linux-x86_64` binary is built with SIMD
-  disabled so it runs anywhere.
+  an SSE2 build. The committed `prebuilt/libbox2dxt-linux-x86_64.so` binary is
+  built with SIMD disabled so it runs anywhere.
 
   ```sh
   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBOX2D_DISABLE_SIMD=ON

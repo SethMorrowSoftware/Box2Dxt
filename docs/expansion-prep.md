@@ -7,15 +7,18 @@ that keep the expansion as reliable as the engine underneath it.
 
 | | |
 |---|---|
-| Baseline | Kit + games user-verified; self-test harness **v10, ~113 assertions, all pass** (Wave 2 closed 2026-06-13) |
+| Baseline | Kit + games user-verified; self-test harness **v22, ~180 assertions across 37 test handlers, all pass** (current; Waves 1–7 all closed) |
 | Assets | **LANDED (2026-06-11)** — Kenney's iconic platformer family, ~900 frames; Wave 0 catalogue below |
-| Wave 1 | **COMPLETE — user-verified 2026-06-12** (the three-level platformer; see §7) |
-| Wave 2 | **COMPLETE — user-verified 2026-06-13** (player actions I, harness v10; see §9) |
-| Wave 3 | **BUILT — statically verified 2026-06-13** (bestiary I + HAUNTED HOLLOW; see §10) |
-| Showcase polish | **BUILT — statically verified 2026-06-13** (pre-Wave-4: longer/re-spaced levels, the kit's first JOINT mechanics — rope bridge + boulder + barrel; a prototyped wrecking ball was cut as un-sprite-able — and four variety species; all example-side, zero Kit change, no harness bump) |
-| Wave 4 | **SWIM user play-tested in the platformer 2026-06-14** (harness **v12**, two Opus reviews clean; see §11). The Kit gained `b2kPlayerAddWater` + a buoyant `swim` mode/state/anim; the platformer's L1 GREEN HILLS gained a **HILLTOP POOL** (a raised-bank basin — the swim showcase, where it's tested), tuned heavier and with the hero hitbox fixed to match the art (gotcha 28), all per the user's OXT pass. DONE: swim zones, pit-dwellers (the micro-game `fish`, debut), lava (already in platformer L4). CARRY-OVER: the collapsing-bridge trap, and the micro-game's L3 "THE DEEP" (built but shows an example-side white-world build issue — set aside) |
-| Wave 5 | **BUILT — statically verified 2026-06-14** (player actions II: double-jump `airJumps`, wall-slide/jump, dash, duck capsule-reshape, moving-platform carry — all opt-in Kit knobs, defaults unchanged; harness **v13**, six new tests; see §12). Enabled + showcased in the platformer; the micro-game was retired (focus is the platformer). Awaiting the OXT feel pass. |
-| Next | Iterate Wave 5 feel in OXT (the new moves' tuning numbers are first-pass); the collapsing-bridge trap remains a loose end |
+| Wave 1 | **COMPLETE — user-verified 2026-06-12** (the iconic-feel base; shipped as a three-level platformer, since grown to **five levels**; see §7) |
+| Wave 2 | **COMPLETE — user-verified 2026-06-13** (player actions I; see §9) |
+| Wave 3 | **COMPLETE — statically verified 2026-06-13** (bestiary I + HAUNTED HOLLOW; see §10) |
+| Showcase polish | **COMPLETE — statically verified 2026-06-13** (pre-Wave-4: longer/re-spaced levels, the kit's first JOINT mechanics — rope bridge + boulder + barrel; a prototyped wrecking ball was cut as un-sprite-able — and four variety species; all example-side, zero Kit change, no harness bump) |
+| Wave 4 | **COMPLETE — SWIM user play-tested in the platformer 2026-06-14** (see §11). The Kit gained `b2kPlayerAddWater` + a buoyant `swim` mode/state/anim; the platformer's L1 GREEN HILLS gained a **HILLTOP POOL** (a raised-bank basin — the swim showcase, where it's tested), tuned heavier and with the hero hitbox fixed to match the art (gotcha 28), all per the user's OXT pass. DONE: swim zones, lava (platformer L4), the collapsing bridge (now L4's lava crossing). |
+| Wave 5 | **COMPLETE** (player actions II: double-jump `airJumps`, wall-slide/jump, dash, duck capsule-reshape, moving-platform carry — all opt-in Kit knobs, defaults unchanged; see §12). Enabled + showcased in the platformer; the **micro-game was retired here** (focus is the platformer). |
+| Wave 6 | **COMPLETE — statically verified, merged** (bestiary II: frog hopper, barnacle lurking clam, spider ceiling-dropper — woven into L1/L2/L4). |
+| Wave 7 | **COMPLETE — statically verified, merged** (the desert biome: **L5 SCORCHED DUNES** — the platformer's fifth level, sand/desert). |
+| Wave 8 | **NOT STARTED** — builder cross-pollination (animated sprite parts + the player-as-a-part in the Contraption Builder); the only remaining roadmap item. |
+| Next | Wave 8: the builder cross-pollination. |
 | Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
@@ -178,11 +181,13 @@ to Kit API (`b2kFoe…`).
    platformer re-skinned sprite-only (real thwomp art, spike tiles, biome
    ground). *The "it looks like the classics now" wave.*
    **COMPLETE — user-verified 2026-06-12.** Shipped as a **three-level
-   platformer**: L1 GREEN HILLS (movement + the toys: springboard, bonk
-   row, one-way bridge, mound, clouds, spike pit), L2 THE WORKS (button
-   gate, saw lever, thwomps, yellow key + the walled door), L3 FROZEN
-   CITADEL (everything on ICE, snow biome, a second saw, red key +
-   door). Springboards, ?-boxes paying coins, POOLED brick debris,
+   platformer** (a historical milestone — the platformer has since grown
+   to **five levels** through Waves 3 and 7): L1 GREEN HILLS (movement +
+   the toys: springboard, bonk row, one-way bridge, mound, clouds, spike
+   pit), L2 THE WORKS (button gate, saw lever, thwomps, yellow key + the
+   walled door), L3 FROZEN CITADEL (everything on ICE, snow biome, a
+   second saw, red key + door). Springboards, ?-boxes paying coins,
+   POOLED brick debris,
    button art on the polled plate, stand-to-flip lever, chained-weight
    thwomps (static at rest, **not player-movable**), walled doors whose
    gates are STRUCTURAL (floor-to-ceiling; the flag and last coins
@@ -210,25 +215,32 @@ to Kit API (`b2kFoe…`).
    Design in §9; as-built record in plan.md's decision log. The §9
    ABI question resolved to NO ABI CHANGE (the shim's pending
    shape-def filter already covers chain creation).
-3. **Wave 3 — bestiary I:** shelled (kickable!), ghost, bat, mimic,
-   pipe plant, crusher-with-faces — into a platformer "haunted" section.
-4. **Wave 4 — liquids:** swim zones (done — the platformer's hilltop pool)
-   + lava (already in L4) + pit dwellers (the micro-game fish) + the
-   collapsing bridge (carry-over). As-built record in §11.
-5. **Wave 5 — player actions II:** wall-slide/jump, dash, double-jump
-   powerup (boxItem delivers it), platform carry.
-6. **Wave 6 — bestiary II + promotion:** chaser, lunger, spider, saws;
-   `b2kFoe…` promotion decision with two consumers in hand.
-7. **Wave 7 — the showcase level:** one long level using every biome
-   mechanic — the "iconic platformer" demonstration piece, plus sprite HUD.
-8. **Wave 8 — builder cross-pollination** (closes Phase 5): sprite parts +
-   the player as placeable kinds in the contraption builder.
+3. **Wave 3 — bestiary I (COMPLETE):** shelled (kickable!), ghost, bat,
+   mimic, pipe plant, crusher-with-faces — into the platformer's L4
+   "HAUNTED HOLLOW".
+4. **Wave 4 — liquids (COMPLETE):** swim zones (the platformer's hilltop
+   pool) + lava (L4) + the collapsing bridge (now L4's lava crossing).
+   As-built record in §11.
+5. **Wave 5 — player actions II (COMPLETE):** wall-slide/jump, dash,
+   double-jump powerup (boxItem delivers it), platform carry. The
+   micro-game was retired here.
+6. **Wave 6 — bestiary II + promotion (COMPLETE):** frog hopper,
+   barnacle lurking clam, spider ceiling-dropper — woven into L1/L2/L4;
+   the `b2kFoe…` promotion decision deferred (no second consumer yet —
+   the micro-game retired).
+7. **Wave 7 — the desert biome (COMPLETE):** the platformer's fifth
+   level, **L5 SCORCHED DUNES** (sand/desert) — the "iconic platformer"
+   demonstration piece.
+8. **Wave 8 — builder cross-pollination (NOT STARTED — the only
+   remaining roadmap item):** sprite parts + the player as placeable
+   kinds in the contraption builder.
 
 ## 8. Open questions / risks
 
 - **macOS/Linux (R1):** unverified; the self-test is the acceptance suite.
-- **`b2kScene*` promotion:** likely lands with Wave 4 (a third level wants
-  the format) — decide then.
+- **`b2kScene*` promotion:** did NOT land — the platformer reached five
+  levels (through Wave 7) keeping its scenes example-side, so the format
+  was never promoted to Kit API. Revisit only if a second game needs it.
 - **`spritesheet_complete.xml`** is an orphan (its `sprites.png` wasn't
   uploaded) — no content loss; upload the PNG later or delete the XML.
 - **Mixed grids:** 70px (C) vs 128px (B) — normalised per level via

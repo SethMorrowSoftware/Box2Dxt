@@ -66,7 +66,8 @@ This guide is entirely about the **Kit** layer.
 ## 2. Install and your first scene
 
 **Requirements:** the `box2dxt` extension loaded. Check with `put b2Version()`
-— it should return `3`. The Kit runs in OpenXTalk and LiveCode 9.6.3+.
+— it should return `4` (the shim ABI version). The Kit runs in OpenXTalk and
+LiveCode 9.6.3+.
 
 **Install:** paste the contents of `src/box2dxt-kit.livecodescript` into your
 card or stack script. (Or save it as a library stack and `start using` it.)
@@ -644,6 +645,15 @@ b2kAnimDef "boss", "wake", "idle,roar", 4, false
 `b2kSheetFrameNames("chars")` lists every frame key of a sheet you didn't
 make — the quickest way to find what an atlas calls things.
 
+**Persisting sheets across rebuilds.** By default a sheet is torn down with
+the world, so a single-shot scene reloads its art each run. A game that
+rebuilds the world per level can keep its sheets cached instead:
+`b2kSheetPersist true` makes sheets **survive `b2kTeardown`** (exactly like
+synthesized sounds) and reuse an identical reload rather than re-slicing it
+— `b2kClear`/`b2kTeardown` then wipe only the sprite *instances*. It's OFF by
+default; `b2kSheetsWipe` forces a clean reload (e.g. after the player picks a
+new asset folder), and `b2kSheetPersists()` reads the flag back.
+
 ### The player controller (`b2kPlayerMake`)
 
 Everything the input and sprite snippets above hand-roll — and the parts
@@ -717,7 +727,7 @@ end b2kFrame
 `b2kTeardown`); `b2kSoundVolume` drives the engine-global loudness. On an
 engine with no working audio the Kit degrades to silence rather than
 errors — check `b2kSoundStatus()` if you hear nothing. The platformer's
-eight cues are all synthesized; press M in it to mute.
+cues are all synthesized this way; press M in it to mute.
 
 ---
 
@@ -930,7 +940,7 @@ put b2kAwakeBodyCount()    -- awake dynamic bodies (native count)
 > 1. **Throttle your HUD.** Setting a field's text re-lays-out and redraws it —
 >    a readout that changes every frame costs a redraw every frame. Update HUDs
 >    at ~4 Hz (`if the milliseconds < gHudNextMS then …`), and still skip the
->    set when the text is unchanged. Both game examples do this.
+>    set when the text is unchanged. The platformer and slingshot both do this.
 > 2. **Write properties and velocities only on change.** Track the last value you
 >    applied (the platformer's gate writes its kinematic velocity only when the
 >    target flips).
@@ -1026,10 +1036,11 @@ The **micro-game pattern** is the recommended skeleton for a green-field
 game on the Kit: a complete game — start screen, levels, a win screen — in a
 few hundred lines of card logic, with nothing to install beyond the
 extension (embed the hero sheet as base64; synthesize every sound with
-`b2kToneMake`). A dedicated micro-game example once shipped this verbatim;
-the repo now concentrates its game work on the **platformer showcase**, but
-the pattern below is exactly the one to copy when you start your own game.
-Its skeleton is four ideas:
+`b2kToneMake`). A dedicated micro-game example once shipped this verbatim; it
+has since been retired (the repo now concentrates its game work on the
+**platformer** and **slingshot** showcases), but the pattern is **preserved
+here** because it remains exactly the skeleton to copy when you start your own
+green-field game. Its skeleton is four ideas:
 
 **1. A game-state machine, gated by `b2kPlayerControl`.** One `gMode`
 local (`menu` / `play` / `won`) decides what clicks and keys mean. The
@@ -1064,7 +1075,7 @@ when the coin count is full.
 **3. One call makes the player.** `b2kPlayerMake gSpawnX, gSpawnY, 32,
 56, "hero"` creates the capsule body host, the bound sprite, the
 controller, and arms input. After it: map the anims, set two tuning
-knobs, `b2kCamFollow`. The micro-game's whole "character system" is six
+knobs, `b2kCamFollow`. A whole "character system" in this pattern is six
 lines.
 
 **4. Game events ride the hooks you already have.** Coins/spikes/door are
@@ -1073,10 +1084,10 @@ sensors (`on b2kSensorEnter`); landing and jump sounds key off
 animation whose `b2kSpriteOnFinish` message teleports the hero home. No
 new machinery — a game is the Kit's events plus your rules.
 
-Play order: `openCard` builds level 1 and shows the menu → click →
+The pattern's flow: `openCard` builds level 1 and shows the menu → click →
 `mgBegin` → door (all coins) → `mgAdvance` → level 2 → door → `mgShowWin`
-→ click → back to level 1. `R` rebuilds the current level, `ESC` pauses,
-`M` mutes.
+→ click → back to level 1, with `R` to rebuild the current level, `ESC` to
+pause, `M` to mute.
 
 ---
 
@@ -1305,7 +1316,8 @@ Optional arguments are in `[…]`.
 `b2kSheetFromImage name,img,fw,fh [,n,margin,spacing]` ·
 `b2kSheetAddFrame sheet,frame,x,y,w,h` · `b2kSheetFrames(name)` `[f]` ·
 `b2kSheetHasFrame(name,frame)` `[f]` · `b2kSheetFrameNames(name)` `[f]` ·
-`b2kSheetScale name,factor` ·
+`b2kSheetScale name,factor` · `b2kSheetPersist flag` · `b2kSheetPersists()` `[f]` ·
+`b2kSheetsWipe` ·
 `b2kSheetFrameSize(name,frame)` `[f]` · `b2kAnimDef sheet,anim,frames,fps [,loop]` ·
 `b2kSpriteNew sheet [,frame,x,y]` · `b2kSpriteFromGIF path [,x,y]` ·
 `b2kSpritePlay spr,anim [,restart]` · `b2kSpriteStop spr` · `b2kSpriteAnim(spr)` `[f]` ·
