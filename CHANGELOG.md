@@ -10,6 +10,21 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: LEVEL 6 "CAVERN DEPTHS" - the DIRT biome (asset-expansion
+  Phase B, slice 1).** A sixth level built on the previously-unused
+  `terrain_dirt_*` tile set (block tops, `block_center` mass under the mound,
+  carved `block_top_left/right` cliff corners on the goal steps, `ramp_long_a/b`
+  dirt ramps, a one-way `cloud_left/middle/right` dirt platform) over the
+  also-unused `background_solid_dirt` backdrop: a WALL-JUMP SHAFT of floating
+  dirt columns (slot coin, the L3 ice-shaft recipe in dirt), a spike GAP to
+  leap (checkpoint past it), a DIRT-RAMP mound, a high one-way-cloud bonus
+  route, two slimes + a snail, a bonus GEM above the shaft, and carved dirt
+  steps to the flag. The win moves to L6 (`gLevel >= 6`); L5's flag now
+  ADVANCES. Example-side only (no Kit change, no harness bump);
+  `tools/audit-platformer.py` auto-discovers and clears L6 (9 coins, 3 walkers,
+  0 findings). Statically verified; needs an OXT pass (see header verify item
+  20). Phase B's headline mechanics - the block slime and the conveyor belt -
+  land in slices 2-3.
 - **Platformer: FISH in the swim pool.** The L1 hilltop pond now has two fish
   (blue + yellow, native `foes` art that was unused) swimming at different depths
   and periods — bodiless proximity hazards (recoverable knockback) you time your

@@ -61,7 +61,7 @@ untouched** and every biome is missing its real terrain shapes:
 - **Water/lava dressing:** `water`, `water_top(_low)`, `lava`, `lava_top_low`.
 - **Flags:** `flag_green_a/b` (a third flag colour).
 
-### HUD strip (`tiles`, 33 frames — entirely unused)
+### HUD strip (`tiles`, 30 frames — entirely unused)
 `hud_character_0`…`9`/`multiply`/`percent`, `hud_coin`, `hud_heart(_half/_empty)`,
 `hud_key_blue/green/red/yellow`, `hud_player_*` and `hud_player_helmet_*` portraits.
 An art-driven HUD that **replaces the LiveCode text fields outright** — the
@@ -141,18 +141,30 @@ needs an OXT eye.
 - *OXT to confirm:* parallax tiling seam/feel; swim+fish balance.
 
 ### Phase B — Underground biome → **Level 6 "CAVERN DEPTHS"**  (M)
-- **Assets:** `terrain_dirt_*` (whole biome), `background_solid_dirt` +
-  `background_color_hills` far layer, `torch_off/on_a/on_b`, `conveyor`,
-  `slime_block_*` (block slime).
+- **Slice 1 — DONE (statically verified; needs OXT):** the **dirt biome + Level 6
+  skeleton** that completes start-to-finish. `terrain_dirt_*` (block tops,
+  `block_center`, carved `block_top_left/right` corners, `ramp_long_a/b`, one-way
+  `cloud_*`) over the `background_solid_dirt` backdrop; a wall-jump shaft of
+  floating dirt columns, a spike gap, a dirt-ramp mound, a one-way-cloud bonus
+  route, reused slimes + a snail, a bonus gem, dirt goal steps. Win moved to
+  `gLevel >= 6`. Example-side; `audit-platformer.py` auto-discovers + clears L6.
+- **Slices 2–3 — TODO:** the block slime (slice 2), then the conveyor + torches
+  (slice 3).
+- **Assets:** `terrain_dirt_*` (whole biome, slice 1), `background_solid_dirt`
+  (slice 1), `torch_off/on_a/on_b` (slice 3), `conveyor` (slice 3),
+  `slime_block_*` (block slime, slice 2).
 - **New enemy:** **block slime** — a hopping cube (slime family, new `slimeblock`
   kind; `_jump` frame on the hop, `_rest` between).
 - **New mechanic:** **conveyor belts** — a floor strip that pushes the grounded
-  hero (a kinematic surface velocity, or a polled zone that adds vx). Animated
-  `conveyor` tile.
+  hero (a polled zone that adds vx). **Correction:** the `conveyor` tile is a
+  **single frame** (no `_a/_b` pair), so the belt does **not** animate by frame-
+  flip — drive it as a polled vx zone with a static tile (or fake-scroll the tile
+  loc if motion is wanted). Only `torch_on_a/b` is a real 2-frame animation.
 - **Ambiance:** wall **torches** (2-frame `torch_on_a/b` flicker) light the cavern;
   the dirt biome's corner/edge/vertical tiles make real tunnels & cliffs.
 - **Level:** a descending cave run — conveyor sections, block-slime hops, a dark
-  vertical shaft (wall-jump), dirt ramps. Backdrop is the new dirt scene.
+  vertical shaft (wall-jump, **slice 1**), dirt ramps (**slice 1**). Backdrop is
+  the dirt scene (**slice 1**).
 - *Kit:* conveyor may want a tiny Kit helper (a "surface velocity" zone) — evaluate
   a polled example-side version first.
 
