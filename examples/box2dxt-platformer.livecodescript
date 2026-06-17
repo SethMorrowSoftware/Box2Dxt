@@ -301,11 +301,11 @@ constant kPfUIVersion = "7"
 -- spawns at x 120 and each goal flag sits near the right end, so the side
 -- walls sit just past the spawn (kPfEdgeL) and just past the flag
 -- (goal + kPfEndCap) - no empty walk-off room before the start or after the
--- finish. Tightened over the OXT passes (64/80 -> 80/40 -> 92/40): you stop
--- right by the spawn and right at the flag, and the camera clamps to the same
--- box - so the INVISIBLE side slabs stop you right at the content and the view
--- never scrolls out onto bare floor past either end (no visible wall).
-constant kPfEdgeL = 92
+-- finish. The INVISIBLE side slabs stop you near the spawn / the flag; an
+-- always-on per-frame clamp and a direct camera-scroll backstop hold the box
+-- even where OXT will not collide an off-card slab or apply b2kCamBounds.
+-- kPfEdgeL eased back to 64 (92 jammed the hero against the screen edge).
+constant kPfEdgeL = 64
 constant kPfEndCap = 40
 constant kHeroSheetB64 = "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"
 
@@ -1520,14 +1520,15 @@ command pfBounds pLeft, pRight
    put pLeft into gEdgeL
    put pRight into gEdgeR
    put pRight into gLevelW   -- kept in step for any legacy reader
-   -- 256px-THICK side slabs: a solver squeeze (wedged against scenery)
-   -- can eject a capsule a few px through a thin wall's far side, but
-   -- never through a quarter-screen of stone. Tall (-600..820) so no
-   -- double-/wall-jump rounds the top and no fall slips under the bottom.
-   pfSlab "pf_wallL", pLeft - 256, -600, pLeft, 820
-   pfSlab "pf_wallR", pRight, -600, pRight + 256, 820
-   b2kWall pLeft, -600, pLeft, 760
-   b2kWall pRight, -600, pRight, 760
+   -- ON-CARD positive coords ONLY. OXT can refuse to collide a static slab
+   -- whose rect sits far off the card (negative x/y) - which is why the old
+   -- -164..-600 wall let the hero walk clean through. The left wall runs from
+   -- x 0 to the edge; the right from the edge out; both floor-to-ceiling
+   -- (y 0..640). The ceiling + kill floor close the box top and bottom.
+   pfSlab "pf_wallL", 0, 0, pLeft, 640
+   pfSlab "pf_wallR", pRight, 0, pRight + 256, 640
+   b2kWall pLeft, 0, pLeft, 640
+   b2kWall pRight, 0, pRight, 640
    b2kWall pLeft, 0, pRight, 0
    b2kKillFloor 820
    -- the camera clamps to the SAME tight box, so the INVISIBLE side slabs
@@ -2944,10 +2945,22 @@ on b2kFrame
    -- Plus the EDGE FAILSAFE: a solver squeeze must never leave the hero
    -- beyond a wall (with the thick slabs it should never fire; when it
    -- does not, it costs two compares)
-   if gHurtLock is not true then
-      if gHeroPY > 780 then pfHurt
-      if gHeroPX < gEdgeL + 16 then b2kMoveTo gHero, gEdgeL + 28, gHeroPY
-      if gHeroPX > gEdgeR - 16 then b2kMoveTo gHero, gEdgeR - 28, gHeroPY
+   if gHurtLock is not true and gHeroPY > 780 then pfHurt   -- the kill plane = respawn
+   -- the EDGE CLAMP runs ALWAYS now (containment is non-negotiable): a hard
+   -- per-frame snap so a knockback, a dash, or a wall that failed to collide
+   -- can never leave the box - b2kMoveTo teleports the body back inside.
+   if gHeroPX < gEdgeL + 16 then b2kMoveTo gHero, gEdgeL + 28, gHeroPY
+   if gHeroPX > gEdgeR - 16 then b2kMoveTo gHero, gEdgeR - 28, gHeroPY
+   -- and BACKSTOP the camera directly: b2kCamBounds did NOT hold on the
+   -- user's engine (the view scrolled past the content to -396), so pin the
+   -- scroll to the content box every frame too
+   if gCamOK is true then
+      put the hScroll of b2kCamGroup() into tHS
+      if tHS < gEdgeL then
+         set the hScroll of b2kCamGroup() to gEdgeL
+      else if tHS > gEdgeR - 1024 then
+         set the hScroll of b2kCamGroup() to gEdgeR - 1024
+      end if
    end if
    -- centre-screen banners (pfNotice) expire here
    if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then
