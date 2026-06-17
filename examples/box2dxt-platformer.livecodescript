@@ -278,9 +278,10 @@
 --      VERIFY on a full asset folder: (a) the BACKDROP is the dark cave (not
 --      blank) - pfBuildCaveBackdrop draws it; no border line shows on the two
 --      panels; (b) the dirt ground/ramps/cloud/cliff-corners read with NO
---      missing-frame fallbacks; (c) the carved pit LIPS + FLUSH spikes read as a
---      finished chasm (spikes now bristle at the edge, not sunk - this also
---      changed L1/L3/L5, glance at those pits too); (d) wall TORCHES flicker and
+--      missing-frame fallbacks; (c) the spike rows sit FLUSH between the carved
+--      pit lips - no bare gap at the left edge, no spike overhanging the ground
+--      on the right (the horizontal fix; check the L1/L3/L5 pits too, it changed
+--      those); (d) wall TORCHES flicker and
 --      light the gloom; CHAINS/STALACTITES hang from the top WITHOUT clipping
 --      the hero, and orientation looks right (gotcha 26 - flip if not); the rock/
 --      mushrooms/bush sit clear; (e) the WALL-JUMP SHAFT slot coin is reachable
@@ -1960,8 +1961,8 @@ end pfMakeGate
 command pfMakeSpikes pL, pR
    local tRef, tX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
-      repeat with tX = pL + 32 to pR - 32 step 64
-         pfTile "spikes", tX, 546   -- SEAT the spikes flush with the surface. The spike pixels are the bottom 34px of the 64px frame (tips at frame-row 30), so a top-left y of 546 puts the TIPS at 576 = the ground line - they bristle AT the pit edge. (Was 576, which sank the tips to 606, 30px BELOW the surface, reading as "misaligned" spikes floating low in the gap.) Horizontally: first tile at pL+32, last at pR-32, flush to BOTH ground edges; pit widths are 64px multiples = an exact tile count.
+      repeat with tX = pL to pR - 64 step 64
+         pfTile "spikes", tX, 546   -- HORIZONTAL alignment: pfTile treats (x,y) as the tile's TOP-LEFT (it centres at x+32, like all the ground tiling), so the row must use top-lefts pL, pL+64, ... pR-64 to land FLUSH from pL to pR. The old pL+32..pR-32 range shifted every spike 32px RIGHT - a bare gap at the LEFT pit edge and the last spike OVERHANGING the ground on the RIGHT (the reported misalignment). VERTICAL: the spike pixels are the bottom 34px of the 64px frame, so y546 puts the tips at the ground line (576).
       end repeat
    else
       create graphic ("pf_spikes" & pL)

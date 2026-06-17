@@ -48,14 +48,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
-- **Platformer: spike pits now seat FLUSH with the surface (all levels).** The
-  `spikes` frame's pixels are the bottom 34px of its 64px cell, so placing the
-  tile at the floor line (y576) sank the spike TIPS to y606 - 30px *below* the
-  pit edge, reading as "misaligned" spikes floating low in the gap (an OXT
-  report). `pfMakeSpikes` now places the tile at y546 so the tips meet y576 (the
-  ground line) and the spikes bristle AT the pit edge. Affects every spike pit
-  (L1/L3/L5/L6); the hurt sensor and pit geometry are unchanged. The no-art
-  fallback strip rises to match.
+- **Platformer: spike pits now align FLUSH with the pit edges (all levels).**
+  Found over two OXT rounds:
+  - *Horizontal (the real misalignment).* `pfTile` treats its `(x,y)` as the
+    tile's TOP-LEFT (it centres at `x+32`, exactly like all the ground tiling),
+    but the spike row was tiled over the range `pL+32 .. pR-32`, shifting every
+    spike 32px RIGHT - a bare 32px gap at the left pit edge and the last spike
+    OVERHANGING onto the ground on the right. The row now tiles `pL .. pR-64`
+    (top-lefts), landing flush from `pL` to `pR` in every pit.
+  - *Vertical.* The spike pixels are the bottom 34px of the 64px cell, so the old
+    y576 sank the tips to y606 (30px below the edge); the tile now sits at y546 so
+    the tips meet the ground line.
+  Affects every spike pit (L1/L3/L5/L6); the hurt sensor and pit geometry are
+  unchanged. The no-art fallback strip matches.
 - **Platformer (OXT round 6): five polish fixes for a solid state.**
   - *Parallax seam.* Adjacent 640px backdrop panels met exactly edge-to-edge, so
     sub-pixel rounding leaked a 1px white hairline. Panels are now widened 4px and
