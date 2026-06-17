@@ -760,7 +760,7 @@ command pfStartGame
          put 1 into gLevel
          pfL1Scene
    end switch
-   b2kCamGoto 120, 480   -- bounds exist now: clamps to scroll 0, no slide
+   b2kCamGoto gEdgeL + 512, 320   -- frame the spawn, clamped to the content box (no void at the left); per-frame tracking is in b2kFrame
    -- ===== the hero ====
    if gAssetsOK is true then
       b2kSheetScale "chars", 0.75
@@ -2920,7 +2920,7 @@ end pfWipeStage
 -- The game tick
 -- =====================================================================
 on b2kFrame
-   local tHud, tPos, tHS
+   local tHud, tPos, tHS, tCamX
    if gHero is empty then exit b2kFrame
    -- THE HERO SNAPSHOT, once per frame: position and controller state
    -- feed the kill plane, edge failsafe, sound cues and every pf tick
@@ -2936,7 +2936,6 @@ on b2kFrame
       -- spawn, then the follow engages and the run clock starts
       subtract 1 from gIntroPan
       if gIntroPan is 0 then
-         b2kCamFollow gHero, 1
          if there is a field "pfSplash" then set the visible of field "pfSplash" to false
          put the milliseconds into gRunStart
       end if
@@ -2951,16 +2950,17 @@ on b2kFrame
    -- can never leave the box - b2kMoveTo teleports the body back inside.
    if gHeroPX < gEdgeL + 16 then b2kMoveTo gHero, gEdgeL + 28, gHeroPY
    if gHeroPX > gEdgeR - 16 then b2kMoveTo gHero, gEdgeR - 28, gHeroPY
-   -- and BACKSTOP the camera directly: b2kCamBounds did NOT hold on the
-   -- user's engine (the view scrolled past the content to -396), so pin the
-   -- scroll to the content box every frame too
-   if gCamOK is true then
-      put the hScroll of b2kCamGroup() into tHS
-      if tHS < gEdgeL then
-         set the hScroll of b2kCamGroup() to gEdgeL
-      else if tHS > gEdgeR - 1024 then
-         set the hScroll of b2kCamGroup() to gEdgeR - 1024
-      end if
+   -- CAMERA: track the hero through the Kit's OWN goto (a cut each frame = a
+   -- 1:1 follow), but clamp the CENTRE to the content box ourselves. This is
+   -- the alignment fix: a raw "set the hScroll" write (the old backstop) left
+   -- the scroll out of step with the Kit's scroll-compensation, so coins and
+   -- flags drew offset at the edges. b2kCamGoto keeps them in sync; we just
+   -- pre-clamp the point (b2kCamBounds did not hold on the user's engine).
+   if gIntroPan is 0 and gCamOK is true then
+      put gHeroPX into tCamX
+      if tCamX < gEdgeL + 512 then put gEdgeL + 512 into tCamX
+      if tCamX > gEdgeR - 512 then put gEdgeR - 512 into tCamX
+      b2kCamGoto tCamX, 320
    end if
    -- centre-screen banners (pfNotice) expire here
    if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then
