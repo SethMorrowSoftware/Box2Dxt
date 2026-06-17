@@ -72,8 +72,8 @@
 --            and swoop), a pit, a long FOUR-burrow PIRANHA row (they
 --            will not rise under your feet), the shy GHOST that drifts
 --            closer while you face away, two faced CRUSHERS around a
---            LAVA strip crossed by the Wave 5 LAVA LIFT (ride the deck
---            over the lava, or double-jump it), a smouldering FIRE
+--            LAVA strip crossed by a COLLAPSING BRIDGE (cross the
+--            crumbling planks fast, or double-jump it), a smouldering FIRE
 --            SLIME, the POWDER KEG bay (an explosive barrel + woodpile,
 --            scattered by b2kExplode), the red crusher alley (its
 --            signature gauntlet), purple steps, the last flag.
@@ -140,8 +140,10 @@
 --      restarts only the CURRENT level; the final dialog shows TOTAL
 --      time and falls across all four; Play again is a fresh L1 run.
 --      The boundaries audit rides pfBounds: every level gets thick
---      side slabs PLUS edge wall segments PLUS the matching camera
---      clamp - check you cannot leave the world on any level.
+--      INVISIBLE side slabs PLUS edge wall segments PLUS the matching
+--      camera clamp, all hugging the level CONTENT (just past the spawn,
+--      just past the flag) - check you stop right by the start / the flag
+--      and the view never scrolls out onto bare floor past either end.
 --  13. WAVE 2 player actions (the Kit's controller, harness v10):
 --      DUCK: DOWN anywhere on the ground brakes to a crouch (the duck
 --      pose; hitbox unchanged this wave - you cannot duck under saws).
@@ -205,15 +207,25 @@
 --      knockback; the ~200px gap is also double-jumpable); L3 WALL-JUMP
 --      SHAFT (climb the two floating ice pillars to the top coin - a
 --      straight double-jump up the slot also reaches it, so it is never
---      trick-only; walk under the pillars unobstructed); L4 LAVA LIFT (ride
---      the deck over the lava between the crushers for the mid-lava coin -
---      or double-jump the 128px strip; a fall onto the lava is a knockback,
---      recoverable). EVERY new-move coin is also reachable WITHOUT the
---      trick (the double-jump is universal), so no level can dead-end.
---      FEEL is unverifiable statically - tune the Wave 5 knobs in OXT and
---      confirm: the lifts carry you (stand still and drift with the deck),
---      a crouched hero clears the L1 bar a standing one cannot, and the L3
---      slot is climbable by wall-jumps AND by a plain double-jump.
+--      trick-only; walk under the pillars unobstructed). PLATFORM CARRY is
+--      demoed by the L2 lift bay above; L4's lava crossing is now the Wave 4
+--      COLLAPSING BRIDGE (item 17), not a lift. EVERY new-move coin is also
+--      reachable WITHOUT the trick (the double-jump is universal), so no
+--      level can dead-end. FEEL is unverifiable statically - tune the Wave 5
+--      knobs in OXT and confirm: the L2 lift carries you (stand still and
+--      drift with the deck), DOWN brakes a running hero to a stop in place
+--      (no hitbox reshape this build), and the L3 slot is climbable by
+--      wall-jumps AND a plain double-jump.
+--  17. WAVE 4 COLLAPSING BRIDGE (L4, over the lava - the wave's last named
+--      mechanic): three planks at the old lift height between the faced
+--      crushers. Standing on a plank reddens it + CREAKS, then ~0.3s later it
+--      DROPS into the lava (SMASH) - so KEEP MOVING; grab the mid-lava coin
+--      mid-cross. A slip onto the lava is a recoverable knockback (pfOuch);
+--      retreat to the near bank and the bridge RE-FORMS for another try. A
+--      running double-jump still clears the 128px strip (no dead-end). VERIFY
+--      in OXT: planks drop a beat after you stand (not instantly, not never),
+--      the bridge re-forms after a knockback, and the coin is grabbable on
+--      the way across; tune the 0.3s crumble in pfTickCollapse to taste.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -225,6 +237,7 @@ local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
 -- the four-level game: which level, its width/name, and the banked
 -- totals carried across level clears for the final win screen
 local gLevel, gLevelW, gLevelName, gTotalFalls, gSecsBank
+local gEdgeL, gEdgeR   -- the playable L/R edges (content-hugging); set by pfBounds
 local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
@@ -274,10 +287,26 @@ local gBarrelN, gBarrelB, gBarrelSpr, gBarrelX, gBarrelY, gBarrelState, gBarrelT
 -- gLiftVX caches the last-written vx so the tick never re-sets an unchanged
 -- velocity (gotcha 17). Indexed 1..gLiftN.
 local gLiftN, gLift, gLiftMin, gLiftMax, gLiftSpeed, gLiftVX
+-- Wave 4's last named mechanic: the COLLAPSING BRIDGE (L4, over the lava).
+-- Static planks that crumble a beat after the hero stands on one and re-form
+-- when he retreats to the near bank. gCollapseStep = plank width; gCollapseDirty
+-- gates the re-form so the idle case is one compare.
+local gCollapseN, gCollapseB, gCollapseHomeX, gCollapseState, gCollapseT
+local gCollapseL, gCollapseR, gCollapseY, gCollapseStep, gCollapseDirty
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
 constant kPfUIVersion = "7"
+-- The playable box hugs the level CONTENT, not the raw world width. The hero
+-- spawns at x 120 and each goal flag sits near the right end, so the side
+-- walls sit just past the spawn (kPfEdgeL) and just past the flag
+-- (goal + kPfEndCap) - no empty walk-off room before the start or after the
+-- finish. The INVISIBLE side slabs stop you near the spawn / the flag; an
+-- always-on per-frame clamp and a direct camera-scroll backstop hold the box
+-- even where OXT will not collide an off-card slab or apply b2kCamBounds.
+-- kPfEdgeL eased back to 64 (92 jammed the hero against the screen edge).
+constant kPfEdgeL = 64
+constant kPfEndCap = 40
 constant kHeroSheetB64 = "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"
 
 -- =====================================================================
@@ -562,6 +591,8 @@ command pfStartGame
    put empty into gCheckX
    put empty into gLevelName
    put 2880 into gLevelW
+   put 64 into gEdgeL    -- pfBounds overrides both per level (belt-and-braces defaults)
+   put 2880 into gEdgeR
    -- the indexed enemy/trap tables start the run empty
    put 0 into gSlimeN
    put empty into gSlimeB
@@ -658,6 +689,9 @@ command pfStartGame
    put empty into gBarrelY
    put empty into gBarrelState
    put empty into gBarrelT
+   -- the collapsing bridge starts empty (only L4 builds one)
+   put 0 into gCollapseN
+   put false into gCollapseDirty
    -- the Wave 5 moving-platform lifts start the run empty/idle
    put 0 into gLiftN
    put empty into gLift
@@ -726,7 +760,7 @@ command pfStartGame
          put 1 into gLevel
          pfL1Scene
    end switch
-   b2kCamGoto 120, 480   -- bounds exist now: clamps to scroll 0, no slide
+   b2kCamGoto gEdgeL + 512, 320   -- frame the spawn, clamped to the content box (no void at the left); per-frame tracking is in b2kFrame
    -- ===== the hero ====
    if gAssetsOK is true then
       b2kSheetScale "chars", 0.75
@@ -797,7 +831,7 @@ command pfStartGame
    b2kPlayerSet "dashCooldownMs", 420
    b2kPlayerSet "airDash", 0          -- no mid-air dash: DASH only fires while grounded
    b2kPlayerSet "duckScale", 1        -- DOWN brakes to a stop in place (no hitbox reshape)
-   b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (L2 lift bay, L4 lava lift)
+   b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (the L2 lift bay)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
@@ -1318,8 +1352,13 @@ end pfMakeGhost
 -- a knockback sensor that rises above the floor line, so wading in -
 -- not just falling in - burns. The Wave 2 split holds: surface
 -- hazards knock back; only pits respawn.
-command pfMakeLava pL, pR
+command pfMakeLava pL, pR, pSensorTop
    local tRef, tX
+   -- the hurt sensor's TOP: y548 (default) sits ABOVE the floor so it catches a
+   -- walker crossing surface lava (L2's grinder bay). A BRIDGED lava PIT (L4)
+   -- passes a LOWER top so a hero on the bank-level bridge is clear, but a fall
+   -- through a collapsed plank still drops into it.
+   if pSensorTop is empty then put 548 into pSensorTop
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "lava_top") then
       repeat with tX = pL to pR - 64 step 64
          pfTile "lava_top", tX, 576
@@ -1334,7 +1373,7 @@ command pfMakeLava pL, pR
    end if
    create graphic ("pf_lavasens" & pL)
    set the style of it to "rectangle"
-   set the rect of it to pL + 6, 548, pR - 6, 640
+   set the rect of it to pL + 6, pSensorTop, pR - 6, 640
    set the visible of it to false
    put the long id of graphic ("pf_lavasens" & pL) into tRef
    set the uPfHazardFlag of tRef to true
@@ -1469,23 +1508,33 @@ command pfMakeKeyDoor pKeyX, pKeyY, pWallX, pColour
    put the result into gDoorSprB
 end pfMakeKeyDoor
 
--- The world box, belt AND braces: thick slabs (the solver's clean
+-- The PLAYABLE box, belt AND braces: thick slabs (the solver's clean
 -- stop) PLUS two-sided wall segments at the exact edges (a second
 -- fence even for a creeping capsule), the segment ceiling, the kill
 -- floor, and the camera clamped to the same box. One helper, every
 -- level - boundary bugs get fixed in exactly one place.
-command pfBounds pW
-   put pW into gLevelW
-   -- 256px-THICK side slabs: a solver squeeze (wedged against scenery)
-   -- can eject a capsule a few px through a thin wall's far side, but
-   -- never through a quarter-screen of stone
-   pfSlab "pf_wallL", -256, -200, 0, 700
-   pfSlab "pf_wallR", pW, -200, pW + 256, 700
-   b2kWall 0, -200, 0, 640
-   b2kWall pW, -200, pW, 640
-   b2kWall 0, 0, pW, 0
+-- pLeft/pRight are the CONTENT edges (just past the spawn, just past the
+-- flag), NOT the raw world width: the walls hug the level so there is no
+-- empty walk-off room before the start or after the goal.
+command pfBounds pLeft, pRight
+   put pLeft into gEdgeL
+   put pRight into gEdgeR
+   put pRight into gLevelW   -- kept in step for any legacy reader
+   -- ON-CARD positive coords ONLY. OXT can refuse to collide a static slab
+   -- whose rect sits far off the card (negative x/y) - which is why the old
+   -- -164..-600 wall let the hero walk clean through. The left wall runs from
+   -- x 0 to the edge; the right from the edge out; both floor-to-ceiling
+   -- (y 0..640). The ceiling + kill floor close the box top and bottom.
+   pfSlab "pf_wallL", 0, 0, pLeft, 640
+   pfSlab "pf_wallR", pRight, 0, pRight + 256, 640
+   b2kWall pLeft, 0, pLeft, 640
+   b2kWall pRight, 0, pRight, 640
+   b2kWall pLeft, 0, pRight, 0
    b2kKillFloor 820
-   b2kCamBounds 0, 0, pW, 640
+   -- the camera clamps to the SAME tight box, so the INVISIBLE side slabs
+   -- stop you right at the content and the view never scrolls out onto bare
+   -- floor past either end (no visible wall needed - the tight stop + clamp do it)
+   b2kCamBounds pLeft, 0, pRight, 640
 end pfBounds
 
 -- The button-and-gate machine: a polled pressure plate at pPlateX
@@ -1627,6 +1676,43 @@ command pfMakeBridge pL, pR, pY, pPlanks
    if tPrev is not empty then b2kHinge tPrev, empty, pR, pY   -- the far post
 end pfMakeBridge
 
+-- The COLLAPSING BRIDGE (Wave 4's last named mechanic): pPlanks static planks
+-- spanning pL..pR at height pY. Standing on one CREAKS it, then a beat later
+-- it drops dynamic into whatever is below (here, the L4 lava) - keep moving or
+-- go down with it. Built static and re-formed by pfTickCollapse once the hero
+-- is back on the near bank, so a knockback (or a backtrack) always gets a whole
+-- bridge for the next try. Visible GRAPHIC planks, not sprites: a falling plank
+-- reads right as it drops (gotcha 23 - sprites do not rotate), and b2kMoveTo
+-- redraws each as it re-forms (a static body is not frame-synced).
+command pfMakeCollapseBridge pL, pR, pY, pPlanks
+   local i, tPW, tW, tCx, tName, tRef
+   if pPlanks is empty then put 3 into pPlanks
+   put (pR - pL) / pPlanks into tPW
+   put round(tPW) - 2 into tW
+   put pL into gCollapseL
+   put pR into gCollapseR
+   put pY into gCollapseY
+   put tPW into gCollapseStep
+   put pPlanks into gCollapseN
+   put false into gCollapseDirty
+   repeat with i = 1 to pPlanks
+      put pL + (i - 0.5) * tPW into tCx
+      put "pf_plank" & i into tName
+      create graphic tName
+      set the style of it to "rectangle"
+      set the rect of it to tCx - tW / 2, pY - 7, tCx + tW / 2, pY + 7
+      set the filled of it to true
+      set the backgroundColor of it to "150,112,62"
+      put the long id of graphic tName into tRef
+      b2kAddStatic tRef
+      b2kCamAdopt tRef
+      put tRef into gCollapseB[i]
+      put tCx into gCollapseHomeX[i]
+      put "set" into gCollapseState[i]
+      put 0 into gCollapseT[i]
+   end repeat
+end pfMakeCollapseBridge
+
 -- A ROLLING BOULDER: a dynamic ball released across the ground (a flat
 -- icy SLIDE on level 3, signed pVX) toward the hero, who must outrun or
 -- leap it. It STARTS parked (static) and is released on a cycle by
@@ -1753,15 +1839,14 @@ end pfMakeLift
 -- LEVEL 1 - "GREEN HILLS" (8640px). Movement and the Wave 1 toys:
 -- springboard + sky coin, the bonk row, the one-way bridge over the
 -- spike slime, the slope mound, two one-way clouds, the spike pit, a
--- skittering MOUSE, the Wave 5 CRAWL TUNNEL (duck under a low overhang
--- for a hidden coin) and a flying ladybug, then the showcase finale: a
+-- skittering MOUSE and a flying ladybug, then the showcase finale: a
 -- sagging ROPE BRIDGE (hinged planks) over a real chasm, the crusher
 -- alley and the hilltop swim pool to the flag.
 -- =====================================================================
 command pfL1Scene
    local tX
    put "GREEN HILLS" into gLevelName
-   pfBounds 8640                                -- extended for the Wave 4 HILLTOP POOL past the crusher alley
+   pfBounds kPfEdgeL, 8520 + kPfEndCap          -- right edge hugs the goal flag (8520); the hilltop pool + meadow are well inside
    pfSlab "pf_ground1", 0, 576, 2560, 640
    pfSlab "pf_ground2", 2752, 576, 3968, 640
    pfSlab "pf_ground3", 4288, 576, 7552, 640   -- the far meadow, the gauntlet, the homeward run + the GREEN CRUSHER alley
@@ -2104,7 +2189,7 @@ end pfL1Cast
 command pfL2Scene
    local tX, tRef
    put "THE WORKS" into gLevelName
-   pfBounds 5952
+   pfBounds kPfEdgeL, 5844 + kPfEndCap   -- right edge hugs the goal flag (5844)
    pfSlab "pf_ground1", 0, 576, 5952, 640
    pfSlab "pf_plat1", 5568, 512, 5760, 576
    pfSlab "pf_plat2", 5760, 448, 5888, 576
@@ -2369,7 +2454,7 @@ command pfL2Cast
    pfMakeThwomp 6, 4320, false, "block_green"
    pfMakeThwomp 7, 4500, false, "block_green"
    pfMakeThwomp 8, 4680, false, "block_green"
-   pfMakeCheckpoint 1000
+   pfMakeCheckpoint 2450   -- clear flat ground past the breather cloud (was 1000, right beside the floating bonus ledge's open span - it read as "a flag over a pit"); clear of both sweeping saws too
    pfMakeGoal 5844, 416
 end pfL2Cast
 
@@ -2386,7 +2471,7 @@ end pfL2Cast
 command pfL3Scene
    local tX
    put "FROZEN CITADEL (icy!)" into gLevelName
-   pfBounds 6592
+   pfBounds kPfEdgeL, 6200 + kPfEndCap   -- right edge hugs the goal flag (6200); was 6592 = ~390px of dead ground past the flag
    pfSlab "pf_ground1", 0, 576, 768, 640
    pfSlab "pf_ground2", 960, 576, 1792, 640
    pfSlab "pf_ground3", 1984, 576, 6592, 640
@@ -2589,8 +2674,8 @@ end pfL3Cast
 -- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
 -- whose kicked shell bowls a slime over, the BAT overhang, a pit, a long
 -- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a pair of
--- faced CRUSHERS around a lava strip crossed by the Wave 5 LAVA LIFT
--- (ride the deck over the lava, or double-jump it), a smouldering FIRE
+-- faced CRUSHERS around a lava strip crossed by a COLLAPSING BRIDGE
+-- (cross the crumbling planks fast, or double-jump it), a smouldering FIRE
 -- SLIME, then the POWDER KEG bay (an explosive barrel + woodpile,
 -- scattered by b2kExplode), the red crusher alley (the signature
 -- gauntlet), purple steps to the flag. Every beat spaced per the
@@ -2599,7 +2684,7 @@ end pfL3Cast
 command pfL4Scene
    local tX, tH, tHi
    put "HAUNTED HOLLOW (spooky!)" into gLevelName
-   pfBounds 6656
+   pfBounds kPfEdgeL, 6524 + kPfEndCap   -- right edge hugs the goal flag (6524)
    pfSlab "pf_ground1", 0, 576, 1856, 640
    -- the ground BREAKS at the lava pit (3136..3264): two slabs with a gap, so
    -- the LAVA strip below is an open hazard you ride the lift / double-jump over
@@ -2657,14 +2742,18 @@ command pfL4Scene
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
       pfTile "sign", 2980, 512        -- a way-marker past the piranha row
    end if
-   pfMakeLava 3136, 3264
-   -- the LAVA LIFT (the Wave 5 platform-carry showcase, hollow edition): a
-   -- moving deck that ferries the hero across the lava strip between the two
-   -- faced crushers. Its patrol (3150..3250) stays clear of either crusher's
-   -- drop zone, so it never meets a slam. Ride it for the mid-lava coin; or,
-   -- since a running DOUBLE JUMP clears the 128px strip, leap it the old way
-   -- (no dead end). A slip onto the lava is a knockback (pfOuch), recoverable.
-   pfMakeLift 3150, 510, 80, 22, 3150, 3250, 70
+   pfMakeLava 3136, 3264, 596   -- a lower hurt-top so the bank-level bridge is safe to walk, a fall is not
+   -- the COLLAPSING BRIDGE (Wave 4's last named mechanic) across the lava:
+   -- three planks at BANK LEVEL, flush with the ground (y576) so you walk
+   -- straight onto them - the lava sensor is lowered to y596 so the crossing
+   -- is safe but a fall through a gap is not. Between the two faced crushers,
+   -- whose slams land on the banks clear of the span. Each plank you stand on
+   -- CREAKS and a beat later DROPS into the lava - so keep MOVING (grab the
+   -- mid-lava coin on the way across). A running DOUBLE JUMP still clears the
+   -- 128px strip the old way (no dead end); a slip onto the lava is a knockback
+   -- (pfOuch), and retreating to the near bank re-forms the bridge for another
+   -- try. Platform-carry stays showcased by the L2 lift bay.
+   pfMakeCollapseBridge 3136, 3264, 583, 3
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
    -- explosive barrel ringed by a small PYRAMID of crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
@@ -2831,7 +2920,7 @@ end pfWipeStage
 -- The game tick
 -- =====================================================================
 on b2kFrame
-   local tHud, tPos, tHS
+   local tHud, tPos, tHS, tCamX
    if gHero is empty then exit b2kFrame
    -- THE HERO SNAPSHOT, once per frame: position and controller state
    -- feed the kill plane, edge failsafe, sound cues and every pf tick
@@ -2847,7 +2936,6 @@ on b2kFrame
       -- spawn, then the follow engages and the run clock starts
       subtract 1 from gIntroPan
       if gIntroPan is 0 then
-         b2kCamFollow gHero, 1
          if there is a field "pfSplash" then set the visible of field "pfSplash" to false
          put the milliseconds into gRunStart
       end if
@@ -2856,10 +2944,23 @@ on b2kFrame
    -- Plus the EDGE FAILSAFE: a solver squeeze must never leave the hero
    -- beyond a wall (with the thick slabs it should never fire; when it
    -- does not, it costs two compares)
-   if gHurtLock is not true then
-      if gHeroPY > 780 then pfHurt
-      if gHeroPX < 16 then b2kMoveTo gHero, 28, gHeroPY
-      if gHeroPX > gLevelW - 16 then b2kMoveTo gHero, gLevelW - 28, gHeroPY
+   if gHurtLock is not true and gHeroPY > 780 then pfHurt   -- the kill plane = respawn
+   -- the EDGE CLAMP runs ALWAYS now (containment is non-negotiable): a hard
+   -- per-frame snap so a knockback, a dash, or a wall that failed to collide
+   -- can never leave the box - b2kMoveTo teleports the body back inside.
+   if gHeroPX < gEdgeL + 16 then b2kMoveTo gHero, gEdgeL + 28, gHeroPY
+   if gHeroPX > gEdgeR - 16 then b2kMoveTo gHero, gEdgeR - 28, gHeroPY
+   -- CAMERA: track the hero through the Kit's OWN goto (a cut each frame = a
+   -- 1:1 follow), but clamp the CENTRE to the content box ourselves. This is
+   -- the alignment fix: a raw "set the hScroll" write (the old backstop) left
+   -- the scroll out of step with the Kit's scroll-compensation, so coins and
+   -- flags drew offset at the edges. b2kCamGoto keeps them in sync; we just
+   -- pre-clamp the point (b2kCamBounds did not hold on the user's engine).
+   if gIntroPan is 0 and gCamOK is true then
+      put gHeroPX into tCamX
+      if tCamX < gEdgeL + 512 then put gEdgeL + 512 into tCamX
+      if tCamX > gEdgeR - 512 then put gEdgeR - 512 into tCamX
+      b2kCamGoto tCamX, 320
    end if
    -- centre-screen banners (pfNotice) expire here
    if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then
@@ -2893,6 +2994,7 @@ on b2kFrame
    pfTickGhost
    pfTickBoulder
    pfTickLift
+   pfTickCollapse
    pfTickBarrel
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
    -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
@@ -3594,6 +3696,67 @@ command pfTickLift
       end if
    end repeat
 end pfTickLift
+
+-- The collapsing bridge: a GROUNDED hero centred over a "set" plank starts
+-- its short crumble timer (the plank reddens + CREAKS); a beat later it drops
+-- dynamic into the lava (SMASH) and the rider goes with it. A fallen plank
+-- re-parks STATIC far below before the kill floor eats it (it must survive to
+-- re-form). When the hero is back on the near bank the whole bridge re-forms.
+-- O(1) out when no bridge exists; the common live case is a few array reads.
+command pfTickCollapse
+   local i, tPos, tY, tMS, tCx
+   if gCollapseN is 0 or gCollapseN is empty then exit pfTickCollapse
+   set the itemDelimiter to comma
+   put the milliseconds into tMS
+   -- re-form the whole bridge once the hero retreats to the near bank (a
+   -- knockback off the lava, or a deliberate backtrack) - only after
+   -- something actually crumbled, so the idle case stays one compare
+   if gCollapseDirty is true and gHeroPX < gCollapseL - 60 then
+      put false into gCollapseDirty
+      repeat with i = 1 to gCollapseN
+         if gCollapseB[i] is empty then next repeat
+         b2kSetStatic gCollapseB[i]
+         b2kMoveTo gCollapseB[i], gCollapseHomeX[i], gCollapseY
+         set the backgroundColor of gCollapseB[i] to "150,112,62"
+         put "set" into gCollapseState[i]
+         put 0 into gCollapseT[i]
+      end repeat
+      exit pfTickCollapse
+   end if
+   repeat with i = 1 to gCollapseN
+      if gCollapseB[i] is empty then next repeat
+      switch gCollapseState[i]
+         case "set"
+            put gCollapseHomeX[i] into tCx
+            if b2kPlayerOnGround() and abs(gHeroPX - tCx) < gCollapseStep * 0.5 \
+                  and gHeroPY > gCollapseY - 90 and gHeroPY < gCollapseY - 20 then
+               put "shaking" into gCollapseState[i]
+               put tMS + 300 into gCollapseT[i]
+               put true into gCollapseDirty
+               set the backgroundColor of gCollapseB[i] to "205,95,55"
+               b2kSound "creak"
+            end if
+            break
+         case "shaking"
+            if tMS >= gCollapseT[i] then
+               put "falling" into gCollapseState[i]
+               b2kSetDynamic gCollapseB[i]   -- gravity (+ the rider) takes it down
+               b2kSound "smash"
+            end if
+            break
+         case "falling"
+            put b2kPosition(gCollapseB[i]) into tPos
+            if tPos is empty then next repeat
+            put item 2 of tPos into tY
+            if tY > 660 then
+               put "gone" into gCollapseState[i]
+               b2kSetStatic gCollapseB[i]
+               b2kMoveTo gCollapseB[i], gCollapseHomeX[i], 2000   -- parked below; static, so the kill floor ignores it
+            end if
+            break
+      end switch
+   end repeat
+end pfTickCollapse
 
 -- The powder keg: idle until the hero is near, then the fuse lights
 -- (bomb_active); a beat later b2kExplode scatters the woodpile, knocks the
