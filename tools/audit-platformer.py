@@ -48,6 +48,7 @@ class Level:
         self.lava = []       # (L,R)
         self.water = []      # (L,T,R,B) swim basins -- coins inside are underwater pickups
         self.coins = []      # (x,y)
+        self.gems = []       # (x,y) bonus pickups
         self.enemies = []    # (kind,idx,x,minx,maxx,topy,halfw)
         self.thwomps = []    # (idx,x)
         self.barnacles = []  # (idx,x,y)
@@ -102,6 +103,8 @@ def parse():
                 v = nums(s); L.water.append((v[0], v[1], v[2], v[3])); continue
             if s.startswith("pfMakeCoin"):
                 v = nums(s); L.coins.append((v[0], v[1])); continue
+            if s.startswith("pfMakeGem"):
+                v = nums(s); L.gems.append((v[0], v[1])); continue
             mt = re.match(r'pfTile "([^"]+)",\s*' + NUM + r',\s*' + NUM, s)
             if mt and mt.group(1) in ("cactus","rock","bush","fence","fence_broken",
                     "mushroom_brown","mushroom_red","sign","grass_purple"):
@@ -196,6 +199,20 @@ def audit(L):
                 flag("ERR", f"coin {x:.0f},{y:.0f} hangs over a PIT (no surface under it)")
             elif gt - y > 120:
                 flag("WARN", f"coin {x:.0f},{y:.0f} sits {gt-y:.0f}px above its surface (high for a 'ground' coin)")
+
+    # gems: bonus mid-air pickups -- must be in-bounds, not buried, and clear of
+    # coins and the goal flag (they are a distinct collectible, not a coin)
+    for (x, y) in L.gems:
+        if x < lo or x > hi:
+            flag("ERR", f"gem {x:.0f},{y:.0f} OUTSIDE play bounds [{lo:.0f}..{hi:.0f}]")
+        nm = inside_solid(L, x, y)
+        if nm:
+            flag("ERR", f"gem {x:.0f},{y:.0f} BURIED inside slab '{nm}'")
+        for (cx, cy) in L.coins:
+            if math.hypot(x - cx, y - cy) < 46:
+                flag("WARN", f"gem {x:.0f},{y:.0f} overlaps coin ({cx:.0f},{cy:.0f})")
+        if L.goal and math.hypot(x - L.goal[0], y - (L.goal[1] + 16)) < 48:
+            flag("ERR", f"gem {x:.0f},{y:.0f} overlaps the goal flag")
 
     # enemies: patrol must stay on a continuous ground top at ~topy
     walkers = [e for e in L.enemies if e[0] in ("slime", "critter", "snail", "frog")]

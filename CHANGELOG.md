@@ -8,8 +8,32 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ## [Unreleased]
 
+### Added
+
+- **Platformer: FISH in the swim pool.** The L1 hilltop pond now has two fish
+  (blue + yellow, native `foes` art that was unused) swimming at different depths
+  and periods — bodiless proximity hazards (recoverable knockback) you time your
+  dive between while grabbing the underwater coins.
+- **Platformer: GEM bonus pickups.** A distinct collectible (`gem_*` tiles art,
+  previously unused) that does **not** gate the flag — a skill-reward tally shown
+  in the HUD and the win screen. One gem per level in a hard-to-reach spot (above
+  the mound, atop the ladder ledge, the wall-jump-shaft top, high over the piranha
+  row, above the dune crest). New synthesized "gem" chime.
+- **Platformer: a PARALLAX biome backdrop.** Each level gets its own scene that
+  drifts behind the foreground at 0.3× for depth — green hills (L1/L2), a pale
+  wintry hills (L3), purple mushrooms (L4), and desert dunes (L5) — tiled and
+  wrapped across three card panels (gated so a still camera costs one compare).
+  The Kenney bg scenes are fully opaque, so this is a single drifting layer (a
+  fade layer behind would be hidden); true multi-layer parallax would need
+  transparent layer art (noted in the expansion plan).
+
 ### Fixed
 
+- **Platformer: the L5 thorn pit fits its spikes and the final coin is off the
+  flag.** The pit was widened 192px → 256px (3 → 4 spikes, `ground2` starts at
+  2256, over-pit coin re-centred to 2128) for a proper spiked chasm, and the
+  summit coin moved off the goal flag (`4180` → `4100,420`; it overlapped the
+  flag at `4200`). The audit gained a coin/gem-vs-goal-flag overlap check.
 - **Platformer (OXT round 4): the collapsing-bridge planks now actually DROP.**
   They recoloured (the "shaking" tint) but never fell — a fresh `b2kAddBox` body
   needs gravity *asserted* to drop (the working thwomp does `b2kSetGravityScale

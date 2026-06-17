@@ -270,6 +270,13 @@
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
+-- GEM bonus pickups (separate from the coin/flag gate): collect them for a
+-- bonus tally shown in the HUD + the win screen; the flag never depends on them.
+-- gGems/gGemsTotal are per-level; gGemsBank/gGemsAllTotal carry the run total.
+local gGems, gGemsTotal, gGemsBank, gGemsAllTotal
+-- the PARALLAX backdrop: a per-biome scene tiled across 3 card panels that drift
+-- slower than the 1:1 foreground (depth). gBgLastHS gates the per-frame redraw.
+local gBgPanel, gBgLastHS
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -387,6 +394,8 @@ on openCard
       put 1 into gLevel
       put 0 into gTotalFalls
       put 0 into gSecsBank
+      put 0 into gGemsBank
+      put 0 into gGemsAllTotal
       pfStartGame
    end if
    pass openCard
@@ -546,6 +555,9 @@ function pfLoadSheets
    b2kAnimDef "foes", "wormwalk", "worm_normal_move_a,worm_normal_move_b", 4, true
    b2kAnimDef "foes", "ladywalk", "ladybug_walk_a,ladybug_walk_b", 7, true
    b2kAnimDef "foes", "firewalk", "slime_fire_walk_a,slime_fire_walk_b", 5, true
+   -- aquatic foes for the swim pools (native 64px foes art, previously unused)
+   b2kAnimDef "foes", "fishblue", "fish_blue_swim_a,fish_blue_swim_b", 6, true
+   b2kAnimDef "foes", "fishyellow", "fish_yellow_swim_a,fish_yellow_swim_b", 6, true
    b2kAnimDef "foes", "ladyflit", "ladybug_fly,ladybug_walk_a", 10, true
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
    b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
@@ -563,7 +575,7 @@ end pfLoadSheets
 -- engine plays one clip at a time, so a new cue cuts the previous.
 command pfMakeSounds
    -- guard on the NEWEST cue, so a stack upgraded in place re-synthesizes
-   if b2kSoundIsLoaded("bite") then exit pfMakeSounds   -- already built
+   if b2kSoundIsLoaded("gem") then exit pfMakeSounds   -- already built
    b2kToneMake "jump", "392,587", 40, 55
    b2kToneMake "coin", "1319,1760", 36, 45
    b2kToneMake "stomp", "165,110", 40, 70
@@ -585,8 +597,10 @@ command pfMakeSounds
    b2kToneMake "creak", "175,147", 34, 35, "sine"   -- a foot on the bridge
    b2kToneMake "rumble", "73,87,65", 60, 55, "sine"  -- the boulder lets go
    b2kToneMake "boom", "131,98,73,55", 80, 70          -- the barrel blast
-   -- Wave 6 cue: the barnacle's snap (the NEWEST cue - the guard keys on it)
+   -- Wave 6 cue: the barnacle's snap
    b2kToneMake "bite", "147,98", 28, 60
+   -- Wave 8 cue: the gem pickup (a sparkly ascending chime - the NEWEST cue, the guard keys on it)
+   b2kToneMake "gem", "1047,1568,2093", 70, 50, "sine"
 end pfMakeSounds
 
 command pfEmbedPlaceholder
@@ -604,6 +618,57 @@ command pfEmbedPlaceholder
    b2kAnimDef "chars", "hurtpose", "19", 2, true   -- looping twin (knockback)
    b2kAnimDef "chars", "win", "1-4", 6, true
 end pfEmbedPlaceholder
+
+-- =====================================================================
+-- Wave 8: the PARALLAX backdrop (per-biome scene, drifting for depth)
+-- =====================================================================
+-- Pick a biome scene for the level and tile it across 3 card panels that
+-- pfTickParallax drifts + wraps. All bg scenes are OPAQUE, so this is a single
+-- drifting layer (a fade layer behind would be hidden); the depth comes from
+-- the slower-than-foreground drift. No art = no backdrop (the card shows), as
+-- before. Built before b2kCamOn so the panels stay on the card, not in the
+-- scrolling camera group.
+command pfBuildBackdrop
+   local tFrame, i, tRef
+   put empty into gBgPanel
+   put 0 into gBgLastHS
+   switch gLevel
+      case 3
+         put "background_fade_hills" into tFrame      -- pale + cold for the frozen citadel
+         break
+      case 4
+         put "background_color_mushrooms" into tFrame  -- purple/spooky for the haunted hollow
+         break
+      case 5
+         put "background_color_desert" into tFrame    -- the scorched dunes
+         break
+      default
+         put "background_color_hills" into tFrame     -- green hills / the works
+   end switch
+   if gAssetsOK is not true or not b2kSheetHasFrame("bg", tFrame) then exit pfBuildBackdrop
+   repeat with i = 1 to 3
+      b2kSpriteNew "bg", tFrame, (i - 1) * 640 + 320, 320
+      put the result into tRef
+      if tRef is empty then next repeat
+      set the layer of tRef to i
+      put tRef into gBgPanel[i]
+   end repeat
+end pfBuildBackdrop
+
+-- Drift the backdrop slower than the 1:1 foreground (parallax depth) and wrap
+-- it seamlessly (the bg scenes tile at the 640px panel width). Gated on the
+-- scroll changing, so a still camera costs one compare. 0.3 = the drift rate.
+command pfTickParallax
+   local i, tHS, tShift
+   if gBgPanel[1] is empty or gCamOK is not true then exit pfTickParallax
+   put the hScroll of b2kCamGroup() into tHS
+   if tHS is gBgLastHS then exit pfTickParallax   -- camera still: no redraw
+   put tHS into gBgLastHS
+   put - ((tHS * 0.3) mod 640) into tShift   -- 0.3x the foreground; wrap every panel width
+   repeat with i = 1 to 3
+      if gBgPanel[i] is not empty then set the loc of gBgPanel[i] to ((i - 1) * 640 + tShift + 320) & ",320"
+   end repeat
+end pfTickParallax
 
 -- =====================================================================
 -- World build / reset
@@ -638,6 +703,8 @@ command pfStartGame
    put 0 into gAirMS
    put the milliseconds into gRunStart
    put 0 into gCoins
+   put 0 into gGems       -- gem bonus tally (gGemsTotal counts itself as gems build, like coins)
+   put 0 into gGemsTotal
    if there is a graphic "pfWinShade" then set the visible of graphic "pfWinShade" to false
    if there is a field "pfWinText" then set the visible of field "pfWinText" to false
    if there is a button "pfbtn_again" then set the visible of button "pfbtn_again" to false
@@ -800,19 +867,11 @@ command pfStartGame
    -- as they are built, so totals can never drift from the layout
    put 0 into gCoinsTotal
    lock screen
-   -- ===== far backdrop: static panels on the CARD (they do not scroll) ====
-   if gAssetsOK is true and b2kSheetHasFrame("bg", "background_color_hills") then
-      b2kSpriteNew "bg", "background_color_hills", 320, 320
-      put the result into tRef
-      if tRef is not empty then set the layer of tRef to 1
-      if b2kSheetHasFrame("bg", "background_color_trees") then
-         b2kSpriteNew "bg", "background_color_trees", 960, 320
-      else
-         b2kSpriteNew "bg", "background_color_hills", 960, 320
-      end if
-      put the result into tRef
-      if tRef is not empty then set the layer of tRef to 2
-   end if
+   -- ===== far backdrop: a per-biome scene that PARALLAX-drifts behind the
+   -- foreground (slower than the 1:1 scroll, for depth). Built BEFORE b2kCamOn
+   -- so the panels live on the CARD (not the scrolling camera group); the
+   -- parallax tick in b2kFrame drifts + wraps them. =====
+   pfBuildBackdrop
    -- ===== the camera: everything Kit-made from here lives in the view ====
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
@@ -1111,6 +1170,30 @@ command pfMakeCoin pX, pY
    set the uPfCoinFlag of tRef to true
    b2kAddSensor tRef, "ball"
 end pfMakeCoin
+
+-- A GEM: a bonus pickup that does NOT count toward the coin/flag gate - a pure
+-- skill-reward tally (gGems/gGemsTotal, shown in the HUD + win screen). pColour
+-- is blue/green/red/yellow (gem_* tiles art); no-art falls back to a small jewel.
+command pfMakeGem pX, pY, pColour
+   local tRef
+   add 1 to gGemsTotal   -- the total counts itself as the level builds (like coins)
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "gem_" & pColour) then
+      b2kSpriteNew "tiles", "gem_" & pColour, pX, pY
+      put the result into tRef
+   end if
+   if tRef is empty then
+      create graphic ("pf_gem" & pX)
+      set the style of it to "oval"   -- a simple jewel when the gem_* art is missing
+      set the rect of it to pX - 13, pY - 16, pX + 13, pY + 16
+      set the filled of it to true
+      set the backgroundColor of it to "120,210,235"
+      put the long id of it into tRef
+      b2kCamAdopt tRef
+   end if
+   set the uPfGemFlag of tRef to true
+   b2kAddSensor tRef, "ball"
+end pfMakeGem
 
 -- A patrolling slime: an invisible dynamic body, art bound on top.
 -- pKind "normal" stomps flat; "spike" hurts from EVERY side. pTopY is the
@@ -2290,6 +2373,7 @@ command pfL1Cast
    pfMakeCoin 880, 396      -- on the bridge deck (the high road)
    pfMakeCoin 1130, 500     -- the meadow slime's beat
    pfMakeCoin 1568, 460     -- on the mound plateau
+   pfMakeGem 1568, 400, "yellow"   -- BONUS gem above the mound (double-jump for it)
    pfMakeCoin 2336, 264     -- on the high cloud (mind the fly)
    pfMakeCoin 2656, 440     -- mid-air over the spike pit: grab it mid-jump
    pfMakeCoin 2876, 500     -- the second act's slime beat
@@ -2383,6 +2467,25 @@ command pfL1Cast
    pfMakeCoin 7880, 556     -- the underwater coins, grouped CENTRALLY in the basin (water 7760..8160, centre 7960): dive for them
    pfMakeCoin 7960, 576     -- the deepest (raised from 588 for a safe margin above the new kill floor at ~644)
    pfMakeCoin 8040, 556
+   -- FISH patrol the pool (native foes art): bodiless movers that hurt by
+   -- proximity (pfOuch knockback, recoverable) - time the dive between them.
+   -- Two depths/periods so the gap shifts; both stay inside the water (7760..8160).
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fish_blue_swim_a") then
+      b2kSpriteNew "foes", "fish_blue_swim_a", 7960, 532
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "fishblue"
+         pfAddMover tRef, 7960, 532, 120, 2000, 14, 700, 30, 26, true
+      end if
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fish_yellow_swim_a") then
+      b2kSpriteNew "foes", "fish_yellow_swim_a", 7960, 596
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "fishyellow"
+         pfAddMover tRef, 7960, 596, 120, 2500, 12, 800, 30, 26, true
+      end if
+   end if
    pfMakeGoal 8520, 544
 end pfL1Cast
 
@@ -2573,6 +2676,7 @@ end pfL2Scene
 command pfL2Cast
    local tRef
    pfMakeCoin 800, 296      -- on the LADDER's bonus ledge (Wave 2 climb)
+   pfMakeGem 800, 236, "blue"   -- BONUS gem above the bonus ledge (climb + double-jump)
    pfMakeCoin 1430, 448     -- above the sweeping saw: time the hop
    pfMakeCoin 1840, 64      -- ride the second thwomp's head to the top
    pfMakeCoin 1990, 500     -- the worm's beat, before the breather cloud
@@ -2819,6 +2923,7 @@ command pfL3Cast
    b2kPlayerSet "airAccel", 480
    -- (the WALL-JUMP SHAFT's slot coin is built in pfL3Scene with the columns, so it stays centred between them)
    pfMakeCoin 1100, 500     -- the ladybug's beat, after the spring landing
+   pfMakeGem 364, 288, "green"   -- BONUS gem atop the WALL-JUMP SHAFT (reward the full climb)
    pfMakeCoin 1300, 500     -- under the bonk row
    pfMakeCoin 1640, 448     -- above the first sweeping saw
    pfMakeCoin 1888, 440     -- mid-air over the second pit
@@ -3037,6 +3142,7 @@ command pfL4Cast
    pfMakeCoin 1664, 500     -- under the bat roost - they drop
    pfMakeCoin 1952, 430     -- mid-air over the pit
    pfMakeCoin 2415, 480     -- threading the FOUR-burrow piranha row: time
+   pfMakeGem 2415, 408, "red"   -- BONUS gem high over the piranha row (a risky double-jump grab)
    pfMakeCoin 2565, 480     -- the bites and snatch a coin between each pair
    pfMakeCoin 2715, 480
    pfMakeCoin 3232, 470     -- mid-bridge over the lava: grab it as you cross the crumbling planks
@@ -3201,6 +3307,7 @@ command pfL5Cast
    pfMakeCoin 480, 500      -- the opening run
    pfMakeCoin 680, 500      -- the sand slime's beat
    pfMakeCoin 1056, 460     -- atop the dune (jump it as you crest)
+   pfMakeGem 1056, 400, "blue"   -- BONUS gem above the dune crest (double-jump for it)
    pfMakeCoin 1500, 500     -- the desert frog's beat (stomp it; do not stand by it)
    pfMakeCoin 2128, 440     -- mid-air over the (widened) thorn pit: leap it
    pfMakeCoin 2480, 392     -- on the first sand cloud
@@ -3355,6 +3462,7 @@ on b2kFrame
    pfTickLift
    pfTickCollapse
    pfTickBarrel
+   pfTickParallax   -- Wave 8: drift the biome backdrop for depth
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
    -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
    -- on EVERY frame -- the single biggest avoidable per-frame cost here
@@ -3367,6 +3475,7 @@ on b2kFrame
       put (the milliseconds - gRunStart) div 1000 into tSecs
    end if
    put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
+   if gGemsTotal > 0 then put "   gems " & gGems & "/" & gGemsTotal after tHud
    if gHasKey is true then put "   [KEY]" after tHud
    if gCamOK is true then
       put the hScroll of b2kCamGroup() into tHS   -- read the scroll once
@@ -4301,6 +4410,16 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       end if
       exit b2kSensorEnter
    end if
+   if the uPfGemFlag of pSensorCtrl is true then
+      add 1 to gGems
+      b2kSound "gem"
+      b2kSpriteRemove pSensorCtrl
+      try
+         delete pSensorCtrl   -- fallback diamond is not Kit-spawned
+      catch tErr
+      end try
+      exit b2kSensorEnter
+   end if
    if the uPfCoinFlag of pSensorCtrl is true then
       pfGainCoin
       put b2kPosition(pSensorCtrl) into tPopAt   -- world px, from its body
@@ -4599,6 +4718,8 @@ command pfLevelClear
    b2kCamShake 4, 300
    add gFalls to gTotalFalls
    add (the milliseconds - gRunStart) div 1000 to gSecsBank
+   add gGems to gGemsBank
+   add gGemsTotal to gGemsAllTotal
    pfNotice "LEVEL " & gLevel & " CLEAR!", 1400
    send pfNextLevel to me in 1200 milliseconds
 end pfLevelClear
@@ -4624,6 +4745,8 @@ command pfWin
    put gSecsBank + (the milliseconds - gRunStart) div 1000 into tSecs
    put tSecs into gWinSecs
    add gFalls to gTotalFalls
+   add gGems to gGemsBank
+   add gGemsTotal to gGemsAllTotal
    b2kSound "win"
    b2kPlayerControl false   -- the win dance owns the art from here
    set the itemDelimiter to comma
@@ -4644,6 +4767,7 @@ command pfWin
    put "ALL FIVE LEVELS CLEAR!" & cr & cr into tMsg
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
+   if gGemsAllTotal > 0 then put "Gems  " & gGemsBank & " / " & gGemsAllTotal & " collected" & cr & cr after tMsg
    if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
    put "Press Play again for a fresh run from level 1." after tMsg
    set the text of field "pfWinText" to tMsg
@@ -4709,6 +4833,8 @@ on mouseUp
          put 1 into gLevel
          put 0 into gTotalFalls
          put 0 into gSecsBank
+         put 0 into gGemsBank
+         put 0 into gGemsAllTotal
          pfStartGame
          break
       default
