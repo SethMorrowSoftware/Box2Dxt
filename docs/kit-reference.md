@@ -400,7 +400,8 @@ away + up; `wallJumpX > 0` arms the **wall system**, `wallJumpY` falls back to
 `jumpSpeed`) · `wallSlideMax` 0 (capped fall px/s while pressing into a wall —
 the `wallslide` state) · `dashSpeed` 0 (a flat horizontal burst on the **`dash`
 action**, default keys SHIFT/X; `0` = off) / `dashMs` 160 / `dashCooldownMs`
-500 · `duckScale` 1 (ducked capsule height ÷ standing; **< 1 reshapes to a
+500 / `airDash` 1 (**1** = dash works mid-air too; `0` = grounded-only) ·
+`duckScale` 1 (ducked capsule height ÷ standing; **< 1 reshapes to a
 crawl** so the hero slips under low gaps — feet-anchored, with a headroom check
 before standing) · `platformCarry` 0 (**1** = a grounded player inherits the
 velocity of a moving kinematic platform it rides; costs two reads per

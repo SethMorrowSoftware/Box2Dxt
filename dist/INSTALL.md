@@ -64,7 +64,7 @@ The game builds itself and starts immediately.
 - **Controls:** **arrows / WASD** move · **Space** jump (press again in mid-air
   to **double-jump**, or off a wall to **wall-jump**) · **SHIFT / X** dash ·
   **↓** duck · **R** restart · **M** mute. Grab every coin (the flag turns gold)
-  and touch the flag to advance — there are four levels.
+  and touch the flag to advance — there are five levels.
 
 That's it. Enjoy the physics.
 

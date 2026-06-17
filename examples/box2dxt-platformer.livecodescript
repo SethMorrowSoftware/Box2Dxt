@@ -1,15 +1,17 @@
 -- =====================================================================
 -- box2dxt-platformer.livecodescript  ·  Game Kit Phases 1+2+3+4 showcase
 --
--- A FOUR-LEVEL collect-them-all platformer (each level its own
+-- A FIVE-LEVEL collect-them-all platformer (each level its own
 -- scrolling world in a 1024px viewport) that exercises everything
 -- built so far: the Kit's PLAYER CONTROLLER (b2kPlayerAttach drives
 -- movement, jumping, grounding, state and animations - this file holds
 -- no movement code of its own), atlas spritesheets with named
 -- animations and scaling, the camera (follow + bounds + shake),
--- synthesized sound, the full Wave 1 toy box, the Wave 3 bestiary, and
--- now the kit's JOINT + dynamics systems (a sagging rope bridge, a
--- rolling boulder, an exploding barrel) plus four more enemy species.
+-- synthesized sound, the full Wave 1 toy box, the Wave 3 + Wave 6
+-- bestiaries (bats, mimics, piranhas, the ghost, kickable shells,
+-- crushers, a frog, a barnacle, a spider), the kit's JOINT + dynamics
+-- systems (a sagging rope bridge, a rolling boulder, an exploding
+-- barrel), and variety walkers (mouse, worm, ladybug, fire slime).
 -- Collect EVERY coin on a level (the goal
 -- flag turns GOLD), touch the flag, and the next level builds; level
 -- 5's flag is the win. Anything without sheet art falls back to plain
@@ -32,23 +34,24 @@
 --           are NOT draggable) · R restarts the CURRENT level · ESC pauses
 --           · M mutes the synthesized sound
 --
--- THE FOUR LEVELS (every beat holds a coin; the flag advances):
+-- THE FIVE LEVELS (every beat holds a coin; the flag advances):
 --   LEVEL 1  GREEN HILLS (8640px) - movement + the toys: the
 --            SPRINGBOARD mid-meadow (sky coin above; a 42px hop for
 --            non-bouncers), the BONK ROW (headbutt ?-boxes, SMASH bricks
 --            into debris), the one-way BRIDGE over a spike slime, the
 --            slope MOUND, one-way CLOUDS with the fly, the bee, the
---            SPIKE PIT, a fast MOUSE, a coin on the open meadow run, a
---            flying ladybug - then the rope-bridge finale over a chasm,
+--            SPIKE PIT, a fast MOUSE, a hopping FROG, a coin on the open
+--            meadow run, a flying ladybug - then the rope-bridge finale,
 --            the crusher alley, and the hilltop SWIM POOL to the flag.
 --   LEVEL 2  THE WORKS (5952px) - the machines: drag the
 --            CRATE onto the yellow BUTTON to open the gate (coin in
 --            the gateway), the Wave 2 LADDER up to its bonus ledge,
 --            the red CHECKPOINT, the saw LEVER (STAND at it to power
 --            the sweeping saw down - running past never flips it),
---            both SAWS, a crawling WORM, THWOMP ALLEY (chained weights:
---            ride the second one's head to the top coin; grab the
---            YELLOW KEY between them), a breather cloud with its bee,
+--            both SAWS, a crawling WORM, a lurking BARNACLE, the THWOMP
+--            ALLEY (chained weights: ride the second one's head to the
+--            top coin; grab the YELLOW KEY between them), a breather
+--            cloud with its bee,
 --            the Wave 5 LIFT BAY (its signature: RIDE the moving deck
 --            across the grinder for a mid-bay coin - platform-carry),
 --            then the crusher alley and the WALLED DOOR - a stone
@@ -71,12 +74,19 @@
 --            path), two BATS roosting under a stone bar (they drop
 --            and swoop), a pit, a long FOUR-burrow PIRANHA row (they
 --            will not rise under your feet), the shy GHOST that drifts
---            closer while you face away, two faced CRUSHERS around a
+--            closer while you face away, a SPIDER that drops from an
+--            overhang, two faced CRUSHERS around a
 --            LAVA strip crossed by a COLLAPSING BRIDGE (cross the
 --            crumbling planks fast, or double-jump it), a smouldering FIRE
 --            SLIME, the POWDER KEG bay (an explosive barrel + woodpile,
 --            scattered by b2kExplode), the red crusher alley (its
---            signature gauntlet), purple steps, the last flag.
+--            signature gauntlet), purple steps, the flag.
+--   LEVEL 5  SCORCHED DUNES (4240px) - WAVE 7's DESERT biome: a sand
+--            DUNE (ramp slope) to crest, a sand slime, a hopping FROG, a
+--            THORN PIT to leap (checkpoint at the brink), a two-cloud
+--            HOP, then bestiary II with room to read - a snail, a lurking
+--            BARNACLE, a SPIDER on a sand overhang - and sand steps to
+--            the final flag (the win).
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
