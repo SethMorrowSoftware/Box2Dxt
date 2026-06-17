@@ -40,7 +40,7 @@ Box2D v3.1.0 (fetched by CMake)
   loop. This is what the examples and most users actually call.
 
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
-`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`). Prebuilt per-platform
+`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`, `asset-expansion-plan.md`). Prebuilt per-platform
 binaries are in `prebuilt/` — the SOURCE `tools/package-extension.py` lays into the extension's
 `src/code/<arch>-<platform>/` tree; the install is the packaged extension, not a loose drop-in (a
 loose `box2dxt.{so,dll,dylib}` beside a saved stack is only the dev/fallback path, mapped at runtime
