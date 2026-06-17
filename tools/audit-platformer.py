@@ -123,7 +123,10 @@ def parse():
                 v = nums(s)  # idx,x,minx,maxx,topy
                 L.enemies.append(("frog", v[0], v[1], v[2], v[3], v[4], 22)); continue
             if s.startswith("pfMakeThwomp"):
-                v = nums(s); L.thwomps.append((v[0], v[1])); continue
+                body = s.split("--", 1)[0]
+                # chained = the weight+chain look: no tile-face string, not a faced block
+                chained = ('"' not in body) and ("true" not in body)
+                v = nums(s); L.thwomps.append((v[0], v[1], chained)); continue
             if s.startswith("pfMakeBarnacle"):
                 v = nums(s); L.barnacles.append((v[0], v[1], v[2])); continue
             if s.startswith("pfMakeSpider"):
@@ -276,6 +279,33 @@ def audit(L):
         mid = (hl + hr) / 2
         if ground_top_at(L, mid) is not None:
             flag("WARN", f"spikes {hl:.0f}..{hr:.0f} overlap solid ground (mid x{mid:.0f}) -- expected an open pit")
+        # pfMakeSpikes centres tiles at pL+32..pR-32 step 64, so the row only
+        # fills the pit FLUSH when the width is a 64px multiple; otherwise a bare
+        # strip is left at the right edge (the pit "doesn't fit its spikes").
+        if (hr - hl) % 64 != 0:
+            flag("WARN", f"spike pit {hl:.0f}..{hr:.0f} width {hr-hl:.0f} is not a 64px multiple -- the spike row won't fill it flush")
+
+    # WALKER vs THWOMP: a walker asserts its velocity every frame; if its swept
+    # range gets within a few px of a crusher's body (x +/- 30) the two fight the
+    # solver and the walker STICKS to the block (gotcha 17/18). Keep a margin.
+    for (kind, idx, x, mn, mx, topy, hw) in walkers:
+        wl, wr = mn - hw, mx + hw
+        for (ti, tx, chained) in L.thwomps:
+            bl, br = tx - 30, tx + 30
+            gap = max(bl - wr, wl - br)   # horizontal gap swept-range <-> block body
+            if gap < 24:
+                flag("WARN", f"{kind}#{idx:.0f} sweep ({wl:.0f}..{wr:.0f}) is only {max(gap,0):.0f}px from thwomp#{ti:.0f} body ({bl:.0f}..{br:.0f}) -- may stick to the crusher")
+
+    # COIN IN A CHAIN COLUMN: a chained crusher hangs a chain at its column
+    # (x +/- ~32) spanning y~44..172. A coin parked in that column at chain
+    # height draws BEHIND the chain art (obscured). Coins BELOW the chain (ground
+    # level) are fine -- those are the "dash under it" beats.
+    for (ti, tx, chained) in L.thwomps:
+        if not chained:
+            continue
+        for (cx, cy) in L.coins:
+            if abs(cx - tx) <= 36 and 20 <= cy <= 180:
+                flag("WARN", f"coin ({cx:.0f},{cy:.0f}) sits in thwomp#{ti:.0f}'s chain column (x{tx:.0f}, chain y44..172) -- obscured by the chain art")
 
     # barnacle/spider grounding sanity
     for (idx, bx, by) in L.barnacles:
@@ -299,6 +329,12 @@ def audit(L):
         for (bi, bx, by) in L.barnacles:
             if math.hypot(cx - bx, cy - by) < 52:
                 flag("WARN", f"decor:{fr} (x{cx:.0f}) overlaps barnacle #{bi:.0f}")
+        # decor must not overlap the checkpoint or goal flag (both 64px sprites,
+        # ground-planted): a sign on the flag reads as one tangled object
+        if L.checkpoint is not None and abs(cx - L.checkpoint) < 64:
+            flag("WARN", f"decor:{fr} (x{cx:.0f}) overlaps the checkpoint flag (x{L.checkpoint:.0f})")
+        if L.goal and abs(cx - L.goal[0]) < 64 and abs(cy - (L.goal[1] + 16)) < 80:
+            flag("WARN", f"decor:{fr} (x{cx:.0f}) overlaps the goal flag (x{L.goal[0]:.0f})")
     # decor-on-decor
     for a in range(len(L.decor)):
         for b in range(a + 1, len(L.decor)):

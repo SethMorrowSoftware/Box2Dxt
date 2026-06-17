@@ -651,6 +651,14 @@ command pfBuildBackdrop
       put the result into tRef
       if tRef is empty then next repeat
       set the layer of tRef to i
+      -- OVERLAP the 640px panels by ~2px each side. Adjacent panels meet
+      -- EXACTLY at the 640 boundary, so sub-pixel rounding leaves a 1px gap and
+      -- the card's white shows through as a hairline seam. A 4px-wider panel,
+      -- recentred, always overlaps its neighbour (opaque over opaque, no seam);
+      -- the spacing and the 640 wrap modulus are unchanged, so the wrap stays
+      -- seamless. (Panels are 256px bg frames at b2kSheetScale 2.5 = 640px.)
+      set the width of tRef to (the width of tRef) + 4
+      set the loc of tRef to ((i - 1) * 640 + 320) & ",320"
       put tRef into gBgPanel[i]
    end repeat
 end pfBuildBackdrop
@@ -664,7 +672,7 @@ command pfTickParallax
    put the hScroll of b2kCamGroup() into tHS
    if tHS is gBgLastHS then exit pfTickParallax   -- camera still: no redraw
    put tHS into gBgLastHS
-   put - ((tHS * 0.3) mod 640) into tShift   -- 0.3x the foreground; wrap every panel width
+   put - (round(tHS * 0.3) mod 640) into tShift   -- 0.3x the foreground; wrap every panel width (rounded so the loc lands on a whole pixel -> no sub-pixel shimmer at the panel overlaps)
    repeat with i = 1 to 3
       if gBgPanel[i] is not empty then set the loc of gBgPanel[i] to ((i - 1) * 640 + tShift + 320) & ",320"
    end repeat
@@ -1869,8 +1877,8 @@ end pfMakeGate
 command pfMakeSpikes pL, pR
    local tRef, tX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
-      repeat with tX = pL to pR - 64 step 64
-         pfTile "spikes", tX, 576
+      repeat with tX = pL + 32 to pR - 32 step 64
+         pfTile "spikes", tX, 576   -- centre the row IN the pit: first tile at pL+32, last at pR-32, flush to BOTH ground edges. (Was pL..pR-64, which buried the first spike's left half under the slab AND left a bare 32px gap at the right edge - it read as "the spikes do not fit the pit". pit widths are 64px multiples, so this lands an exact tile count.)
       end repeat
    else
       create graphic ("pf_spikes" & pL)
@@ -2593,8 +2601,8 @@ command pfL2Scene
    -- decor along the run into the second machine bay (the chained
    -- crusher + the always-on sweeping saw are built in the CAST)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
-      pfTile "sign", 2400, 512
-      pfTile "bush", 2720, 512        -- moved clear of the LIFT BAY (3010..3210)
+      pfTile "sign", 2300, 512        -- moved LEFT off the checkpoint: at 2400 the sign (2368..2432) overlapped the flag at 2450 (flag 2418..2482); 2300 clears it by ~86px and sits just right of the breather cloud's art (~2274)
+      pfTile "bush", 2828, 512        -- between the relocated slime's sweep (..2824) and the left lift pedestal (2920); clear of both (was 2720, now inside that slime's patrol)
    end if
    -- ===== THE LIFT BAY (level 2's signature finale - the Wave 5 PLATFORM-
    -- CARRY showcase). A GRINDER strip runs along the floor; two boarding
@@ -2678,7 +2686,7 @@ command pfL2Cast
    pfMakeCoin 800, 296      -- on the LADDER's bonus ledge (Wave 2 climb)
    pfMakeGem 800, 236, "blue"   -- BONUS gem above the bonus ledge (climb + double-jump)
    pfMakeCoin 1430, 448     -- above the sweeping saw: time the hop
-   pfMakeCoin 1840, 64      -- ride the second thwomp's head to the top
+   pfMakeCoin 1912, 96      -- ride the second thwomp's head up, then hop RIGHT for it. (Was 1840,64 - dead in the chain's column: the chain tiles at x1840 span y44..172, so a coin at y64 sat BEHIND the chain art. 1912 clears the chain's right edge (~1872) by 40px, still reachable from the rising weight's apex.)
    pfMakeCoin 1990, 500     -- the worm's beat, before the breather cloud
    pfMakeCoin 2210, 392     -- on the breather cloud (the bee patrols it)
    pfMakeCoin 2680, 500     -- past the second bay's chained crusher
@@ -2738,7 +2746,7 @@ command pfL2Cast
          put tRef into gSawSpr
       end if
    end if
-   pfMakeSlime 1, "normal", 4374, 4324, 4460, 576   -- topY is the floor line (was 512: it spawned 64px up and dropped)
+   pfMakeSlime 1, "normal", 2750, 2700, 2800, 576   -- guards the coin past the 2nd-bay crusher. (Was 4374, patrolling 4324..4460 INSIDE the green crusher alley: its sweep overlapped crushers 6@4320 and 7@4500 and it stuck to them. Crusher alleys are walker-free by convention - snails guard the APPROACH, never the gaps. The open 2590..2920 stretch gives it a real 100px patrol, 86px clear of the chained crusher at 2560.)
    -- a slow WORM crawls the run before the breather cloud (new variety;
    -- native foes art, stomps like any walker)
    pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_normal_move_a", "wormwalk", empty, 22, 26, "210,120,170", -2
@@ -2966,7 +2974,7 @@ command pfL3Cast
          pfAddMover tRef, 2608, 548, 96, 1000, 0, 1, 38, 42, false
       end if
    end if
-   pfMakeSlime 1, "normal", 2113, 2078, 2148, 576
+   pfMakeSlime 1, "normal", 2113, 2078, 2118, 576   -- right limit pulled IN off the crusher: at 2148 its right edge (2172) all but touched the crusher body (left 2178 - a 6px gap) and the two stuck together; 2118 -> far edge 2142 clears the crusher by 36px (the slime body is 48px wide). Coin stays at 2113, inside the band.
    -- a LADYBUG ambles the early ice (new variety; native foes art)
    pfMakeCritter 2, "normal", 1100, 1010, 1180, 576, 64, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4
    pfMakeThwomp 1, 2208     -- it guards the red key

@@ -29,6 +29,35 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer (OXT round 6): five polish fixes for a solid state.**
+  - *Parallax seam.* Adjacent 640px backdrop panels met exactly edge-to-edge, so
+    sub-pixel rounding leaked a 1px white hairline. Panels are now widened 4px and
+    recentred (a ~2px overlap each side, opaque-over-opaque), and the drift is
+    rounded to whole pixels; the 640 wrap modulus is unchanged so the wrap stays
+    seamless.
+  - *L5 spike pit.* `pfMakeSpikes` tiled the row from `pL` (burying the first
+    spike's left half under the slab and leaving a bare strip at the right edge —
+    it read as "the spikes don't fit"). It now centres the row at `pL+32..pR-32`,
+    flush to both ground edges — fixes every pit at once.
+  - *Slime stuck to the crusher (L3).* The red-key crusher's slime patrolled to
+    `2148`; its right edge (`2172`) all but touched the block body (`2178`, a 6px
+    gap) and the velocity-asserting slime pinned against it. Right limit pulled in
+    to `2118` (36px clearance).
+  - *Coin obscured by the chain (L2).* The "ride the thwomp up" coin sat at
+    `1840,64` — dead in the chain's column (chain art spans y44..172 at x1840), so
+    it drew behind the chain. Moved to `1912,96`, clear of the chain, still
+    reachable from the rising weight.
+  - *Sign overlapping the checkpoint (L2).* A decor sign at `2400` (centre 2432)
+    overlapped the checkpoint flag at `2450`. Moved to `2300` (~86px clear).
+  - *Bonus, caught by the extended audit:* L2's slime#1 was patrolling **inside**
+    the green crusher alley (`4324..4460`), its sweep overlapping crushers 6 & 7
+    (0px) — the same stick risk. Crusher alleys are walker-free by convention, so
+    it was relocated to the open stretch past the 2nd-bay crusher (a real 100px
+    patrol, 86px clear), and a decor bush nudged out of its new sweep.
+  - The geometry audit (`tools/audit-platformer.py`) gained four checks that flag
+    this whole class statically: spike-pit fill (64px-multiple width), walker
+    sweep vs thwomp body proximity, coin-in-a-chain-column, and decor vs the
+    checkpoint/goal flag.
 - **Platformer: the L5 thorn pit fits its spikes and the final coin is off the
   flag.** The pit was widened 192px → 256px (3 → 4 spikes, `ground2` starts at
   2256, over-pit coin re-centred to 2128) for a proper spiked chasm, and the
