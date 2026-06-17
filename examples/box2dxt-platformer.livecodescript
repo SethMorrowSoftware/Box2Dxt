@@ -2247,7 +2247,15 @@ command pfL1Scene
    -- visible earth slabs; the floor hides under the water rect. =====
    pfSlab "pf_pondL", 7552, 480, 7760, 640
    pfSlab "pf_pondR", 8160, 480, 8368, 640
-   pfSlab "pf_pondFloor", 7760, 616, 8160, 648
+   -- a KILL FLOOR under the water (no solid bottom): the basin has no floor to
+   -- rest on, so sinking out the bottom RESPAWNS - the swim has stakes, you must
+   -- stroke up and out. The sensor sits just below the water line (640), clear of
+   -- the underwater coins above it (b2kSensorEnter routes uPfKillFlag to pfHurt).
+   create graphic "pf_pondkill"
+   set the rect of it to 7760, 644, 8160, 676
+   set the visible of it to false
+   set the uPfKillFlag of graphic "pf_pondkill" to true
+   b2kAddSensor the long id of graphic "pf_pondkill", "box"
    pfSlab "pf_ground4", 8368, 576, 8640, 640
    set the backgroundColor of graphic "pf_pondL" to "150,120,82"
    set the backgroundColor of graphic "pf_pondR" to "150,120,82"
@@ -2373,7 +2381,7 @@ command pfL1Cast
    -- Wave 4: the hilltop pool's coins are UNDERWATER, so the gate can only
    -- be cleared by diving and swimming for them (then stroke out + on)
    pfMakeCoin 7880, 556     -- the underwater coins, grouped CENTRALLY in the basin (water 7760..8160, centre 7960): dive for them
-   pfMakeCoin 7960, 588
+   pfMakeCoin 7960, 576     -- the deepest (raised from 588 for a safe margin above the new kill floor at ~644)
    pfMakeCoin 8040, 556
    pfMakeGoal 8520, 544
 end pfL1Cast
@@ -4204,6 +4212,7 @@ command pfTickCollapse
             if tMS >= gCollapseT[i] then
                put "falling" into gCollapseState[i]
                b2kSetDynamic gCollapseB[i]   -- gravity (+ the rider) takes it down
+               b2kSetGravityScale gCollapseB[i], 1.8   -- assert gravity like the thwomp ("slam, not float"): a fresh b2kAddBox body stays put without it, so the plank only recoloured and never dropped
                b2kSound "smash"
             end if
             break
@@ -4325,6 +4334,10 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       -- (a wide spike strip pops you back toward the side you entered)
       set the itemDelimiter to comma
       pfOuch item 1 of b2kPosition(pSensorCtrl)
+   end if
+   if the uPfKillFlag of pSensorCtrl is true then
+      pfHurt   -- the kill floor under the water: sinking out the bottom respawns
+      exit b2kSensorEnter
    end if
    if the uPfGoalFlag of pSensorCtrl is true then
       -- camera-dead fallback clamps play to one screen, so most coins are

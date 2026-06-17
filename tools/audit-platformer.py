@@ -46,6 +46,7 @@ class Level:
         self.clouds = []     # (L,R,y) one-way platform solid spans
         self.spikes = []     # (L,R)
         self.lava = []       # (L,R)
+        self.water = []      # (L,T,R,B) swim basins -- coins inside are underwater pickups
         self.coins = []      # (x,y)
         self.enemies = []    # (kind,idx,x,minx,maxx,topy,halfw)
         self.thwomps = []    # (idx,x)
@@ -97,6 +98,8 @@ def parse():
                 v = nums(s); L.spikes.append((v[0], v[1])); continue
             if s.startswith("pfMakeLava"):
                 v = nums(s); L.lava.append((v[0], v[1])); continue
+            if s.startswith("pfMakeWater"):
+                v = nums(s); L.water.append((v[0], v[1], v[2], v[3])); continue
             if s.startswith("pfMakeCoin"):
                 v = nums(s); L.coins.append((v[0], v[1])); continue
             mt = re.match(r'pfTile "([^"]+)",\s*' + NUM + r',\s*' + NUM, s)
@@ -181,8 +184,12 @@ def audit(L):
         nm = inside_solid(L, x, y)
         if nm:
             flag("ERR", f"coin {x:.0f},{y:.0f} BURIED inside slab '{nm}'")
+        # underwater coins (inside a swim basin) are intentional dives -- the
+        # basin has no solid floor (the kill floor is under it), so skip the
+        # surface check for them
+        in_water = any(wl <= x <= wr and wt <= y <= wb for (wl, wt, wr, wb) in L.water)
         # ground-level coin (y>=492) needs a real surface below within a jump
-        if y >= 492:
+        if y >= 492 and not in_water:
             gt = solid_top_at(L, x)
             if gt is None:
                 flag("ERR", f"coin {x:.0f},{y:.0f} hangs over a PIT (no surface under it)")

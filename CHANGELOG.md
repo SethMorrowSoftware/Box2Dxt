@@ -10,6 +10,18 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer (OXT round 4): the collapsing-bridge planks now actually DROP.**
+  They recoloured (the "shaking" tint) but never fell — a fresh `b2kAddBox` body
+  needs gravity *asserted* to drop (the working thwomp does `b2kSetGravityScale
+  1.8`, commented "slam, not float"); the plank skipped that step, so it floated
+  in place. It now asserts gravity on the drop, like the thwomp.
+- **Platformer: the L1 swim basin has a KILL FLOOR under the water.** The solid
+  pond floor is replaced by a kill sensor just below the water line
+  (`uPfKillFlag` → `pfHurt`), so sinking out the bottom respawns instead of
+  resting on the floor forever — the swim now has stakes. The deepest underwater
+  coin is raised (`588` → `576`) for a safe dive margin above the kill line, and
+  the layout audit learned about water zones so underwater coins don't false-flag.
+
 - **Platformer (OXT round 3): the ROOT cause of the drifting coins and flags —
   cast sprites were born scroll-shifted.** The camera `b2kCamGoto` ran *before*
   the hero and the cast, so every create-once cast sprite (coins, flags,
