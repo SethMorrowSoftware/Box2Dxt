@@ -2370,7 +2370,7 @@ command pfL2Cast
    pfMakeCoin 2680, 500     -- past the second bay's chained crusher
    pfMakeCoin 2880, 448     -- above the second sweeping saw: time the hop
    pfMakeCoin 3110, 465     -- mid-LIFT-BAY: grab it as the deck carries you across the grinder
-   pfMakeCoin 3300, 500     -- the third bay's snail (shell it, kick it)
+   pfMakeCoin 3350, 500     -- the third bay's snail; nudged PAST the right lift-pedestal edge (3210..3300) so the coin disc clears the stone
    pfMakeCoin 3600, 500     -- beneath the third chained crusher: grab it as you dash under
    pfMakeCoin 3796, 392     -- up on the third bay's one-way cloud
    pfMakeCoin 3950, 500     -- the fourth bay's snail (shell it, kick it)
@@ -2381,7 +2381,7 @@ command pfL2Cast
    pfMakeCoin 5124, 392     -- up on the second hop cloud, before the door
    pfMakeCoin 5700, 448     -- over the first stone step
    pfMakeCoin 5774, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 5392, 510   -- inside the door passage
+   if gToysOK is true then pfMakeCoin 5440, 500   -- just PAST the door (still gated by it), clear of the closed-door face (was 5392 on the door tile)
    -- the bee patrols the breather cloud
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 2210, 310
@@ -2616,7 +2616,7 @@ command pfL3Cast
    pfMakeCoin 6145, 392     -- over the top step, by the flag
    if gToysOK is true then
       pfMakeCoin 864, 300   -- over the first pit: ride the spring's arc
-      pfMakeCoin 5808, 510  -- inside the red door's passage
+      pfMakeCoin 5856, 500  -- just PAST the red door (still gated by it), clear of the closed-door face (was 5808 on the door tile)
    end if
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
       b2kSpriteNew "foes", "saw_a", 1640, 548
