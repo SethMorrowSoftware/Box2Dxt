@@ -10,6 +10,25 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: LEVEL 6 "CAVERN DEPTHS" - the DIRT biome (asset-expansion
+  Phase B, slice 1).** A sixth level built on the previously-unused
+  `terrain_dirt_*` tile set (block tops, `block_center` mass under the mound,
+  carved `block_top_left/right` cliff corners on the goal steps AND the spike-pit
+  lips, `ramp_long_a/b` dirt ramps, a one-way `cloud_left/middle/right` dirt
+  platform): a WALL-JUMP SHAFT of floating dirt columns (slot coin, the L3
+  ice-shaft recipe in dirt), a spike GAP to leap (checkpoint past it), a
+  DIRT-RAMP mound, a high one-way-cloud bonus route, two slimes + a snail, a
+  bonus GEM above the shaft, and carved dirt steps to the flag. The win moves to
+  L6 (`gLevel >= 6`); L5's flag now ADVANCES. **OXT round 1 polish (atmosphere):**
+  a built **dark cave backdrop** (`pfBuildCaveBackdrop` - two card graphics, not
+  the flat/blank `background_solid_dirt` frame), flickering **wall torches**
+  (`torch_on_a/b`, new `pfMakeTorch`), hanging **chains + stalactites**
+  (`terrain_dirt_vertical_bottom`), and ground decor (a rock, cave mushrooms, a
+  bush) - placed clear of every beat. Example-side only (no Kit change, no
+  harness bump); `tools/audit-platformer.py` auto-discovers and clears L6 (9
+  coins, 3 walkers, 0 findings). Statically verified; needs an OXT pass (see
+  header verify item 20). Phase B's headline mechanics - the block slime and the
+  conveyor belt - land in slices 2-3.
 - **Platformer: FISH in the swim pool.** The L1 hilltop pond now has two fish
   (blue + yellow, native `foes` art that was unused) swimming at different depths
   and periods — bodiless proximity hazards (recoverable knockback) you time your
@@ -29,6 +48,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer: spike pits now align FLUSH with the pit edges (all levels).**
+  Found over two OXT rounds:
+  - *Horizontal (the real misalignment).* `pfTile` treats its `(x,y)` as the
+    tile's TOP-LEFT (it centres at `x+32`, exactly like all the ground tiling),
+    but the spike row was tiled over the range `pL+32 .. pR-32`, shifting every
+    spike 32px RIGHT - a bare 32px gap at the left pit edge and the last spike
+    OVERHANGING onto the ground on the right. The row now tiles `pL .. pR-64`
+    (top-lefts), landing flush from `pL` to `pR` in every pit.
+  - *Vertical.* The spike pixels are the bottom 34px of the 64px cell, so the old
+    y576 sank the tips to y606 (30px below the edge); the tile now sits at y546 so
+    the tips meet the ground line.
+  Affects every spike pit (L1/L3/L5/L6); the hurt sensor and pit geometry are
+  unchanged. The no-art fallback strip matches.
 - **Platformer (OXT round 6): five polish fixes for a solid state.**
   - *Parallax seam.* Adjacent 640px backdrop panels met exactly edge-to-edge, so
     sub-pixel rounding leaked a 1px white hairline. Panels are now widened 4px and
