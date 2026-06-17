@@ -227,15 +227,17 @@
 --      (no hitbox reshape this build), and the L3 slot is climbable by
 --      wall-jumps AND a plain double-jump.
 --  17. WAVE 4 COLLAPSING BRIDGE (L4, over the lava - the wave's last named
---      mechanic): three planks at the old lift height between the faced
---      crushers. Standing on a plank reddens it + CREAKS, then ~0.3s later it
---      DROPS into the lava (SMASH) - so KEEP MOVING; grab the mid-lava coin
---      mid-cross. A slip onto the lava is a recoverable knockback (pfOuch);
---      retreat to the near bank and the bridge RE-FORMS for another try. A
---      running double-jump still clears the 128px strip (no dead-end). VERIFY
---      in OXT: planks drop a beat after you stand (not instantly, not never),
---      the bridge re-forms after a knockback, and the coin is grabbable on
---      the way across; tune the 0.3s crumble in pfTickCollapse to taste.
+--      mechanic), REBUILT with room: FOUR ~48px planks span a widened 192px pit
+--      (was a cramped 128px slot pinched between two crushers), with a single
+--      faced CRUSHER now guarding only the ENTRANCE. Standing on a plank reddens
+--      it + CREAKS, then ~0.3s later it DROPS into the lava (SMASH) - so KEEP
+--      MOVING; grab the mid-lava coin mid-cross. A slip onto the lava is a
+--      recoverable knockback (pfOuch); retreat to the near bank and the bridge
+--      RE-FORMS for another try. A running double-jump still clears the ~190px
+--      strip (the L2 lift bay's ~200px reach - no dead-end). VERIFY in OXT:
+--      planks drop a beat after you stand (not instantly, not never), the bridge
+--      re-forms after a knockback, and the coin is grabbable on the way across;
+--      tune the 0.3s crumble in pfTickCollapse to taste.
 --  18. WAVE 6 BESTIARY II (frog / barnacle / spider - all example-side, no Kit
 --      change, no harness bump). FROG (L1 far meadow, ~x4660): a native-art
 --      HOPPER that crouches then LEAPS at you when near; STOMP it from above (it
@@ -256,19 +258,25 @@
 --      win now needs gLevel>=5). A new SAND level, laid out GENEROUSLY (every
 --      beat 250px+ of clear air, audited before building - the answer to Wave
 --      6's crowding). VERIFY: the sand DUNE (ramp slope) walks up/across/down
---      with no fall-through (the chain ghost-rule); the THORN PIT (2000..2192)
---      is a clean leap and a slip burns + respawns at the checkpoint (1900, at
+--      with no fall-through (the chain ghost-rule); the THORN PIT (2000..2256,
+--      four spikes) is a running/double-jump leap and a slip burns + respawns at the checkpoint (1900, at
 --      the brink); BOTH sand clouds are solid to their visible ends; the
---      bestiary II reads with ROOM here (frog ~1500, barnacle ~3300, spider
---      ~3552 - no crowding); the sand STEPS + flag finale plays; the HUD/help/
---      splash say "of 5" and the win screen says ALL FIVE LEVELS CLEAR. The
---      spider + its overhang vanish without the spooks sheet (level still
---      completes). New biome: confirm the sand art reads with no missing-frame
---      fallbacks on a full asset folder.
+--      bestiary II reads with ROOM here (frog ~1500, barnacle ~3300 - no
+--      crowding; no spider, which needs a ceiling the open desert lacks); the
+--      sand STEPS + flag finale plays; the HUD/help/splash say "of 5" and the
+--      win screen says ALL FIVE LEVELS CLEAR. New biome: confirm the sand art
+--      reads with no missing-frame fallbacks on a full asset folder.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
 local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
+-- GEM bonus pickups (separate from the coin/flag gate): collect them for a
+-- bonus tally shown in the HUD + the win screen; the flag never depends on them.
+-- gGems/gGemsTotal are per-level; gGemsBank/gGemsAllTotal carry the run total.
+local gGems, gGemsTotal, gGemsBank, gGemsAllTotal
+-- the PARALLAX backdrop: a per-biome scene tiled across 3 card panels that drift
+-- slower than the 1:1 foreground (depth). gBgLastHS gates the per-frame redraw.
+local gBgPanel, gBgLastHS
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -355,6 +363,18 @@ constant kPfUIVersion = "7"
 -- kPfEdgeL eased back to 64 (92 jammed the hero against the screen edge).
 constant kPfEdgeL = 64
 constant kPfEndCap = 40
+-- Flags/checkpoints are 64px frames whose pole base lands on the frame bottom,
+-- so a flag CENTRED at surface-32 rests its base on the floor line (verified
+-- against the atlas: zero footroom). On the user's engine the flags still read
+-- as "floating" a few px above the surface (a scrolled-group vertical quirk in
+-- how a sprite created mid-scroll lands), so every flag/checkpoint is PLANTED
+-- this many px deeper -- the base sits slightly INTO the ground, never hovering.
+-- This is the single knob: bump it if a flag still floats in an OXT pass.
+-- The real float turned out to be a cast-creation scroll-shift (flags were
+-- BORN while the camera was scrolled), now fixed by building the cast at
+-- scroll 0 (see pfStartGame's ORDER LAW). So this no longer fights an offset -
+-- 8px is just a subtle plant so the pole base reads as rooted, not balanced.
+constant kFlagPlantPx = 8
 constant kHeroSheetB64 = "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"
 
 -- =====================================================================
@@ -374,6 +394,8 @@ on openCard
       put 1 into gLevel
       put 0 into gTotalFalls
       put 0 into gSecsBank
+      put 0 into gGemsBank
+      put 0 into gGemsAllTotal
       pfStartGame
    end if
    pass openCard
@@ -533,6 +555,9 @@ function pfLoadSheets
    b2kAnimDef "foes", "wormwalk", "worm_normal_move_a,worm_normal_move_b", 4, true
    b2kAnimDef "foes", "ladywalk", "ladybug_walk_a,ladybug_walk_b", 7, true
    b2kAnimDef "foes", "firewalk", "slime_fire_walk_a,slime_fire_walk_b", 5, true
+   -- aquatic foes for the swim pools (native 64px foes art, previously unused)
+   b2kAnimDef "foes", "fishblue", "fish_blue_swim_a,fish_blue_swim_b", 6, true
+   b2kAnimDef "foes", "fishyellow", "fish_yellow_swim_a,fish_yellow_swim_b", 6, true
    b2kAnimDef "foes", "ladyflit", "ladybug_fly,ladybug_walk_a", 10, true
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
    b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
@@ -550,7 +575,7 @@ end pfLoadSheets
 -- engine plays one clip at a time, so a new cue cuts the previous.
 command pfMakeSounds
    -- guard on the NEWEST cue, so a stack upgraded in place re-synthesizes
-   if b2kSoundIsLoaded("bite") then exit pfMakeSounds   -- already built
+   if b2kSoundIsLoaded("gem") then exit pfMakeSounds   -- already built
    b2kToneMake "jump", "392,587", 40, 55
    b2kToneMake "coin", "1319,1760", 36, 45
    b2kToneMake "stomp", "165,110", 40, 70
@@ -572,8 +597,10 @@ command pfMakeSounds
    b2kToneMake "creak", "175,147", 34, 35, "sine"   -- a foot on the bridge
    b2kToneMake "rumble", "73,87,65", 60, 55, "sine"  -- the boulder lets go
    b2kToneMake "boom", "131,98,73,55", 80, 70          -- the barrel blast
-   -- Wave 6 cue: the barnacle's snap (the NEWEST cue - the guard keys on it)
+   -- Wave 6 cue: the barnacle's snap
    b2kToneMake "bite", "147,98", 28, 60
+   -- Wave 8 cue: the gem pickup (a sparkly ascending chime - the NEWEST cue, the guard keys on it)
+   b2kToneMake "gem", "1047,1568,2093", 70, 50, "sine"
 end pfMakeSounds
 
 command pfEmbedPlaceholder
@@ -591,6 +618,65 @@ command pfEmbedPlaceholder
    b2kAnimDef "chars", "hurtpose", "19", 2, true   -- looping twin (knockback)
    b2kAnimDef "chars", "win", "1-4", 6, true
 end pfEmbedPlaceholder
+
+-- =====================================================================
+-- Wave 8: the PARALLAX backdrop (per-biome scene, drifting for depth)
+-- =====================================================================
+-- Pick a biome scene for the level and tile it across 3 card panels that
+-- pfTickParallax drifts + wraps. All bg scenes are OPAQUE, so this is a single
+-- drifting layer (a fade layer behind would be hidden); the depth comes from
+-- the slower-than-foreground drift. No art = no backdrop (the card shows), as
+-- before. Built before b2kCamOn so the panels stay on the card, not in the
+-- scrolling camera group.
+command pfBuildBackdrop
+   local tFrame, i, tRef
+   put empty into gBgPanel
+   put 0 into gBgLastHS
+   switch gLevel
+      case 3
+         put "background_fade_hills" into tFrame      -- pale + cold for the frozen citadel
+         break
+      case 4
+         put "background_color_mushrooms" into tFrame  -- purple/spooky for the haunted hollow
+         break
+      case 5
+         put "background_color_desert" into tFrame    -- the scorched dunes
+         break
+      default
+         put "background_color_hills" into tFrame     -- green hills / the works
+   end switch
+   if gAssetsOK is not true or not b2kSheetHasFrame("bg", tFrame) then exit pfBuildBackdrop
+   repeat with i = 1 to 3
+      b2kSpriteNew "bg", tFrame, (i - 1) * 640 + 320, 320
+      put the result into tRef
+      if tRef is empty then next repeat
+      set the layer of tRef to i
+      -- OVERLAP the 640px panels by ~2px each side. Adjacent panels meet
+      -- EXACTLY at the 640 boundary, so sub-pixel rounding leaves a 1px gap and
+      -- the card's white shows through as a hairline seam. A 4px-wider panel,
+      -- recentred, always overlaps its neighbour (opaque over opaque, no seam);
+      -- the spacing and the 640 wrap modulus are unchanged, so the wrap stays
+      -- seamless. (Panels are 256px bg frames at b2kSheetScale 2.5 = 640px.)
+      set the width of tRef to (the width of tRef) + 4
+      set the loc of tRef to ((i - 1) * 640 + 320) & ",320"
+      put tRef into gBgPanel[i]
+   end repeat
+end pfBuildBackdrop
+
+-- Drift the backdrop slower than the 1:1 foreground (parallax depth) and wrap
+-- it seamlessly (the bg scenes tile at the 640px panel width). Gated on the
+-- scroll changing, so a still camera costs one compare. 0.3 = the drift rate.
+command pfTickParallax
+   local i, tHS, tShift
+   if gBgPanel[1] is empty or gCamOK is not true then exit pfTickParallax
+   put the hScroll of b2kCamGroup() into tHS
+   if tHS is gBgLastHS then exit pfTickParallax   -- camera still: no redraw
+   put tHS into gBgLastHS
+   put - (round(tHS * 0.3) mod 640) into tShift   -- 0.3x the foreground; wrap every panel width (rounded so the loc lands on a whole pixel -> no sub-pixel shimmer at the panel overlaps)
+   repeat with i = 1 to 3
+      if gBgPanel[i] is not empty then set the loc of gBgPanel[i] to ((i - 1) * 640 + tShift + 320) & ",320"
+   end repeat
+end pfTickParallax
 
 -- =====================================================================
 -- World build / reset
@@ -625,6 +711,8 @@ command pfStartGame
    put 0 into gAirMS
    put the milliseconds into gRunStart
    put 0 into gCoins
+   put 0 into gGems       -- gem bonus tally (gGemsTotal counts itself as gems build, like coins)
+   put 0 into gGemsTotal
    if there is a graphic "pfWinShade" then set the visible of graphic "pfWinShade" to false
    if there is a field "pfWinText" then set the visible of field "pfWinText" to false
    if there is a button "pfbtn_again" then set the visible of button "pfbtn_again" to false
@@ -787,19 +875,11 @@ command pfStartGame
    -- as they are built, so totals can never drift from the layout
    put 0 into gCoinsTotal
    lock screen
-   -- ===== far backdrop: static panels on the CARD (they do not scroll) ====
-   if gAssetsOK is true and b2kSheetHasFrame("bg", "background_color_hills") then
-      b2kSpriteNew "bg", "background_color_hills", 320, 320
-      put the result into tRef
-      if tRef is not empty then set the layer of tRef to 1
-      if b2kSheetHasFrame("bg", "background_color_trees") then
-         b2kSpriteNew "bg", "background_color_trees", 960, 320
-      else
-         b2kSpriteNew "bg", "background_color_hills", 960, 320
-      end if
-      put the result into tRef
-      if tRef is not empty then set the layer of tRef to 2
-   end if
+   -- ===== far backdrop: a per-biome scene that PARALLAX-drifts behind the
+   -- foreground (slower than the 1:1 scroll, for depth). Built BEFORE b2kCamOn
+   -- so the panels live on the CARD (not the scrolling camera group); the
+   -- parallax tick in b2kFrame drifts + wraps them. =====
+   pfBuildBackdrop
    -- ===== the camera: everything Kit-made from here lives in the view ====
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
@@ -808,8 +888,13 @@ command pfStartGame
    -- ORDER LAW (gotcha #12, learned the hard way): NEVER b2kCamGoto
    -- before the bounds exist - an unbounded goto scrolls the empty
    -- viewport (120 centred = scroll -392), and every control built
-   -- after that lands SCROLL-SHIFTED: art ~400px away from its
-   -- physics. Build first at scroll 0, bound (pfBounds), THEN goto.
+   -- after that lands SCROLL-SHIFTED. So build the WHOLE world at scroll
+   -- 0 - scenery, the hero, AND the cast (coins/flags/checkpoints) - and
+   -- b2kCamGoto exactly ONCE, after the cast (below). A goto BEFORE the
+   -- cast left create-once cast sprites scroll-shifted on the user's engine
+   -- (coins off-centre in the pond, flag/checkpoint POLES drifting off their
+   -- step). Bound bodies re-sync every frame, so the hero was always fine;
+   -- static pickups never re-sync, so they must be BORN at scroll 0.
    b2kCamDeadzone 0, 0
    -- ===== LEVEL SCENERY (terrain, machines, Wave 1 toys) =====
    -- Built BEFORE the hero so every piece of it layers BEHIND him (he
@@ -832,7 +917,8 @@ command pfStartGame
          put 1 into gLevel
          pfL1Scene
    end switch
-   b2kCamGoto gEdgeL + 512, 320   -- frame the spawn, clamped to the content box (no void at the left); per-frame tracking is in b2kFrame
+   -- (the camera goto is DEFERRED to after the cast - see the ORDER LAW above -
+   -- so coins/flags/checkpoints are born at scroll 0, on their marks)
    -- ===== the hero ====
    if gAssetsOK is true then
       b2kSheetScale "chars", 0.75
@@ -922,6 +1008,11 @@ command pfStartGame
       default
          pfL1Cast
    end switch
+   -- NOW frame the spawn (clamped to the content box, no void at the left).
+   -- Deferred to HERE so the whole world - scenery, hero AND cast - was built
+   -- at scroll 0; no create-once pickup is scroll-shifted. Per-frame tracking
+   -- takes over in b2kFrame once the intro beat ends.
+   b2kCamGoto gEdgeL + 512, 320
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
@@ -941,7 +1032,7 @@ command pfStartGame
       b2kWall 1010, 0, 1010, 640
       put empty into tRef
       if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
-         b2kSpriteNew "tiles", "flag_blue_a", 950, 544
+         b2kSpriteNew "tiles", "flag_blue_a", 950, 544 + kFlagPlantPx   -- plant the pole base (see kFlagPlantPx)
          put the result into tRef
          if tRef is not empty then
             set the uPfGoalFlag of tRef to true
@@ -1087,6 +1178,30 @@ command pfMakeCoin pX, pY
    set the uPfCoinFlag of tRef to true
    b2kAddSensor tRef, "ball"
 end pfMakeCoin
+
+-- A GEM: a bonus pickup that does NOT count toward the coin/flag gate - a pure
+-- skill-reward tally (gGems/gGemsTotal, shown in the HUD + win screen). pColour
+-- is blue/green/red/yellow (gem_* tiles art); no-art falls back to a small jewel.
+command pfMakeGem pX, pY, pColour
+   local tRef
+   add 1 to gGemsTotal   -- the total counts itself as the level builds (like coins)
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "gem_" & pColour) then
+      b2kSpriteNew "tiles", "gem_" & pColour, pX, pY
+      put the result into tRef
+   end if
+   if tRef is empty then
+      create graphic ("pf_gem" & pX)
+      set the style of it to "oval"   -- a simple jewel when the gem_* art is missing
+      set the rect of it to pX - 13, pY - 16, pX + 13, pY + 16
+      set the filled of it to true
+      set the backgroundColor of it to "120,210,235"
+      put the long id of it into tRef
+      b2kCamAdopt tRef
+   end if
+   set the uPfGemFlag of tRef to true
+   b2kAddSensor tRef, "ball"
+end pfMakeGem
 
 -- A patrolling slime: an invisible dynamic body, art bound on top.
 -- pKind "normal" stomps flat; "spike" hurts from EVERY side. pTopY is the
@@ -1254,7 +1369,7 @@ command pfMakeCheckpoint pX
    put empty into gCheckSpr
    put pX into gCheckX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_off") then
-      b2kSpriteNew "tiles", "flag_off", pX, 544
+      b2kSpriteNew "tiles", "flag_off", pX, 544 + kFlagPlantPx   -- plant the pole base on the floor (see kFlagPlantPx)
       put the result into tRef
       if tRef is not empty then
          set the uPfCheckFlag of tRef to true
@@ -1762,8 +1877,8 @@ end pfMakeGate
 command pfMakeSpikes pL, pR
    local tRef, tX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
-      repeat with tX = pL to pR - 64 step 64
-         pfTile "spikes", tX, 576
+      repeat with tX = pL + 32 to pR - 32 step 64
+         pfTile "spikes", tX, 576   -- centre the row IN the pit: first tile at pL+32, last at pR-32, flush to BOTH ground edges. (Was pL..pR-64, which buried the first spike's left half under the slab AND left a bare 32px gap at the right edge - it read as "the spikes do not fit the pit". pit widths are 64px multiples, so this lands an exact tile count.)
       end repeat
    else
       create graphic ("pf_spikes" & pL)
@@ -1787,6 +1902,7 @@ end pfMakeSpikes
 -- level four).
 command pfMakeGoal pX, pY
    local tRef
+   add kFlagPlantPx to pY   -- plant the flag base on its surface (see kFlagPlantPx); shifts both the sprite and the no-art fallback
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
       b2kSpriteNew "tiles", "flag_blue_a", pX, pY
@@ -2126,10 +2242,10 @@ command pfL1Scene
       pfTile "bush", 168, 512
       pfTile "fence", 640, 512
       pfTile "fence_broken", 704, 512
-      pfTile "mushroom_brown", 1056, 512
-      pfTile "mushroom_red", 2816, 512
-      pfTile "bush", 3008, 512
-      pfTile "mushroom_brown", 4600, 512
+      pfTile "mushroom_brown", 1008, 512   -- clear of the meadow slime's patrol (was 1056, on its beat)
+      pfTile "mushroom_red", 2752, 512      -- just left of the 2nd-act slime (was 2816, on its spawn)
+      pfTile "bush", 2936, 512              -- in the gap before the mouse (was 3008, on its run)
+      pfTile "mushroom_brown", 4860, 512    -- past the meadow frog (was 4600, on its beat)
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
       pfTile "sign", 96, 512        -- a way-marker by the spawn
@@ -2222,7 +2338,15 @@ command pfL1Scene
    -- visible earth slabs; the floor hides under the water rect. =====
    pfSlab "pf_pondL", 7552, 480, 7760, 640
    pfSlab "pf_pondR", 8160, 480, 8368, 640
-   pfSlab "pf_pondFloor", 7760, 616, 8160, 648
+   -- a KILL FLOOR under the water (no solid bottom): the basin has no floor to
+   -- rest on, so sinking out the bottom RESPAWNS - the swim has stakes, you must
+   -- stroke up and out. The sensor sits just below the water line (640), clear of
+   -- the underwater coins above it (b2kSensorEnter routes uPfKillFlag to pfHurt).
+   create graphic "pf_pondkill"
+   set the rect of it to 7760, 644, 8160, 676
+   set the visible of it to false
+   set the uPfKillFlag of graphic "pf_pondkill" to true
+   b2kAddSensor the long id of graphic "pf_pondkill", "box"
    pfSlab "pf_ground4", 8368, 576, 8640, 640
    set the backgroundColor of graphic "pf_pondL" to "150,120,82"
    set the backgroundColor of graphic "pf_pondR" to "150,120,82"
@@ -2257,6 +2381,7 @@ command pfL1Cast
    pfMakeCoin 880, 396      -- on the bridge deck (the high road)
    pfMakeCoin 1130, 500     -- the meadow slime's beat
    pfMakeCoin 1568, 460     -- on the mound plateau
+   pfMakeGem 1568, 400, "yellow"   -- BONUS gem above the mound (double-jump for it)
    pfMakeCoin 2336, 264     -- on the high cloud (mind the fly)
    pfMakeCoin 2656, 440     -- mid-air over the spike pit: grab it mid-jump
    pfMakeCoin 2876, 500     -- the second act's slime beat
@@ -2347,9 +2472,28 @@ command pfL1Cast
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
    -- Wave 4: the hilltop pool's coins are UNDERWATER, so the gate can only
    -- be cleared by diving and swimming for them (then stroke out + on)
-   pfMakeCoin 7848, 556
-   pfMakeCoin 7960, 588
-   pfMakeCoin 8072, 556
+   pfMakeCoin 7880, 556     -- the underwater coins, grouped CENTRALLY in the basin (water 7760..8160, centre 7960): dive for them
+   pfMakeCoin 7960, 576     -- the deepest (raised from 588 for a safe margin above the new kill floor at ~644)
+   pfMakeCoin 8040, 556
+   -- FISH patrol the pool (native foes art): bodiless movers that hurt by
+   -- proximity (pfOuch knockback, recoverable) - time the dive between them.
+   -- Two depths/periods so the gap shifts; both stay inside the water (7760..8160).
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fish_blue_swim_a") then
+      b2kSpriteNew "foes", "fish_blue_swim_a", 7960, 532
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "fishblue"
+         pfAddMover tRef, 7960, 532, 120, 2000, 14, 700, 30, 26, true
+      end if
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fish_yellow_swim_a") then
+      b2kSpriteNew "foes", "fish_yellow_swim_a", 7960, 596
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "fishyellow"
+         pfAddMover tRef, 7960, 596, 120, 2500, 12, 800, 30, 26, true
+      end if
+   end if
    pfMakeGoal 8520, 544
 end pfL1Cast
 
@@ -2457,8 +2601,8 @@ command pfL2Scene
    -- decor along the run into the second machine bay (the chained
    -- crusher + the always-on sweeping saw are built in the CAST)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
-      pfTile "sign", 2400, 512
-      pfTile "bush", 2720, 512        -- moved clear of the LIFT BAY (3010..3210)
+      pfTile "sign", 2300, 512        -- moved LEFT off the checkpoint: at 2400 the sign (2368..2432) overlapped the flag at 2450 (flag 2418..2482); 2300 clears it by ~86px and sits just right of the breather cloud's art (~2274)
+      pfTile "bush", 2828, 512        -- between the relocated slime's sweep (..2824) and the left lift pedestal (2920); clear of both (was 2720, now inside that slime's patrol)
    end if
    -- ===== THE LIFT BAY (level 2's signature finale - the Wave 5 PLATFORM-
    -- CARRY showcase). A GRINDER strip runs along the floor; two boarding
@@ -2505,7 +2649,7 @@ command pfL2Scene
       b2kCamAdopt the long id of graphic "pf_cloudledgeH"
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
-      pfTile "bush", 3400, 512
+      pfTile "bush", 3488, 512   -- between the barnacle and the chained crusher (was 3400, on the barnacle's telegraph)
    end if
    -- the GREEN CRUSHER ALLEY (the works' marquee gauntlet): a row of green-
    -- block thwomps (in the cast) you run beneath, then a two-cloud HOP to the
@@ -2540,8 +2684,9 @@ end pfL2Scene
 command pfL2Cast
    local tRef
    pfMakeCoin 800, 296      -- on the LADDER's bonus ledge (Wave 2 climb)
+   pfMakeGem 800, 236, "blue"   -- BONUS gem above the bonus ledge (climb + double-jump)
    pfMakeCoin 1430, 448     -- above the sweeping saw: time the hop
-   pfMakeCoin 1840, 64      -- ride the second thwomp's head to the top
+   pfMakeCoin 1912, 96      -- ride the second thwomp's head up, then hop RIGHT for it. (Was 1840,64 - dead in the chain's column: the chain tiles at x1840 span y44..172, so a coin at y64 sat BEHIND the chain art. 1912 clears the chain's right edge (~1872) by 40px, still reachable from the rising weight's apex.)
    pfMakeCoin 1990, 500     -- the worm's beat, before the breather cloud
    pfMakeCoin 2210, 392     -- on the breather cloud (the bee patrols it)
    pfMakeCoin 2680, 500     -- past the second bay's chained crusher
@@ -2601,7 +2746,7 @@ command pfL2Cast
          put tRef into gSawSpr
       end if
    end if
-   pfMakeSlime 1, "normal", 4374, 4324, 4460, 512
+   pfMakeSlime 1, "normal", 2750, 2700, 2800, 576   -- guards the coin past the 2nd-bay crusher. (Was 4374, patrolling 4324..4460 INSIDE the green crusher alley: its sweep overlapped crushers 6@4320 and 7@4500 and it stuck to them. Crusher alleys are walker-free by convention - snails guard the APPROACH, never the gaps. The open 2590..2920 stretch gives it a real 100px patrol, 86px clear of the chained crusher at 2560.)
    -- a slow WORM crawls the run before the breather cloud (new variety;
    -- native foes art, stomps like any walker)
    pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_normal_move_a", "wormwalk", empty, 22, 26, "210,120,170", -2
@@ -2682,25 +2827,35 @@ command pfL3Scene
    pfMakeSpikes 768, 960
    pfMakeSpikes 1792, 1984
    -- ===== THE WALL-JUMP SHAFT (level 3's signature vertical beat - the
-   -- Wave 5 WALL-SLIDE + WALL-JUMP). Two FLOATING ice pillars form a slot
+   -- Wave 5 WALL-SLIDE + WALL-JUMP). Two FLOATING ICE COLUMNS frame a slot
    -- over the opening run: hug one, jump to launch up-and-away, alternate
-   -- pillar to pillar to climb to the coin at the top. The pillars float
-   -- (bottoms at y460), so the hero walks UNDER them at ground level
-   -- unobstructed - the main path is never blocked. And the slot coin sits
-   -- where a straight DOUBLE JUMP up the gap also reaches it, so a player
-   -- who has not mastered wall-jumps is never locked out (no dead end, the
-   -- coin is never trick-only). Wall-jumping is just the elegant way up.
-   -- Built on ground1 (the run to the spring), before the first pit. =====
-   pfSlab "pf_wjShaftL", 300, 220, 318, 460
-   pfSlab "pf_wjShaftR", 410, 220, 428, 460
-   set the backgroundColor of graphic "pf_wjShaftL" to "150,180,210"
-   set the backgroundColor of graphic "pf_wjShaftR" to "150,180,210"
-   set the visible of graphic "pf_wjShaftL" to true
-   set the visible of graphic "pf_wjShaftR" to true
-   b2kCamAdopt the long id of graphic "pf_wjShaftL"
-   b2kCamAdopt the long id of graphic "pf_wjShaftR"
-   pfTextureSlab "pf_wjShaftL", "terrain_snow_block_center"   -- icy pillars, not flat blue
-   pfTextureSlab "pf_wjShaftR", "terrain_snow_block_center"
+   -- column to column to climb to the COIN dead-centre in the slot. The
+   -- columns float (bottoms at y448), so the hero walks UNDER them at ground
+   -- level unobstructed - the main path is never blocked. The slot coin sits
+   -- where a straight DOUBLE JUMP up the gap also reaches it, so a player who
+   -- has not mastered wall-jumps is never locked out (no dead end, never
+   -- trick-only). Built from real 64px ICE BLOCKS (was a stretched thin slab;
+   -- it reads crisp now), and the COIN is built HERE in the SCENE with the
+   -- columns so it lands exactly between them (a cast-built coin can drift
+   -- relative to the scene-built columns). Built on ground1, before the pit. =====
+   pfSlab "pf_wjShaftL", 256, 256, 320, 448
+   pfSlab "pf_wjShaftR", 408, 256, 472, 448
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_block_top") then
+      pfTile "terrain_snow_block_top", 256, 256
+      pfTile "terrain_snow_block_center", 256, 320
+      pfTile "terrain_snow_block_center", 256, 384
+      pfTile "terrain_snow_block_top", 408, 256
+      pfTile "terrain_snow_block_center", 408, 320
+      pfTile "terrain_snow_block_center", 408, 384
+   else
+      set the backgroundColor of graphic "pf_wjShaftL" to "150,180,210"
+      set the backgroundColor of graphic "pf_wjShaftR" to "150,180,210"
+      set the visible of graphic "pf_wjShaftL" to true
+      set the visible of graphic "pf_wjShaftR" to true
+      b2kCamAdopt the long id of graphic "pf_wjShaftL"
+      b2kCamAdopt the long id of graphic "pf_wjShaftR"
+   end if
+   pfMakeCoin 364, 340   -- the slot coin, dead-centre between the columns (slot 320..408, centre 364): wall-jump up (or double-jump). Built in the SCENE so it aligns with the columns.
    -- the glacier run (the level's second act): a snow cloud rest above
    -- the second sweeping saw's stretch
    b2kSmoothGround "3008,448" & cr & "2944,448" & cr & "2752,448" & cr & "2688,448"
@@ -2774,8 +2929,9 @@ command pfL3Cast
    -- with each rebuild, so only this level skates)
    b2kPlayerSet "accel", 260
    b2kPlayerSet "airAccel", 480
-   pfMakeCoin 364, 340      -- atop the WALL-JUMP SHAFT: wall-jump up the slot (or double-jump straight up)
+   -- (the WALL-JUMP SHAFT's slot coin is built in pfL3Scene with the columns, so it stays centred between them)
    pfMakeCoin 1100, 500     -- the ladybug's beat, after the spring landing
+   pfMakeGem 364, 288, "green"   -- BONUS gem atop the WALL-JUMP SHAFT (reward the full climb)
    pfMakeCoin 1300, 500     -- under the bonk row
    pfMakeCoin 1640, 448     -- above the first sweeping saw
    pfMakeCoin 1888, 440     -- mid-air over the second pit
@@ -2818,7 +2974,7 @@ command pfL3Cast
          pfAddMover tRef, 2608, 548, 96, 1000, 0, 1, 38, 42, false
       end if
    end if
-   pfMakeSlime 1, "normal", 2113, 2078, 2148, 576
+   pfMakeSlime 1, "normal", 2113, 2078, 2118, 576   -- right limit pulled IN off the crusher: at 2148 its right edge (2172) all but touched the crusher body (left 2178 - a 6px gap) and the two stuck together; 2118 -> far edge 2142 clears the crusher by 36px (the slime body is 48px wide). Coin stays at 2113, inside the band.
    -- a LADYBUG ambles the early ice (new variety; native foes art)
    pfMakeCritter 2, "normal", 1100, 1010, 1180, 576, 64, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4
    pfMakeThwomp 1, 2208     -- it guards the red key
@@ -2854,8 +3010,8 @@ end pfL3Cast
 -- LEVEL 4 - "HAUNTED HOLLOW" (6656px). Wave 3's bestiary in the purple
 -- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
 -- whose kicked shell bowls a slime over, the BAT overhang, a pit, a long
--- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a pair of
--- faced CRUSHERS around a lava strip crossed by a COLLAPSING BRIDGE
+-- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a faced
+-- CRUSHER guarding a widened lava strip crossed by a COLLAPSING BRIDGE
 -- (cross the crumbling planks fast, or double-jump it), a smouldering FIRE
 -- SLIME, then the POWDER KEG bay (an explosive barrel + woodpile,
 -- scattered by b2kExplode), the red crusher alley (the signature
@@ -2870,7 +3026,7 @@ command pfL4Scene
    -- the ground BREAKS at the lava pit (3136..3264): two slabs with a gap, so
    -- the LAVA strip below is an open hazard you ride the lift / double-jump over
    pfSlab "pf_ground2", 2048, 576, 3136, 640
-   pfSlab "pf_ground3", 3264, 576, 6656, 640
+   pfSlab "pf_ground3", 3328, 576, 6656, 640   -- far bank: the lava pit widened to 3136..3328 for the rebuilt collapsing bridge
    pfSlab "pf_plat1", 6240, 512, 6432, 576
    pfSlab "pf_plat2", 6432, 448, 6560, 576
    -- the bat overhang: a stone bar the bats roost under
@@ -2880,7 +3036,7 @@ command pfL4Scene
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
       repeat with tX = 2048 to 6592 step 64
-         if tX >= 3136 and tX < 3264 then next repeat   -- leave the LAVA PIT open
+         if tX >= 3136 and tX < 3328 then next repeat   -- leave the (widened) LAVA PIT open
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
       pfTile "terrain_purple_block_top_left", 6240, 512
@@ -2918,23 +3074,24 @@ command pfL4Scene
       pfTile "grass_purple", 1100, 512
       pfTile "grass_purple", 2240, 512
       pfTile "grass_purple", 2920, 512
-      pfTile "grass_purple", 3960, 512
-   end if
+   end if   -- (a 3960 tuft was removed: it sat on the bowling-lane snail AND hid the 4000 coin)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
       pfTile "sign", 2980, 512        -- a way-marker past the piranha row
    end if
-   pfMakeLava 3136, 3264, 596   -- a lower hurt-top so the bank-level bridge is safe to walk, a fall is not
-   -- the COLLAPSING BRIDGE (Wave 4's last named mechanic) across the lava:
-   -- three planks at BANK LEVEL, flush with the ground (y576) so you walk
-   -- straight onto them - the lava sensor is lowered to y596 so the crossing
-   -- is safe but a fall through a gap is not. Between the two faced crushers,
-   -- whose slams land on the banks clear of the span. Each plank you stand on
-   -- CREAKS and a beat later DROPS into the lava - so keep MOVING (grab the
-   -- mid-lava coin on the way across). A running DOUBLE JUMP still clears the
-   -- 128px strip the old way (no dead end); a slip onto the lava is a knockback
-   -- (pfOuch), and retreating to the near bank re-forms the bridge for another
-   -- try. Platform-carry stays showcased by the L2 lift bay.
-   pfMakeCollapseBridge 3136, 3264, 583, 3
+   pfMakeLava 3136, 3328, 596   -- a lower hurt-top so the bank-level bridge is safe to walk, a fall is not
+   -- the COLLAPSING BRIDGE (Wave 4's last named mechanic) across the lava,
+   -- REBUILT with room to read: the pit is now 192px (was a cramped 128px) and
+   -- the bridge is FOUR ~48px planks at BANK LEVEL, flush with the ground (y576)
+   -- so you walk straight onto them. The lava sensor is lowered to y596 so the
+   -- crossing is safe but a fall through a gap is not. The single faced CRUSHER
+   -- (3040) guards the ENTRANCE - the old second crusher crammed the far bank and
+   -- has been retired, giving the planks clear air. Each plank you stand on CREAKS
+   -- and a beat later DROPS into the lava - so keep MOVING (grab the mid-lava coin
+   -- on the way across). A running DOUBLE JUMP still clears the ~190px strip (it is
+   -- the L2 lift bay's ~200px reach - no dead end); a slip onto the lava is a
+   -- knockback (pfOuch), and retreating to the near bank re-forms the bridge for
+   -- another try. Platform-carry stays showcased by the L2 lift bay.
+   pfMakeCollapseBridge 3136, 3328, 583, 4
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
    -- explosive barrel ringed by a small PYRAMID of crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
@@ -2993,9 +3150,10 @@ command pfL4Cast
    pfMakeCoin 1664, 500     -- under the bat roost - they drop
    pfMakeCoin 1952, 430     -- mid-air over the pit
    pfMakeCoin 2415, 480     -- threading the FOUR-burrow piranha row: time
+   pfMakeGem 2415, 408, "red"   -- BONUS gem high over the piranha row (a risky double-jump grab)
    pfMakeCoin 2565, 480     -- the bites and snatch a coin between each pair
    pfMakeCoin 2715, 480
-   pfMakeCoin 3200, 470     -- over the lava, between the crushers
+   pfMakeCoin 3232, 470     -- mid-bridge over the lava: grab it as you cross the crumbling planks
    pfMakeCoin 3492, 500     -- the fire slime's beat, fresh from the lava
    pfMakeCoin 3892, 500     -- past the powder keg (the lure: mind the blast)
    pfMakeCoin 4000, 500     -- the second snail's beat (shell it, kick it!)
@@ -3025,8 +3183,7 @@ command pfL4Cast
    pfMakePlant 3, 2640
    pfMakePlant 4, 2790
    pfMakeGhost 2240, 360
-   pfMakeThwomp 1, 3040, true   -- the faced CRUSHERS guard the lava
-   pfMakeThwomp 2, 3360, true
+   pfMakeThwomp 1, 3040, true   -- the faced CRUSHER guards the collapsing-bridge entrance (the far-bank twin was retired to de-cram the widened pit)
    -- a FIRE SLIME smoulders along past the lava (spike-type: it hurts
    -- from every side - you do not stomp a slime that is on fire)
    pfMakeCritter 7, "spike", 3492, 3424, 3560, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
@@ -3057,17 +3214,18 @@ end pfL4Cast
 -- =====================================================================
 -- LEVEL 5 - "SCORCHED DUNES" (Wave 7, the DESERT biome): sand ground with a
 -- DUNE (sand-ramp slope), a THORN PIT to leap, a two-cloud HOP, then the Wave
--- 6 bestiary given ROOM - a frog in the open, a barnacle clam, a spider on a
--- sand overhang - and sand steps to the flag. GENEROUSLY spaced: the layout
--- was audited before building, so every beat gets 250px+ of clear air (the
--- answer to Wave 6's "slight alignment" crowding - this level had room to plan).
+-- 6 bestiary given ROOM - a frog in the open, a barnacle clam - and sand steps
+-- to the flag. (No spider here: a ceiling-crawler needs a ceiling, and a sand
+-- bar floating in the open desert sky read as a glitch - the spider stays in
+-- L4's cave.) GENEROUSLY spaced: the layout was audited before building, so
+-- every beat gets 250px+ of clear air (the answer to Wave 6's crowding).
 -- =====================================================================
 command pfL5Scene
    local tX
    put "SCORCHED DUNES (hot!)" into gLevelName
    pfBounds kPfEdgeL, 4200 + kPfEndCap   -- right edge hugs the goal flag (4200)
    pfSlab "pf_ground1", 0, 576, 2000, 640
-   pfSlab "pf_ground2", 2192, 576, 4288, 640
+   pfSlab "pf_ground2", 2256, 576, 4288, 640   -- far edge of the widened THORN PIT (2000..2256, was 2192 = only 3 spikes)
    pfSlab "pf_plat1", 3936, 512, 4128, 576
    pfSlab "pf_plat2", 4128, 448, 4256, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_block_top") then
@@ -3078,7 +3236,7 @@ command pfL5Scene
             pfTile "terrain_sand_block_top", tX, 576
          end if
       end repeat
-      repeat with tX = 2192 to 4224 step 64
+      repeat with tX = 2256 to 4224 step 64
          pfTile "terrain_sand_block_top", tX, 576
       end repeat
       pfTile "terrain_sand_block_top_left", 3936, 512
@@ -3111,8 +3269,10 @@ command pfL5Scene
       b2kCamAdopt the long id of graphic "pf_dune"
    end if
    -- the THORN PIT (leap it; a slip burns then drops to the kill floor): the
-   -- gap between the two ground slabs, spike tips flush with the floor line
-   pfMakeSpikes 2000, 2192
+   -- gap between the two ground slabs, spike tips flush with the floor line.
+   -- Widened to 256px (FOUR spikes) for a proper spiked chasm - clear it with a
+   -- running/double jump (the checkpoint at the brink, 1900, makes a slip a quick retry).
+   pfMakeSpikes 2000, 2256
    -- the two-cloud HOP (one-way sand clouds, each ghost-padded a tile past the
    -- art each side): jump up for the coins, DOWN+JUMP to drop off
    b2kSmoothGround "2640,448" & cr & "2576,448" & cr & "2384,448" & cr & "2320,448"
@@ -3138,12 +3298,9 @@ command pfL5Scene
       set the foregroundColor of it to "200,170,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeN"
    end if
-   -- the SPIDER's sand overhang (drawn only with the spooks sheet, like L4):
-   -- visual only and at y256 (out of jump reach), so it never blocks the run
-   if gSpooksOK is true and gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_horizontal_left") then
-      pfTile "terrain_sand_horizontal_left", 3488, 256
-      pfTile "terrain_sand_horizontal_right", 3552, 256
-   end if
+   -- (no SPIDER here: a ceiling-crawler needs a ceiling, and a sand bar floating
+   -- in the open desert sky read as a glitch. The spider stays showcased in L4's
+   -- cave biome, where the overhang reads as a real ceiling fragment.)
    -- desert decor, placed clear of every beat (cacti, a rock, the way-markers)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "cactus") then
       pfTile "sign", 160, 512
@@ -3158,20 +3315,20 @@ command pfL5Cast
    pfMakeCoin 480, 500      -- the opening run
    pfMakeCoin 680, 500      -- the sand slime's beat
    pfMakeCoin 1056, 460     -- atop the dune (jump it as you crest)
+   pfMakeGem 1056, 400, "blue"   -- BONUS gem above the dune crest (double-jump for it)
    pfMakeCoin 1500, 500     -- the desert frog's beat (stomp it; do not stand by it)
-   pfMakeCoin 2096, 440     -- mid-air over the thorn pit: leap it
+   pfMakeCoin 2128, 440     -- mid-air over the (widened) thorn pit: leap it
    pfMakeCoin 2480, 392     -- on the first sand cloud
    pfMakeCoin 2784, 392     -- on the second sand cloud
    pfMakeCoin 3000, 500     -- the snail's beat (shell it, kick it)
-   pfMakeCoin 3552, 500     -- under the spider's overhang: grab it as it drops
+   pfMakeCoin 3552, 500     -- on the clear run home (was the spider beat; the spider is L4-only now)
    pfMakeCoin 3750, 500     -- the clear run home to the steps
    pfMakeCoin 3990, 448     -- over the first sand step
-   pfMakeCoin 4180, 392     -- over the top step, by the flag
+   pfMakeCoin 4100, 420     -- on the climb to the summit (moved off the flag: 4180 overlapped the goal flag at 4200)
    pfMakeSlime 1, "normal", 680, 620, 760, 576
    pfMakeFrog 2, 1500, 1420, 1620, 576
    pfMakeSnail 3, 3000, 2940, 3060
    pfMakeBarnacle 1, 3300, 544
-   pfMakeSpider 1, 3552, 3508, 3596, 336
    pfMakeCheckpoint 1900    -- at the brink of the thorn pit: a slip is a retry, not a replay
    pfMakeGoal 4200, 416
 end pfL5Cast
@@ -3313,6 +3470,7 @@ on b2kFrame
    pfTickLift
    pfTickCollapse
    pfTickBarrel
+   pfTickParallax   -- Wave 8: drift the biome backdrop for depth
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
    -- unthrottled HUD re-sets the field text (= engine relayout+redraw)
    -- on EVERY frame -- the single biggest avoidable per-frame cost here
@@ -3325,6 +3483,7 @@ on b2kFrame
       put (the milliseconds - gRunStart) div 1000 into tSecs
    end if
    put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
+   if gGemsTotal > 0 then put "   gems " & gGems & "/" & gGemsTotal after tHud
    if gHasKey is true then put "   [KEY]" after tHud
    if gCamOK is true then
       put the hScroll of b2kCamGroup() into tHS   -- read the scroll once
@@ -4172,6 +4331,7 @@ command pfTickCollapse
             if tMS >= gCollapseT[i] then
                put "falling" into gCollapseState[i]
                b2kSetDynamic gCollapseB[i]   -- gravity (+ the rider) takes it down
+               b2kSetGravityScale gCollapseB[i], 1.8   -- assert gravity like the thwomp ("slam, not float"): a fresh b2kAddBox body stays put without it, so the plank only recoloured and never dropped
                b2kSound "smash"
             end if
             break
@@ -4258,6 +4418,16 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       end if
       exit b2kSensorEnter
    end if
+   if the uPfGemFlag of pSensorCtrl is true then
+      add 1 to gGems
+      b2kSound "gem"
+      b2kSpriteRemove pSensorCtrl
+      try
+         delete pSensorCtrl   -- fallback diamond is not Kit-spawned
+      catch tErr
+      end try
+      exit b2kSensorEnter
+   end if
    if the uPfCoinFlag of pSensorCtrl is true then
       pfGainCoin
       put b2kPosition(pSensorCtrl) into tPopAt   -- world px, from its body
@@ -4293,6 +4463,10 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       -- (a wide spike strip pops you back toward the side you entered)
       set the itemDelimiter to comma
       pfOuch item 1 of b2kPosition(pSensorCtrl)
+   end if
+   if the uPfKillFlag of pSensorCtrl is true then
+      pfHurt   -- the kill floor under the water: sinking out the bottom respawns
+      exit b2kSensorEnter
    end if
    if the uPfGoalFlag of pSensorCtrl is true then
       -- camera-dead fallback clamps play to one screen, so most coins are
@@ -4552,6 +4726,8 @@ command pfLevelClear
    b2kCamShake 4, 300
    add gFalls to gTotalFalls
    add (the milliseconds - gRunStart) div 1000 to gSecsBank
+   add gGems to gGemsBank
+   add gGemsTotal to gGemsAllTotal
    pfNotice "LEVEL " & gLevel & " CLEAR!", 1400
    send pfNextLevel to me in 1200 milliseconds
 end pfLevelClear
@@ -4577,6 +4753,8 @@ command pfWin
    put gSecsBank + (the milliseconds - gRunStart) div 1000 into tSecs
    put tSecs into gWinSecs
    add gFalls to gTotalFalls
+   add gGems to gGemsBank
+   add gGemsTotal to gGemsAllTotal
    b2kSound "win"
    b2kPlayerControl false   -- the win dance owns the art from here
    set the itemDelimiter to comma
@@ -4597,6 +4775,7 @@ command pfWin
    put "ALL FIVE LEVELS CLEAR!" & cr & cr into tMsg
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
+   if gGemsAllTotal > 0 then put "Gems  " & gGemsBank & " / " & gGemsAllTotal & " collected" & cr & cr after tMsg
    if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
    put "Press Play again for a fresh run from level 1." after tMsg
    set the text of field "pfWinText" to tMsg
@@ -4662,6 +4841,8 @@ on mouseUp
          put 1 into gLevel
          put 0 into gTotalFalls
          put 0 into gSecsBank
+         put 0 into gGemsBank
+         put 0 into gGemsAllTotal
          pfStartGame
          break
       default

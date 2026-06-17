@@ -8,7 +8,132 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ## [Unreleased]
 
+### Added
+
+- **Platformer: FISH in the swim pool.** The L1 hilltop pond now has two fish
+  (blue + yellow, native `foes` art that was unused) swimming at different depths
+  and periods — bodiless proximity hazards (recoverable knockback) you time your
+  dive between while grabbing the underwater coins.
+- **Platformer: GEM bonus pickups.** A distinct collectible (`gem_*` tiles art,
+  previously unused) that does **not** gate the flag — a skill-reward tally shown
+  in the HUD and the win screen. One gem per level in a hard-to-reach spot (above
+  the mound, atop the ladder ledge, the wall-jump-shaft top, high over the piranha
+  row, above the dune crest). New synthesized "gem" chime.
+- **Platformer: a PARALLAX biome backdrop.** Each level gets its own scene that
+  drifts behind the foreground at 0.3× for depth — green hills (L1/L2), a pale
+  wintry hills (L3), purple mushrooms (L4), and desert dunes (L5) — tiled and
+  wrapped across three card panels (gated so a still camera costs one compare).
+  The Kenney bg scenes are fully opaque, so this is a single drifting layer (a
+  fade layer behind would be hidden); true multi-layer parallax would need
+  transparent layer art (noted in the expansion plan).
+
 ### Fixed
+
+- **Platformer (OXT round 6): five polish fixes for a solid state.**
+  - *Parallax seam.* Adjacent 640px backdrop panels met exactly edge-to-edge, so
+    sub-pixel rounding leaked a 1px white hairline. Panels are now widened 4px and
+    recentred (a ~2px overlap each side, opaque-over-opaque), and the drift is
+    rounded to whole pixels; the 640 wrap modulus is unchanged so the wrap stays
+    seamless.
+  - *L5 spike pit.* `pfMakeSpikes` tiled the row from `pL` (burying the first
+    spike's left half under the slab and leaving a bare strip at the right edge —
+    it read as "the spikes don't fit"). It now centres the row at `pL+32..pR-32`,
+    flush to both ground edges — fixes every pit at once.
+  - *Slime stuck to the crusher (L3).* The red-key crusher's slime patrolled to
+    `2148`; its right edge (`2172`) all but touched the block body (`2178`, a 6px
+    gap) and the velocity-asserting slime pinned against it. Right limit pulled in
+    to `2118` (36px clearance).
+  - *Coin obscured by the chain (L2).* The "ride the thwomp up" coin sat at
+    `1840,64` — dead in the chain's column (chain art spans y44..172 at x1840), so
+    it drew behind the chain. Moved to `1912,96`, clear of the chain, still
+    reachable from the rising weight.
+  - *Sign overlapping the checkpoint (L2).* A decor sign at `2400` (centre 2432)
+    overlapped the checkpoint flag at `2450`. Moved to `2300` (~86px clear).
+  - *Bonus, caught by the extended audit:* L2's slime#1 was patrolling **inside**
+    the green crusher alley (`4324..4460`), its sweep overlapping crushers 6 & 7
+    (0px) — the same stick risk. Crusher alleys are walker-free by convention, so
+    it was relocated to the open stretch past the 2nd-bay crusher (a real 100px
+    patrol, 86px clear), and a decor bush nudged out of its new sweep.
+  - The geometry audit (`tools/audit-platformer.py`) gained four checks that flag
+    this whole class statically: spike-pit fill (64px-multiple width), walker
+    sweep vs thwomp body proximity, coin-in-a-chain-column, and decor vs the
+    checkpoint/goal flag.
+- **Platformer: the L5 thorn pit fits its spikes and the final coin is off the
+  flag.** The pit was widened 192px → 256px (3 → 4 spikes, `ground2` starts at
+  2256, over-pit coin re-centred to 2128) for a proper spiked chasm, and the
+  summit coin moved off the goal flag (`4180` → `4100,420`; it overlapped the
+  flag at `4200`). The audit gained a coin/gem-vs-goal-flag overlap check.
+- **Platformer (OXT round 4): the collapsing-bridge planks now actually DROP.**
+  They recoloured (the "shaking" tint) but never fell — a fresh `b2kAddBox` body
+  needs gravity *asserted* to drop (the working thwomp does `b2kSetGravityScale
+  1.8`, commented "slam, not float"); the plank skipped that step, so it floated
+  in place. It now asserts gravity on the drop, like the thwomp.
+- **Platformer: the L1 swim basin has a KILL FLOOR under the water.** The solid
+  pond floor is replaced by a kill sensor just below the water line
+  (`uPfKillFlag` → `pfHurt`), so sinking out the bottom respawns instead of
+  resting on the floor forever — the swim now has stakes. The deepest underwater
+  coin is raised (`588` → `576`) for a safe dive margin above the kill line, and
+  the layout audit learned about water zones so underwater coins don't false-flag.
+
+- **Platformer (OXT round 3): the ROOT cause of the drifting coins and flags —
+  cast sprites were born scroll-shifted.** The camera `b2kCamGoto` ran *before*
+  the hero and the cast, so every create-once cast sprite (coins, flags,
+  checkpoints, the barnacle) was created while the view was already scrolled and
+  landed offset on the user's engine — pond coins pushed off-centre, flag and
+  checkpoint POLES drifting to step edges or hovering "unattached". Bound bodies
+  (hero, slimes) re-sync every frame, so they were always fine; static pickups
+  never re-sync. Fix: build the WHOLE world (scenery, hero AND cast) at scroll 0,
+  then `b2kCamGoto` exactly **once, after the cast** — matching how the
+  correctly-placed terrain was always built. The flag plant drops back to 8px
+  (it had been bumped to 16 to fight the now-removed offset), and the L1 pond's
+  underwater coins are grouped more centrally (`7880/7960/8040`).
+
+- **Platformer (OXT round 2): the L3 wall-jump shaft reads as a real beat now.**
+  The two pillars were a stretched thin slab; rebuilt as crisp 64px ICE-BLOCK
+  columns framing a clear slot, and the slot coin is now built in the SCENE
+  *with* the columns (it was in the cast, created after the camera scroll, so it
+  could drift off-centre relative to the scene-built columns) — it sits
+  dead-centre between them to show off the wall-jump.
+- **Platformer: removed the L5 spider + its floating sand overhang.** A
+  ceiling-crawler needs a ceiling; a sand bar hovering in the open desert sky
+  read as a glitch. The spider stays showcased in L4's cave biome (the overhang
+  is a real ceiling fragment there); the 3552 coin remains as a run-home pickup.
+  L5's bestiary is now frog + barnacle (+ slime/snail).
+- **Platformer: the flag/checkpoint plant was raised 8px → 16px** after an OXT
+  pass showed flags still hovering at 8px. `kFlagPlantPx` remains the single
+  tunable knob.
+
+- **Platformer: the L4 COLLAPSING BRIDGE was crammed into a 128px lava slot
+  between two crushers — rebuilt with room to read.** The mechanic's logic was
+  sound all along (the stand-to-crumble detection window, the static→dynamic
+  plank flip, and the render-sync — `b2kSetType` clears `sStatic`, wakes the
+  body and forces a full sync — all check out); the *space* was the problem:
+  three ~42px planks pinched between faced crushers at `3040` and `3360`. The
+  lava pit is now **192px** (grid-aligned `3136..3328`), the bridge is **four
+  ~48px planks**, and the **far-bank crusher is retired** so the planks get
+  clear air (the single entrance crusher still gates the approach). The ~190px
+  strip stays double-jumpable (the L2 lift bay's ~200px reach — no dead-end) and
+  the mid-lava coin re-centres to `3232`. Downstream beats (fire slime, powder
+  keg, bowling lane) are untouched — no cascade.
+
+- **Platformer: flags/checkpoints that read as "floating" on the user's engine
+  are now PLANTED.** Every flag/checkpoint frame seats its pole base on the floor
+  line in geometry (re-verified: the 64px frames have *zero* footroom and are
+  centre-anchored at `surface − 32`), but they hovered a few px on the user's
+  engine — a scrolled-group vertical quirk at sprite-create time, the same class
+  of engine difference the camera code already works around. A single tunable
+  constant `kFlagPlantPx` (8px) now sinks every goal/checkpoint base slightly
+  *into* its surface so it reads as rooted; bump it if a flag still floats in an
+  OXT pass. (Statically verified — needs an OXT confirmation.)
+
+- **Platformer: scenery no longer spawns on top of enemies or coins.** A new
+  geometric layout audit (`tools/audit-platformer.py`, advisory) found decor
+  sitting on beats: L1 mushrooms/bush on the meadow-slime / 2nd-act-slime /
+  mouse / frog spawns (nudged into the clear inter-enemy gaps), an L2 bush on the
+  barnacle's telegraph (`3400`→`3488`), and an L4 grass tuft that both hid the
+  `4000` coin and sat on the bowling-lane snail (removed). Also fixed an L2 slime
+  spawned 64px in the air (`topY 512`→`576`, it dropped on build). The audit now
+  passes clean across all five levels (grounding, bounds, walk-offs, overlaps).
 
 - **Platformer: three coins sat *on* a wall — lifted clear (a measured-alpha
   audit of every coin/flag in all four levels).** The visible coin disc is a
