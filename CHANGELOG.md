@@ -10,6 +10,14 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer: three coins sat *on* a wall — lifted clear (a measured-alpha
+  audit of every coin/flag in all four levels).** The visible coin disc is a
+  38×40 sprite-alpha box centred in its 64px cell (not the whole cell), so most
+  coins float clear at head/jump height; the audit found only three that bit a
+  solid: the L2 lift-pedestal coin (`3300`→`3350`, off the pedestal corner) and
+  the L2/L3 door-passage coins (`5392`→`5440`, `5808`→`5856`, which z-ordered
+  on top of the *closed* door tile). Flags verified seated on their surfaces.
+
 - **Kit: commands called with function syntax never worked in OXT.** OXT
   cannot invoke a *command* handler with function syntax (`get b2kChain(...)`
   throws "can't find function"), which the Game Kit Phase 0 spike caught on
@@ -55,6 +63,27 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer Wave 7 (biomes): a new desert Level 5, "Scorched Dunes."** The
+  platformer's first *fifth* level, in the fully-tiled **sand biome** — a sand
+  **dune** (ramp slope), a **thorn pit** to leap, a **two-cloud hop**, and the
+  Wave 6 bestiary (frog, barnacle, spider) given **room** (one of each, well
+  apart), then sand steps to the flag. Laid out **layout-first**: every
+  placement was geometrically audited (coin/flag/enemy overlaps + 250px-plus
+  spacing per beat) *before* coding. The win now spans five levels.
+- **Platformer Wave 6 (bestiary II): frog, barnacle, and spider — woven into
+  L1/L2/L4, all example-side (no Kit change, no harness bump).** Three new
+  enemy archetypes, each built on an existing Kit pattern:
+  - **Frog** (L1 far meadow) — a grounded *hopper* that crouches then leaps
+    toward you when you're in range. Joins the slime family as a new `"frog"`
+    kind, so it's **stompable for free** (the classic-slime contact path); its
+    side touch knocks back. Bounded to its band so it never springs into a pit.
+  - **Barnacle** (L2 machine-works) — a stationary clam (the piranha's timed
+    cycle held still): it lurks shut, **opens as a telegraph**, snaps a brief
+    hurt-window, then cools down. Unkillable (the saw rule) — time it or jump it.
+  - **Spider** (L4 haunted hollow) — a bodiless ceiling-crawler under a small
+    overhang that **drops as you pass under** and climbs back. Family-C art, so
+    **optional**: a missing spooks sheet omits it *and* its overhang, and the
+    level still completes (the optional-art rule). Plus a `bite` sound cue.
 - **Kit: a persistent spritesheet cache (`b2kSheetPersist`) — load atlases
   once, not per level (statically verified + harness v14).** Opt-in (default
   off, so every other example and the harness are byte-for-byte unchanged).

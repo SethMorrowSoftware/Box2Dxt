@@ -12,8 +12,8 @@
 -- rolling boulder, an exploding barrel) plus four more enemy species.
 -- Collect EVERY coin on a level (the goal
 -- flag turns GOLD), touch the flag, and the next level builds; level
--- 4's flag is the win. Anything without sheet art falls back to plain
--- graphics, so all four levels run even with no asset folder (the coin
+-- 5's flag is the win. Anything without sheet art falls back to plain
+-- graphics, so all five levels run even with no asset folder (the coin
 -- totals count themselves as each level builds).
 --
 -- HOW TO RUN
@@ -226,6 +226,35 @@
 --      in OXT: planks drop a beat after you stand (not instantly, not never),
 --      the bridge re-forms after a knockback, and the coin is grabbable on
 --      the way across; tune the 0.3s crumble in pfTickCollapse to taste.
+--  18. WAVE 6 BESTIARY II (frog / barnacle / spider - all example-side, no Kit
+--      change, no harness bump). FROG (L1 far meadow, ~x4660): a native-art
+--      HOPPER that crouches then LEAPS at you when near; STOMP it from above (it
+--      rides the slime stomp path), its side touch knocks back. Confirm it hops
+--      toward you, stays in its band (never springs into a pit), and squashes on
+--      a clean stomp. BARNACLE (L2, ~x3460, between the third-bay snail and the
+--      chained crusher): a clam that lurks shut, OPENS as a telegraph, then SNAPS
+--      a brief hurt-window and cools down - a watchful run clears it, a jump
+--      always clears it. Confirm the open-before-bite warning and that jumping
+--      over is safe. SPIDER (L4, ~x4416, under a small purple overhang on the run
+--      to the chained crusher): OPTIONAL (Family C art) - it crawls the bar and
+--      DROPS as you pass under, then climbs back; grab the 4440 coin while you
+--      dodge. Confirm it drops on approach, hurts on contact, climbs back, and
+--      that a MISSING spooks sheet simply omits it + its overhang (the level
+--      still completes). Art FACING polarity (frog/spider flip) is statically
+--      unverifiable - flag any mirrored sprite for a one-line flip fix.
+--  19. WAVE 7 DESERT BIOME - LEVEL 5 "SCORCHED DUNES" (the first 5th level; the
+--      win now needs gLevel>=5). A new SAND level, laid out GENEROUSLY (every
+--      beat 250px+ of clear air, audited before building - the answer to Wave
+--      6's crowding). VERIFY: the sand DUNE (ramp slope) walks up/across/down
+--      with no fall-through (the chain ghost-rule); the THORN PIT (2000..2192)
+--      is a clean leap and a slip burns + respawns at the checkpoint (1900, at
+--      the brink); BOTH sand clouds are solid to their visible ends; the
+--      bestiary II reads with ROOM here (frog ~1500, barnacle ~3300, spider
+--      ~3552 - no crowding); the sand STEPS + flag finale plays; the HUD/help/
+--      splash say "of 5" and the win screen says ALL FIVE LEVELS CLEAR. The
+--      spider + its overhang vanish without the spooks sheet (level still
+--      completes). New biome: confirm the sand art reads with no missing-frame
+--      fallbacks on a full asset folder.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -234,7 +263,7 @@ local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
 local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
--- the four-level game: which level, its width/name, and the banked
+-- the five-level game: which level, its width/name, and the banked
 -- totals carried across level clears for the final win screen
 local gLevel, gLevelW, gLevelName, gTotalFalls, gSecsBank
 local gEdgeL, gEdgeR   -- the playable L/R edges (content-hugging); set by pfBounds
@@ -293,6 +322,15 @@ local gLiftN, gLift, gLiftMin, gLiftMax, gLiftSpeed, gLiftVX
 -- gates the re-form so the idle case is one compare.
 local gCollapseN, gCollapseB, gCollapseHomeX, gCollapseState, gCollapseT
 local gCollapseL, gCollapseR, gCollapseY, gCollapseStep, gCollapseDirty
+-- Wave 6 (bestiary II), all example-side: the FROG joins the slime family
+-- (gFrogAir, indexed by slime row, tracks its mid-hop pose so the crouch frame
+-- is set once on landing, not every frame). The BARNACLE is a bodiless timed
+-- bite-cycle (the piranha pattern held still); the SPIDER is a bodiless
+-- ceiling-crawler that drops on the hero (the ghost/mover pattern). Indexed 1..N.
+local gFrogAir
+local gBarnN, gBarnSpr, gBarnX, gBarnY, gBarnState, gBarnT
+local gSpiderN, gSpiderSpr, gSpiderX, gSpiderY, gSpiderHangY, gSpiderDropTo
+local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
@@ -459,6 +497,7 @@ function pfLoadSheets
    if tN >= 1 then
       b2kSheetScale "spooks", 0.9
       b2kAnimDef "spooks", "batfly", "bat_fly.png,bat.png", 8, true
+      b2kAnimDef "spooks", "spiderwalk", "spider_walk1.png,spider_walk2.png", 8, true   -- Wave 6
    end if
    -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -501,7 +540,7 @@ end pfLoadSheets
 -- engine plays one clip at a time, so a new cue cuts the previous.
 command pfMakeSounds
    -- guard on the NEWEST cue, so a stack upgraded in place re-synthesizes
-   if b2kSoundIsLoaded("boom") then exit pfMakeSounds   -- already built
+   if b2kSoundIsLoaded("bite") then exit pfMakeSounds   -- already built
    b2kToneMake "jump", "392,587", 40, 55
    b2kToneMake "coin", "1319,1760", 36, 45
    b2kToneMake "stomp", "165,110", 40, 70
@@ -523,6 +562,8 @@ command pfMakeSounds
    b2kToneMake "creak", "175,147", 34, 35, "sine"   -- a foot on the bridge
    b2kToneMake "rumble", "73,87,65", 60, 55, "sine"  -- the boulder lets go
    b2kToneMake "boom", "131,98,73,55", 80, 70          -- the barrel blast
+   -- Wave 6 cue: the barnacle's snap (the NEWEST cue - the guard keys on it)
+   b2kToneMake "bite", "147,98", 28, 60
 end pfMakeSounds
 
 command pfEmbedPlaceholder
@@ -603,6 +644,7 @@ command pfStartGame
    put empty into gSlimeMax
    put empty into gSlimeGoneAt
    put empty into gSlimeT
+   put empty into gFrogAir   -- Wave 6: the frog's per-row hop-pose flag
    -- Wave 3 tables start the run empty
    put 0 into gPlantN
    put empty into gPlantSpr
@@ -613,6 +655,23 @@ command pfStartGame
    put 0 into gGhostX
    put 0 into gGhostY
    put true into gGhostShy
+   -- Wave 6 (bestiary II) tables start the run empty
+   put 0 into gBarnN
+   put empty into gBarnSpr
+   put empty into gBarnX
+   put empty into gBarnY
+   put empty into gBarnState
+   put empty into gBarnT
+   put 0 into gSpiderN
+   put empty into gSpiderSpr
+   put empty into gSpiderX
+   put empty into gSpiderY
+   put empty into gSpiderHangY
+   put empty into gSpiderDropTo
+   put empty into gSpiderMinX
+   put empty into gSpiderMaxX
+   put empty into gSpiderDir
+   put empty into gSpiderState
    put 0 into gBlockN
    put empty into gBlockB
    put empty into gBlockSpr
@@ -756,6 +815,9 @@ command pfStartGame
       case 4
          pfL4Scene
          break
+      case 5
+         pfL5Scene
+         break
       default
          put 1 into gLevel
          pfL1Scene
@@ -844,13 +906,16 @@ command pfStartGame
       case 4
          pfL4Cast
          break
+      case 5
+         pfL5Cast
+         break
       default
          pfL1Cast
    end switch
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 4: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Four levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 5: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Five levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -859,7 +924,7 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 4" & cr & gLevelName
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 5" & cr & gLevelName
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -1317,6 +1382,48 @@ command pfMakeMimic pIdx, pX
    put 0 into gSlimeT[pIdx]
 end pfMakeMimic
 
+-- Wave 6 (bestiary II): a FROG - a grounded HOPPER (the lunger). It rests in
+-- a crouch, then leaps toward the hero whenever it has settled and he is within
+-- range. It JOINS the slime family (a new "frog" kind in pfTickSlimes), so the
+-- existing stomp verdict, knockback and b2kFell cleanup carry it for free:
+-- stomp it from above, its side touch hurts. Native foes art (so it is NOT
+-- optional). pMinX/pMaxX bound its hops so it can never spring into a pit.
+command pfMakeFrog pIdx, pX, pMinX, pMaxX, pTopY
+   local tName, tBody, tSpr
+   put "pf_slimeBody" & pIdx into tName
+   create graphic tName
+   set the style of it to "rectangle"
+   set the rect of it to pX - 22, pTopY - 36, pX + 22, pTopY
+   set the filled of it to true
+   set the backgroundColor of it to "120,175,75"
+   set the visible of it to false
+   put the long id of graphic tName into tBody
+   b2kAddBox tBody
+   b2kSetFixedRotation tBody, true
+   b2kSetFriction tBody, 0.3
+   put empty into tSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "frog_idle") then
+      b2kSpriteNew "foes", "frog_idle", pX, pTopY - 32
+      put the result into tSpr
+      if tSpr is not empty then b2kSpriteBind tSpr, tBody, 0, -14
+   end if
+   if tSpr is empty then set the visible of graphic tName to true
+   if the visible of graphic tName is true then b2kCamAdopt tBody
+   if pIdx > gSlimeN then put pIdx into gSlimeN
+   put tBody into gSlimeB[pIdx]
+   put tSpr into gSlimeSpr[pIdx]
+   put "frog" into gSlimeKind[pIdx]
+   put 0 into gSlimeDir[pIdx]
+   put 0 into gSlimeSpeed[pIdx]
+   put empty into gSlimeFlat[pIdx]    -- no squashed frame: it drops and fades
+   put false into gSlimeFlip[pIdx]
+   put pMinX into gSlimeMin[pIdx]
+   put pMaxX into gSlimeMax[pIdx]
+   put empty into gSlimeGoneAt[pIdx]
+   put the milliseconds + 600 + random(500) into gSlimeT[pIdx]
+   put false into gFrogAir[pIdx]
+end pfMakeFrog
+
 -- A piranha burrow at pX: the plant is a bodiless sprite pfTickPlants
 -- raises and sinks; its dark mouth-hole is drawn by the SCENE (so it
 -- layers under every later sprite). Unkillable, like the saws.
@@ -1347,6 +1454,62 @@ command pfMakeGhost pX, pY
    put pY into gGhostY
    put true into gGhostShy
 end pfMakeGhost
+
+-- Wave 6 (bestiary II): a BARNACLE - a stationary clam (the lurker). It sits
+-- SHUT until the hero nears, TELEGRAPHS by opening, then SNAPS a brief
+-- hurt-window and cools down. Bodiless (the piranha's timed cycle held still),
+-- unkillable like the saws - you time it or jump it. pY is the surface it sits
+-- on (place at 544 to rest a clam on a 576 floor: the art opens upward). Native
+-- foes art; the no-art fallback is a static rect that still snaps (gBarnSpr
+-- stays empty there, so the tick skips the frame swaps, like the slimes).
+command pfMakeBarnacle pIdx, pX, pY
+   local tSpr
+   put empty into tSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "barnacle_attack_rest") then
+      b2kSpriteNew "foes", "barnacle_attack_rest", pX, pY
+      put the result into tSpr
+   end if
+   if tSpr is empty then
+      create graphic ("pf_barn" & pIdx)
+      set the style of it to "rectangle"
+      set the rect of it to pX - 22, pY - 10, pX + 22, pY + 32
+      set the filled of it to true
+      set the backgroundColor of it to "150,95,120"
+      b2kCamAdopt the long id of graphic ("pf_barn" & pIdx)
+   end if
+   if pIdx > gBarnN then put pIdx into gBarnN
+   put tSpr into gBarnSpr[pIdx]
+   put pX into gBarnX[pIdx]
+   put pY into gBarnY[pIdx]
+   put "shut" into gBarnState[pIdx]
+   put the milliseconds + 600 into gBarnT[pIdx]
+end pfMakeBarnacle
+
+-- Wave 6 (bestiary II): a SPIDER - a ceiling-crawler under an overhang. It
+-- creeps along the bar, and when the hero passes BENEATH it DROPS on its
+-- thread, hurts on contact, then hauls back up and resumes the crawl. Bodiless
+-- (the ghost/mover pattern - b2kSpriteMoveTo is scroll-correct, no physics to
+-- fight the controller). Family C art, so it is OPTIONAL: a missing spooks
+-- sheet skips it silently (gotcha 25), and the SCENE only draws its overhang
+-- when gSpooksOK, so the level stays completable without it.
+command pfMakeSpider pIdx, pX, pMinX, pMaxX, pHangY
+   local tSpr
+   if gSpooksOK is not true then exit pfMakeSpider
+   b2kSpriteNew "spooks", "spider.png", pX, pHangY
+   put the result into tSpr
+   if tSpr is empty then exit pfMakeSpider
+   b2kSpritePlay tSpr, "spiderwalk"
+   if pIdx > gSpiderN then put pIdx into gSpiderN
+   put tSpr into gSpiderSpr[pIdx]
+   put pX into gSpiderX[pIdx]
+   put pHangY into gSpiderY[pIdx]
+   put pHangY into gSpiderHangY[pIdx]
+   put pHangY + 174 into gSpiderDropTo[pIdx]   -- drops to ~head height, then climbs
+   put pMinX into gSpiderMinX[pIdx]
+   put pMaxX into gSpiderMaxX[pIdx]
+   put 60 into gSpiderDir[pIdx]
+   put "patrol" into gSpiderState[pIdx]
+end pfMakeSpider
 
 -- A lava strip ON the path (the haunted ground hazard): lava art over
 -- a knockback sensor that rises above the floor line, so wading in -
@@ -2093,6 +2256,7 @@ command pfL1Cast
    pfMakeCoin 3616, 500     -- the last meadow slime's beat
    pfMakeCoin 4128, 510     -- mid-bridge: grab it as the planks dip
    pfMakeCoin 4456, 500     -- the far meadow's ladybug beat
+   pfMakeCoin 4660, 500     -- the meadow frog's beat (Wave 6)
    pfMakeCoin 4832, 392     -- up on the gauntlet's one-way cloud
    pfMakeCoin 5040, 500     -- the first gauntlet slime's beat
    pfMakeCoin 5232, 500     -- under the darting fly
@@ -2140,6 +2304,9 @@ command pfL1Cast
    -- mouse skitters the second act; a LADYBUG ambles the far meadow
    pfMakeCritter 5, "normal", 3076, 3000, 3160, 576, 120, "mouse_walk_a", "mousewalk", empty, 20, 30, "150,140,150", -4
    pfMakeCritter 6, "normal", 4456, 4360, 4540, 576, 72, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4
+   -- Wave 6 (bestiary II): a meadow FROG hops at you in the far-meadow clearing
+   -- (between the ladybug and the gauntlet cloud). Stomp it; do not stand by it.
+   pfMakeFrog 10, 4660, 4600, 4780, 576
    -- the far-meadow gauntlet's two slimes (the cloud is above them) and a
    -- darting fly between - a classic run of stomps on the way to the flag
    pfMakeSlime 7, "normal", 5040, 4980, 5100, 576
@@ -2434,6 +2601,10 @@ command pfL2Cast
    pfMakeThwomp 2, 1840
    pfMakeThwomp 3, 2560        -- the second bay's chained crusher
    pfMakeThwomp 4, 3600        -- the third bay's chained crusher
+   -- Wave 6 (bestiary II): a BARNACLE clam-trap lurks on the floor in the clear
+   -- pocket between the third bay's snail and the chained crusher. It opens
+   -- (telegraph) before it snaps, so a watchful run clears it; jump it if late.
+   pfMakeBarnacle 1, 3460, 544
    -- a SECOND sweeping saw, ALWAYS on (the lever powers only the first):
    -- a bodiless mover hurting by proximity, sweeping the second bay floor
    if gAssetsOK is true and b2kSheetHasFrame("foes", "saw_a") then
@@ -2794,6 +2965,14 @@ command pfL4Scene
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "grass_purple") then
       pfTile "grass_purple", 5640, 512
    end if
+   -- Wave 6 (bestiary II): the SPIDER's overhang - a short purple bar over the
+   -- run up to the chained crusher. Drawn ONLY when the spooks sheet is present
+   -- (the spider that hangs from it is optional art). Visual only and at y256,
+   -- out of jump reach, so it never blocks the ground beneath it.
+   if gSpooksOK is true and gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_purple_horizontal_left") then
+      pfTile "terrain_purple_horizontal_left", 4352, 256
+      pfTile "terrain_purple_horizontal_right", 4416, 256
+   end if
 end pfL4Scene
 
 command pfL4Cast
@@ -2849,6 +3028,10 @@ command pfL4Cast
    -- the faced crushers. (Trimmed from four snails to two for the showcase
    -- pass - the bowling-lane snail above is plenty; the alley reads cleaner.)
    pfMakeThwomp 3, 4600
+   -- Wave 6 (bestiary II): a SPIDER crawls the overhang over the run to the
+   -- chained crusher and DROPS as you pass under it (grab the 4440 coin while
+   -- you dodge). Optional (Family C art); a missing spooks sheet skips it.
+   pfMakeSpider 1, 4416, 4368, 4464, 336
    -- the RED CRUSHER ALLEY (the hollow's marquee gauntlet): a row of four
    -- danger-block thwomps you time your run beneath - each drops as you near
    -- it, so keep moving and snatch the coins in the gaps. The haunted level's
@@ -2860,6 +3043,128 @@ command pfL4Cast
    pfMakeCheckpoint 2160
    pfMakeGoal 6524, 416
 end pfL4Cast
+
+-- =====================================================================
+-- LEVEL 5 - "SCORCHED DUNES" (Wave 7, the DESERT biome): sand ground with a
+-- DUNE (sand-ramp slope), a THORN PIT to leap, a two-cloud HOP, then the Wave
+-- 6 bestiary given ROOM - a frog in the open, a barnacle clam, a spider on a
+-- sand overhang - and sand steps to the flag. GENEROUSLY spaced: the layout
+-- was audited before building, so every beat gets 250px+ of clear air (the
+-- answer to Wave 6's "slight alignment" crowding - this level had room to plan).
+-- =====================================================================
+command pfL5Scene
+   local tX
+   put "SCORCHED DUNES (hot!)" into gLevelName
+   pfBounds kPfEdgeL, 4200 + kPfEndCap   -- right edge hugs the goal flag (4200)
+   pfSlab "pf_ground1", 0, 576, 2000, 640
+   pfSlab "pf_ground2", 2192, 576, 4288, 640
+   pfSlab "pf_plat1", 3936, 512, 4128, 576
+   pfSlab "pf_plat2", 4128, 448, 4256, 576
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_block_top") then
+      repeat with tX = 0 to 1936 step 64
+         if tX >= 864 and tX <= 1184 then
+            pfTile "terrain_sand_block_center", tX, 576   -- under the dune: one mass
+         else
+            pfTile "terrain_sand_block_top", tX, 576
+         end if
+      end repeat
+      repeat with tX = 2192 to 4224 step 64
+         pfTile "terrain_sand_block_top", tX, 576
+      end repeat
+      pfTile "terrain_sand_block_top_left", 3936, 512
+      pfTile "terrain_sand_block_top", 4000, 512
+      pfTile "terrain_sand_block_top_right", 4064, 512
+      pfTile "terrain_sand_block_top", 4128, 448
+      pfTile "terrain_sand_block_top", 4192, 448
+      pfTile "terrain_sand_block_center", 4128, 512
+      pfTile "terrain_sand_block_center", 4192, 512
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   -- the DUNE (26.6-degree sand ramps; the L1 mound recipe in sand): six chain
+   -- points, the outer two non-colliding ghost anchors; ramps mirrored
+   b2kSmoothGround "1312,576" & cr & "1248,576" & cr & "1120,512" & cr & "992,512" & cr & "864,576" & cr & "800,576"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_ramp_long_a") then
+      pfTile "terrain_sand_ramp_long_b", 864, 512, true
+      pfTile "terrain_sand_ramp_long_a", 928, 512, true
+      pfTile "terrain_sand_block_top", 992, 512
+      pfTile "terrain_sand_block_top", 1056, 512
+      pfTile "terrain_sand_ramp_long_a", 1120, 512
+      pfTile "terrain_sand_ramp_long_b", 1184, 512
+   else
+      create graphic "pf_dune"
+      set the style of it to "polygon"
+      set the points of it to "864,576" & cr & "992,512" & cr & "1120,512" & cr & "1248,576" & cr & "864,576"
+      set the filled of it to true
+      set the backgroundColor of it to "200,170,110"
+      b2kCamAdopt the long id of graphic "pf_dune"
+   end if
+   -- the THORN PIT (leap it; a slip burns then drops to the kill floor): the
+   -- gap between the two ground slabs, spike tips flush with the floor line
+   pfMakeSpikes 2000, 2192
+   -- the two-cloud HOP (one-way sand clouds, each ghost-padded a tile past the
+   -- art each side): jump up for the coins, DOWN+JUMP to drop off
+   b2kSmoothGround "2640,448" & cr & "2576,448" & cr & "2384,448" & cr & "2320,448"
+   b2kSmoothGround "2944,448" & cr & "2880,448" & cr & "2688,448" & cr & "2624,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_cloud_left") then
+      pfTile "terrain_sand_cloud_left", 2384, 448
+      pfTile "terrain_sand_cloud_middle", 2448, 448
+      pfTile "terrain_sand_cloud_right", 2512, 448
+      pfTile "terrain_sand_cloud_left", 2688, 448
+      pfTile "terrain_sand_cloud_middle", 2752, 448
+      pfTile "terrain_sand_cloud_right", 2816, 448
+   else
+      create graphic "pf_cloudledgeM"
+      set the style of it to "line"
+      set the points of it to "2384,448" & cr & "2576,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "200,170,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeM"
+      create graphic "pf_cloudledgeN"
+      set the style of it to "line"
+      set the points of it to "2688,448" & cr & "2880,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "200,170,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeN"
+   end if
+   -- the SPIDER's sand overhang (drawn only with the spooks sheet, like L4):
+   -- visual only and at y256 (out of jump reach), so it never blocks the run
+   if gSpooksOK is true and gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_horizontal_left") then
+      pfTile "terrain_sand_horizontal_left", 3488, 256
+      pfTile "terrain_sand_horizontal_right", 3552, 256
+   end if
+   -- desert decor, placed clear of every beat (cacti, a rock, the way-markers)
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "cactus") then
+      pfTile "sign", 160, 512
+      pfTile "cactus", 320, 512
+      pfTile "cactus", 1700, 512
+      pfTile "cactus", 2300, 512
+      pfTile "rock", 3760, 512
+   end if
+end pfL5Scene
+
+command pfL5Cast
+   pfMakeCoin 480, 500      -- the opening run
+   pfMakeCoin 680, 500      -- the sand slime's beat
+   pfMakeCoin 1056, 460     -- atop the dune (jump it as you crest)
+   pfMakeCoin 1500, 500     -- the desert frog's beat (stomp it; do not stand by it)
+   pfMakeCoin 2096, 440     -- mid-air over the thorn pit: leap it
+   pfMakeCoin 2480, 392     -- on the first sand cloud
+   pfMakeCoin 2784, 392     -- on the second sand cloud
+   pfMakeCoin 3000, 500     -- the snail's beat (shell it, kick it)
+   pfMakeCoin 3552, 500     -- under the spider's overhang: grab it as it drops
+   pfMakeCoin 3750, 500     -- the clear run home to the steps
+   pfMakeCoin 3990, 448     -- over the first sand step
+   pfMakeCoin 4180, 392     -- over the top step, by the flag
+   pfMakeSlime 1, "normal", 680, 620, 760, 576
+   pfMakeFrog 2, 1500, 1420, 1620, 576
+   pfMakeSnail 3, 3000, 2940, 3060
+   pfMakeBarnacle 1, 3300, 544
+   pfMakeSpider 1, 3552, 3508, 3596, 336
+   pfMakeCheckpoint 1900    -- at the brink of the thorn pit: a slip is a retry, not a replay
+   pfMakeGoal 4200, 416
+end pfL5Cast
 
 
 -- Every coin (sensor pickup or ?-box payout) lands here. The moment the
@@ -2992,6 +3297,8 @@ on b2kFrame
    pfTickDoor
    pfTickPlants
    pfTickGhost
+   pfTickBarnacles   -- Wave 6 (bestiary II)
+   pfTickSpiders     -- Wave 6 (bestiary II)
    pfTickBoulder
    pfTickLift
    pfTickCollapse
@@ -3192,6 +3499,37 @@ command pfTickSlimes
                if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
             end if
             break
+         case "frog"
+            -- Wave 6: a grounded HOPPER (the lunger). Crouches, then leaps
+            -- toward the hero when settled and he is within range. Stompable
+            -- via the classic-slime path (no contact case needed); its side
+            -- touch knocks back. One velocity read per live frog - it is
+            -- always active (unlike the mimic, which only wakes when neared).
+            put item 2 of b2kVelocity(tBody) into tVX
+            if gFrogAir[i] is true then
+               -- mid-hop: the instant it settles, drop to the idle crouch
+               if abs(tVX) < 8 then
+                  put false into gFrogAir[i]
+                  if gSlimeSpr[i] is not empty then b2kSpriteSetFrame gSlimeSpr[i], "frog_idle"
+               end if
+            else if tMS > gSlimeT[i] and abs(tVX) < 8 then
+               -- crouched and re-armed: leap at the hero if he is near, but
+               -- never hop past this frog's band, so it can never spring into
+               -- a pit or off its ledge (0 = a frustrated hop in place)
+               if abs(gHeroPX - tX) < 300 then
+                  put 0 into gSlimeDir[i]
+                  if gHeroPX < tX - 8 and tX > gSlimeMin[i] then put -150 into gSlimeDir[i]
+                  if gHeroPX > tX + 8 and tX < gSlimeMax[i] then put 150 into gSlimeDir[i]
+                  b2kSetVelocity tBody, gSlimeDir[i], -300
+                  put tMS + 1100 + random(500) into gSlimeT[i]
+                  put true into gFrogAir[i]
+                  if gSlimeSpr[i] is not empty then
+                     b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
+                     b2kSpriteSetFrame gSlimeSpr[i], "frog_jump"
+                  end if
+               end if
+            end if
+            break
          default
             -- the classic patroller (normal/spike slimes, walking snails,
             -- and the showcase mice/worms/ladybugs - speed per row now,
@@ -3294,6 +3632,89 @@ command pfTickGhost
       if abs(gHeroPX - gGhostX) < 30 and abs(gHeroPY - gGhostY) < 44 then pfOuch gGhostX
    end if
 end pfTickGhost
+
+-- Wave 6: the BARNACLES - stationary clams that lurk, telegraph, then snap.
+-- A timed bite cycle armed by proximity (shut -> open warning -> bite window
+-- -> cooldown). The hurt window is the "bite" state only, and only when the
+-- hero is close AND at the clam's level, so jumping over it is always safe.
+command pfTickBarnacles
+   local i, tMS, tDX
+   if gBarnN is 0 or gBarnN is empty then exit pfTickBarnacles
+   put the milliseconds into tMS
+   repeat with i = 1 to gBarnN
+      put abs(gHeroPX - gBarnX[i]) into tDX
+      switch gBarnState[i]
+         case "shut"
+            -- lurks closed; the hero nearing (cooldown up) arms a bite, but it
+            -- TELEGRAPHS by opening first - the warning beat is the mercy
+            if tDX < 120 and tMS > gBarnT[i] then
+               put "open" into gBarnState[i]
+               put tMS + 360 into gBarnT[i]
+               if gBarnSpr[i] is not empty then b2kSpriteSetFrame gBarnSpr[i], "barnacle_attack_a"
+            end if
+            break
+         case "open"
+            if tMS >= gBarnT[i] then
+               put "bite" into gBarnState[i]
+               put tMS + 240 into gBarnT[i]
+               if gBarnSpr[i] is not empty then b2kSpriteSetFrame gBarnSpr[i], "barnacle_attack_b"
+               b2kSound "bite"
+            end if
+            break
+         case "bite"
+            if gHurtLock is not true and tDX < 40 and abs(gHeroPY - gBarnY[i]) < 46 then pfOuch gBarnX[i]
+            if tMS >= gBarnT[i] then
+               put "shut" into gBarnState[i]
+               put tMS + 900 into gBarnT[i]   -- a cooldown before it can re-arm
+               if gBarnSpr[i] is not empty then b2kSpriteSetFrame gBarnSpr[i], "barnacle_attack_rest"
+            end if
+            break
+      end switch
+   end repeat
+end pfTickBarnacles
+
+-- Wave 6: the SPIDERS - ceiling-crawlers that drop on the hero passing under
+-- and climb back. Bodiless: a per-frame b2kSpriteMoveTo (scroll-correct) walks
+-- the sprite; dt comes from b2kFrameMS like the ghost. The drop hurts on
+-- contact; reaching the bottom flips it to climb, reaching the top to patrol.
+command pfTickSpiders
+   local i, tDT
+   if gSpiderN is 0 or gSpiderN is empty then exit pfTickSpiders
+   put b2kFrameMS() / 1000 into tDT
+   if tDT > 0.05 then put 0.05 into tDT
+   repeat with i = 1 to gSpiderN
+      if gSpiderSpr[i] is empty then next repeat
+      switch gSpiderState[i]
+         case "patrol"
+            -- creep along the underside of the overhang, facing travel
+            put gSpiderX[i] + gSpiderDir[i] * tDT into gSpiderX[i]
+            if gSpiderX[i] <= gSpiderMinX[i] then put abs(gSpiderDir[i]) into gSpiderDir[i]
+            if gSpiderX[i] >= gSpiderMaxX[i] then put -abs(gSpiderDir[i]) into gSpiderDir[i]
+            b2kSpriteMoveTo gSpiderSpr[i], gSpiderX[i], gSpiderHangY[i]
+            b2kSpriteFlipH gSpiderSpr[i], (gSpiderDir[i] < 0)
+            -- the hero passing beneath (close in x, below the bar) drops it
+            if abs(gHeroPX - gSpiderX[i]) < 44 and gHeroPY > gSpiderHangY[i] + 20 then put "drop" into gSpiderState[i]
+            break
+         case "drop"
+            put gSpiderY[i] + 380 * tDT into gSpiderY[i]
+            if gSpiderY[i] >= gSpiderDropTo[i] then
+               put gSpiderDropTo[i] into gSpiderY[i]
+               put "climb" into gSpiderState[i]
+            end if
+            b2kSpriteMoveTo gSpiderSpr[i], gSpiderX[i], gSpiderY[i]
+            if gHurtLock is not true and abs(gHeroPX - gSpiderX[i]) < 26 and abs(gHeroPY - gSpiderY[i]) < 40 then pfOuch gSpiderX[i]
+            break
+         case "climb"
+            put gSpiderY[i] - 240 * tDT into gSpiderY[i]
+            if gSpiderY[i] <= gSpiderHangY[i] then
+               put gSpiderHangY[i] into gSpiderY[i]
+               put "patrol" into gSpiderState[i]
+            end if
+            b2kSpriteMoveTo gSpiderSpr[i], gSpiderX[i], gSpiderY[i]
+            break
+      end switch
+   end repeat
+end pfTickSpiders
 
 -- Each thwomp's life cycle (only the underside kills; the head is a
 -- platform). A chained weight is never the player's to move: it rests
@@ -3867,7 +4288,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       -- camera-dead fallback clamps play to one screen, so most coins are
       -- out of reach there: the near flag advances unconditionally instead
       if gCoins >= gCoinsTotal or gCamOK is not true then
-         if gLevel >= 4 then
+         if gLevel >= 5 then
             pfWin
          else
             pfLevelClear
@@ -4163,7 +4584,7 @@ command pfWin
       put the result into tC
       if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
    end repeat
-   put "ALL FOUR LEVELS CLEAR!" & cr & cr into tMsg
+   put "ALL FIVE LEVELS CLEAR!" & cr & cr into tMsg
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
    if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
