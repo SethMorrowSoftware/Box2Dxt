@@ -258,8 +258,8 @@
 --      win now needs gLevel>=5). A new SAND level, laid out GENEROUSLY (every
 --      beat 250px+ of clear air, audited before building - the answer to Wave
 --      6's crowding). VERIFY: the sand DUNE (ramp slope) walks up/across/down
---      with no fall-through (the chain ghost-rule); the THORN PIT (2000..2192)
---      is a clean leap and a slip burns + respawns at the checkpoint (1900, at
+--      with no fall-through (the chain ghost-rule); the THORN PIT (2000..2256,
+--      four spikes) is a running/double-jump leap and a slip burns + respawns at the checkpoint (1900, at
 --      the brink); BOTH sand clouds are solid to their visible ends; the
 --      bestiary II reads with ROOM here (frog ~1500, barnacle ~3300 - no
 --      crowding; no spider, which needs a ceiling the open desert lacks); the
@@ -3111,7 +3111,7 @@ command pfL5Scene
    put "SCORCHED DUNES (hot!)" into gLevelName
    pfBounds kPfEdgeL, 4200 + kPfEndCap   -- right edge hugs the goal flag (4200)
    pfSlab "pf_ground1", 0, 576, 2000, 640
-   pfSlab "pf_ground2", 2192, 576, 4288, 640
+   pfSlab "pf_ground2", 2256, 576, 4288, 640   -- far edge of the widened THORN PIT (2000..2256, was 2192 = only 3 spikes)
    pfSlab "pf_plat1", 3936, 512, 4128, 576
    pfSlab "pf_plat2", 4128, 448, 4256, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_block_top") then
@@ -3122,7 +3122,7 @@ command pfL5Scene
             pfTile "terrain_sand_block_top", tX, 576
          end if
       end repeat
-      repeat with tX = 2192 to 4224 step 64
+      repeat with tX = 2256 to 4224 step 64
          pfTile "terrain_sand_block_top", tX, 576
       end repeat
       pfTile "terrain_sand_block_top_left", 3936, 512
@@ -3155,8 +3155,10 @@ command pfL5Scene
       b2kCamAdopt the long id of graphic "pf_dune"
    end if
    -- the THORN PIT (leap it; a slip burns then drops to the kill floor): the
-   -- gap between the two ground slabs, spike tips flush with the floor line
-   pfMakeSpikes 2000, 2192
+   -- gap between the two ground slabs, spike tips flush with the floor line.
+   -- Widened to 256px (FOUR spikes) for a proper spiked chasm - clear it with a
+   -- running/double jump (the checkpoint at the brink, 1900, makes a slip a quick retry).
+   pfMakeSpikes 2000, 2256
    -- the two-cloud HOP (one-way sand clouds, each ghost-padded a tile past the
    -- art each side): jump up for the coins, DOWN+JUMP to drop off
    b2kSmoothGround "2640,448" & cr & "2576,448" & cr & "2384,448" & cr & "2320,448"
@@ -3200,14 +3202,14 @@ command pfL5Cast
    pfMakeCoin 680, 500      -- the sand slime's beat
    pfMakeCoin 1056, 460     -- atop the dune (jump it as you crest)
    pfMakeCoin 1500, 500     -- the desert frog's beat (stomp it; do not stand by it)
-   pfMakeCoin 2096, 440     -- mid-air over the thorn pit: leap it
+   pfMakeCoin 2128, 440     -- mid-air over the (widened) thorn pit: leap it
    pfMakeCoin 2480, 392     -- on the first sand cloud
    pfMakeCoin 2784, 392     -- on the second sand cloud
    pfMakeCoin 3000, 500     -- the snail's beat (shell it, kick it)
    pfMakeCoin 3552, 500     -- on the clear run home (was the spider beat; the spider is L4-only now)
    pfMakeCoin 3750, 500     -- the clear run home to the steps
    pfMakeCoin 3990, 448     -- over the first sand step
-   pfMakeCoin 4180, 392     -- over the top step, by the flag
+   pfMakeCoin 4100, 420     -- on the climb to the summit (moved off the flag: 4180 overlapped the goal flag at 4200)
    pfMakeSlime 1, "normal", 680, 620, 760, 576
    pfMakeFrog 2, 1500, 1420, 1620, 576
    pfMakeSnail 3, 3000, 2940, 3060

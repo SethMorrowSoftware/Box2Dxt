@@ -170,6 +170,7 @@ def ground_top_at(L, x):
 
 # ---- the checks ------------------------------------------------------------
 def audit(L):
+    import math
     out = []
     def flag(sev, msg):
         out.append((sev, msg))
@@ -246,6 +247,10 @@ def audit(L):
             flag("ERR", f"goal flag x{gx:.0f} is over a PIT")
         elif gy + 32 > gt + 4:
             flag("WARN", f"goal flag base (y{gy+32:.0f}) sits below its ground top (y{gt:.0f}) at x{gx:.0f}")
+        # a coin must not overlap the goal flag sprite (64px frame, planted)
+        for (cx, cy) in L.coins:
+            if math.hypot(cx - gx, cy - (gy + 16)) < 48:
+                flag("ERR", f"coin ({cx:.0f},{cy:.0f}) overlaps the goal flag at x{gx:.0f}")
 
     # SPIKES must align with a real gap in the MAIN ground (a spike PIT); lava
     # may be either a bridged pit OR an intentional SURFACE grinder on solid
