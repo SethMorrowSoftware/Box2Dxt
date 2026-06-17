@@ -12,8 +12,8 @@
 -- rolling boulder, an exploding barrel) plus four more enemy species.
 -- Collect EVERY coin on a level (the goal
 -- flag turns GOLD), touch the flag, and the next level builds; level
--- 4's flag is the win. Anything without sheet art falls back to plain
--- graphics, so all four levels run even with no asset folder (the coin
+-- 5's flag is the win. Anything without sheet art falls back to plain
+-- graphics, so all five levels run even with no asset folder (the coin
 -- totals count themselves as each level builds).
 --
 -- HOW TO RUN
@@ -242,6 +242,19 @@
 --      that a MISSING spooks sheet simply omits it + its overhang (the level
 --      still completes). Art FACING polarity (frog/spider flip) is statically
 --      unverifiable - flag any mirrored sprite for a one-line flip fix.
+--  19. WAVE 7 DESERT BIOME - LEVEL 5 "SCORCHED DUNES" (the first 5th level; the
+--      win now needs gLevel>=5). A new SAND level, laid out GENEROUSLY (every
+--      beat 250px+ of clear air, audited before building - the answer to Wave
+--      6's crowding). VERIFY: the sand DUNE (ramp slope) walks up/across/down
+--      with no fall-through (the chain ghost-rule); the THORN PIT (2000..2192)
+--      is a clean leap and a slip burns + respawns at the checkpoint (1900, at
+--      the brink); BOTH sand clouds are solid to their visible ends; the
+--      bestiary II reads with ROOM here (frog ~1500, barnacle ~3300, spider
+--      ~3552 - no crowding); the sand STEPS + flag finale plays; the HUD/help/
+--      splash say "of 5" and the win screen says ALL FIVE LEVELS CLEAR. The
+--      spider + its overhang vanish without the spooks sheet (level still
+--      completes). New biome: confirm the sand art reads with no missing-frame
+--      fallbacks on a full asset folder.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -250,7 +263,7 @@ local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
 local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
--- the four-level game: which level, its width/name, and the banked
+-- the five-level game: which level, its width/name, and the banked
 -- totals carried across level clears for the final win screen
 local gLevel, gLevelW, gLevelName, gTotalFalls, gSecsBank
 local gEdgeL, gEdgeR   -- the playable L/R edges (content-hugging); set by pfBounds
@@ -802,6 +815,9 @@ command pfStartGame
       case 4
          pfL4Scene
          break
+      case 5
+         pfL5Scene
+         break
       default
          put 1 into gLevel
          pfL1Scene
@@ -890,13 +906,16 @@ command pfStartGame
       case 4
          pfL4Cast
          break
+      case 5
+         pfL5Cast
+         break
       default
          pfL1Cast
    end switch
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 4: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Four levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 5: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Five levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -905,7 +924,7 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 4" & cr & gLevelName
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 5" & cr & gLevelName
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -3025,6 +3044,128 @@ command pfL4Cast
    pfMakeGoal 6524, 416
 end pfL4Cast
 
+-- =====================================================================
+-- LEVEL 5 - "SCORCHED DUNES" (Wave 7, the DESERT biome): sand ground with a
+-- DUNE (sand-ramp slope), a THORN PIT to leap, a two-cloud HOP, then the Wave
+-- 6 bestiary given ROOM - a frog in the open, a barnacle clam, a spider on a
+-- sand overhang - and sand steps to the flag. GENEROUSLY spaced: the layout
+-- was audited before building, so every beat gets 250px+ of clear air (the
+-- answer to Wave 6's "slight alignment" crowding - this level had room to plan).
+-- =====================================================================
+command pfL5Scene
+   local tX
+   put "SCORCHED DUNES (hot!)" into gLevelName
+   pfBounds kPfEdgeL, 4200 + kPfEndCap   -- right edge hugs the goal flag (4200)
+   pfSlab "pf_ground1", 0, 576, 2000, 640
+   pfSlab "pf_ground2", 2192, 576, 4288, 640
+   pfSlab "pf_plat1", 3936, 512, 4128, 576
+   pfSlab "pf_plat2", 4128, 448, 4256, 576
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_block_top") then
+      repeat with tX = 0 to 1936 step 64
+         if tX >= 864 and tX <= 1184 then
+            pfTile "terrain_sand_block_center", tX, 576   -- under the dune: one mass
+         else
+            pfTile "terrain_sand_block_top", tX, 576
+         end if
+      end repeat
+      repeat with tX = 2192 to 4224 step 64
+         pfTile "terrain_sand_block_top", tX, 576
+      end repeat
+      pfTile "terrain_sand_block_top_left", 3936, 512
+      pfTile "terrain_sand_block_top", 4000, 512
+      pfTile "terrain_sand_block_top_right", 4064, 512
+      pfTile "terrain_sand_block_top", 4128, 448
+      pfTile "terrain_sand_block_top", 4192, 448
+      pfTile "terrain_sand_block_center", 4128, 512
+      pfTile "terrain_sand_block_center", 4192, 512
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   -- the DUNE (26.6-degree sand ramps; the L1 mound recipe in sand): six chain
+   -- points, the outer two non-colliding ghost anchors; ramps mirrored
+   b2kSmoothGround "1312,576" & cr & "1248,576" & cr & "1120,512" & cr & "992,512" & cr & "864,576" & cr & "800,576"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_ramp_long_a") then
+      pfTile "terrain_sand_ramp_long_b", 864, 512, true
+      pfTile "terrain_sand_ramp_long_a", 928, 512, true
+      pfTile "terrain_sand_block_top", 992, 512
+      pfTile "terrain_sand_block_top", 1056, 512
+      pfTile "terrain_sand_ramp_long_a", 1120, 512
+      pfTile "terrain_sand_ramp_long_b", 1184, 512
+   else
+      create graphic "pf_dune"
+      set the style of it to "polygon"
+      set the points of it to "864,576" & cr & "992,512" & cr & "1120,512" & cr & "1248,576" & cr & "864,576"
+      set the filled of it to true
+      set the backgroundColor of it to "200,170,110"
+      b2kCamAdopt the long id of graphic "pf_dune"
+   end if
+   -- the THORN PIT (leap it; a slip burns then drops to the kill floor): the
+   -- gap between the two ground slabs, spike tips flush with the floor line
+   pfMakeSpikes 2000, 2192
+   -- the two-cloud HOP (one-way sand clouds, each ghost-padded a tile past the
+   -- art each side): jump up for the coins, DOWN+JUMP to drop off
+   b2kSmoothGround "2640,448" & cr & "2576,448" & cr & "2384,448" & cr & "2320,448"
+   b2kSmoothGround "2944,448" & cr & "2880,448" & cr & "2688,448" & cr & "2624,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_cloud_left") then
+      pfTile "terrain_sand_cloud_left", 2384, 448
+      pfTile "terrain_sand_cloud_middle", 2448, 448
+      pfTile "terrain_sand_cloud_right", 2512, 448
+      pfTile "terrain_sand_cloud_left", 2688, 448
+      pfTile "terrain_sand_cloud_middle", 2752, 448
+      pfTile "terrain_sand_cloud_right", 2816, 448
+   else
+      create graphic "pf_cloudledgeM"
+      set the style of it to "line"
+      set the points of it to "2384,448" & cr & "2576,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "200,170,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeM"
+      create graphic "pf_cloudledgeN"
+      set the style of it to "line"
+      set the points of it to "2688,448" & cr & "2880,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "200,170,110"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeN"
+   end if
+   -- the SPIDER's sand overhang (drawn only with the spooks sheet, like L4):
+   -- visual only and at y256 (out of jump reach), so it never blocks the run
+   if gSpooksOK is true and gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_horizontal_left") then
+      pfTile "terrain_sand_horizontal_left", 3488, 256
+      pfTile "terrain_sand_horizontal_right", 3552, 256
+   end if
+   -- desert decor, placed clear of every beat (cacti, a rock, the way-markers)
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "cactus") then
+      pfTile "sign", 160, 512
+      pfTile "cactus", 320, 512
+      pfTile "cactus", 1700, 512
+      pfTile "cactus", 2300, 512
+      pfTile "rock", 3760, 512
+   end if
+end pfL5Scene
+
+command pfL5Cast
+   pfMakeCoin 480, 500      -- the opening run
+   pfMakeCoin 680, 500      -- the sand slime's beat
+   pfMakeCoin 1056, 460     -- atop the dune (jump it as you crest)
+   pfMakeCoin 1500, 500     -- the desert frog's beat (stomp it; do not stand by it)
+   pfMakeCoin 2096, 440     -- mid-air over the thorn pit: leap it
+   pfMakeCoin 2480, 392     -- on the first sand cloud
+   pfMakeCoin 2784, 392     -- on the second sand cloud
+   pfMakeCoin 3000, 500     -- the snail's beat (shell it, kick it)
+   pfMakeCoin 3552, 500     -- under the spider's overhang: grab it as it drops
+   pfMakeCoin 3750, 500     -- the clear run home to the steps
+   pfMakeCoin 3990, 448     -- over the first sand step
+   pfMakeCoin 4180, 392     -- over the top step, by the flag
+   pfMakeSlime 1, "normal", 680, 620, 760, 576
+   pfMakeFrog 2, 1500, 1420, 1620, 576
+   pfMakeSnail 3, 3000, 2940, 3060
+   pfMakeBarnacle 1, 3300, 544
+   pfMakeSpider 1, 3552, 3508, 3596, 336
+   pfMakeCheckpoint 1900    -- at the brink of the thorn pit: a slip is a retry, not a replay
+   pfMakeGoal 4200, 416
+end pfL5Cast
+
 
 -- Every coin (sensor pickup or ?-box payout) lands here. The moment the
 -- LAST one arrives, the goal flag turns GOLD and a banner + chime send
@@ -4147,7 +4288,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       -- camera-dead fallback clamps play to one screen, so most coins are
       -- out of reach there: the near flag advances unconditionally instead
       if gCoins >= gCoinsTotal or gCamOK is not true then
-         if gLevel >= 4 then
+         if gLevel >= 5 then
             pfWin
          else
             pfLevelClear
@@ -4443,7 +4584,7 @@ command pfWin
       put the result into tC
       if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
    end repeat
-   put "ALL FOUR LEVELS CLEAR!" & cr & cr into tMsg
+   put "ALL FIVE LEVELS CLEAR!" & cr & cr into tMsg
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
    if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg

@@ -63,6 +63,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer Wave 7 (biomes): a new desert Level 5, "Scorched Dunes."** The
+  platformer's first *fifth* level, in the fully-tiled **sand biome** — a sand
+  **dune** (ramp slope), a **thorn pit** to leap, a **two-cloud hop**, and the
+  Wave 6 bestiary (frog, barnacle, spider) given **room** (one of each, well
+  apart), then sand steps to the flag. Laid out **layout-first**: every
+  placement was geometrically audited (coin/flag/enemy overlaps + 250px-plus
+  spacing per beat) *before* coding. The win now spans five levels.
 - **Platformer Wave 6 (bestiary II): frog, barnacle, and spider — woven into
   L1/L2/L4, all example-side (no Kit change, no harness bump).** Three new
   enemy archetypes, each built on an existing Kit pattern:
