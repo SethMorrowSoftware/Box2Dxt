@@ -64,7 +64,9 @@ untouched** and every biome is missing its real terrain shapes:
 ### HUD strip (`tiles`, 33 frames — entirely unused)
 `hud_character_0`…`9`/`multiply`/`percent`, `hud_coin`, `hud_heart(_half/_empty)`,
 `hud_key_blue/green/red/yellow`, `hud_player_*` and `hud_player_helmet_*` portraits.
-An art-driven HUD instead of the synthesized-text one.
+An art-driven HUD that **replaces the LiveCode text fields outright** — the
+`pfTitle`/`pfHelp` top bars and the `pfHud` bottom readout come out; live counts
+become sprite digits + icons (see Phase F).
 
 ### Enemies (`spritesheet-enemies-default` "foes", 60 frames)
 Used: slimes, snail, bat-via-spooks, saw, bee, fly, frog, mouse, worm, ladybug,
@@ -193,7 +195,31 @@ needs an OXT eye.
 - **Optional 3-heart health** (`hud_heart*`): replace/augment the knockback-mercy
   model with hearts; losing all → the respawn flow. *This is the one design-heavy
   item — prototype carefully, it changes the difficulty contract.*
-- **Art HUD** (`hud_*`): swap the synthesized-text HUD for sprite digits + icons.
+- **Art HUD — retire the LiveCode text chrome (`hud_*`).** Today the demo frames
+  the play area with LiveCode **fields**: `pfTitle` + `pfHelp` across the **top**
+  and the live `pfHud` readout across the **bottom**. **Remove those persistent
+  edge fields** and render every *in-game HUD need* from the unused `hud_*` sprite
+  strip instead:
+  - **Coins / gems / star:** `hud_coin` (+ a gem/star icon) followed by sprite
+    digits `hud_character_0`…`9` (with `hud_multiply` / `hud_percent`) — e.g.
+    `[coin] 12 / 30`. Built once, frames swapped **on change only** (the count
+    changes rarely, so this is far cheaper than the per-frame field relayout it
+    replaces — see the 4 Hz / write-on-change rule).
+  - **Keys:** light a `hud_key_{blue,green,red,yellow}` icon as each key is taken
+    (pairs with the Phase-C multi-key puzzles).
+  - **Hearts** (if Phase F's health model ships): `hud_heart(_half/_empty)`.
+  - **Hero portrait:** `hud_player_*` / `hud_player_helmet_*` (pairs with the
+    Phase-G character select).
+  - **Placement:** the `hud_*` sprites are screen chrome, not world objects — fixed
+    positions on the card, **never** `b2kCamAdopt`-ed (the camera group scrolls; the
+    HUD must not), built once at level start and parked/hidden when unused.
+  - **Onboarding text loses its standing field:** fold the controls/level blurb
+    (`pfHelp`) into the **transient centred splash** (`pfSplash` already exists as a
+    non-edge overlay) and a Pause overlay — *that* field stays, since it is not
+    top/bottom chrome and is the natural home for the load-failure / camera-unavailable
+    diagnostics in the no-art fallback (where there are no HUD sprites to show).
+  - **Buttons:** the `pfbtn_pause`/`pfbtn_reset` bottom buttons can stay functional
+    or move into the Pause overlay; keyboard (ESC/R) already covers both.
 
 ### Phase G — Player identity: character select + portraits  (S–M)
 - **Assets:** `character_{green,pink,purple,yellow}_*`, `character_beige_front`,
@@ -267,6 +293,12 @@ needs an OXT eye.
   and keep `.png`-suffixed frame names where the sheet uses them.
 - **Scroll-0 creation:** every create-once pickup/flag is built before the camera
   `goto` (the root-cause fix) — new makers must keep that or be built in the scene.
+- **Art HUD (Phase F):** the goal is to **delete the LiveCode edge fields**
+  (`pfTitle`/`pfHelp` top, `pfHud` bottom) and rebuild the live readouts from
+  `hud_*` sprites. Treat them as screen chrome: fixed card positions, **not**
+  `b2kCamAdopt`-ed, built once, frames swapped on change only. Keep the centred
+  `pfSplash` field as the text home for onboarding + the no-art / no-camera
+  diagnostics (the fallback path has no HUD sprites to fall back on).
 
 ---
 
@@ -277,7 +309,7 @@ Track usage per sheet; "done" = used or a one-line documented reason it isn't.
 - [ ] `backgrounds` — biome scenes used (Phase A partial); solids/clouds for new biomes (B/H).
 - [ ] `tiles` terrain — dirt (B) + stone (C) biomes; corner/edge/ramp/overhang pieces across biomes.
 - [ ] `tiles` items — coin tiers + star + heart (F); torches + conveyor + planks (B/C); multi-colour locks/switches (C); `flag_green`.
-- [ ] `tiles` HUD strip — art HUD (F).
+- [ ] `tiles` HUD strip — art HUD (F), **removing the LiveCode top/bottom fields**.
 - [ ] `foes` — block slime, worm ring, rest poses (B/D).
 - [ ] `spooks` — snakes (E), spinners (C), squash/dead states everywhere (D), alt fish.
 - [ ] `characters` — 4 skins + portraits via character select (G).
