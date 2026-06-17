@@ -10,6 +10,38 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer: the L4 COLLAPSING BRIDGE was crammed into a 128px lava slot
+  between two crushers — rebuilt with room to read.** The mechanic's logic was
+  sound all along (the stand-to-crumble detection window, the static→dynamic
+  plank flip, and the render-sync — `b2kSetType` clears `sStatic`, wakes the
+  body and forces a full sync — all check out); the *space* was the problem:
+  three ~42px planks pinched between faced crushers at `3040` and `3360`. The
+  lava pit is now **192px** (grid-aligned `3136..3328`), the bridge is **four
+  ~48px planks**, and the **far-bank crusher is retired** so the planks get
+  clear air (the single entrance crusher still gates the approach). The ~190px
+  strip stays double-jumpable (the L2 lift bay's ~200px reach — no dead-end) and
+  the mid-lava coin re-centres to `3232`. Downstream beats (fire slime, powder
+  keg, bowling lane) are untouched — no cascade.
+
+- **Platformer: flags/checkpoints that read as "floating" on the user's engine
+  are now PLANTED.** Every flag/checkpoint frame seats its pole base on the floor
+  line in geometry (re-verified: the 64px frames have *zero* footroom and are
+  centre-anchored at `surface − 32`), but they hovered a few px on the user's
+  engine — a scrolled-group vertical quirk at sprite-create time, the same class
+  of engine difference the camera code already works around. A single tunable
+  constant `kFlagPlantPx` (8px) now sinks every goal/checkpoint base slightly
+  *into* its surface so it reads as rooted; bump it if a flag still floats in an
+  OXT pass. (Statically verified — needs an OXT confirmation.)
+
+- **Platformer: scenery no longer spawns on top of enemies or coins.** A new
+  geometric layout audit (`tools/audit-platformer.py`, advisory) found decor
+  sitting on beats: L1 mushrooms/bush on the meadow-slime / 2nd-act-slime /
+  mouse / frog spawns (nudged into the clear inter-enemy gaps), an L2 bush on the
+  barnacle's telegraph (`3400`→`3488`), and an L4 grass tuft that both hid the
+  `4000` coin and sat on the bowling-lane snail (removed). Also fixed an L2 slime
+  spawned 64px in the air (`topY 512`→`576`, it dropped on build). The audit now
+  passes clean across all five levels (grounding, bounds, walk-offs, overlaps).
+
 - **Platformer: three coins sat *on* a wall — lifted clear (a measured-alpha
   audit of every coin/flag in all four levels).** The visible coin disc is a
   38×40 sprite-alpha box centred in its 64px cell (not the whole cell), so most

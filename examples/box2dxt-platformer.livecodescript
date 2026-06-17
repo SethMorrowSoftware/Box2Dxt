@@ -227,15 +227,17 @@
 --      (no hitbox reshape this build), and the L3 slot is climbable by
 --      wall-jumps AND a plain double-jump.
 --  17. WAVE 4 COLLAPSING BRIDGE (L4, over the lava - the wave's last named
---      mechanic): three planks at the old lift height between the faced
---      crushers. Standing on a plank reddens it + CREAKS, then ~0.3s later it
---      DROPS into the lava (SMASH) - so KEEP MOVING; grab the mid-lava coin
---      mid-cross. A slip onto the lava is a recoverable knockback (pfOuch);
---      retreat to the near bank and the bridge RE-FORMS for another try. A
---      running double-jump still clears the 128px strip (no dead-end). VERIFY
---      in OXT: planks drop a beat after you stand (not instantly, not never),
---      the bridge re-forms after a knockback, and the coin is grabbable on
---      the way across; tune the 0.3s crumble in pfTickCollapse to taste.
+--      mechanic), REBUILT with room: FOUR ~48px planks span a widened 192px pit
+--      (was a cramped 128px slot pinched between two crushers), with a single
+--      faced CRUSHER now guarding only the ENTRANCE. Standing on a plank reddens
+--      it + CREAKS, then ~0.3s later it DROPS into the lava (SMASH) - so KEEP
+--      MOVING; grab the mid-lava coin mid-cross. A slip onto the lava is a
+--      recoverable knockback (pfOuch); retreat to the near bank and the bridge
+--      RE-FORMS for another try. A running double-jump still clears the ~190px
+--      strip (the L2 lift bay's ~200px reach - no dead-end). VERIFY in OXT:
+--      planks drop a beat after you stand (not instantly, not never), the bridge
+--      re-forms after a knockback, and the coin is grabbable on the way across;
+--      tune the 0.3s crumble in pfTickCollapse to taste.
 --  18. WAVE 6 BESTIARY II (frog / barnacle / spider - all example-side, no Kit
 --      change, no harness bump). FROG (L1 far meadow, ~x4660): a native-art
 --      HOPPER that crouches then LEAPS at you when near; STOMP it from above (it
@@ -355,6 +357,14 @@ constant kPfUIVersion = "7"
 -- kPfEdgeL eased back to 64 (92 jammed the hero against the screen edge).
 constant kPfEdgeL = 64
 constant kPfEndCap = 40
+-- Flags/checkpoints are 64px frames whose pole base lands on the frame bottom,
+-- so a flag CENTRED at surface-32 rests its base on the floor line (verified
+-- against the atlas: zero footroom). On the user's engine the flags still read
+-- as "floating" a few px above the surface (a scrolled-group vertical quirk in
+-- how a sprite created mid-scroll lands), so every flag/checkpoint is PLANTED
+-- this many px deeper -- the base sits slightly INTO the ground, never hovering.
+-- This is the single knob: bump it if a flag still floats in an OXT pass.
+constant kFlagPlantPx = 8
 constant kHeroSheetB64 = "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"
 
 -- =====================================================================
@@ -941,7 +951,7 @@ command pfStartGame
       b2kWall 1010, 0, 1010, 640
       put empty into tRef
       if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
-         b2kSpriteNew "tiles", "flag_blue_a", 950, 544
+         b2kSpriteNew "tiles", "flag_blue_a", 950, 544 + kFlagPlantPx   -- plant the pole base (see kFlagPlantPx)
          put the result into tRef
          if tRef is not empty then
             set the uPfGoalFlag of tRef to true
@@ -1254,7 +1264,7 @@ command pfMakeCheckpoint pX
    put empty into gCheckSpr
    put pX into gCheckX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_off") then
-      b2kSpriteNew "tiles", "flag_off", pX, 544
+      b2kSpriteNew "tiles", "flag_off", pX, 544 + kFlagPlantPx   -- plant the pole base on the floor (see kFlagPlantPx)
       put the result into tRef
       if tRef is not empty then
          set the uPfCheckFlag of tRef to true
@@ -1787,6 +1797,7 @@ end pfMakeSpikes
 -- level four).
 command pfMakeGoal pX, pY
    local tRef
+   add kFlagPlantPx to pY   -- plant the flag base on its surface (see kFlagPlantPx); shifts both the sprite and the no-art fallback
    put empty into tRef
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "flag_blue_a") then
       b2kSpriteNew "tiles", "flag_blue_a", pX, pY
@@ -2126,10 +2137,10 @@ command pfL1Scene
       pfTile "bush", 168, 512
       pfTile "fence", 640, 512
       pfTile "fence_broken", 704, 512
-      pfTile "mushroom_brown", 1056, 512
-      pfTile "mushroom_red", 2816, 512
-      pfTile "bush", 3008, 512
-      pfTile "mushroom_brown", 4600, 512
+      pfTile "mushroom_brown", 1008, 512   -- clear of the meadow slime's patrol (was 1056, on its beat)
+      pfTile "mushroom_red", 2752, 512      -- just left of the 2nd-act slime (was 2816, on its spawn)
+      pfTile "bush", 2936, 512              -- in the gap before the mouse (was 3008, on its run)
+      pfTile "mushroom_brown", 4860, 512    -- past the meadow frog (was 4600, on its beat)
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
       pfTile "sign", 96, 512        -- a way-marker by the spawn
@@ -2505,7 +2516,7 @@ command pfL2Scene
       b2kCamAdopt the long id of graphic "pf_cloudledgeH"
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
-      pfTile "bush", 3400, 512
+      pfTile "bush", 3488, 512   -- between the barnacle and the chained crusher (was 3400, on the barnacle's telegraph)
    end if
    -- the GREEN CRUSHER ALLEY (the works' marquee gauntlet): a row of green-
    -- block thwomps (in the cast) you run beneath, then a two-cloud HOP to the
@@ -2601,7 +2612,7 @@ command pfL2Cast
          put tRef into gSawSpr
       end if
    end if
-   pfMakeSlime 1, "normal", 4374, 4324, 4460, 512
+   pfMakeSlime 1, "normal", 4374, 4324, 4460, 576   -- topY is the floor line (was 512: it spawned 64px up and dropped)
    -- a slow WORM crawls the run before the breather cloud (new variety;
    -- native foes art, stomps like any walker)
    pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_normal_move_a", "wormwalk", empty, 22, 26, "210,120,170", -2
@@ -2854,8 +2865,8 @@ end pfL3Cast
 -- LEVEL 4 - "HAUNTED HOLLOW" (6656px). Wave 3's bestiary in the purple
 -- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
 -- whose kicked shell bowls a slime over, the BAT overhang, a pit, a long
--- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a pair of
--- faced CRUSHERS around a lava strip crossed by a COLLAPSING BRIDGE
+-- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a faced
+-- CRUSHER guarding a widened lava strip crossed by a COLLAPSING BRIDGE
 -- (cross the crumbling planks fast, or double-jump it), a smouldering FIRE
 -- SLIME, then the POWDER KEG bay (an explosive barrel + woodpile,
 -- scattered by b2kExplode), the red crusher alley (the signature
@@ -2870,7 +2881,7 @@ command pfL4Scene
    -- the ground BREAKS at the lava pit (3136..3264): two slabs with a gap, so
    -- the LAVA strip below is an open hazard you ride the lift / double-jump over
    pfSlab "pf_ground2", 2048, 576, 3136, 640
-   pfSlab "pf_ground3", 3264, 576, 6656, 640
+   pfSlab "pf_ground3", 3328, 576, 6656, 640   -- far bank: the lava pit widened to 3136..3328 for the rebuilt collapsing bridge
    pfSlab "pf_plat1", 6240, 512, 6432, 576
    pfSlab "pf_plat2", 6432, 448, 6560, 576
    -- the bat overhang: a stone bar the bats roost under
@@ -2880,7 +2891,7 @@ command pfL4Scene
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
       repeat with tX = 2048 to 6592 step 64
-         if tX >= 3136 and tX < 3264 then next repeat   -- leave the LAVA PIT open
+         if tX >= 3136 and tX < 3328 then next repeat   -- leave the (widened) LAVA PIT open
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
       pfTile "terrain_purple_block_top_left", 6240, 512
@@ -2918,23 +2929,24 @@ command pfL4Scene
       pfTile "grass_purple", 1100, 512
       pfTile "grass_purple", 2240, 512
       pfTile "grass_purple", 2920, 512
-      pfTile "grass_purple", 3960, 512
-   end if
+   end if   -- (a 3960 tuft was removed: it sat on the bowling-lane snail AND hid the 4000 coin)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
       pfTile "sign", 2980, 512        -- a way-marker past the piranha row
    end if
-   pfMakeLava 3136, 3264, 596   -- a lower hurt-top so the bank-level bridge is safe to walk, a fall is not
-   -- the COLLAPSING BRIDGE (Wave 4's last named mechanic) across the lava:
-   -- three planks at BANK LEVEL, flush with the ground (y576) so you walk
-   -- straight onto them - the lava sensor is lowered to y596 so the crossing
-   -- is safe but a fall through a gap is not. Between the two faced crushers,
-   -- whose slams land on the banks clear of the span. Each plank you stand on
-   -- CREAKS and a beat later DROPS into the lava - so keep MOVING (grab the
-   -- mid-lava coin on the way across). A running DOUBLE JUMP still clears the
-   -- 128px strip the old way (no dead end); a slip onto the lava is a knockback
-   -- (pfOuch), and retreating to the near bank re-forms the bridge for another
-   -- try. Platform-carry stays showcased by the L2 lift bay.
-   pfMakeCollapseBridge 3136, 3264, 583, 3
+   pfMakeLava 3136, 3328, 596   -- a lower hurt-top so the bank-level bridge is safe to walk, a fall is not
+   -- the COLLAPSING BRIDGE (Wave 4's last named mechanic) across the lava,
+   -- REBUILT with room to read: the pit is now 192px (was a cramped 128px) and
+   -- the bridge is FOUR ~48px planks at BANK LEVEL, flush with the ground (y576)
+   -- so you walk straight onto them. The lava sensor is lowered to y596 so the
+   -- crossing is safe but a fall through a gap is not. The single faced CRUSHER
+   -- (3040) guards the ENTRANCE - the old second crusher crammed the far bank and
+   -- has been retired, giving the planks clear air. Each plank you stand on CREAKS
+   -- and a beat later DROPS into the lava - so keep MOVING (grab the mid-lava coin
+   -- on the way across). A running DOUBLE JUMP still clears the ~190px strip (it is
+   -- the L2 lift bay's ~200px reach - no dead end); a slip onto the lava is a
+   -- knockback (pfOuch), and retreating to the near bank re-forms the bridge for
+   -- another try. Platform-carry stays showcased by the L2 lift bay.
+   pfMakeCollapseBridge 3136, 3328, 583, 4
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
    -- explosive barrel ringed by a small PYRAMID of crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
@@ -2995,7 +3007,7 @@ command pfL4Cast
    pfMakeCoin 2415, 480     -- threading the FOUR-burrow piranha row: time
    pfMakeCoin 2565, 480     -- the bites and snatch a coin between each pair
    pfMakeCoin 2715, 480
-   pfMakeCoin 3200, 470     -- over the lava, between the crushers
+   pfMakeCoin 3232, 470     -- mid-bridge over the lava: grab it as you cross the crumbling planks
    pfMakeCoin 3492, 500     -- the fire slime's beat, fresh from the lava
    pfMakeCoin 3892, 500     -- past the powder keg (the lure: mind the blast)
    pfMakeCoin 4000, 500     -- the second snail's beat (shell it, kick it!)
@@ -3025,8 +3037,7 @@ command pfL4Cast
    pfMakePlant 3, 2640
    pfMakePlant 4, 2790
    pfMakeGhost 2240, 360
-   pfMakeThwomp 1, 3040, true   -- the faced CRUSHERS guard the lava
-   pfMakeThwomp 2, 3360, true
+   pfMakeThwomp 1, 3040, true   -- the faced CRUSHER guards the collapsing-bridge entrance (the far-bank twin was retired to de-cram the widened pit)
    -- a FIRE SLIME smoulders along past the lava (spike-type: it hurts
    -- from every side - you do not stomp a slime that is on fire)
    pfMakeCritter 7, "spike", 3492, 3424, 3560, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
