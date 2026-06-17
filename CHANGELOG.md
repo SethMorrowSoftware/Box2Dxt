@@ -10,6 +10,21 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer (OXT round 2): the L3 wall-jump shaft reads as a real beat now.**
+  The two pillars were a stretched thin slab; rebuilt as crisp 64px ICE-BLOCK
+  columns framing a clear slot, and the slot coin is now built in the SCENE
+  *with* the columns (it was in the cast, created after the camera scroll, so it
+  could drift off-centre relative to the scene-built columns) — it sits
+  dead-centre between them to show off the wall-jump.
+- **Platformer: removed the L5 spider + its floating sand overhang.** A
+  ceiling-crawler needs a ceiling; a sand bar hovering in the open desert sky
+  read as a glitch. The spider stays showcased in L4's cave biome (the overhang
+  is a real ceiling fragment there); the 3552 coin remains as a run-home pickup.
+  L5's bestiary is now frog + barnacle (+ slime/snail).
+- **Platformer: the flag/checkpoint plant was raised 8px → 16px** after an OXT
+  pass showed flags still hovering at 8px. `kFlagPlantPx` remains the single
+  tunable knob.
+
 - **Platformer: the L4 COLLAPSING BRIDGE was crammed into a 128px lava slot
   between two crushers — rebuilt with room to read.** The mechanic's logic was
   sound all along (the stand-to-crumble detection window, the static→dynamic

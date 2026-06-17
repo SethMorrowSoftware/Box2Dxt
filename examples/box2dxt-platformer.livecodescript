@@ -261,12 +261,11 @@
 --      with no fall-through (the chain ghost-rule); the THORN PIT (2000..2192)
 --      is a clean leap and a slip burns + respawns at the checkpoint (1900, at
 --      the brink); BOTH sand clouds are solid to their visible ends; the
---      bestiary II reads with ROOM here (frog ~1500, barnacle ~3300, spider
---      ~3552 - no crowding); the sand STEPS + flag finale plays; the HUD/help/
---      splash say "of 5" and the win screen says ALL FIVE LEVELS CLEAR. The
---      spider + its overhang vanish without the spooks sheet (level still
---      completes). New biome: confirm the sand art reads with no missing-frame
---      fallbacks on a full asset folder.
+--      bestiary II reads with ROOM here (frog ~1500, barnacle ~3300 - no
+--      crowding; no spider, which needs a ceiling the open desert lacks); the
+--      sand STEPS + flag finale plays; the HUD/help/splash say "of 5" and the
+--      win screen says ALL FIVE LEVELS CLEAR. New biome: confirm the sand art
+--      reads with no missing-frame fallbacks on a full asset folder.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -364,7 +363,8 @@ constant kPfEndCap = 40
 -- how a sprite created mid-scroll lands), so every flag/checkpoint is PLANTED
 -- this many px deeper -- the base sits slightly INTO the ground, never hovering.
 -- This is the single knob: bump it if a flag still floats in an OXT pass.
-constant kFlagPlantPx = 8
+-- Raised to 16 after an OXT pass showed flags still hovering at 8px.
+constant kFlagPlantPx = 16
 constant kHeroSheetB64 = "iVBORw0KGgoAAAANSUhEUgAAAYAAAAEACAYAAAC6d6FnAAAI/ElEQVR42u3dPVLjShgFUJlyxCJwTOqVQEDORojYCDkBrMSpY7EIUl4knixjj9vqH7V0TtVUYaZLvhZPffUZ3tA0AAAAAAAAAAAAAAAAAAAAAAAAAABAHquxB3h7ufsZe4zn16+VLwVAJQUQY+OfQhEosLKcf6ioAIYX7NPDdnSI989d9gtagdWfWxFAxgLoX7QxNv5zRZDqYlZgZTfQuZx/WFQBpN78c5SAAiu7gc7h/MPiCiDX5p/yQlZg886uBCDcTcjiHJt/iufJWWD948d8mybHa6g5e+rXAIssgO4iyrX5Dy/kmBexAiu7gdZ6/sEEUCkFVvZ55nT+YVEFUOridRHbQAETQJWbp03U+QcFgA0UmKx1rAPdbj8OHn/vHqOuB2CCBTDczLvPndrUQ9fnoMDKcv6hwgIYXoibzf3vx227P7owQ9eX2HwUmPMPS3AT88Ltb+bd4/6a0PUlNp/N5v73z6mNJmR9yQ001nrnHxTA7N92UGAfzj8oABQYoAAAUABDw2+6te3+6HF/Teh6ACY8Afy1qXd//trMQ9enpMDKcv6h8gL468I89blr1+fehBSY8w9LsE51Icden3oTCvm5+ND1ObP3N/VTG2jIeucfFMDi3o5QYM4/KAAUGDBLfgwUQAEAoAAAUAAAKAAAFAAACgAABQCAAgBAAQCgAACoowCeX79WTdM075+7IuG65+1yhJJf/jH5wQQAwDILoNRdXKy7N/nld5lDhAkg10Wc6nnklx8ILID+XVTqi6t//Fh3b/LLD4yYAHJcxCkvXvnlBw4FXyRvL3c/5/7+6WE7ekRPefHKLz9wZQFcchHHulMstQnJLz8sgR8DBVio6L8U/pI7sJR3gPLLD5gAAFAAACgAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAksop5sBi/q/WS3wmbivzyyy//kvKvphK85BdCfvnll3+J+Vcxgz89bEcHf//cZftCyC+//PIvOf8qRvgYwc+9kBRfBPnll1/+pee/mWL44XFjj0jyyy+//PJfUQA5wqf8Isgvv/zyyz9iAsgRPmdDyi+//PIvMX9QAXQtkiv88EWMbWH55ZdffvkjTAAA1O3iAijVXrFaWH755Zdf/sP8JgAAEwAAS7JOcdDb7cfB4+/dY9T1qckvv/zyLyH/Terwpz537frcJ19++eWXf6751ynDbzb3vx+37f6omULX5z758ssvv/xzzn+TI3z3uL8mdH3Jky+//PLLP8f8vgkMsFAKAEABAKAArjD8hkPb7o8e99eErk9Nfvnll39p+dexX0T/Gw/9UH+FCV2f44sgv/zyy7+U/DcpXsQln7t2fe4mll9++eWfa/51rhcRc32JL4L88ssv/9zy+yYwwEIpAAAFAIACAEABAKAAAFAAACgAABQAAAoAAAUAgAIAoL4CeH79WjVN07x/7ooE7Z63yxFKfvnll1/+w/wmAAATwHRbbGz7yi+//PLLf5z/ZuxBc4Wv5bjyyy+//LXkDy6AfoukfhH9449tX/nll19++SNMADleRIqTL7/88ssv//9GvbC3l7ufc3//9LAdPaLEPvnyyy+//PJHKIBLXkSspiz1RZBffvnln2t+PwYKsFDrlAe/pIFSNqD88ssvv/yFCoDpyzHmgv9+FzgB+A8Q59/5Y7rn3/cAABZKAQAAAAAAAAAAAAAAAABM3CT+OWj/OzpARQWQ4l/RUwQAEy6A4cZ/yW+t+Zfhb7XJWQQmGEABBG6WMTb+c0WQelM1wQAKYCKbf64SmNsEA5C0AHJt/qlLYE4TDMBYQf8cdI7NP9Xz5Cix/nGn/KvmAC4qgG4jy7X5DzfTGBtpzglGCQCznABqV/MEA5C1AErd/cecAuYwwQCYAABQAFO++zcFADVYxzrQ7fbj4PH37jHqegAmOAEMN/NTn7t2PQATnACGG/dmc//7cdvuj+7sQ9fnYoIBTACRNv/ucX9N6PpSm78JBjABLMBcJhiArBPAnDf/miYYAAUAQJ4CGL7d0bb7o8f9NaHrAUhn9PcAvnePB2979Df1vzbz0PUATHAC+NdGH2t9KiYYwASQqARirk9ZAiYYwASwULVOMACTmADmWAI1TDAAJgAAFAAACgAABQCAAgBAAQAoAAAUAAAKAAAFAIACAEABAKAAAFAAACgAABQAAAoAgCkXwPPr16ppmub9c1ckXPe8XY5QtecHMAEAkL8ASt1Fx7p7rj0/wCQmgFybaKrnqT0/QPYC6N/Fpt7c+sePdfdce36AohNAjk005eZZe36A2II3qbeXu59L1j09bM9ukJdu1rHVnh+gWAGEbqTX3qWnVnt+gLGu/jHQlG/R5FB7foCx1jk32BR33fIDZJ4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJZgNfYAby93P2OP8fz6tfKlAKikAGJs/IoAoKICGG78Tw/b0SHeP3fFisAEAyiAwM0yxsZ/rghSb6omGEABTGTzz1UCc5tgAJIWQK7NP3UJzGmCARjrJmRxjs0/1fPkKLH+cVO8xQSQtQC6jSzX5j/cTGNspDknGCUAzHICqF3NEwxA1gIodfcfcwqYwwQDYAIAQAFM+e7fFADUYB3rQLfbj4PH37vHqOsBmOAEMNzMT33u2vUATHACGG7cm83978dtuz+6sw9dn4sJBjABRNr8u8f9NaHrS23+JhjABLAAc5lgALJOAHPe/GuaYAAUAAB5CmD4dkfb7o8e99eErgcgndHfA/jePR687dHf1P/azEPXAzDBCeBfG32s9amYYAATQKISiLk+ZQmYYAATwELVOsEATGICmGMJ1DDBAJgAAFAAACgAABQAAAoAAAUAoAAAUAAALLwAnl+/Vk3TNO+fuyLhuuftcoSqPT+ACQCA/AVQ6i461t1z7fkBJjEB5NpEUz1P7fkBshdA/y429ebWP36su+fa8wMUnQBybKIpN8/a8wPEdvEm9fZy93Pq754etlE2zXOb9li15weILcrvA6j9PW/v2QNL5MdAAUwA1xvzVse5t2ZyqT0/gAkAAAUAgAIAQAEA0PkPK875jF7ESN4AAAAASUVORK5CYII="
 
 -- =====================================================================
@@ -2693,25 +2693,35 @@ command pfL3Scene
    pfMakeSpikes 768, 960
    pfMakeSpikes 1792, 1984
    -- ===== THE WALL-JUMP SHAFT (level 3's signature vertical beat - the
-   -- Wave 5 WALL-SLIDE + WALL-JUMP). Two FLOATING ice pillars form a slot
+   -- Wave 5 WALL-SLIDE + WALL-JUMP). Two FLOATING ICE COLUMNS frame a slot
    -- over the opening run: hug one, jump to launch up-and-away, alternate
-   -- pillar to pillar to climb to the coin at the top. The pillars float
-   -- (bottoms at y460), so the hero walks UNDER them at ground level
-   -- unobstructed - the main path is never blocked. And the slot coin sits
-   -- where a straight DOUBLE JUMP up the gap also reaches it, so a player
-   -- who has not mastered wall-jumps is never locked out (no dead end, the
-   -- coin is never trick-only). Wall-jumping is just the elegant way up.
-   -- Built on ground1 (the run to the spring), before the first pit. =====
-   pfSlab "pf_wjShaftL", 300, 220, 318, 460
-   pfSlab "pf_wjShaftR", 410, 220, 428, 460
-   set the backgroundColor of graphic "pf_wjShaftL" to "150,180,210"
-   set the backgroundColor of graphic "pf_wjShaftR" to "150,180,210"
-   set the visible of graphic "pf_wjShaftL" to true
-   set the visible of graphic "pf_wjShaftR" to true
-   b2kCamAdopt the long id of graphic "pf_wjShaftL"
-   b2kCamAdopt the long id of graphic "pf_wjShaftR"
-   pfTextureSlab "pf_wjShaftL", "terrain_snow_block_center"   -- icy pillars, not flat blue
-   pfTextureSlab "pf_wjShaftR", "terrain_snow_block_center"
+   -- column to column to climb to the COIN dead-centre in the slot. The
+   -- columns float (bottoms at y448), so the hero walks UNDER them at ground
+   -- level unobstructed - the main path is never blocked. The slot coin sits
+   -- where a straight DOUBLE JUMP up the gap also reaches it, so a player who
+   -- has not mastered wall-jumps is never locked out (no dead end, never
+   -- trick-only). Built from real 64px ICE BLOCKS (was a stretched thin slab;
+   -- it reads crisp now), and the COIN is built HERE in the SCENE with the
+   -- columns so it lands exactly between them (a cast-built coin can drift
+   -- relative to the scene-built columns). Built on ground1, before the pit. =====
+   pfSlab "pf_wjShaftL", 256, 256, 320, 448
+   pfSlab "pf_wjShaftR", 408, 256, 472, 448
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_block_top") then
+      pfTile "terrain_snow_block_top", 256, 256
+      pfTile "terrain_snow_block_center", 256, 320
+      pfTile "terrain_snow_block_center", 256, 384
+      pfTile "terrain_snow_block_top", 408, 256
+      pfTile "terrain_snow_block_center", 408, 320
+      pfTile "terrain_snow_block_center", 408, 384
+   else
+      set the backgroundColor of graphic "pf_wjShaftL" to "150,180,210"
+      set the backgroundColor of graphic "pf_wjShaftR" to "150,180,210"
+      set the visible of graphic "pf_wjShaftL" to true
+      set the visible of graphic "pf_wjShaftR" to true
+      b2kCamAdopt the long id of graphic "pf_wjShaftL"
+      b2kCamAdopt the long id of graphic "pf_wjShaftR"
+   end if
+   pfMakeCoin 364, 340   -- the slot coin, dead-centre between the columns (slot 320..408, centre 364): wall-jump up (or double-jump). Built in the SCENE so it aligns with the columns.
    -- the glacier run (the level's second act): a snow cloud rest above
    -- the second sweeping saw's stretch
    b2kSmoothGround "3008,448" & cr & "2944,448" & cr & "2752,448" & cr & "2688,448"
@@ -2785,7 +2795,7 @@ command pfL3Cast
    -- with each rebuild, so only this level skates)
    b2kPlayerSet "accel", 260
    b2kPlayerSet "airAccel", 480
-   pfMakeCoin 364, 340      -- atop the WALL-JUMP SHAFT: wall-jump up the slot (or double-jump straight up)
+   -- (the WALL-JUMP SHAFT's slot coin is built in pfL3Scene with the columns, so it stays centred between them)
    pfMakeCoin 1100, 500     -- the ladybug's beat, after the spring landing
    pfMakeCoin 1300, 500     -- under the bonk row
    pfMakeCoin 1640, 448     -- above the first sweeping saw
@@ -3068,10 +3078,11 @@ end pfL4Cast
 -- =====================================================================
 -- LEVEL 5 - "SCORCHED DUNES" (Wave 7, the DESERT biome): sand ground with a
 -- DUNE (sand-ramp slope), a THORN PIT to leap, a two-cloud HOP, then the Wave
--- 6 bestiary given ROOM - a frog in the open, a barnacle clam, a spider on a
--- sand overhang - and sand steps to the flag. GENEROUSLY spaced: the layout
--- was audited before building, so every beat gets 250px+ of clear air (the
--- answer to Wave 6's "slight alignment" crowding - this level had room to plan).
+-- 6 bestiary given ROOM - a frog in the open, a barnacle clam - and sand steps
+-- to the flag. (No spider here: a ceiling-crawler needs a ceiling, and a sand
+-- bar floating in the open desert sky read as a glitch - the spider stays in
+-- L4's cave.) GENEROUSLY spaced: the layout was audited before building, so
+-- every beat gets 250px+ of clear air (the answer to Wave 6's crowding).
 -- =====================================================================
 command pfL5Scene
    local tX
@@ -3149,12 +3160,9 @@ command pfL5Scene
       set the foregroundColor of it to "200,170,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeN"
    end if
-   -- the SPIDER's sand overhang (drawn only with the spooks sheet, like L4):
-   -- visual only and at y256 (out of jump reach), so it never blocks the run
-   if gSpooksOK is true and gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_horizontal_left") then
-      pfTile "terrain_sand_horizontal_left", 3488, 256
-      pfTile "terrain_sand_horizontal_right", 3552, 256
-   end if
+   -- (no SPIDER here: a ceiling-crawler needs a ceiling, and a sand bar floating
+   -- in the open desert sky read as a glitch. The spider stays showcased in L4's
+   -- cave biome, where the overhang reads as a real ceiling fragment.)
    -- desert decor, placed clear of every beat (cacti, a rock, the way-markers)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "cactus") then
       pfTile "sign", 160, 512
@@ -3174,7 +3182,7 @@ command pfL5Cast
    pfMakeCoin 2480, 392     -- on the first sand cloud
    pfMakeCoin 2784, 392     -- on the second sand cloud
    pfMakeCoin 3000, 500     -- the snail's beat (shell it, kick it)
-   pfMakeCoin 3552, 500     -- under the spider's overhang: grab it as it drops
+   pfMakeCoin 3552, 500     -- on the clear run home (was the spider beat; the spider is L4-only now)
    pfMakeCoin 3750, 500     -- the clear run home to the steps
    pfMakeCoin 3990, 448     -- over the first sand step
    pfMakeCoin 4180, 392     -- over the top step, by the flag
@@ -3182,7 +3190,6 @@ command pfL5Cast
    pfMakeFrog 2, 1500, 1420, 1620, 576
    pfMakeSnail 3, 3000, 2940, 3060
    pfMakeBarnacle 1, 3300, 544
-   pfMakeSpider 1, 3552, 3508, 3596, 336
    pfMakeCheckpoint 1900    -- at the brink of the thorn pit: a slip is a retry, not a replay
    pfMakeGoal 4200, 416
 end pfL5Cast
