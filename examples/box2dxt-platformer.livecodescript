@@ -274,16 +274,22 @@
 --      and L5's flag ADVANCES to level 6 (the win moved to L6 - see item 20).
 --      New biome: confirm the sand art reads with no missing-frame fallbacks.
 --  20. ASSET-EXPANSION PHASE B, SLICE 1 - LEVEL 6 "CAVERN DEPTHS" (the DIRT
---      biome: terrain_dirt_* + background_solid_dirt, both previously unused;
---      the win now needs gLevel>=6). VERIFY on a full asset folder: the dirt
---      ground/ramps/cloud/cliff-corners read with NO missing-frame fallbacks;
---      the WALL-JUMP SHAFT slot coin is reachable by wall-jump AND a straight
---      double-jump (never trick-only); the bonus GEM above the shaft is
---      reachable (lower it if not); the dirt MOUND walks up/across/down with
---      no fall-through (chain ghost-rule); the DIRT CLOUD is solid to its
---      visible ends and DOWN+JUMP drops through it; the spike GAP is a clean
---      leap; both slimes + the snail patrol on solid ground; the win screen
---      says ALL SIX LEVELS CLEAR. (Block slime + conveyor arrive in slices 2-3.)
+--      biome: terrain_dirt_*, previously unused; the win now needs gLevel>=6).
+--      VERIFY on a full asset folder: (a) the BACKDROP is the dark cave (not
+--      blank) - pfBuildCaveBackdrop draws it; no border line shows on the two
+--      panels; (b) the dirt ground/ramps/cloud/cliff-corners read with NO
+--      missing-frame fallbacks; (c) the carved pit LIPS + FLUSH spikes read as a
+--      finished chasm (spikes now bristle at the edge, not sunk - this also
+--      changed L1/L3/L5, glance at those pits too); (d) wall TORCHES flicker and
+--      light the gloom; CHAINS/STALACTITES hang from the top WITHOUT clipping
+--      the hero, and orientation looks right (gotcha 26 - flip if not); the rock/
+--      mushrooms/bush sit clear; (e) the WALL-JUMP SHAFT slot coin is reachable
+--      by wall-jump AND a straight double-jump (never trick-only), and the bonus
+--      GEM above the shaft is reachable (lower it if not); (f) the dirt MOUND
+--      walks up/across/down with no fall-through; the DIRT CLOUD is solid to its
+--      ends and DOWN+JUMP drops through it; the spike GAP is a clean leap; both
+--      slimes + the snail patrol on solid ground; the win screen says ALL SIX
+--      LEVELS CLEAR. (Block slime + conveyor arrive in slices 2-3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -582,6 +588,7 @@ function pfLoadSheets
    b2kAnimDef "tiles", "wavegold", "flag_yellow_a,flag_yellow_b", 4, true
    b2kAnimDef "tiles", "coinpop", "coin_gold_side,coin_gold,coin_gold_side", 14, false
    b2kAnimDef "tiles", "checkwave", "flag_red_a,flag_red_b", 4, true
+   b2kAnimDef "tiles", "torch", "torch_on_a,torch_on_b", 5, true   -- flickering wall torch (cavern ambiance, L6)
    b2kAnimDef "foes", "flit", "fly_a,fly_b", 10, true
    b2kAnimDef "chars", "win", "character_beige_duck,character_beige_idle", 3, true
    return true
@@ -650,6 +657,10 @@ command pfBuildBackdrop
    local tFrame, i, tRef
    put empty into gBgPanel
    put 0 into gBgLastHS
+   if gLevel is 6 then
+      pfBuildCaveBackdrop   -- the cavern gets a built dark backdrop, not a flat "solid_" frame
+      exit pfBuildBackdrop
+   end if
    switch gLevel
       case 3
          put "background_fade_hills" into tFrame      -- pale + cold for the frozen citadel
@@ -659,9 +670,6 @@ command pfBuildBackdrop
          break
       case 5
          put "background_color_desert" into tFrame    -- the scorched dunes
-         break
-      case 6
-         put "background_solid_dirt" into tFrame       -- the deep dirt cavern (Phase B)
          break
       default
          put "background_color_hills" into tFrame     -- green hills / the works
@@ -683,6 +691,32 @@ command pfBuildBackdrop
       put tRef into gBgPanel[i]
    end repeat
 end pfBuildBackdrop
+
+-- The CAVERN (L6) has no outdoor SCENE in the bg atlas, and Kenney's flat
+-- "background_solid_*" frames read as a near-blank wash (the "no background"
+-- report), so build a guaranteed-visible dark UNDERGROUND void from two card
+-- graphics: deep earth, a touch warmer through the play band as if lit from
+-- the floor torches. NOT parallax-drifted (a flat fill gains nothing from
+-- drift) - the cave's depth comes from the scrolling ceiling/torches/decor in
+-- pfL6Scene. gBgPanel stays empty so pfTickParallax no-ops. The graphics are
+-- pf_* (pfWipeStage clears them next build) and sit at the back layers, behind
+-- the camera viewport built right after.
+command pfBuildCaveBackdrop
+   create graphic "pf_bgcave1"
+   set the style of graphic "pf_bgcave1" to "rectangle"
+   set the showBorder of graphic "pf_bgcave1" to false
+   set the filled of graphic "pf_bgcave1" to true
+   set the backgroundColor of graphic "pf_bgcave1" to "36,28,21"
+   set the rect of graphic "pf_bgcave1" to 0, 0, 1064, 640
+   set the layer of graphic "pf_bgcave1" to 1
+   create graphic "pf_bgcave2"
+   set the style of graphic "pf_bgcave2" to "rectangle"
+   set the showBorder of graphic "pf_bgcave2" to false
+   set the filled of graphic "pf_bgcave2" to true
+   set the backgroundColor of graphic "pf_bgcave2" to "54,42,32"
+   set the rect of graphic "pf_bgcave2" to 0, 388, 1064, 584
+   set the layer of graphic "pf_bgcave2" to 2
+end pfBuildCaveBackdrop
 
 -- Drift the backdrop slower than the 1:1 foreground (parallax depth) and wrap
 -- it seamlessly (the bg scenes tile at the 640px panel width). Gated on the
@@ -1166,6 +1200,28 @@ command pfTile pFrame, pX, pY, pFlip
       if tRef is not empty then b2kSpriteFlipH tRef, true
    end if
 end pfTile
+
+-- A flickering wall TORCH (2-frame torch_on_a/b), centred at pX,pY - pure
+-- cavern ambiance, no body, no gate (not audited as decor). No torch art: a
+-- small warm glow oval stands in so the cave still reads as lit.
+command pfMakeTorch pX, pY
+   local tRef
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "torch_on_a") then
+      b2kSpriteNew "tiles", "torch_on_a", pX, pY
+      put the result into tRef
+      if tRef is not empty then b2kSpritePlay tRef, "torch"
+   end if
+   if tRef is empty then
+      create graphic ("pf_torch" & pX & "_" & pY)
+      set the style of it to "oval"
+      set the filled of it to true
+      set the backgroundColor of it to "255,170,70"
+      set the rect of it to pX - 9, pY - 13, pX + 9, pY + 13
+      put the long id of it into tRef
+      b2kCamAdopt tRef
+   end if
+end pfMakeTorch
 
 -- Register a bodiless patroller: the sprite glides on sine paths each
 -- frame (b2kSpriteMoveTo, camera-correct), flips to face its travel, and
@@ -1905,12 +1961,12 @@ command pfMakeSpikes pL, pR
    local tRef, tX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
       repeat with tX = pL + 32 to pR - 32 step 64
-         pfTile "spikes", tX, 576   -- centre the row IN the pit: first tile at pL+32, last at pR-32, flush to BOTH ground edges. (Was pL..pR-64, which buried the first spike's left half under the slab AND left a bare 32px gap at the right edge - it read as "the spikes do not fit the pit". pit widths are 64px multiples, so this lands an exact tile count.)
+         pfTile "spikes", tX, 546   -- SEAT the spikes flush with the surface. The spike pixels are the bottom 34px of the 64px frame (tips at frame-row 30), so a top-left y of 546 puts the TIPS at 576 = the ground line - they bristle AT the pit edge. (Was 576, which sank the tips to 606, 30px BELOW the surface, reading as "misaligned" spikes floating low in the gap.) Horizontally: first tile at pL+32, last at pR-32, flush to BOTH ground edges; pit widths are 64px multiples = an exact tile count.
       end repeat
    else
       create graphic ("pf_spikes" & pL)
       set the style of it to "rectangle"
-      set the rect of it to pL, 600, pR, 640
+      set the rect of it to pL, 576, pR, 612
       set the filled of it to true
       set the backgroundColor of it to "200,60,60"
       b2kCamAdopt the long id of graphic ("pf_spikes" & pL)
@@ -3385,10 +3441,12 @@ command pfL6Scene
    -- under the mound, for one earthen mass), carved CLIFF CORNERS finishing the
    -- goal steps. terrain_dirt_* was entirely unused until this level.
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_dirt_block_top") then
-      repeat with tX = 0 to 1024 step 64
+      repeat with tX = 0 to 960 step 64
          pfTile "terrain_dirt_block_top", tX, 576
       end repeat
-      repeat with tX = 1280 to 3008 step 64
+      pfTile "terrain_dirt_block_top_right", 1024, 576   -- carved LEFT lip of the spike pit (a finished cliff edge, not a raw cut)
+      pfTile "terrain_dirt_block_top_left", 1280, 576    -- carved RIGHT lip of the spike pit
+      repeat with tX = 1344 to 3008 step 64
          if tX >= 1408 and tX <= 1792 then
             pfTile "terrain_dirt_block_center", tX, 576   -- under the dirt mound: one mass
          else
@@ -3431,8 +3489,9 @@ command pfL6Scene
       b2kCamAdopt the long id of graphic "pf_wjShaftR"
    end if
    pfMakeCoin 428, 340   -- the slot coin, dead-centre between the columns (slot 384..472, centre 428): wall-jump up, or double-jump. Built in the SCENE so it aligns with the columns.
-   -- the CAVERN GAP: spike tips flush in the floor gap (192px = four spikes;
-   -- leap it - the checkpoint sits just past it)
+   -- the CAVERN GAP: spikes seated FLUSH at the pit edge (192px = three
+   -- spikes); leap it - the checkpoint sits just past it. The carved dirt
+   -- cliff lips (block_top_right/left, above) finish the chasm.
    pfMakeSpikes 1088, 1280
    -- a DIRT RAMP mound (the dirt biome's slopes): up the left ramp, across the
    -- crest, down the right. The six-point chain's outer two points are ghost
@@ -3460,6 +3519,34 @@ command pfL6Scene
       set the lineSize of it to 4
       set the foregroundColor of it to "150,120,90"
       b2kCamAdopt the long id of graphic "pf_cloudledgeP"
+   end if
+   -- CAVE DRESSING: flickering wall TORCHES light the gloom; CHAINS and
+   -- STALACTITES hang from the unseen roof; ground decor (a rock, cave
+   -- mushrooms, a bush) breaks up the floor. Torches/chains/dirt-pieces are
+   -- not audited decor; the rock/mushrooms/bush sit clear of every beat.
+   -- (Stalactite + chain hang orientation: OXT-verify, gotcha 26.)
+   pfMakeTorch 352, 300     -- mounted on the wall-jump shaft's left column
+   pfMakeTorch 504, 300     -- ...and its right column
+   pfMakeTorch 900, 452     -- the entry cave
+   pfMakeTorch 1360, 452    -- past the spike gap
+   pfMakeTorch 2360, 452    -- the lower run
+   pfMakeTorch 2860, 432    -- the climb to the flag
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "chain") then
+      pfTile "chain", 700, 96
+      pfTile "chain", 1640, 96
+      pfTile "chain", 2520, 96
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_dirt_vertical_bottom") then
+      pfTile "terrain_dirt_vertical_bottom", 1120, 96    -- a stalactite over the spike gap
+      pfTile "terrain_dirt_vertical_bottom", 2000, 96    -- ...and over the cloud route
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "rock") then
+      pfTile "rock", 970, 512
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "mushroom_brown") then
+      pfTile "mushroom_brown", 1336, 512
+      pfTile "mushroom_red", 2320, 512
+      pfTile "bush", 2680, 512
    end if
 end pfL6Scene
 
