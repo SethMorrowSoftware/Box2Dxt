@@ -91,10 +91,9 @@
 --            WALL-JUMP SHAFT of floating dirt columns over the entry (slot
 --            coin), a spike GAP to leap (checkpoint past it), a DIRT-RAMP
 --            mound, a one-way DIRT CLOUD high route, a slime, a hopping BLOCK
---            SLIME + a snail,
+--            SLIME + a snail, a CONVEYOR BELT (a treadmill you power across),
 --            and carved dirt steps to the flag (the win). A bonus GEM rides
---            high above the wall-jump shaft. (Block slime + conveyor in
---            slices 2-3.)
+--            high above the wall-jump shaft.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -292,8 +291,11 @@
 --      ends and DOWN+JUMP drops through it; the spike GAP is a clean leap; the
 --      slime, the snail, and the BLOCK SLIME (slice 2) all patrol solid ground -
 --      the block slime HOPS its band (jump frame airborne, squish idle settled,
---      no apex-flicker) and stomps to slime_block_rest; the win screen says ALL
---      SIX LEVELS CLEAR. (The conveyor belt arrives in slice 3.)
+--      no apex-flicker) and stomps to slime_block_rest; (g) the CONVEYOR BELT
+--      (slice 3) carries you LEFT when grounded on it - you walk slower toward
+--      the goal and faster back, you can still power across, and jumping over it
+--      is unaffected; the tread art faces the push direction (flip - OXT-verify
+--      it reads). The win screen says ALL SIX LEVELS CLEAR.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -321,6 +323,7 @@ local gSlimeT          -- Wave 3: per-row timer (mimic hop cooldowns)
 local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT, gBlockX
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
 local gMovHurtW, gMovHurtH, gMovFlip
+local gConvN, gConvL, gConvR, gConvY, gConvDir   -- Phase B: conveyor-belt zones
 -- Wave 3 (bestiary I): the piranha burrows, the ghost, the spooks sheet
 local gPlantN, gPlantSpr, gPlantX, gPlantState, gPlantT
 local gGhostSpr, gGhostX, gGhostY, gGhostShy
@@ -847,6 +850,11 @@ command pfStartGame
    put empty into gMovHurtW
    put empty into gMovHurtH
    put empty into gMovFlip
+   put 0 into gConvN
+   put empty into gConvL
+   put empty into gConvR
+   put empty into gConvY
+   put empty into gConvDir
    put empty into gPrevState
    -- Wave 1 state starts the run empty/idle
    put false into gToysOK
@@ -1681,6 +1689,45 @@ command pfMakeBlockSlime pIdx, pX, pMinX, pMaxX, pTopY
    put the milliseconds + 500 + random(400) into gSlimeT[pIdx]
    put false into gFrogAir[pIdx]
 end pfMakeBlockSlime
+
+-- A CONVEYOR BELT (asset-expansion Phase B): a polled surface ZONE that carries
+-- the GROUNDED hero along pDir (+1 right, -1 left) ON TOP of his own walking, so
+-- you can power against it. No body - the level's ground slab still owns the
+-- collision; this only adds vx in pfTickConveyor. The belt art is the (single-
+-- frame, unanimated) conveyor tile, flipped to face pDir. Per the plan this is
+-- the example-side polled version (no Kit "surface velocity" feature).
+command pfMakeConveyor pL, pR, pDir
+   local tX
+   add 1 to gConvN
+   put pL into gConvL[gConvN]
+   put pR into gConvR[gConvN]
+   put 576 into gConvY[gConvN]
+   put pDir into gConvDir[gConvN]
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "conveyor") then
+      repeat with tX = pL to pR - 64 step 64
+         pfTile "conveyor", tX, 576, (pDir < 0)   -- flip the tread to face pDir; the single frame has no scroll animation, so the flip is the only direction cue (OXT-verify it reads)
+      end repeat
+   end if
+end pfMakeConveyor
+
+-- Carry the grounded hero along any belt he stands on (his input vx PLUS the
+-- belt). One compare when no belts exist; uses the per-frame hero snapshot (no
+-- extra position FFI). b2kSetVelocity wakes the hero - already awake under the
+-- controller, so it is free. The y test (hero at/below the belt line) keeps a
+-- hero on a HIGHER platform over the same x off the belt.
+command pfTickConveyor
+   local i, tV
+   if gConvN is 0 or gConvN is empty then exit pfTickConveyor
+   if not b2kPlayerOnGround() then exit pfTickConveyor
+   set the itemDelimiter to comma
+   repeat with i = 1 to gConvN
+      if gHeroPX >= gConvL[i] and gHeroPX <= gConvR[i] and gHeroPY > gConvY[i] - 80 then
+         put b2kVelocity(gHero) into tV   -- the controller's input-driven vx,vy this frame
+         b2kSetVelocity gHero, (item 1 of tV) + gConvDir[i] * 130, item 2 of tV
+         exit repeat   -- one belt at a time
+      end if
+   end repeat
+end pfTickConveyor
 
 -- A piranha burrow at pX: the plant is a bodiless sprite pfTickPlants
 -- raises and sinks; its dark mouth-hole is drawn by the SCENE (so it
@@ -3570,6 +3617,10 @@ command pfL6Scene
       set the foregroundColor of it to "150,120,90"
       b2kCamAdopt the long id of graphic "pf_cloudledgeP"
    end if
+   -- a CONVEYOR BELT on the lower run (pushes LEFT, back toward the cloud): a
+   -- treadmill you must power across to reach the block slime + the goal - the
+   -- cavern's mechanic (Phase B, slice 3). Grid-aligned, on solid ground2.
+   pfMakeConveyor 2176, 2368, -1
    -- CAVE DRESSING: flickering wall TORCHES light the gloom; CHAINS and
    -- STALACTITES hang from the unseen roof; ground decor (a rock, cave
    -- mushrooms, a bush) breaks up the floor. Torches/chains/dirt-pieces are
@@ -3752,6 +3803,7 @@ on b2kFrame
    pfTickSpiders     -- Wave 6 (bestiary II)
    pfTickBoulder
    pfTickLift
+   pfTickConveyor    -- Phase B: belts carry the grounded hero
    pfTickCollapse
    pfTickBarrel
    pfTickParallax   -- Wave 8: drift the biome backdrop for depth

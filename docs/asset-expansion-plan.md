@@ -148,8 +148,11 @@ needs an OXT eye.
   floating dirt columns, a spike gap, a dirt-ramp mound, a one-way-cloud bonus
   route, reused slimes + a snail, a bonus gem, dirt goal steps. Win moved to
   `gLevel >= 6`. Example-side; `audit-platformer.py` auto-discovers + clears L6.
-- **Slices 2–3 — TODO:** the block slime (slice 2), then the conveyor + torches
-  (slice 3).
+- **Slice 2 — DONE (statically verified; needs OXT):** the **block slime**, a
+  hopping cube (`slime_block_*`), a new slime-family kind `block` debuting in L6.
+- **Slice 3 — DONE (statically verified; needs OXT):** the **conveyor belt**
+  (`pfMakeConveyor`, a polled vx zone) in L6. Torches were pulled forward into
+  slice 1's polish. **Phase B is complete** (pending the OXT pass).
 - **Assets:** `terrain_dirt_*` (whole biome, slice 1), `background_solid_dirt`
   (slice 1), `torch_off/on_a/on_b` (slice 3), `conveyor` (slice 3),
   `slime_block_*` (block slime, slice 2).

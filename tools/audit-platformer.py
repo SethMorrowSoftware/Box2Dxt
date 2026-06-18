@@ -58,6 +58,7 @@ class Level:
         self.goal = None
         self.bridge = None
         self.collapse = None
+        self.conveyors = []  # (pL,pR,dir)
         self.edgeL = 64
         self.edgeR = None
 
@@ -125,6 +126,9 @@ def parse():
             if s.startswith("pfMakeBlockSlime"):
                 v = nums(s)  # idx,x,minx,maxx,topy  (a hopping cube; patrols its band)
                 L.enemies.append(("block", v[0], v[1], v[2], v[3], v[4], 24)); continue
+            if s.startswith("pfMakeConveyor"):
+                v = nums(s)  # pL,pR,dir
+                L.conveyors.append((v[0], v[1], v[2])); continue
             if s.startswith("pfMakeThwomp"):
                 body = s.split("--", 1)[0]
                 # chained = the weight+chain look: no tile-face string, not a faced block
@@ -282,11 +286,26 @@ def audit(L):
         mid = (hl + hr) / 2
         if ground_top_at(L, mid) is not None:
             flag("WARN", f"spikes {hl:.0f}..{hr:.0f} overlap solid ground (mid x{mid:.0f}) -- expected an open pit")
-        # pfMakeSpikes centres tiles at pL+32..pR-32 step 64, so the row only
-        # fills the pit FLUSH when the width is a 64px multiple; otherwise a bare
-        # strip is left at the right edge (the pit "doesn't fit its spikes").
+        # pfMakeSpikes tiles the row pL..pR-64 (top-lefts), so it fills the pit
+        # FLUSH only when the width is a 64px multiple; otherwise a partial tile
+        # is left (the pit "doesn't fit its spikes").
         if (hr - hl) % 64 != 0:
             flag("WARN", f"spike pit {hl:.0f}..{hr:.0f} width {hr-hl:.0f} is not a 64px multiple -- the spike row won't fill it flush")
+
+    # CONVEYOR: a belt carries the GROUNDED hero, so every column must be solid
+    # ground (a belt over a pit would convey him into thin air), and its width
+    # must be a 64px multiple to tile flush.
+    for (cl, cr, cdir) in L.conveyors:
+        gap = None
+        x = cl
+        while x <= cr:
+            if ground_top_at(L, x) is None:
+                gap = x; break
+            x += 32
+        if gap is not None:
+            flag("ERR", f"conveyor {cl:.0f}..{cr:.0f} runs over a pit (no ground at x{gap:.0f})")
+        if (cr - cl) % 64 != 0:
+            flag("WARN", f"conveyor {cl:.0f}..{cr:.0f} width {cr-cl:.0f} is not a 64px multiple -- the belt tiles won't fill it flush")
 
     # WALKER vs THWOMP: a walker asserts its velocity every frame; if its swept
     # range gets within a few px of a crusher's body (x +/- 30) the two fight the

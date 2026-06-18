@@ -10,6 +10,20 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: the CONVEYOR BELT - a carried surface (asset-expansion Phase B,
+  slice 3).** The previously-unused `conveyor` tile becomes a polled surface
+  zone (`pfMakeConveyor pL, pR, pDir`) that adds a steady vx to the GROUNDED hero
+  on top of his own walking, so you can power against it; jumping over it is
+  unaffected, and a hero on a higher platform at the same x is excluded. No body
+  - the level's ground slab still owns the collision. Built example-side per the
+  plan (no Kit "surface velocity" feature). The `conveyor` art is a single frame
+  (no scroll animation), flipped to face the push direction. Debuts in L6 as a
+  leftward treadmill before the block slime. New `pfTickConveyor` in the frame
+  fan-out (one compare when no belts exist); `tools/audit-platformer.py` gains a
+  conveyor parse branch + an over-solid-ground check (a belt may not run over a
+  pit). This completes asset-expansion **Phase B**. Example-side only (no Kit
+  change, no harness bump); audit clears all 6 levels. Statically verified;
+  needs an OXT pass.
 - **Platformer: the BLOCK SLIME - a hopping cube (asset-expansion Phase B,
   slice 2).** The previously-unused `slime_block_*` foes art becomes a new
   slime-family kind `block`: a cube that arcs back and forth across its band in
