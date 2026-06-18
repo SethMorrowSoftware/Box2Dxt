@@ -250,6 +250,16 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
    real half-height (a build-time global), never a hardcoded constant. The
    platformer's brick-smash gap (round 7) was exactly this: an 88px capsule
    over a ~76px visible character.
+29. **A `constant` must be declared BEFORE its first use, lexically.** OXT resolves
+   `constant` names by their position in the file, so a handler that references a
+   constant declared *later* gets an UNRESOLVED name: it compiles with no error,
+   then evaluates to nothing at runtime, silently zeroing the expression. The L4
+   lava serpent shipped broken this way — `pfTickLavaSerpent` used `sin(kPI * tP)`
+   while `kPI` was declared ~900 lines below, so the term collapsed to 0 every
+   frame and the serpent never rose (it stayed in its "submerged, hidden" branch
+   forever). Fix: declare the constant above its first use, or inline the literal
+   value. Distinct from gotcha 6 (constant *values* must be literals) — this is
+   about the *order* of declaration vs use. (Confirmed in OXT.)
 
 ## The single-threaded performance playbook
 
