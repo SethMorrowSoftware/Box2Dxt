@@ -58,8 +58,10 @@ class Level:
         self.goal = None
         self.bridge = None
         self.collapse = None
+        self.conveyors = []  # (pL,pR,dir)
         self.edgeL = 64
         self.edgeR = None
+        self.vertical = False  # a VERTICAL climbing level (pfBoundsV): the y=576 ground model doesn't apply
 
 def parse():
     levels = {}
@@ -71,6 +73,9 @@ def parse():
                 continue
             mk = re.match(r"(pf\w+|b2kSmoothGround|b2kPlayerAddLadder)\b", s)
             if not s or not (mk or "pfBounds" in s):
+                continue
+            if s.startswith("pfBoundsV"):   # MUST precede the pfBounds test (startswith overlap)
+                L.vertical = True
                 continue
             if s.startswith("pfBounds"):
                 v = nums(s)
@@ -122,6 +127,12 @@ def parse():
             if s.startswith("pfMakeFrog"):
                 v = nums(s)  # idx,x,minx,maxx,topy
                 L.enemies.append(("frog", v[0], v[1], v[2], v[3], v[4], 22)); continue
+            if s.startswith("pfMakeBlockSlime"):
+                v = nums(s)  # idx,x,minx,maxx,topy  (a hopping cube; patrols its band)
+                L.enemies.append(("block", v[0], v[1], v[2], v[3], v[4], 24)); continue
+            if s.startswith("pfMakeConveyor"):
+                v = nums(s)  # pL,pR,dir
+                L.conveyors.append((v[0], v[1], v[2])); continue
             if s.startswith("pfMakeThwomp"):
                 body = s.split("--", 1)[0]
                 # chained = the weight+chain look: no tile-face string, not a faced block
@@ -180,6 +191,14 @@ def audit(L):
     out = []
     def flag(sev, msg):
         out.append((sev, msg))
+
+    # A VERTICAL climbing level (pfBoundsV) uses the full height as play space and
+    # the camera scrolls; the horizontal y=576 ground model (coins-near-a-surface,
+    # walkers-on-ground, pit widths) does not apply, so skip the geometry checks
+    # here and lean on the OXT pass + check-livecodescript for it.
+    if L.vertical:
+        flag("INFO", "vertical climbing level - geometry audit skipped (the y=576 ground model does not apply; verify in OXT)")
+        return out
 
     # bounds
     lo, hi = L.edgeL, L.edgeR
@@ -279,11 +298,26 @@ def audit(L):
         mid = (hl + hr) / 2
         if ground_top_at(L, mid) is not None:
             flag("WARN", f"spikes {hl:.0f}..{hr:.0f} overlap solid ground (mid x{mid:.0f}) -- expected an open pit")
-        # pfMakeSpikes centres tiles at pL+32..pR-32 step 64, so the row only
-        # fills the pit FLUSH when the width is a 64px multiple; otherwise a bare
-        # strip is left at the right edge (the pit "doesn't fit its spikes").
+        # pfMakeSpikes tiles the row pL..pR-64 (top-lefts), so it fills the pit
+        # FLUSH only when the width is a 64px multiple; otherwise a partial tile
+        # is left (the pit "doesn't fit its spikes").
         if (hr - hl) % 64 != 0:
             flag("WARN", f"spike pit {hl:.0f}..{hr:.0f} width {hr-hl:.0f} is not a 64px multiple -- the spike row won't fill it flush")
+
+    # CONVEYOR: a belt carries the GROUNDED hero, so every column must be solid
+    # ground (a belt over a pit would convey him into thin air), and its width
+    # must be a 64px multiple to tile flush.
+    for (cl, cr, cdir) in L.conveyors:
+        gap = None
+        x = cl
+        while x <= cr:
+            if ground_top_at(L, x) is None:
+                gap = x; break
+            x += 32
+        if gap is not None:
+            flag("ERR", f"conveyor {cl:.0f}..{cr:.0f} runs over a pit (no ground at x{gap:.0f})")
+        if (cr - cl) % 64 != 0:
+            flag("WARN", f"conveyor {cl:.0f}..{cr:.0f} width {cr-cl:.0f} is not a 64px multiple -- the belt tiles won't fill it flush")
 
     # WALKER vs THWOMP: a walker asserts its velocity every frame; if its swept
     # range gets within a few px of a crusher's body (x +/- 30) the two fight the
@@ -355,13 +389,17 @@ def main():
     for n in sorted(levels):
         L = levels[n]
         res = audit(L)
-        head = f"===== LEVEL {n}  (bounds {L.edgeL:.0f}..{L.edgeR:.0f}, {len(L.coins)} coins, {len(L.enemies)} walkers) ====="
+        if L.vertical:
+            head = f"===== LEVEL {n}  (VERTICAL climb, {len(L.coins)} coins) ====="
+        else:
+            head = f"===== LEVEL {n}  (bounds {L.edgeL:.0f}..{L.edgeR:.0f}, {len(L.coins)} coins, {len(L.enemies)} walkers) ====="
         print(head)
         if not res:
             print("   (clean)")
         for sev, msg in sorted(res, key=lambda r: (r[0] != "ERR", r[1])):
             print(f"   {sev:4} {msg}")
-            total += 1
+            if sev != "INFO":
+                total += 1
         print()
     print(f"{total} finding(s) across {len(levels)} levels.")
 

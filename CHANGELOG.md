@@ -10,6 +10,81 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: the SPINNER - a spinning-blade hazard (asset-expansion Phase C,
+  slice 2).** The previously-unused `spinner*` art (the `spooks` / `enemies.png`
+  sheet) becomes the keep's hazard: `pfMakeSpinner pX, pY, pAmpX, pPerX, pHalf`
+  registers a bodiless sprite that spins via ANIMATION (not body rotation,
+  gotcha 23) and sweeps a horizontal sine path, hurting by plain proximity like
+  the saw - an UNKILLABLE "saw-rule" hazard you TIME, never stomp (knockback via
+  `pfOuch` in `pfTickMovers`, never a respawn). Built on the existing mover
+  table (no new per-frame tick). `pHalf` selects the wall-mounted half-blade
+  (`spinnerHalf`) for slice 3's puzzle wing. L7 deploys two full blades, each
+  sweeping the shaft across a climb gap (lower L1->L2, upper L4->L5) and placed
+  STANDING-SAFE on both adjacent ledges (the hero waits on the lower ledge and
+  times the jump). Optional art (gated on `gSpooksOK`): no `enemies.png` = the
+  maker no-ops and those spots are simply safe (the climb never depends on a
+  hazard). Example-side only (no Kit change, no harness bump); static gates
+  clean. **The blade timing needs the OXT feel-pass** (tune `pPerX` if frantic).
+- **Platformer: a LEVEL PICKER (dev/test convenience).** A top-right option-menu
+  dropdown jumps straight to any level (`menuPick` -> `pfJumpToLevel`, a fresh
+  run-state rebuild), so levels already approved need not be replayed after every
+  update. Works from play, pause, or the win screen; the menu tracks the current
+  level. Chrome change, so `kPfUIVersion` bumps to "8" (older pasted stacks
+  rebuild their UI once). Not part of the normal coin-gated progression; the
+  title field shrinks to make room. Example-side only.
+- **Platformer: LEVEL 7 "STONE KEEP" - a VERTICAL climbing tower (asset-expansion
+  Phase C, slice 1).** A seventh level on the previously-unused `terrain_stone_*`
+  set, built as **a tall tower you CLIMB, not a level you cross** - the camera
+  **scrolls UP** as the hero jumps from one one-way stone ledge to the next, to
+  the flag atop the keep. The first level in the game that scrolls vertically.
+  (Two earlier passes - a stone-skinned L6 clone, then a single-screen fortress -
+  were redesigned after OXT feedback; the user asked for a true vertical level.)
+  - **New gated vertical-camera mode**, all parameterized so L1-L6 are byte-for-
+    byte unchanged: `pfBoundsV` (a tall world, walls + ceiling, a kill plane far
+    below) sets `gCamTopY`/`gCamBotY`/`gKillPlaneY`; the per-frame camera follows
+    the hero's Y clamped to those (horizontal levels keep `gCamTopY=gCamBotY=320`,
+    pinning Y as before) and centres X when the world is no wider than the
+    viewport; the hero spawns at `gRespawnX`/`gRespawnY` (L1-L6 still 120/480).
+  - `pfMakeLedge` builds the one-way stone climb platforms (`b2kSmoothGround` +
+    `stone_cloud`); a zig-zag of 8 ledges, 8 coins, a summit gem, contained walls
+    (a fall drops you to a lower ledge, no respawn).
+  - **Centred + enclosed (two OXT rounds).** The play column (64..960) is
+    narrower than the 1024 viewport, so `pfBoundsV` now sets the camera's X
+    bounds to a viewport-wide range CENTRED on the column (was left-aligning the
+    tower), and `pfDressWall` fills the leftover margin EACH side with solid
+    stone (`terrain_stone_block_center`, matching the floor) so the shaft reads
+    as an enclosed keep edge-to-edge - no dead backdrop at ground level. The
+    side-wall colliders that were invisible are now the visible walls.
+  The win moves to L7 (`gLevel >= 7`); L6's flag now ADVANCES. Example-side only
+  (no Kit change, no harness bump). `tools/audit-platformer.py` learned to skip a
+  vertical level (the y=576 model doesn't apply); L1-L6 still 0 findings.
+  Statically verified; **the vertical camera scroll needs the OXT pass** (verify
+  item 21) - it is the one thing untested on the engine.
+- **Platformer: the CONVEYOR BELT - a carried surface (asset-expansion Phase B,
+  slice 3).** The previously-unused `conveyor` tile becomes a polled surface
+  zone (`pfMakeConveyor pL, pR, pDir`) that adds a steady vx to the GROUNDED hero
+  on top of his own walking, so you can power against it; jumping over it is
+  unaffected, and a hero on a higher platform at the same x is excluded. No body
+  - the level's ground slab still owns the collision. Built example-side per the
+  plan (no Kit "surface velocity" feature). The `conveyor` art is a single frame
+  (no scroll animation), flipped to face the push direction. Debuts in L6 as a
+  leftward treadmill before the block slime. New `pfTickConveyor` in the frame
+  fan-out (one compare when no belts exist); `tools/audit-platformer.py` gains a
+  conveyor parse branch + an over-solid-ground check (a belt may not run over a
+  pit). This completes asset-expansion **Phase B**. Example-side only (no Kit
+  change, no harness bump); audit clears all 6 levels. Statically verified;
+  needs an OXT pass.
+- **Platformer: the BLOCK SLIME - a hopping cube (asset-expansion Phase B,
+  slice 2).** The previously-unused `slime_block_*` foes art becomes a new
+  slime-family kind `block`: a cube that arcs back and forth across its band in
+  hops (the `_jump` frame in the air, a `walk_a/b` squish idle when settled),
+  reversing at the band edges and sleeping between hops. Stompable on the
+  classic path (a stomp squashes it to `slime_block_rest`, a side touch knocks
+  back) - no new contact case. Debuts in L6 "Cavern Depths" (it replaces a plain
+  slime, so the cavern's signature foe is the hopper). New `pfMakeBlockSlime`
+  maker + a `case "block"` in `pfTickSlimes`; `tools/audit-platformer.py` gains
+  its parse branch and clears L6 (still 0 findings). Example-side only (no Kit
+  change, no harness bump). Statically verified; needs an OXT pass.
 - **Platformer: LEVEL 6 "CAVERN DEPTHS" - the DIRT biome (asset-expansion
   Phase B, slice 1).** A sixth level built on the previously-unused
   `terrain_dirt_*` tile set (block tops, `block_center` mass under the mound,

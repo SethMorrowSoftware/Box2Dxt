@@ -1,7 +1,7 @@
 -- =====================================================================
 -- box2dxt-platformer.livecodescript  ·  Game Kit Phases 1+2+3+4 showcase
 --
--- A SIX-LEVEL collect-them-all platformer (each level its own
+-- A SEVEN-LEVEL collect-them-all platformer (each level its own
 -- scrolling world in a 1024px viewport) that exercises everything
 -- built so far: the Kit's PLAYER CONTROLLER (b2kPlayerAttach drives
 -- movement, jumping, grounding, state and animations - this file holds
@@ -14,8 +14,8 @@
 -- barrel), and variety walkers (mouse, worm, ladybug, fire slime).
 -- Collect EVERY coin on a level (the goal
 -- flag turns GOLD), touch the flag, and the next level builds; level
--- 6's flag is the win. Anything without sheet art falls back to plain
--- graphics, so all six levels run even with no asset folder (the coin
+-- 7's flag is the win. Anything without sheet art falls back to plain
+-- graphics, so all seven levels run even with no asset folder (the coin
 -- totals count themselves as each level builds).
 --
 -- HOW TO RUN
@@ -34,7 +34,7 @@
 --           are NOT draggable) · R restarts the CURRENT level · ESC pauses
 --           · M mutes the synthesized sound
 --
--- THE SIX LEVELS (every beat holds a coin; the flag advances):
+-- THE SEVEN LEVELS (every beat holds a coin; the flag advances):
 --   LEVEL 1  GREEN HILLS (8640px) - movement + the toys: the
 --            SPRINGBOARD mid-meadow (sky coin above; a 42px hop for
 --            non-bouncers), the BONK ROW (headbutt ?-boxes, SMASH bricks
@@ -90,10 +90,17 @@
 --   LEVEL 6  CAVERN DEPTHS (3040px) - the asset-expansion DIRT biome: a
 --            WALL-JUMP SHAFT of floating dirt columns over the entry (slot
 --            coin), a spike GAP to leap (checkpoint past it), a DIRT-RAMP
---            mound, a one-way DIRT CLOUD high route, two slimes + a snail,
---            and carved dirt steps to the flag (the win). A bonus GEM rides
---            high above the wall-jump shaft. (Block slime + conveyor in
---            slices 2-3.)
+--            mound, a one-way DIRT CLOUD high route, a slime, a hopping BLOCK
+--            SLIME + a snail, a CONVEYOR BELT (a treadmill you power across),
+--            and carved dirt steps to the flag. A bonus GEM rides high above
+--            the wall-jump shaft.
+--   LEVEL 7  STONE KEEP (a VERTICAL TOWER, 1280px tall) - the asset-expansion
+--            STONE/CASTLE biome, CLIMBED not crossed: you JUMP UP one-way stone
+--            ledges that zig-zag to the top of the keep, and the camera SCROLLS
+--            UP with you (the only level that scrolls vertically). Eight coins up
+--            the climb, a bonus GEM at the very summit, the flag atop the keep
+--            (the win); torchlit walls. A pure climb for slice 1 - the SPINNER
+--            hazard + the multi-key/switch PUZZLES land in slices 2-3.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -288,9 +295,38 @@
 --      by wall-jump AND a straight double-jump (never trick-only), and the bonus
 --      GEM above the shaft is reachable (lower it if not); (f) the dirt MOUND
 --      walks up/across/down with no fall-through; the DIRT CLOUD is solid to its
---      ends and DOWN+JUMP drops through it; the spike GAP is a clean leap; both
---      slimes + the snail patrol on solid ground; the win screen says ALL SIX
---      LEVELS CLEAR. (Block slime + conveyor arrive in slices 2-3.)
+--      ends and DOWN+JUMP drops through it; the spike GAP is a clean leap; the
+--      slime, the snail, and the BLOCK SLIME (slice 2) all patrol solid ground -
+--      the block slime HOPS its band (jump frame airborne, squish idle settled,
+--      no apex-flicker) and stomps to slime_block_rest; (g) the CONVEYOR BELT
+--      (slice 3) carries you LEFT when grounded on it - you walk slower toward
+--      the goal and faster back, you can still power across, and jumping over it
+--      is unaffected; the tread art faces the push direction (flip - OXT-verify
+--      it reads). L6's flag now ADVANCES to L7 (the win moved to L7).
+--  21. ASSET-EXPANSION PHASE C, SLICE 1 - LEVEL 7 "STONE KEEP" - a VERTICAL
+--      TOWER you CLIMB (the win now needs gLevel>=7). *** THE BIG OXT ITEM: the
+--      camera must SCROLL UP smoothly as the hero climbs *** - this is the only
+--      level that scrolls vertically (pfBoundsV opens gCamTopY/gCamBotY; every
+--      other level pins y=320). If the vertical scroll is wrong, that is where
+--      to look (the per-frame camera in b2kFrame + pfBoundsV). ALSO VERIFY: (a)
+--      the hero spawns at the BOTTOM and the view starts there; (b) the one-way
+--      stone LEDGES are solid from above and you JUMP UP THROUGH them from below
+--      (drop-through still works); (c) the zig-zag is climbable jump-to-jump (or
+--      with a double-jump) and the side WALLS keep you in the tower; (d) falling
+--      drops you to a lower ledge / the floor, never off the world or to a
+--      respawn (the kill plane is off); (e) all 8 coins are grabbable up the
+--      climb, the summit GEM needs a double-jump off the top, the flag is atop
+--      the keep; (f) the backdrop is the dark stone keep and the chrome (HUD/
+--      help/buttons/level-picker) stays put while the world scrolls; (g) the
+--      tower is CENTRED and the stone SIDE-WALLS fill the viewport margins each
+--      side (the play column is narrower than the view) - no dead backdrop at
+--      ground level or up the climb; (h) SLICE 2 - two SPINNING BLADES (the
+--      spooks sheet) sweep the shaft across a climb gap each (lower L1->L2,
+--      upper L4->L5): you can stand SAFE on the lower ledge and time the jump,
+--      a mistime is knockback (never lethal), and the blades spin via animation
+--      (not body rotation). Confirm the timing is FAIR (tune pPerX if frantic);
+--      no art (no enemies.png) = the spots are simply safe. The win screen says
+--      ALL SEVEN LEVELS CLEAR. (Multi-key / switch puzzles: slice 3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -310,6 +346,7 @@ local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
 -- totals carried across level clears for the final win screen
 local gLevel, gLevelW, gLevelName, gTotalFalls, gSecsBank
 local gEdgeL, gEdgeR   -- the playable L/R edges (content-hugging); set by pfBounds
+local gCamTopY, gCamBotY, gKillPlaneY   -- camera Y clamp + kill plane; pfBounds pins gCamTopY=gCamBotY=320 (no vertical scroll), pfBoundsV opens them for the climbing levels
 local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
@@ -318,6 +355,7 @@ local gSlimeT          -- Wave 3: per-row timer (mimic hop cooldowns)
 local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT, gBlockX
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
 local gMovHurtW, gMovHurtH, gMovFlip
+local gConvN, gConvL, gConvR, gConvY, gConvDir   -- Phase B: conveyor-belt zones
 -- Wave 3 (bestiary I): the piranha burrows, the ghost, the spooks sheet
 local gPlantN, gPlantSpr, gPlantX, gPlantState, gPlantT
 local gGhostSpr, gGhostX, gGhostY, gGhostShy
@@ -377,7 +415,7 @@ local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
-constant kPfUIVersion = "7"
+constant kPfUIVersion = "8"
 -- The playable box hugs the level CONTENT, not the raw world width. The hero
 -- spawns at x 120 and each goal flag sits near the right end, so the side
 -- walls sit just past the spawn (kPfEdgeL) and just past the flag
@@ -440,6 +478,7 @@ command buildPfUI
    if there is a field "pfHud" then delete field "pfHud"
    if there is a button "pfbtn_pause" then delete button "pfbtn_pause"
    if there is a button "pfbtn_reset" then delete button "pfbtn_reset"
+   if there is a button "pfbtn_level" then delete button "pfbtn_level"
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -448,11 +487,21 @@ command buildPfUI
    catch tErr
    end try
    create field "pfTitle"
-   set the rect of it to 20, 8, 1004, 30
+   set the rect of it to 20, 8, 838, 30
    set the lockText of it to true
    set the traversalOn of it to false
    set the textSize of it to 14
    set the text of it to "Box2Dxt platformer - a scrolling Game Kit showcase (input + sprites + player + camera + joints)"
+   -- LEVEL PICKER (top-right): a DEV/TEST convenience - jump straight to any
+   -- level instead of replaying the ones already approved (menuPick ->
+   -- pfJumpToLevel). UPDATE this menu list when a level is added.
+   create button "pfbtn_level"
+   set the style of it to "menu"
+   set the menuMode of it to "option"
+   set the rect of it to 846, 6, 1004, 32
+   set the traversalOn of it to false
+   set the text of it to "1  Green Hills" & cr & "2  The Works" & cr & "3  Frozen Citadel" & cr & "4  Haunted Hollow" & cr & "5  Scorched Dunes" & cr & "6  Cavern Depths" & cr & "7  Stone Keep"
+   set the menuHistory of it to 1
    create field "pfHelp"
    set the rect of it to 20, 34, 1004, 92
    set the lockText of it to true
@@ -555,6 +604,8 @@ function pfLoadSheets
       b2kSheetScale "spooks", 0.9
       b2kAnimDef "spooks", "batfly", "bat_fly.png,bat.png", 8, true
       b2kAnimDef "spooks", "spiderwalk", "spider_walk1.png,spider_walk2.png", 8, true   -- Wave 6
+      b2kAnimDef "spooks", "spin", "spinner.png,spinner_spin.png", 12, true             -- Phase C: the keep's blade
+      b2kAnimDef "spooks", "spinhalf", "spinnerHalf.png,spinnerHalf_spin.png", 12, true -- wall-mounted half-blade
    end if
    -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -573,6 +624,7 @@ function pfLoadSheets
    b2kAnimDef "foes", "sawspin", "saw_a,saw_b", 10, true
    b2kAnimDef "foes", "slimewalk", "slime_normal_walk_a,slime_normal_walk_b", 4, true
    b2kAnimDef "foes", "spikewalk", "slime_spike_walk_a,slime_spike_walk_b", 4, true
+   b2kAnimDef "foes", "blockidle", "slime_block_walk_a,slime_block_walk_b", 4, true   -- the block slime's settled squish between hops (Phase B)
    b2kAnimDef "foes", "snailwalk", "snail_walk_a,snail_walk_b", 4, true
    -- the showcase round's new walker species (all native 64px foes art,
    -- so no sheet/scale juggling; they ride the slime FAMILY as new kinds)
@@ -662,6 +714,10 @@ command pfBuildBackdrop
       pfBuildCaveBackdrop   -- the cavern gets a built dark backdrop, not a flat "solid_" frame
       exit pfBuildBackdrop
    end if
+   if gLevel is 7 then
+      pfBuildStoneBackdrop   -- the stone keep, like the cavern, has no outdoor scene
+      exit pfBuildBackdrop
+   end if
    switch gLevel
       case 3
          put "background_fade_hills" into tFrame      -- pale + cold for the frozen citadel
@@ -718,6 +774,28 @@ command pfBuildCaveBackdrop
    set the rect of graphic "pf_bgcave2" to 0, 388, 1064, 584
    set the layer of graphic "pf_bgcave2" to 2
 end pfBuildCaveBackdrop
+
+-- The STONE KEEP (L7) interior, like the cavern, has no outdoor scene in the bg
+-- atlas, so build a dark stone backdrop (cooler gray-blue than the cave's
+-- brown) from two card graphics. Not parallax-drifted - the depth comes from
+-- the scrolling stonework + torches in pfL7Scene. Reuses the pf_bgcave* names
+-- (one level's backdrop exists at a time; pfWipeStage clears them each build).
+command pfBuildStoneBackdrop
+   create graphic "pf_bgcave1"
+   set the style of graphic "pf_bgcave1" to "rectangle"
+   set the showBorder of graphic "pf_bgcave1" to false
+   set the filled of graphic "pf_bgcave1" to true
+   set the backgroundColor of graphic "pf_bgcave1" to "40,42,52"
+   set the rect of graphic "pf_bgcave1" to 0, 0, 1064, 640
+   set the layer of graphic "pf_bgcave1" to 1
+   create graphic "pf_bgcave2"
+   set the style of graphic "pf_bgcave2" to "rectangle"
+   set the showBorder of graphic "pf_bgcave2" to false
+   set the filled of graphic "pf_bgcave2" to true
+   set the backgroundColor of graphic "pf_bgcave2" to "58,61,74"
+   set the rect of graphic "pf_bgcave2" to 0, 388, 1064, 584
+   set the layer of graphic "pf_bgcave2" to 2
+end pfBuildStoneBackdrop
 
 -- Drift the backdrop slower than the 1:1 foreground (parallax depth) and wrap
 -- it seamlessly (the bg scenes tile at the 640px panel width). Gated on the
@@ -788,6 +866,9 @@ command pfStartGame
    put 2880 into gLevelW
    put 64 into gEdgeL    -- pfBounds overrides both per level (belt-and-braces defaults)
    put 2880 into gEdgeR
+   put 320 into gCamTopY
+   put 320 into gCamBotY
+   put 780 into gKillPlaneY
    -- the indexed enemy/trap tables start the run empty
    put 0 into gSlimeN
    put empty into gSlimeB
@@ -843,6 +924,11 @@ command pfStartGame
    put empty into gMovHurtW
    put empty into gMovHurtH
    put empty into gMovFlip
+   put 0 into gConvN
+   put empty into gConvL
+   put empty into gConvR
+   put empty into gConvY
+   put empty into gConvDir
    put empty into gPrevState
    -- Wave 1 state starts the run empty/idle
    put false into gToysOK
@@ -972,6 +1058,9 @@ command pfStartGame
       case 6
          pfL6Scene
          break
+      case 7
+         pfL7Scene
+         break
       default
          put 1 into gLevel
          pfL1Scene
@@ -998,13 +1087,13 @@ command pfStartGame
    put tH / 2 into gHeroHalfH   -- bonks reach the brick at the real head
    create graphic "pf_heroBody"
    set the style of it to "rectangle"
-   set the rect of it to 120 - tW div 2, 480 - tH div 2, 120 + tW div 2, 480 + tH div 2
+   set the rect of it to gRespawnX - tW div 2, gRespawnY - tH div 2, gRespawnX + tW div 2, gRespawnY + tH div 2
    set the visible of it to false
    put the long id of graphic "pf_heroBody" into gHero
    if gAssetsOK is true then
-      b2kSpriteNew "chars", "character_beige_idle", 120, 480
+      b2kSpriteNew "chars", "character_beige_idle", gRespawnX, gRespawnY
    else
-      b2kSpriteNew "chars", 1, 120, 480
+      b2kSpriteNew "chars", 1, gRespawnX, gRespawnY
    end if
    put the result into gHeroSpr
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
@@ -1067,6 +1156,9 @@ command pfStartGame
       case 6
          pfL6Cast
          break
+      case 7
+         pfL7Cast
+         break
       default
          pfL1Cast
    end switch
@@ -1074,11 +1166,11 @@ command pfStartGame
    -- Deferred to HERE so the whole world - scenery, hero AND cast - was built
    -- at scroll 0; no create-once pickup is scroll-shifted. Per-frame tracking
    -- takes over in b2kFrame once the intro beat ends.
-   b2kCamGoto gEdgeL + 512, 320
+   b2kCamGoto gEdgeL + 512, gCamBotY   -- gCamBotY=320 (horizontal) or the tower's bottom (vertical)
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 6: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Six levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 7: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Seven levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -1087,7 +1179,7 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 6" & cr & gLevelName
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -1133,6 +1225,7 @@ command pfStartGame
    put empty into gHudLast
    put true into gStarted
    put false into gBuilding
+   if there is a button "pfbtn_level" then set the menuHistory of button "pfbtn_level" to gLevel
    b2kStart
 end pfStartGame
 
@@ -1183,7 +1276,7 @@ end pfTextureSlab
 command pfShowSlabs pFlag
    local tC
    set the itemDelimiter to comma
-   repeat for each item tC in "pf_ground1,pf_ground2,pf_ground3,pf_plat1,pf_plat2"
+   repeat for each item tC in "pf_ground1,pf_ground2,pf_ground3,pf_plat1,pf_plat2,pf_plat3"
       if there is a graphic tC then
          set the visible of graphic tC to pFlag
          if pFlag is true then b2kCamAdopt the long id of graphic tC
@@ -1240,6 +1333,36 @@ command pfAddMover pSpr, pX, pY, pAmpX, pPerX, pAmpY, pPerY, pHurtW, pHurtH, pFa
    put pHurtH into gMovHurtH[gMovN]
    put (pFaceTravel is true) into gMovFlip[gMovN]
 end pfAddMover
+
+-- A SPINNING-BLADE hazard (asset-expansion Phase C, the keep's hazard): a
+-- bodiless spooks-sheet sprite that spins in place (animation, not body
+-- rotation - gotcha 23) and SWEEPS a horizontal sine path, hurting by plain
+-- proximity like the saw. It is an UNKILLABLE hazard - the "saw rule": you
+-- TIME it, you never stomp it (knockback via pfOuch in pfTickMovers, never a
+-- respawn). pAmpX/pPerX set the sweep (amp 0 = a blade fixed in place); pHalf
+-- selects the wall-mounted HALF-blade (spinnerHalf) over the full disc. The
+-- art is OPTIONAL (enemies.png / gSpooksOK): absent, the maker no-ops and the
+-- spot is simply safe (the climb never depends on a hazard being present).
+command pfMakeSpinner pX, pY, pAmpX, pPerX, pHalf
+   local tRef, tFrame, tAnim, tHurtH
+   if gSpooksOK is not true then exit pfMakeSpinner
+   if pHalf is true then
+      put "spinnerHalf.png" into tFrame
+      put "spinhalf" into tAnim
+      put 15 into tHurtH        -- the half-blade is flat (63x31): a short hurt box
+   else
+      put "spinner.png" into tFrame
+      put "spin" into tAnim
+      put 28 into tHurtH        -- the full disc (~57px after the 0.9 scale): hurt ~ the blade
+   end if
+   if not b2kSheetHasFrame("spooks", tFrame) then exit pfMakeSpinner
+   b2kSpriteNew "spooks", tFrame, pX, pY
+   put the result into tRef
+   if tRef is empty then exit pfMakeSpinner
+   b2kSpritePlay tRef, tAnim
+   -- a spinning disc is symmetric: no facing flip (pFaceTravel false)
+   pfAddMover tRef, pX, pY, pAmpX, pPerX, 0, 1, 28, tHurtH, false
+end pfMakeSpinner
 
 command pfMakeCoin pX, pY
    local tRef
@@ -1633,6 +1756,90 @@ command pfMakeFrog pIdx, pX, pMinX, pMaxX, pTopY
    put false into gFrogAir[pIdx]
 end pfMakeFrog
 
+-- A BLOCK SLIME (asset-expansion Phase B): a hopping CUBE that arcs back and
+-- forth across its band (slime_block_* foes art, previously unused). A
+-- slime-family kind "block" - stompable via the CLASSIC path (a stomp squashes
+-- it to slime_block_rest, a side touch knocks back), so it needs no b2kContact
+-- case. The _jump frame shows on the hop, the squish idle (walk_a/b) when
+-- settled. Reuses gFrogAir as its airborne flag (per-index, like the frog).
+command pfMakeBlockSlime pIdx, pX, pMinX, pMaxX, pTopY
+   local tName, tBody, tSpr
+   put "pf_slimeBody" & pIdx into tName
+   create graphic tName
+   set the style of it to "rectangle"
+   set the rect of it to pX - 24, pTopY - 44, pX + 24, pTopY
+   set the filled of it to true
+   set the backgroundColor of it to "150,120,200"   -- a purple cube (no-art fallback)
+   set the visible of it to false
+   put the long id of graphic tName into tBody
+   b2kAddBox tBody
+   b2kSetFixedRotation tBody, true
+   b2kSetFriction tBody, 0.4
+   put empty into tSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "slime_block_rest") then
+      b2kSpriteNew "foes", "slime_block_rest", pX, pTopY - 28
+      put the result into tSpr
+      if tSpr is not empty then
+         b2kSpriteBind tSpr, tBody, 0, -8
+         b2kSpritePlay tSpr, "blockidle"
+      end if
+   end if
+   if tSpr is empty then set the visible of graphic tName to true
+   if the visible of graphic tName is true then b2kCamAdopt tBody
+   if pIdx > gSlimeN then put pIdx into gSlimeN
+   put tBody into gSlimeB[pIdx]
+   put tSpr into gSlimeSpr[pIdx]
+   put "block" into gSlimeKind[pIdx]
+   put 100 into gSlimeSpeed[pIdx]
+   put 100 into gSlimeDir[pIdx]
+   put "slime_block_rest" into gSlimeFlat[pIdx]   -- the defeat pose (the only static cube frame)
+   put false into gSlimeFlip[pIdx]
+   put pMinX into gSlimeMin[pIdx]
+   put pMaxX into gSlimeMax[pIdx]
+   put empty into gSlimeGoneAt[pIdx]
+   put the milliseconds + 500 + random(400) into gSlimeT[pIdx]
+   put false into gFrogAir[pIdx]
+end pfMakeBlockSlime
+
+-- A CONVEYOR BELT (asset-expansion Phase B): a polled surface ZONE that carries
+-- the GROUNDED hero along pDir (+1 right, -1 left) ON TOP of his own walking, so
+-- you can power against it. No body - the level's ground slab still owns the
+-- collision; this only adds vx in pfTickConveyor. The belt art is the (single-
+-- frame, unanimated) conveyor tile, flipped to face pDir. Per the plan this is
+-- the example-side polled version (no Kit "surface velocity" feature).
+command pfMakeConveyor pL, pR, pDir
+   local tX
+   add 1 to gConvN
+   put pL into gConvL[gConvN]
+   put pR into gConvR[gConvN]
+   put 576 into gConvY[gConvN]
+   put pDir into gConvDir[gConvN]
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "conveyor") then
+      repeat with tX = pL to pR - 64 step 64
+         pfTile "conveyor", tX, 576, (pDir < 0)   -- flip the tread to face pDir; the single frame has no scroll animation, so the flip is the only direction cue (OXT-verify it reads)
+      end repeat
+   end if
+end pfMakeConveyor
+
+-- Carry the grounded hero along any belt he stands on (his input vx PLUS the
+-- belt). One compare when no belts exist; uses the per-frame hero snapshot (no
+-- extra position FFI). b2kSetVelocity wakes the hero - already awake under the
+-- controller, so it is free. The y test (hero at/below the belt line) keeps a
+-- hero on a HIGHER platform over the same x off the belt.
+command pfTickConveyor
+   local i, tV
+   if gConvN is 0 or gConvN is empty then exit pfTickConveyor
+   if not b2kPlayerOnGround() then exit pfTickConveyor
+   set the itemDelimiter to comma
+   repeat with i = 1 to gConvN
+      if gHeroPX >= gConvL[i] and gHeroPX <= gConvR[i] and gHeroPY > gConvY[i] - 80 then
+         put b2kVelocity(gHero) into tV   -- the controller's input-driven vx,vy this frame
+         b2kSetVelocity gHero, (item 1 of tV) + gConvDir[i] * 130, item 2 of tV
+         exit repeat   -- one belt at a time
+      end if
+   end repeat
+end pfTickConveyor
+
 -- A piranha burrow at pX: the plant is a bodiless sprite pfTickPlants
 -- raises and sinks; its dark mouth-hole is drawn by the SCENE (so it
 -- layers under every later sprite). Unkillable, like the saws.
@@ -1907,7 +2114,66 @@ command pfBounds pLeft, pRight
    -- stop you right at the content and the view never scrolls out onto bare
    -- floor past either end (no visible wall needed - the tight stop + clamp do it)
    b2kCamBounds pLeft, 0, pRight, 640
+   put 320 into gCamTopY    -- horizontal: the camera Y is pinned (the world is exactly one viewport tall)
+   put 320 into gCamBotY
+   put 780 into gKillPlaneY
 end pfBounds
+
+-- Dress a vertical level's side MARGIN as a solid stone WALL so the gap beside
+-- the (narrower-than-viewport) play column reads as the keep's wall, not dead
+-- backdrop. pX1..pX2 is the margin span in world px, pTop..pBottom its height;
+-- it is stone-tiled (terrain_stone_block_center, matching the floor/ledges) at
+-- 64px, lowest layer so torches/coins/ledges draw in front. No stone art: the
+-- flat collider slab pSlab is made visible (and camera-adopted) as the fallback.
+command pfDressWall pSlab, pX1, pX2, pTop, pBottom
+   local tX, tY
+   if pX2 - pX1 < 1 then exit pfDressWall                  -- a zero-width margin (column == viewport): nothing to fill
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_center") then
+      repeat with tX = pX1 to pX2 - 64 step 64
+         repeat with tY = pTop to pBottom - 64 step 64
+            pfTile "terrain_stone_block_center", tX, tY
+         end repeat
+      end repeat
+   else if there is a graphic pSlab then
+      set the backgroundColor of graphic pSlab to "70,73,86"   -- lit stone, lighter than the backdrop
+      set the visible of graphic pSlab to true
+      b2kCamAdopt the long id of graphic pSlab
+   end if
+end pfDressWall
+
+-- VERTICAL bounds (the CLIMBING levels): a TALL world (pTop..pBottom), walls
+-- around the full box + a ceiling, and the camera scrolls VERTICALLY between
+-- gCamTopY..gCamBotY as the hero climbs. The kill plane sits well BELOW the
+-- bottom floor: the climb is contained (a missed jump drops you onto a lower
+-- platform or the floor, never off the world), so there is no respawn-on-fall.
+-- Coords stay POSITIVE (the off-card collision worry was NEGATIVE coords; a
+-- tall positive world collides the same way the horizontal walls do).
+command pfBoundsV pLeft, pRight, pTop, pBottom
+   local tCx
+   put pLeft into gEdgeL
+   put pRight into gEdgeR
+   put pRight into gLevelW
+   pfSlab "pf_wallL", 0, pTop, pLeft, pBottom        -- POSITIVE coords only (x 0..pLeft), like pfBounds
+   pfSlab "pf_wallR", pRight, pTop, pRight + 256, pBottom
+   b2kWall pLeft, pTop, pLeft, pBottom
+   b2kWall pRight, pTop, pRight, pBottom
+   b2kWall pLeft, pTop, pRight, pTop       -- the ceiling
+   b2kKillFloor pBottom + 300              -- below the floor slab; the climb never reaches it
+   -- the play column (pLeft..pRight) is NARROWER than the 1024 viewport, so the
+   -- camera's X bounds are a viewport-wide range CENTRED on the column (a bound
+   -- of just pLeft..pRight would left-align the tower with dead space on the
+   -- right). The leftover margin EACH side is then DRESSED as the keep's stone
+   -- side-walls (the collider slabs made visible / stone-tiled) so the shaft
+   -- reads enclosed, edge to edge - no dead backdrop. The Y bounds stay the
+   -- full world height (that is what the vertical scroll rides).
+   put (pLeft + pRight) / 2 into tCx
+   b2kCamBounds tCx - 512, pTop, tCx + 512, pBottom
+   pfDressWall "pf_wallL", tCx - 512, pLeft, pTop, pBottom      -- fill the LEFT margin
+   pfDressWall "pf_wallR", pRight, tCx + 512, pTop, pBottom     -- fill the RIGHT margin
+   put pTop + 320 into gCamTopY            -- a 640-tall viewport sliding inside the tall world
+   put pBottom - 320 into gCamBotY
+   put pBottom + 300 into gKillPlaneY      -- the explicit kill check is effectively off (contained)
+end pfBoundsV
 
 -- The button-and-gate machine: a polled pressure plate at pPlateX
 -- (pfTickGate reads gPlateX) drives a kinematic gate whose left edge
@@ -3521,6 +3787,10 @@ command pfL6Scene
       set the foregroundColor of it to "150,120,90"
       b2kCamAdopt the long id of graphic "pf_cloudledgeP"
    end if
+   -- a CONVEYOR BELT on the lower run (pushes LEFT, back toward the cloud): a
+   -- treadmill you must power across to reach the block slime + the goal - the
+   -- cavern's mechanic (Phase B, slice 3). Grid-aligned, on solid ground2.
+   pfMakeConveyor 2176, 2368, -1
    -- CAVE DRESSING: flickering wall TORCHES light the gloom; CHAINS and
    -- STALACTITES hang from the unseen roof; ground decor (a rock, cave
    -- mushrooms, a bush) breaks up the floor. Torches/chains/dirt-pieces are
@@ -3558,15 +3828,111 @@ command pfL6Cast
    pfMakeCoin 1568, 468     -- atop the dirt mound crest
    pfMakeCoin 2048, 408     -- on the one-way dirt cloud (the high route)
    pfMakeCoin 2200, 500     -- past the snail, on the lower run
-   pfMakeCoin 2560, 500     -- the second slime's beat
+   pfMakeCoin 2560, 500     -- the block slime's beat (grab it between hops)
    pfMakeCoin 2820, 476     -- on the first goal step
    pfMakeGem 428, 204, "green"   -- BONUS gem ABOVE the wall-jump shaft: master the wall-jump to reach it (OXT: confirm it is reachable; lower it a touch if not)
    pfMakeSlime 1, "normal", 760, 640, 900, 576
-   pfMakeSlime 2, "normal", 2560, 2440, 2680, 576
+   pfMakeBlockSlime 2, 2560, 2440, 2680, 576   -- the cavern's hopping CUBE (Phase B; stomp it or time the hops)
    pfMakeSnail 3, 2050, 1980, 2120
    pfMakeCheckpoint 1900    -- past the cavern gap, before the depths
    pfMakeGoal 3000, 416
 end pfL6Cast
+
+
+-- =====================================================================
+-- A one-way stone LEDGE for the vertical climb: a b2kSmoothGround chain (solid
+-- from ABOVE, pass up THROUGH from below), ghost-padded a tile each side, then
+-- skinned with stone_cloud tiles (a line in the no-art fallback). pL..pR is the
+-- SOLID span at height pY.
+command pfMakeLedge pL, pR, pY
+   local tX, tPts
+   put (pR + 64) & "," & pY & cr & pR & "," & pY & cr & pL & "," & pY & cr & (pL - 64) & "," & pY into tPts
+   b2kSmoothGround tPts
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_cloud_left") then
+      pfTile "terrain_stone_cloud_left", pL, pY
+      repeat with tX = pL + 64 to pR - 128 step 64
+         pfTile "terrain_stone_cloud_middle", tX, pY
+      end repeat
+      pfTile "terrain_stone_cloud_right", pR - 64, pY
+   else
+      create graphic ("pf_ledge" & pL & "_" & pY)
+      set the style of it to "line"
+      set the points of it to pL & "," & pY & cr & pR & "," & pY
+      set the lineSize of it to 4
+      set the foregroundColor of it to "150,154,170"
+      b2kCamAdopt the long id of graphic ("pf_ledge" & pL & "_" & pY)
+   end if
+end pfMakeLedge
+
+-- =====================================================================
+-- LEVEL 7 - "STONE KEEP" (asset-expansion Phase C, slice 1): a VERTICAL
+-- TOWER you CLIMB, not a level you cross. The terrain_stone_* set (unused
+-- before this) builds a tall keep; the camera SCROLLS UP as the hero
+-- jumps from one one-way stone ledge to the next (pfBoundsV opens the
+-- vertical camera; L1-L6 are untouched). A pure climb for slice 1; the
+-- SPINNER (slice 2) and the multi-key / switch PUZZLES (slice 3) are the
+-- keep's hazards, landing next. NOTE: the vertical camera scroll is the
+-- one thing that needs an OXT eye (every other level only scrolls
+-- horizontally) - if it is janky, that is where to look.
+-- =====================================================================
+command pfL7Scene
+   local tX
+   put "STONE KEEP (the climb!)" into gLevelName
+   put 160 into gRespawnX      -- the hero starts at the BOTTOM of the tower
+   put 1140 into gRespawnY
+   pfBoundsV 64, 960, 0, 1280   -- a TALL world (climb it; camera scrolls UP); 64..960 wide = one viewport, no horizontal scroll
+   pfSlab "pf_ground1", 64, 1216, 960, 1280   -- the bottom floor (solid)
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
+      repeat with tX = 64 to 896 step 64
+         pfTile "terrain_stone_block_top", tX, 1216
+      end repeat
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   -- THE CLIMB: one-way stone ledges zig-zag up to the keep's top, each ~128px
+   -- above the last and staggered side to side - jump (or double-jump) up
+   -- through each and land on top. The walls (pfBoundsV) keep you in the tower.
+   pfMakeLedge 256, 448, 1088
+   pfMakeLedge 576, 768, 960
+   pfMakeLedge 256, 448, 832
+   pfMakeLedge 576, 768, 704
+   pfMakeLedge 256, 448, 576
+   pfMakeLedge 576, 768, 448
+   pfMakeLedge 384, 640, 320
+   pfMakeLedge 320, 704, 192      -- the KEEP TOP (the goal ledge; wide, to land + reach the flag)
+   -- TOWER DRESSING: torches climb the walls; a window or two in the stonework.
+   pfMakeTorch 96, 1000
+   pfMakeTorch 928, 824
+   pfMakeTorch 96, 632
+   pfMakeTorch 928, 440
+   pfMakeTorch 96, 264
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "window") then
+      pfTile "window", 0, 900      -- centred IN the left wall column (origin 0, like its stone)
+      pfTile "window", 960, 500    -- centred IN the right wall column (origin 960)
+   end if
+end pfL7Scene
+
+command pfL7Cast
+   pfMakeCoin 352, 1040     -- climbing: above ledge 1
+   pfMakeCoin 672, 912      -- ledge 2
+   pfMakeCoin 352, 784      -- ledge 3
+   pfMakeCoin 672, 656      -- ledge 4
+   pfMakeCoin 352, 528      -- ledge 5
+   pfMakeCoin 672, 400      -- ledge 6
+   pfMakeCoin 512, 272      -- ledge 7
+   pfMakeCoin 448, 144      -- on the keep top
+   pfMakeGem 544, 80, "blue"   -- BONUS gem: a double-jump above the keep top (the summit)
+   -- the keep's SPINNING BLADES (Phase C slice 2): two sweep the shaft across
+   -- a climb gap each - stand SAFE on the lower ledge, read the blade, jump the
+   -- gap when it has swept clear (the saw rule; a mistime is knockback, never
+   -- lethal). Each sits in the GAP (standing-safe on both adjacent ledges, ~66px
+   -- of the 38px-half hero clear): the lower across L1->L2, the upper L4->L5
+   -- (tighter + faster). OXT: confirm the timing is fair; widen pPerX if frantic.
+   pfMakeSpinner 512, 986, 320, 1300, false   -- lower: guards the L1->L2 crossing
+   pfMakeSpinner 512, 602, 300, 1050, false   -- upper: a tighter, faster sweep
+   pfMakeGoal 544, 160      -- the flag, atop the keep
+end pfL7Cast
 
 
 -- Every coin (sensor pickup or ?-box payout) lands here. The moment the
@@ -3602,7 +3968,7 @@ command pfChromeFront
       if there is a field tC then set the layer of field tC to tN
    end repeat
    if there is a graphic "pfWinShade" then set the layer of graphic "pfWinShade" to tN - 1
-   repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_again"
+   repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_again,pfbtn_level"
       if there is a button tC then set the layer of button tC to tN
    end repeat
 end pfChromeFront
@@ -3627,7 +3993,7 @@ end pfWipeStage
 -- The game tick
 -- =====================================================================
 on b2kFrame
-   local tHud, tPos, tHS, tCamX
+   local tHud, tPos, tHS, tCamX, tCamY
    if gHero is empty then exit b2kFrame
    -- THE HERO SNAPSHOT, once per frame: position and controller state
    -- feed the kill plane, edge failsafe, sound cues and every pf tick
@@ -3651,7 +4017,7 @@ on b2kFrame
    -- Plus the EDGE FAILSAFE: a solver squeeze must never leave the hero
    -- beyond a wall (with the thick slabs it should never fire; when it
    -- does not, it costs two compares)
-   if gHurtLock is not true and gHeroPY > 780 then pfHurt   -- the kill plane = respawn
+   if gHurtLock is not true and gHeroPY > gKillPlaneY then pfHurt   -- the kill plane = respawn (off, far below, on a contained vertical climb)
    -- the EDGE CLAMP runs ALWAYS now (containment is non-negotiable): a hard
    -- per-frame snap so a knockback, a dash, or a wall that failed to collide
    -- can never leave the box - b2kMoveTo teleports the body back inside.
@@ -3664,10 +4030,17 @@ on b2kFrame
    -- flags drew offset at the edges. b2kCamGoto keeps them in sync; we just
    -- pre-clamp the point (b2kCamBounds did not hold on the user's engine).
    if gIntroPan is 0 and gCamOK is true then
-      put gHeroPX into tCamX
-      if tCamX < gEdgeL + 512 then put gEdgeL + 512 into tCamX
-      if tCamX > gEdgeR - 512 then put gEdgeR - 512 into tCamX
-      b2kCamGoto tCamX, 320
+      if gEdgeR - gEdgeL <= 1024 then
+         put (gEdgeL + gEdgeR) / 2 into tCamX   -- a world no wider than the viewport (the tower): centre it, no horizontal scroll
+      else
+         put gHeroPX into tCamX
+         if tCamX < gEdgeL + 512 then put gEdgeL + 512 into tCamX
+         if tCamX > gEdgeR - 512 then put gEdgeR - 512 into tCamX
+      end if
+      put gHeroPY into tCamY    -- follow vertically too; gCamTopY=gCamBotY=320 pins it on horizontal levels
+      if tCamY < gCamTopY then put gCamTopY into tCamY
+      if tCamY > gCamBotY then put gCamBotY into tCamY
+      b2kCamGoto tCamX, tCamY
    end if
    -- centre-screen banners (pfNotice) expire here
    if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then
@@ -3703,6 +4076,7 @@ on b2kFrame
    pfTickSpiders     -- Wave 6 (bestiary II)
    pfTickBoulder
    pfTickLift
+   pfTickConveyor    -- Phase B: belts carry the grounded hero
    pfTickCollapse
    pfTickBarrel
    pfTickParallax   -- Wave 8: drift the biome backdrop for depth
@@ -3931,6 +4305,29 @@ command pfTickSlimes
                      b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
                      b2kSpriteSetFrame gSlimeSpr[i], "frog_jump"
                   end if
+               end if
+            end if
+            break
+         case "block"
+            -- Phase B: a HOPPING cube that arcs back and forth across its band
+            -- (jump frame in the air, the squish idle when settled), reversing
+            -- at the band edges. Always active; one velocity read per live
+            -- block-slime. Stomp/knockback live on the classic path (b2kContact).
+            put item 2 of b2kVelocity(tBody) into tVX   -- vy, reusing tVX like the frog
+            if gFrogAir[i] is true then
+               if abs(tVX) < 8 then
+                  put false into gFrogAir[i]   -- landed: settle into the squish idle
+                  if gSlimeSpr[i] is not empty then b2kSpritePlay gSlimeSpr[i], "blockidle"
+               end if
+            else if tMS > gSlimeT[i] and abs(tVX) < 8 then
+               if tX <= gSlimeMin[i] then put gSlimeSpeed[i] into gSlimeDir[i]
+               if tX >= gSlimeMax[i] then put -gSlimeSpeed[i] into gSlimeDir[i]
+               b2kSetVelocity tBody, gSlimeDir[i], -320
+               put tMS + 650 + random(350) into gSlimeT[i]
+               put true into gFrogAir[i]
+               if gSlimeSpr[i] is not empty then
+                  b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
+                  b2kSpriteSetFrame gSlimeSpr[i], "slime_block_jump"
                end if
             end if
             break
@@ -4707,7 +5104,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       -- camera-dead fallback clamps play to one screen, so most coins are
       -- out of reach there: the near flag advances unconditionally instead
       if gCoins >= gCoinsTotal or gCamOK is not true then
-         if gLevel >= 6 then
+         if gLevel >= 7 then
             pfWin
          else
             pfLevelClear
@@ -5007,7 +5404,7 @@ command pfWin
       put the result into tC
       if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
    end repeat
-   put "ALL SIX LEVELS CLEAR!" & cr & cr into tMsg
+   put "ALL SEVEN LEVELS CLEAR!" & cr & cr into tMsg
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
    if gGemsAllTotal > 0 then put "Gems  " & gGemsBank & " / " & gGemsAllTotal & " collected" & cr & cr after tMsg
@@ -5084,6 +5481,32 @@ on mouseUp
          b2kRelease
    end switch
 end mouseUp
+
+-- The LEVEL PICKER (the top-right option menu): jump straight to the chosen
+-- level. A DEV/TEST convenience so the levels already approved need not be
+-- replayed after every update; NOT part of the normal coin-gated progression.
+on menuPick pWhich
+   local tLv
+   if the short name of the target is "pfbtn_level" then
+      put word 1 of pWhich into tLv
+      if tLv is an integer and tLv >= 1 then pfJumpToLevel tLv
+   end if
+   pass menuPick
+end menuPick
+
+-- Rebuild straight to pLevel with a FRESH run state (banks zeroed, like starting
+-- there). pfStartGame hides the win dialogue + clears the win latches itself, so
+-- jumping works from play, pause, or the win screen.
+command pfJumpToLevel pLevel
+   if gBuilding is true then exit pfJumpToLevel
+   put pLevel into gLevel
+   put 0 into gTotalFalls
+   put 0 into gSecsBank
+   put 0 into gGemsBank
+   put 0 into gGemsAllTotal
+   put true into gStarted
+   pfStartGame
+end pfJumpToLevel
 
 on mouseRelease
    b2kRelease

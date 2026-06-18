@@ -148,8 +148,11 @@ needs an OXT eye.
   floating dirt columns, a spike gap, a dirt-ramp mound, a one-way-cloud bonus
   route, reused slimes + a snail, a bonus gem, dirt goal steps. Win moved to
   `gLevel >= 6`. Example-side; `audit-platformer.py` auto-discovers + clears L6.
-- **Slices 2–3 — TODO:** the block slime (slice 2), then the conveyor + torches
-  (slice 3).
+- **Slice 2 — DONE (statically verified; needs OXT):** the **block slime**, a
+  hopping cube (`slime_block_*`), a new slime-family kind `block` debuting in L6.
+- **Slice 3 — DONE (statically verified; needs OXT):** the **conveyor belt**
+  (`pfMakeConveyor`, a polled vx zone) in L6. Torches were pulled forward into
+  slice 1's polish. **Phase B is complete** (pending the OXT pass).
 - **Assets:** `terrain_dirt_*` (whole biome, slice 1), `background_solid_dirt`
   (slice 1), `torch_off/on_a/on_b` (slice 3), `conveyor` (slice 3),
   `slime_block_*` (block slime, slice 2).
@@ -169,6 +172,22 @@ needs an OXT eye.
   a polled example-side version first.
 
 ### Phase C — Castle/dungeon biome → **Level 7 "STONE KEEP"**  (M–L)
+- **Slice 1 — DONE (statically verified; needs OXT):** Level 7 as a **VERTICAL
+  climbing tower** on the `terrain_stone_*` set over the dark stone backdrop
+  (`pfBuildStoneBackdrop`). A new **gated vertical-camera mode** (`pfBoundsV` +
+  `gCamTopY/gCamBotY/gKillPlaneY`, spawn at `gRespawnX/Y`) scrolls the camera UP
+  as the hero jumps one-way `pfMakeLedge` stone ledges to the flag atop the keep;
+  8 coins + a summit gem. L1-L6 byte-for-byte unchanged. Win moved to
+  `gLevel >= 7`. The audit skips the vertical level. **The vertical camera scroll
+  is the OXT unknown.** (Earlier horizontal passes were redesigned after the user
+  asked for a true vertical level.)
+- **Slice 2 — DONE (pending OXT):** the **spinner** hazard. `pfMakeSpinner` (a
+  bodiless `spooks`-sheet sprite spinning via animation + sweeping a sine path,
+  proximity knockback like the saw — the saw-rule, you time it). L7 gets two
+  sweeping blades across the L1->L2 and L4->L5 climb gaps, standing-safe on the
+  adjacent ledges. `pHalf` provides the wall-mounted `spinnerHalf` for slice 3.
+  Gated on `gSpooksOK` (no `enemies.png` = safe). **Blade timing is the OXT feel-pass.**
+- **Slice 3 — TODO:** the **multi-key / switch puzzles** — the keep's real identity.
 - **Assets:** `terrain_stone_*` (full), `switch_{blue,green,red}(_pressed)`,
   `key_{blue,green}`, `lock_{blue,green}`, `spinner*`/`spinnerHalf*`,
   `block_strong_*`.
