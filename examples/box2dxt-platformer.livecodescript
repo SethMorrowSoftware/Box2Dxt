@@ -403,7 +403,7 @@ local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
-constant kPfUIVersion = "7"
+constant kPfUIVersion = "8"
 -- The playable box hugs the level CONTENT, not the raw world width. The hero
 -- spawns at x 120 and each goal flag sits near the right end, so the side
 -- walls sit just past the spawn (kPfEdgeL) and just past the flag
@@ -466,6 +466,7 @@ command buildPfUI
    if there is a field "pfHud" then delete field "pfHud"
    if there is a button "pfbtn_pause" then delete button "pfbtn_pause"
    if there is a button "pfbtn_reset" then delete button "pfbtn_reset"
+   if there is a button "pfbtn_level" then delete button "pfbtn_level"
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -474,11 +475,21 @@ command buildPfUI
    catch tErr
    end try
    create field "pfTitle"
-   set the rect of it to 20, 8, 1004, 30
+   set the rect of it to 20, 8, 838, 30
    set the lockText of it to true
    set the traversalOn of it to false
    set the textSize of it to 14
    set the text of it to "Box2Dxt platformer - a scrolling Game Kit showcase (input + sprites + player + camera + joints)"
+   -- LEVEL PICKER (top-right): a DEV/TEST convenience - jump straight to any
+   -- level instead of replaying the ones already approved (menuPick ->
+   -- pfJumpToLevel). UPDATE this menu list when a level is added.
+   create button "pfbtn_level"
+   set the style of it to "menu"
+   set the menuMode of it to "option"
+   set the rect of it to 846, 6, 1004, 32
+   set the traversalOn of it to false
+   set the text of it to "1  Green Hills" & cr & "2  The Works" & cr & "3  Frozen Citadel" & cr & "4  Haunted Hollow" & cr & "5  Scorched Dunes" & cr & "6  Cavern Depths" & cr & "7  Stone Keep"
+   set the menuHistory of it to 1
    create field "pfHelp"
    set the rect of it to 20, 34, 1004, 92
    set the lockText of it to true
@@ -1197,6 +1208,7 @@ command pfStartGame
    put empty into gHudLast
    put true into gStarted
    put false into gBuilding
+   if there is a button "pfbtn_level" then set the menuHistory of button "pfbtn_level" to gLevel
    b2kStart
 end pfStartGame
 
@@ -3881,7 +3893,7 @@ command pfChromeFront
       if there is a field tC then set the layer of field tC to tN
    end repeat
    if there is a graphic "pfWinShade" then set the layer of graphic "pfWinShade" to tN - 1
-   repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_again"
+   repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_again,pfbtn_level"
       if there is a button tC then set the layer of button tC to tN
    end repeat
 end pfChromeFront
@@ -5387,6 +5399,32 @@ on mouseUp
          b2kRelease
    end switch
 end mouseUp
+
+-- The LEVEL PICKER (the top-right option menu): jump straight to the chosen
+-- level. A DEV/TEST convenience so the levels already approved need not be
+-- replayed after every update; NOT part of the normal coin-gated progression.
+on menuPick pWhich
+   local tLv
+   if the short name of the target is "pfbtn_level" then
+      put word 1 of pWhich into tLv
+      if tLv is an integer and tLv >= 1 then pfJumpToLevel tLv
+   end if
+   pass menuPick
+end menuPick
+
+-- Rebuild straight to pLevel with a FRESH run state (banks zeroed, like starting
+-- there). pfStartGame hides the win dialogue + clears the win latches itself, so
+-- jumping works from play, pause, or the win screen.
+command pfJumpToLevel pLevel
+   if gBuilding is true then exit pfJumpToLevel
+   put pLevel into gLevel
+   put 0 into gTotalFalls
+   put 0 into gSecsBank
+   put 0 into gGemsBank
+   put 0 into gGemsAllTotal
+   put true into gStarted
+   pfStartGame
+end pfJumpToLevel
 
 on mouseRelease
    b2kRelease

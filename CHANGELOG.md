@@ -10,6 +10,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: a LEVEL PICKER (dev/test convenience).** A top-right option-menu
+  dropdown jumps straight to any level (`menuPick` -> `pfJumpToLevel`, a fresh
+  run-state rebuild), so levels already approved need not be replayed after every
+  update. Works from play, pause, or the win screen; the menu tracks the current
+  level. Chrome change, so `kPfUIVersion` bumps to "8" (older pasted stacks
+  rebuild their UI once). Not part of the normal coin-gated progression; the
+  title field shrinks to make room. Example-side only.
 - **Platformer: LEVEL 7 "STONE KEEP" - the STONE/CASTLE biome (asset-expansion
   Phase C, slice 1).** A seventh level on the previously-unused `terrain_stone_*`
   tile set (block tops, `block_center`, carved corners, `ramp_long_a/b`,
