@@ -3720,9 +3720,11 @@ command pfL4Cast
    pfMakePlant 4, 2790
    pfMakeGhost 2240, 360
    pfMakeThwomp 1, 3040, true   -- the faced CRUSHER guards the lava-pit approach (the far-bank twin was retired to de-cram the widened pit)
-   -- a FIRE SLIME smoulders along the far bank past the lava (spike-type: it hurts
-   -- from every side - you do not stomp a slime that is on fire)
-   pfMakeCritter 7, "spike", 3540, 3480, 3600, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
+   -- a FIRE SLIME smoulders in the bay between the lava and the powder keg
+   -- (spike-type: it hurts from every side - you do not stomp a slime on fire).
+   -- Its band stops at 3560 (right edge ~3584) so it never wades into the crate
+   -- pyramid at 3644 (the earlier 3600 band jammed its body against the crates).
+   pfMakeCritter 7, "spike", 3522, 3484, 3560, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
    -- a final BOWLING LANE past the keg: a second snail to shell + kick,
    -- and a slime its sliding shell flattens - the haunted level escalates
    pfMakeSnail 8, 4000, 3940, 4060
@@ -5501,7 +5503,7 @@ command pfTickLavaSerpent
    if gLSerpSpr is empty then exit pfTickLavaSerpent
    put the milliseconds into tMS
    put (tMS mod gLSerpPer) / gLSerpPer into tP
-   put sin(kPI * tP) into tEm                            -- 0 at the lips, 1 at the centre peak
+   put sin(3.14159265 * tP) into tEm                    -- 0 at the lips, 1 at the centre peak (literal pi: kPI is declared later in the script, and a forward constant ref leaves it unresolved on OXT - which pinned tEm at 0 and kept the serpent submerged forever)
    put gLSerpL + (gLSerpR - gLSerpL) * tP into tX
    put gLSerpLavaY - (gLSerpLavaY - gLSerpPeakY) * tEm into tHeadY
    if tHeadY >= gLSerpLavaY - 6 then
