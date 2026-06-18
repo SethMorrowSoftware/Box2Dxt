@@ -249,18 +249,20 @@
 --      drift with the deck), DOWN brakes a running hero to a stop in place
 --      (no hitbox reshape this build), and the L3 slot is climbable by
 --      wall-jumps AND a plain double-jump.
---  17. WAVE 4 COLLAPSING BRIDGE (L4, over the lava - the wave's last named
---      mechanic), REBUILT with room: FOUR ~48px planks span a widened 192px pit
---      (was a cramped 128px slot pinched between two crushers), with a single
---      faced CRUSHER now guarding only the ENTRANCE. Standing on a plank reddens
---      it + CREAKS, then ~0.3s later it DROPS into the lava (SMASH) - so KEEP
---      MOVING; grab the mid-lava coin mid-cross. A slip onto the lava is a
---      recoverable knockback (pfOuch); retreat to the near bank and the bridge
---      RE-FORMS for another try. A running double-jump still clears the ~190px
---      strip (the L2 lift bay's ~200px reach - no dead-end). VERIFY in OXT:
---      planks drop a beat after you stand (not instantly, not never), the bridge
---      re-forms after a knockback, and the coin is grabbable on the way across;
---      tune the 0.3s crumble in pfTickCollapse to taste.
+--  17. PHASE E LAVA SERPENT (L4, over a WIDENED lava pit - this replaced the old
+--      collapsing bridge, which never read right). The pit is now a 512px chasm
+--      (2944..3456, up from a cramped 192px strip) crossed in TWO ~160px hops over
+--      a middle STEPPING-STONE (deck y490), with a single faced CRUSHER guarding
+--      the approach. A rearing LAVA SERPENT (snakeLava art, bodiless) rises OUT of
+--      the lava, arcs ACROSS it and sinks back in, PEAKING at the stepping-stone -
+--      so it contests the very rock you must land on (time your hops between its
+--      rises). A slip onto the lava OR a brush with the serpent's head is a
+--      recoverable knockback (pfOuch) back to a bank, never a kill. VERIFY in OXT:
+--      the serpent reads as rising from / sinking into the lava (its lower body
+--      hidden by the lava tiles), its head reaches the stepping-stone deck at the
+--      peak, each hop is clearable by a running/double jump, and the mid-stone
+--      coin is grabbable between rises; tune gLSerpPer (the crossing period) in
+--      pfMakeLavaSerpent to taste.
 --  18. WAVE 6 BESTIARY II (frog / barnacle / spider - all example-side, no Kit
 --      change, no harness bump). FROG (L1 far meadow, ~x4660): a native-art
 --      HOPPER that crouches then LEAPS at you when near; STOMP it from above (it
@@ -381,6 +383,7 @@ local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
+local gSlimeDeadX, gSlimeDeadY   -- Phase D: the squash point, so the defeated art POPS up as it fades
 local gSlimeT          -- Wave 3: per-row timer (mimic hop cooldowns)
 local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT, gBlockX
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
@@ -412,6 +415,10 @@ local gKeysHeld, gKeyRide, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gD
 -- in one compare thereafter).
 local gSwN, gSwX, gSwWord, gSwOpen, gSwDone, gSwGate, gSwSpr, gSwGateSprA, gSwGateSprB, gSwGateVel
 local gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
+-- Phase D juice: a small pool of DUST motes flung from a stomped foe (the
+-- debris pattern - pooled bodies parked off-world, flung on the event, re-parked
+-- by pfTickDust - so nothing is created mid-game). Built every level.
+local gDustB, gDustUntil, gDustNext
 local gBlockChainA, gBlockChainB, gBlockFace
 local gGoalSpr, gNoticeUntil, gFlagNoteMS
 -- Polish pass (the showcase round): three classic mechanisms riding the
@@ -436,12 +443,15 @@ local gBarrelN, gBarrelB, gBarrelSpr, gBarrelX, gBarrelY, gBarrelState, gBarrelT
 -- gLiftVX caches the last-written vx so the tick never re-sets an unchanged
 -- velocity (gotcha 17). Indexed 1..gLiftN.
 local gLiftN, gLift, gLiftMin, gLiftMax, gLiftSpeed, gLiftVX
--- Wave 4's last named mechanic: the COLLAPSING BRIDGE (L4, over the lava).
--- Static planks that crumble a beat after the hero stands on one and re-form
--- when he retreats to the near bank. gCollapseStep = plank width; gCollapseDirty
--- gates the re-form so the idle case is one compare.
-local gCollapseN, gCollapseB, gCollapseHomeX, gCollapseState, gCollapseT
-local gCollapseL, gCollapseR, gCollapseY, gCollapseStep, gCollapseDirty
+-- Phase E: the LAVA SERPENT (L4). A bodiless rearing-snake sprite that rises out
+-- of the lava pit, arcs across it and sinks back in, peaking at the middle
+-- stepping-stone so it CONTESTS the platform (gotcha 16: a proximity-poll hurt,
+-- the saw rule - you TIME it, you never stomp it). gLSerpL/R = the lava lips it
+-- travels between; gLSerpLavaY = the surface it emerges from; gLSerpPeakY = the
+-- head's height at the centre peak; gLSerpVis caches its shown/hidden state so the
+-- visibility flip is write-on-change. (It replaced the L4 collapsing bridge.)
+local gLSerpSpr, gLSerpL, gLSerpR, gLSerpLavaY, gLSerpPeakY, gLSerpPer
+local gLSerpHalfH, gLSerpVis
 -- Wave 6 (bestiary II), all example-side: the FROG joins the slime family
 -- (gFrogAir, indexed by slime row, tracks its mid-hop pose so the crouch frame
 -- is set once on landing, not every frame). The BARNACLE is a bodiless timed
@@ -645,6 +655,11 @@ function pfLoadSheets
       b2kAnimDef "spooks", "spiderwalk", "spider_walk1.png,spider_walk2.png", 8, true   -- Wave 6
       b2kAnimDef "spooks", "spin", "spinner.png,spinner_spin.png", 12, true             -- Phase C: the keep's blade
       b2kAnimDef "spooks", "spinhalf", "spinnerHalf.png,spinnerHalf_spin.png", 12, true -- wall-mounted half-blade
+      b2kAnimDef "spooks", "slimegreen", "slimeGreen.png,slimeGreen_walk.png", 4, true  -- Phase D: a GREEN slime skin
+      b2kAnimDef "spooks", "slimeblue", "slimeBlue.png,slimeBlue_blue.png", 4, true     -- ...and a BLUE one
+      b2kAnimDef "spooks", "snakewalk", "snake.png,snake_walk.png", 5, true             -- Phase E: the SLITHER crawl
+      b2kAnimDef "spooks", "snakelava", "snakeLava.png,snakeLava_ani.png", 5, true
+      b2kAnimDef "spooks", "snakeslime", "snakeSlime.png,snakeSlime_ani.png", 5, true
    end if
    -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -669,6 +684,7 @@ function pfLoadSheets
    -- so no sheet/scale juggling; they ride the slime FAMILY as new kinds)
    b2kAnimDef "foes", "mousewalk", "mouse_walk_a,mouse_walk_b", 9, true
    b2kAnimDef "foes", "wormwalk", "worm_normal_move_a,worm_normal_move_b", 4, true
+   b2kAnimDef "foes", "wormring", "worm_ring_move_a,worm_ring_move_b", 4, true   -- Phase D: a second worm skin
    b2kAnimDef "foes", "ladywalk", "ladybug_walk_a,ladybug_walk_b", 7, true
    b2kAnimDef "foes", "firewalk", "slime_fire_walk_a,slime_fire_walk_b", 5, true
    -- aquatic foes for the swim pools (native 64px foes art, previously unused)
@@ -917,6 +933,8 @@ command pfStartGame
    put empty into gSlimeMin
    put empty into gSlimeMax
    put empty into gSlimeGoneAt
+   put empty into gSlimeDeadX
+   put empty into gSlimeDeadY
    put empty into gSlimeT
    put empty into gFrogAir   -- Wave 6: the frog's per-row hop-pose flag
    -- Wave 3 tables start the run empty
@@ -1009,6 +1027,9 @@ command pfStartGame
    put empty into gDebrisB
    put empty into gDebrisSpr
    put empty into gDebrisUntil
+   put 0 into gDustNext
+   put empty into gDustB
+   put empty into gDustUntil
    put 0 into gHeroPX
    put 0 into gHeroPY
    put empty into gHeroState
@@ -1039,9 +1060,9 @@ command pfStartGame
    put empty into gBarrelY
    put empty into gBarrelState
    put empty into gBarrelT
-   -- the collapsing bridge starts empty (only L4 builds one)
-   put 0 into gCollapseN
-   put false into gCollapseDirty
+   -- the lava serpent starts empty (only L4 builds one)
+   put empty into gLSerpSpr
+   put false into gLSerpVis
    -- the Wave 5 moving-platform lifts start the run empty/idle
    put 0 into gLiftN
    put empty into gLift
@@ -1190,6 +1211,7 @@ command pfStartGame
    b2kPlayerSet "duckScale", 1        -- DOWN brakes to a stop in place (no hitbox reshape)
    b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (the L2 lift bay)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
+   pfMakeDustPool   -- Phase D: the stomp dust-poof pool (every level; needs gHero)
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
       case 2
@@ -1518,8 +1540,9 @@ end pfMakeSlime
 -- squash frame (empty = the sheet has none, so the critter just drops
 -- and fades - a safe no-op, never wrong art). pHalfW/pFullH size the
 -- (invisible) collision box; pDY offsets the bound art.
-command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY
+command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY, pSheet
    local tName, tBody, tSpr
+   if pSheet is empty then put "foes" into pSheet   -- Phase D: default native foes; "spooks" for the .png slime skins
    put "pf_slimeBody" & pIdx into tName
    create graphic tName
    set the style of it to "rectangle"
@@ -1532,8 +1555,8 @@ command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAni
    b2kSetFixedRotation tBody, true
    b2kSetFriction tBody, 0.1
    put empty into tSpr
-   if gAssetsOK is true and b2kSheetHasFrame("foes", pFrame) then
-      b2kSpriteNew "foes", pFrame, pX, pTopY - pFullH div 2
+   if gAssetsOK is true and b2kSheetHasFrame(pSheet, pFrame) then
+      b2kSpriteNew pSheet, pFrame, pX, pTopY - pFullH div 2
       put the result into tSpr
       if tSpr is not empty then
          b2kSpriteBind tSpr, tBody, 0, pDY
@@ -1554,6 +1577,18 @@ command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAni
    put pMaxX into gSlimeMax[pIdx]
    put empty into gSlimeGoneAt[pIdx]
 end pfMakeCritter
+
+-- Phase E: a SNAKE - the SLITHER movement type. It joins the slime family as
+-- kind "snake" (stompable on top, hurts on a side touch, like a slime) but
+-- gets its own tick: it crawls the floor and AUTO-REVERSES at a pit edge or a
+-- wall (pfTickSlimes "snake" case), so you place it without hand-tuning a band -
+-- pMinX/pMaxX are just the outer safety bound. This is the LOW (snake.png)
+-- crawler; the taller snakeLava/snakeSlime art rears up and is the rising LAVA
+-- SERPENT (pfMakeLavaSerpent). Spook-sheet art, so it SELF-GATES on gSpooksOK.
+command pfMakeSnake pIdx, pX, pMinX, pMaxX, pTopY
+   if gSpooksOK is not true then exit pfMakeSnake
+   pfMakeCritter pIdx, "snake", pX, pMinX, pMaxX, pTopY, 46, "snake.png", "snakewalk", "snake_dead.png", 28, 24, "150,170,90", 3, "spooks"
+end pfMakeSnake
 
 -- A thwomp (falling-block trap) perched at pX. Walking beneath wakes it
 -- (static -> dynamic) and it slams down. Only its UNDERSIDE is dangerous -
@@ -2437,42 +2472,34 @@ command pfMakeBridge pL, pR, pY, pPlanks
    if tPrev is not empty then b2kHinge tPrev, empty, pR, pY   -- the far post
 end pfMakeBridge
 
--- The COLLAPSING BRIDGE (Wave 4's last named mechanic): pPlanks static planks
--- spanning pL..pR at height pY. Standing on one CREAKS it, then a beat later
--- it drops dynamic into whatever is below (here, the L4 lava) - keep moving or
--- go down with it. Built static and re-formed by pfTickCollapse once the hero
--- is back on the near bank, so a knockback (or a backtrack) always gets a whole
--- bridge for the next try. Visible GRAPHIC planks, not sprites: a falling plank
--- reads right as it drops (gotcha 23 - sprites do not rotate), and b2kMoveTo
--- redraws each as it re-forms (a static body is not frame-synced).
-command pfMakeCollapseBridge pL, pR, pY, pPlanks
-   local i, tPW, tW, tCx, tName, tRef
-   if pPlanks is empty then put 3 into pPlanks
-   put (pR - pL) / pPlanks into tPW
-   put round(tPW) - 2 into tW
-   put pL into gCollapseL
-   put pR into gCollapseR
-   put pY into gCollapseY
-   put tPW into gCollapseStep
-   put pPlanks into gCollapseN
-   put false into gCollapseDirty
-   repeat with i = 1 to pPlanks
-      put pL + (i - 0.5) * tPW into tCx
-      put "pf_plank" & i into tName
-      create graphic tName
-      set the style of it to "rectangle"
-      set the rect of it to tCx - tW / 2, pY - 7, tCx + tW / 2, pY + 7
-      set the filled of it to true
-      set the backgroundColor of it to "150,112,62"
-      put the long id of graphic tName into tRef
-      b2kAddStatic tRef
-      b2kCamAdopt tRef
-      put tRef into gCollapseB[i]
-      put tCx into gCollapseHomeX[i]
-      put "set" into gCollapseState[i]
-      put 0 into gCollapseT[i]
-   end repeat
-end pfMakeCollapseBridge
+-- Phase E: the LAVA SERPENT (L4, replacing the old collapsing bridge). A tall
+-- rearing snake (snakeLava art) that rises out of the lava pit, arcs ACROSS it
+-- and sinks back in, peaking at the middle stepping-stone so it CONTESTS the
+-- platform. Bodiless: a pure sprite that pfTickLavaSerpent drives along a sine
+-- arc (rise at the lips, peak over the centre) and hides while submerged - the
+-- lava tiles occlude its lower body, so it must be created BEFORE pfMakeLava.
+-- Unkillable, like the saws (gotcha 16: a proximity-poll knockback, never a
+-- stomp). Optional art (enemies.png / gSpooksOK): absent, the maker no-ops and
+-- the pit is simply a two-hop lava gap (the crossing never depends on it).
+-- pL/pR are the lava lips; pLavaY the surface; pPeakY the head's height at peak.
+command pfMakeLavaSerpent pL, pR, pLavaY, pPeakY
+   local tRef
+   if gSpooksOK is not true then exit pfMakeLavaSerpent
+   if not b2kSheetHasFrame("spooks", "snakeLava.png") then exit pfMakeLavaSerpent
+   b2kSpriteNew "spooks", "snakeLava.png", (pL + pR) / 2, pLavaY
+   put the result into tRef
+   if tRef is empty then exit pfMakeLavaSerpent
+   b2kSpritePlay tRef, "snakelava"
+   set the visible of tRef to false   -- starts submerged (the tick shows it as it rises)
+   put tRef into gLSerpSpr
+   put pL into gLSerpL
+   put pR into gLSerpR
+   put pLavaY into gLSerpLavaY
+   put pPeakY into gLSerpPeakY
+   put 4200 into gLSerpPer           -- one full lip-to-lip crossing; slow enough to read + time
+   put 66 into gLSerpHalfH           -- snakeLava is 147px * the 0.9 spooks scale ~= 132 tall; head at the sprite TOP, so half ~= 66
+   put false into gLSerpVis
+end pfMakeLavaSerpent
 
 -- A ROLLING BOULDER: a dynamic ball released across the ground (a flat
 -- icy SLIDE on level 3, signed pVX) toward the hero, who must outrun or
@@ -2905,7 +2932,11 @@ command pfL1Cast
    end if
    pfMakeSlime 1, "spike", 880, 760, 1000, 576
    pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
-   pfMakeSlime 3, "normal", 2876, 2816, 2936, 576
+   if gSpooksOK is true then   -- Phase D: a GREEN slime variant (optional spooks art; a normal slime without it)
+      pfMakeCritter 3, "normal", 2876, 2816, 2936, 576, 52, "slimeGreen.png", "slimegreen", "slimeGreen_squashed.png", 22, 36, "120,200,90", 4, "spooks"
+   else
+      pfMakeSlime 3, "normal", 2876, 2816, 2936, 576
+   end if
    pfMakeSlime 4, "normal", 3616, 3556, 3676, 576
    -- NEW variety walkers (native foes art, stomp like any slime): a FAST
    -- mouse skitters the second act; a LADYBUG ambles the far meadow
@@ -2916,7 +2947,11 @@ command pfL1Cast
    pfMakeFrog 10, 4660, 4600, 4780, 576
    -- the far-meadow gauntlet's two slimes (the cloud is above them) and a
    -- darting fly between - a classic run of stomps on the way to the flag
-   pfMakeSlime 7, "normal", 5040, 4980, 5100, 576
+   if gSpooksOK is true then   -- Phase D: a BLUE slime variant
+      pfMakeCritter 7, "normal", 5040, 4980, 5100, 576, 52, "slimeBlue.png", "slimeblue", "slimeBlue_squashed.png", 22, 36, "90,150,220", 4, "spooks"
+   else
+      pfMakeSlime 7, "normal", 5040, 4980, 5100, 576
+   end if
    pfMakeSlime 8, "normal", 5360, 5300, 5420, 576
    if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
       b2kSpriteNew "foes", "fly_a", 5232, 452
@@ -3242,7 +3277,7 @@ command pfL2Cast
    pfMakeSlime 1, "normal", 2750, 2700, 2800, 576   -- guards the coin past the 2nd-bay crusher. (Was 4374, patrolling 4324..4460 INSIDE the green crusher alley: its sweep overlapped crushers 6@4320 and 7@4500 and it stuck to them. Crusher alleys are walker-free by convention - snails guard the APPROACH, never the gaps. The open 2590..2920 stretch gives it a real 100px patrol, 86px clear of the chained crusher at 2560.)
    -- a slow WORM crawls the run before the breather cloud (new variety;
    -- native foes art, stomps like any walker)
-   pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_normal_move_a", "wormwalk", empty, 22, 26, "210,120,170", -2
+   pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_ring_move_a", "wormring", empty, 22, 26, "210,150,120", -2   -- Phase D: the second (ring) worm skin
    -- the THIRD bay's snail (snails liberally now) and a third chained crusher
    pfMakeSnail 3, 3300, 3240, 3360
    pfMakeThwomp 1, 1640
@@ -3494,6 +3529,9 @@ command pfL3Cast
    pfMakeThwomp 4, 4740, false, "block_blue"
    pfMakeThwomp 5, 4920, false, "block_blue"
    pfMakeThwomp 6, 5100, false, "block_blue"
+   -- Phase E: a SNAKE slithers the second ice platform, auto-turning at the
+   -- right spike pit (the new slither movement; clear of the ladybug's band).
+   pfMakeSnake 6, 1450, 1250, 1792, 576
    pfMakeCheckpoint 2048
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
    pfMakeGoal 6200, 416
@@ -3504,9 +3542,9 @@ end pfL3Cast
 -- biome: a MIMIC field (grass blocks that do not belong), the SNAIL
 -- whose kicked shell bowls a slime over, the BAT overhang, a pit, a long
 -- FOUR-burrow PIRANHA row, the GHOST stalking the back half, a faced
--- CRUSHER guarding a widened lava strip crossed by a COLLAPSING BRIDGE
--- (cross the crumbling planks fast, or double-jump it), a smouldering FIRE
--- SLIME, then the POWDER KEG bay (an explosive barrel + woodpile,
+-- CRUSHER guarding a WIDE lava pit crossed in two hops over a middle
+-- stepping-stone that a rearing LAVA SERPENT contests at its peak, a
+-- smouldering FIRE SLIME, then the POWDER KEG bay (an explosive barrel + woodpile,
 -- scattered by b2kExplode), the red crusher alley (the signature
 -- gauntlet), purple steps to the flag. Every beat spaced per the
 -- layout law (~100px+ of clear air).
@@ -3516,10 +3554,12 @@ command pfL4Scene
    put "HAUNTED HOLLOW (spooky!)" into gLevelName
    pfBounds kPfEdgeL, 6524 + kPfEndCap   -- right edge hugs the goal flag (6524)
    pfSlab "pf_ground1", 0, 576, 1856, 640
-   -- the ground BREAKS at the lava pit (3136..3264): two slabs with a gap, so
-   -- the LAVA strip below is an open hazard you ride the lift / double-jump over
-   pfSlab "pf_ground2", 2048, 576, 3136, 640
-   pfSlab "pf_ground3", 3328, 576, 6656, 640   -- far bank: the lava pit widened to 3136..3328 for the rebuilt collapsing bridge
+   -- the ground BREAKS at a WIDE lava pit (2944..3456, 512px): two bank slabs
+   -- with a middle STEPPING-STONE (pf_lavastep), so the crossing is TWO ~160px
+   -- hops, not one - and the lava serpent rears up to the stone at its peak.
+   pfSlab "pf_ground2", 2048, 576, 2944, 640
+   pfSlab "pf_ground3", 3456, 576, 6656, 640
+   pfSlab "pf_lavastep", 3104, 490, 3296, 554   -- the mid-lava stepping-stone (deck y490 = the serpent's peak)
    pfSlab "pf_plat1", 6240, 512, 6432, 576
    pfSlab "pf_plat2", 6432, 448, 6560, 576
    -- the bat overhang: a stone bar the bats roost under
@@ -3529,9 +3569,13 @@ command pfL4Scene
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
       repeat with tX = 2048 to 6592 step 64
-         if tX >= 3136 and tX < 3328 then next repeat   -- leave the (widened) LAVA PIT open
+         if tX >= 2944 and tX < 3456 then next repeat   -- leave the WIDE LAVA PIT open
          pfTile "terrain_purple_block_top", tX, 576
       end repeat
+      -- the mid-lava stepping-stone, tiled to match its slab (deck y490): L/M/R
+      pfTile "terrain_purple_block_top_left", 3104, 490
+      pfTile "terrain_purple_block_top", 3168, 490
+      pfTile "terrain_purple_block_top_right", 3232, 490
       pfTile "terrain_purple_block_top_left", 6240, 512
       pfTile "terrain_purple_block_top", 6304, 512
       pfTile "terrain_purple_block_top_right", 6368, 512
@@ -3566,25 +3610,24 @@ command pfL4Scene
       pfTile "grass_purple", 320, 512
       pfTile "grass_purple", 1100, 512
       pfTile "grass_purple", 2240, 512
-      pfTile "grass_purple", 2920, 512
-   end if   -- (a 3960 tuft was removed: it sat on the bowling-lane snail AND hid the 4000 coin)
+   end if   -- (the 2920 tuft was removed: it now sat at the widened lava lip; a 3960 tuft went earlier - it hid the 4000 coin)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
-      pfTile "sign", 2980, 512        -- a way-marker past the piranha row
+      pfTile "sign", 2860, 512        -- a way-marker past the piranha row, before the lava pit
    end if
-   pfMakeLava 3136, 3328, 596   -- a lower hurt-top so the bank-level bridge is safe to walk, a fall is not
-   -- the COLLAPSING BRIDGE (Wave 4's last named mechanic) across the lava,
-   -- REBUILT with room to read: the pit is now 192px (was a cramped 128px) and
-   -- the bridge is FOUR ~48px planks at BANK LEVEL, flush with the ground (y576)
-   -- so you walk straight onto them. The lava sensor is lowered to y596 so the
-   -- crossing is safe but a fall through a gap is not. The single faced CRUSHER
-   -- (3040) guards the ENTRANCE - the old second crusher crammed the far bank and
-   -- has been retired, giving the planks clear air. Each plank you stand on CREAKS
-   -- and a beat later DROPS into the lava - so keep MOVING (grab the mid-lava coin
-   -- on the way across). A running DOUBLE JUMP still clears the ~190px strip (it is
-   -- the L2 lift bay's ~200px reach - no dead end); a slip onto the lava is a
-   -- knockback (pfOuch), and retreating to the near bank re-forms the bridge for
-   -- another try. Platform-carry stays showcased by the L2 lift bay.
-   pfMakeCollapseBridge 3136, 3328, 583, 4
+   -- the LAVA SERPENT is created BEFORE pfMakeLava so the lava tiles (the y576
+   -- row) draw OVER its lower body - it reads as rising OUT of the lava. It rears
+   -- to the stepping-stone deck (y490) at its peak over the pit centre (x3200),
+   -- CONTESTING the stone: time your two hops between its rises. Bodiless, the
+   -- saw rule (gotcha 16) - a recoverable proximity knockback, never a stomp.
+   pfMakeLavaSerpent 2944, 3456, 596, 490
+   -- the WIDE lava pit (2944..3456, 512px - a real widening from the old 192px
+   -- bridge strip) with a low hurt-top (y596) so a hero ON the banks / the
+   -- stepping-stone is clear, but a slip INTO the lava burns. Crossed in TWO
+   -- ~160px hops (near bank -> stepping-stone -> far bank): a confident running
+   -- jump, a double-jump as insurance (the L2 lift bay's ~200px reach). The single
+   -- faced CRUSHER (3040) guards the approach - the far-bank twin was retired to
+   -- de-cram the pit. A slip onto the lava is a knockback (pfOuch) back to a bank.
+   pfMakeLava 2944, 3456, 596
    -- the POWDER KEG bay (scenery, so it layers behind the hero): an
    -- explosive barrel ringed by a small PYRAMID of crates. Coming near lights
    -- the fuse and b2kExplode (the kit's native radial blast, dark in the
@@ -3646,8 +3689,8 @@ command pfL4Cast
    pfMakeGem 2415, 408, "red"   -- BONUS gem high over the piranha row (a risky double-jump grab)
    pfMakeCoin 2565, 480     -- the bites and snatch a coin between each pair
    pfMakeCoin 2715, 480
-   pfMakeCoin 3232, 470     -- mid-bridge over the lava: grab it as you cross the crumbling planks
-   pfMakeCoin 3492, 500     -- the fire slime's beat, fresh from the lava
+   pfMakeCoin 3200, 450     -- up on the mid-lava STEPPING-STONE: grab it between the serpent's rises
+   pfMakeCoin 3540, 500     -- the fire slime's beat, fresh from the lava on the far bank
    pfMakeCoin 3892, 500     -- past the powder keg (the lure: mind the blast)
    pfMakeCoin 4000, 500     -- the second snail's beat (shell it, kick it!)
    pfMakeCoin 4220, 500     -- the slime its bowled shell can flatten
@@ -3676,10 +3719,12 @@ command pfL4Cast
    pfMakePlant 3, 2640
    pfMakePlant 4, 2790
    pfMakeGhost 2240, 360
-   pfMakeThwomp 1, 3040, true   -- the faced CRUSHER guards the collapsing-bridge entrance (the far-bank twin was retired to de-cram the widened pit)
-   -- a FIRE SLIME smoulders along past the lava (spike-type: it hurts
-   -- from every side - you do not stomp a slime that is on fire)
-   pfMakeCritter 7, "spike", 3492, 3424, 3560, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
+   pfMakeThwomp 1, 3040, true   -- the faced CRUSHER guards the lava-pit approach (the far-bank twin was retired to de-cram the widened pit)
+   -- a FIRE SLIME smoulders in the bay between the lava and the powder keg
+   -- (spike-type: it hurts from every side - you do not stomp a slime on fire).
+   -- Its band stops at 3560 (right edge ~3584) so it never wades into the crate
+   -- pyramid at 3644 (the earlier 3600 band jammed its body against the crates).
+   pfMakeCritter 7, "spike", 3522, 3484, 3560, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6
    -- a final BOWLING LANE past the keg: a second snail to shell + kick,
    -- and a slime its sliding shell flattens - the haunted level escalates
    pfMakeSnail 8, 4000, 3940, 4060
@@ -3700,6 +3745,11 @@ command pfL4Cast
    pfMakeThwomp 5, 5180, false, "block_red"
    pfMakeThwomp 6, 5360, false, "block_red"
    pfMakeThwomp 7, 5540, false, "block_red"
+   -- Phase E: a plain SNAKE slithers the lava-pit APPROACH, auto-reversing at the
+   -- entry pit (2048) and the lava lip (2944) - the floor-probe slither, so it
+   -- never falls in. The rearing LAVA SERPENT over the pit itself is bodiless and
+   -- built in the SCENE (it must live under the lava tiles).
+   pfMakeSnake 10, 2500, 2048, 2944, 576
    pfMakeCheckpoint 2160
    pfMakeGoal 6524, 416
 end pfL4Cast
@@ -4439,6 +4489,7 @@ on b2kFrame
    pfTickSpring
    pfTickBonks
    pfTickDebris
+   pfTickDust
    pfTickLever
    pfTickDoors
    pfTickPlants
@@ -4448,7 +4499,7 @@ on b2kFrame
    pfTickBoulder
    pfTickLift
    pfTickConveyor    -- Phase B: belts carry the grounded hero
-   pfTickCollapse
+   pfTickLavaSerpent -- Phase E: the L4 lava serpent's rise-cross-sink arc
    pfTickBarrel
    pfTickParallax   -- Wave 8: drift the biome backdrop for depth
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
@@ -4603,16 +4654,31 @@ end pfTickSwitchGates
 -- shell; bat -> batfly; mimic -> mimiclive. (The stomp/kick/hurt
 -- VERDICTS live in b2kContact - this tick is pure steering.)
 command pfTickSlimes
-   local i, j, tX, tY, tPos, tBody, tVX, tMS, tVel
+   local i, j, tX, tY, tPos, tBody, tVX, tMS, tVel, tEl, tInv
    set the itemDelimiter to comma
    put the milliseconds into tMS
    repeat with i = 1 to gSlimeN
       if gSlimeGoneAt[i] is not empty then
          if tMS > gSlimeGoneAt[i] then
-            if gSlimeSpr[i] is not empty then b2kSpriteRemove gSlimeSpr[i]
+            if gSlimeSpr[i] is not empty then
+               set the blendLevel of gSlimeSpr[i] to 0   -- clear the fade before the sprite is freed/reused
+               b2kSpriteRemove gSlimeSpr[i]
+            end if
             put empty into gSlimeSpr[i]
             if there is a graphic ("pf_slimeBody" & i) then delete graphic ("pf_slimeBody" & i)
             put empty into gSlimeGoneAt[i]
+         else
+            -- Phase D juice: the defeated art FADES out (blendLevel 0 -> ~96) AND
+            -- POPS up on an ease-out arc (~50px) over its ~700ms linger, instead
+            -- of blinking off. Short window; only a stomped foe or two at once.
+            if gSlimeSpr[i] is not empty then
+               put (tMS - gSlimeGoneAt[i] + 700) into tEl   -- 0..700 ms elapsed
+               set the blendLevel of gSlimeSpr[i] to min(96, round(tEl / 7))
+               if gSlimeDeadY[i] is not empty then
+                  put 1 - tEl / 700 into tInv
+                  b2kSpriteMoveTo gSlimeSpr[i], gSlimeDeadX[i], gSlimeDeadY[i] - 50 * (1 - tInv * tInv)
+               end if
+            end if
          end if
          next repeat
       end if
@@ -4747,6 +4813,22 @@ command pfTickSlimes
                   b2kSpriteSetFrame gSlimeSpr[i], "slime_block_jump"
                end if
             end if
+            break
+         case "snake"
+            -- Phase E SLITHER: crawl the floor, auto-reversing at a PIT EDGE as
+            -- well as the patrol bound (which also stops it at a wall). One
+            -- floor-probe AHEAD-and-BELOW the body per frame - it sits past the
+            -- snake's own box, so empty = a ledge ahead, flip around. Gravity
+            -- keeps vy, so it hugs the floor.
+            if gSlimeDir[i] is 0 then put gSlimeSpeed[i] into gSlimeDir[i]
+            if gSlimeDir[i] >= 0 then put tX + 40 into tEl
+            if gSlimeDir[i] < 0 then put tX - 40 into tEl
+            if tEl <= gSlimeMin[i] or tEl >= gSlimeMax[i] \
+                  or b2kOverlap(tEl - 8, tY + 18, tEl + 8, tY + 50) is empty then
+               put - gSlimeDir[i] into gSlimeDir[i]
+            end if
+            b2kSetVelocity tBody, gSlimeDir[i], item 2 of b2kVelocity(tBody)
+            if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
             break
          default
             -- the classic patroller (normal/spike slimes, walking snails,
@@ -5190,6 +5272,60 @@ command pfTickDebris
    end repeat
 end pfTickDebris
 
+-- Phase D: the DUST-POOF pool. Eight tiny pale balls parked off-world; a stomp
+-- flings four of them out of the foe (pfDustBurst), and pfTickDust re-parks them
+-- ~0.5s later. The balls ARE the art (no sprite), so a dust mote is just a small
+-- light circle arcing up out of the squash - the classic stomp poof, no new
+-- frames. Bodies (not graphics), so b2kMoveTo handles the camera scroll for free.
+command pfMakeDustPool
+   local i, tRef
+   put 0 into gDustNext
+   repeat with i = 1 to 8
+      put empty into gDustB[i]
+      put 0 into gDustUntil[i]
+      b2kSpawnBall -800 + i * 18, 300, 6, "238,234,216"
+      put the result into tRef
+      if tRef is empty then next repeat
+      b2kNoCollide tRef, gHero
+      b2kSetStatic tRef
+      put tRef into gDustB[i]
+   end repeat
+end pfMakeDustPool
+
+-- Fling four pooled dust motes out of (pX,pY) - call it the moment a foe is
+-- squashed. Nothing is created here; see pfMakeDustPool.
+command pfDustBurst pX, pY
+   local i, tSlot, tDX, tVX
+   if gDustNext is empty then exit pfDustBurst   -- no pool on this build
+   set the itemDelimiter to comma
+   repeat with i = 1 to 4
+      put item i of "-14,14,-6,6" into tDX
+      put item i of "-130,130,-55,55" into tVX
+      add 1 to gDustNext
+      if gDustNext > 8 then put 1 into gDustNext
+      put gDustNext into tSlot
+      if gDustB[tSlot] is empty then next repeat
+      b2kSetDynamic gDustB[tSlot]
+      b2kMoveTo gDustB[tSlot], pX + tDX, pY - 8
+      b2kSetVelocity gDustB[tSlot], tVX, -210 - i * 22
+      put the milliseconds + 500 into gDustUntil[tSlot]
+   end repeat
+end pfDustBurst
+
+-- Flung motes re-park ~0.5s out (before the kill floor eats them). Eight array
+-- reads per frame while none are flying.
+command pfTickDust
+   local i
+   repeat with i = 1 to 8
+      if gDustUntil[i] is 0 or gDustUntil[i] is empty then next repeat
+      if the milliseconds < gDustUntil[i] then next repeat
+      put 0 into gDustUntil[i]
+      if gDustB[i] is empty then next repeat
+      b2kSetStatic gDustB[i]
+      b2kMoveTo gDustB[i], -800 + i * 18, 300
+   end repeat
+end pfTickDust
+
 -- The lever: STOP at it (grounded in its band, near-zero vx) to toggle
 -- the sweeping saw's power - running through never flips it, so the
 -- main path stays accident-free. A leave-the-band latch re-arms it; no
@@ -5353,67 +5489,41 @@ command pfTickLift
    end repeat
 end pfTickLift
 
--- The collapsing bridge: a GROUNDED hero centred over a "set" plank starts
--- its short crumble timer (the plank reddens + CREAKS); a beat later it drops
--- dynamic into the lava (SMASH) and the rider goes with it. A fallen plank
--- re-parks STATIC far below before the kill floor eats it (it must survive to
--- re-form). When the hero is back on the near bank the whole bridge re-forms.
--- O(1) out when no bridge exists; the common live case is a few array reads.
-command pfTickCollapse
-   local i, tPos, tY, tMS, tCx
-   if gCollapseN is 0 or gCollapseN is empty then exit pfTickCollapse
-   set the itemDelimiter to comma
+-- The lava serpent's arc (Phase E): a sine EMERGENCE (0 at the lips, 1 over the
+-- middle platform) drives both how far it has risen and where along the pit it
+-- sits, so one parameter traces a rise-cross-sink path lip to lip; it loops, and
+-- the reset lands while submerged (hidden), so the teleport back to the left lip
+-- never shows. The lava tiles (the y576 row) occlude its lower body as it rises;
+-- we ALSO hide it outright while its head is below the surface so the no-tile
+-- fallback never shows a snake floating in the gap. Proximity HURT (the saw
+-- rule, gotcha 16) fires only while emerged - a recoverable knockback, never a
+-- respawn. O(1) out when no serpent exists (the non-L4 case).
+command pfTickLavaSerpent
+   local tP, tEm, tX, tHeadY, tCy, tMS
+   if gLSerpSpr is empty then exit pfTickLavaSerpent
    put the milliseconds into tMS
-   -- re-form the whole bridge once the hero retreats to the near bank (a
-   -- knockback off the lava, or a deliberate backtrack) - only after
-   -- something actually crumbled, so the idle case stays one compare
-   if gCollapseDirty is true and gHeroPX < gCollapseL - 60 then
-      put false into gCollapseDirty
-      repeat with i = 1 to gCollapseN
-         if gCollapseB[i] is empty then next repeat
-         b2kSetStatic gCollapseB[i]
-         b2kMoveTo gCollapseB[i], gCollapseHomeX[i], gCollapseY
-         set the backgroundColor of gCollapseB[i] to "150,112,62"
-         put "set" into gCollapseState[i]
-         put 0 into gCollapseT[i]
-      end repeat
-      exit pfTickCollapse
+   put (tMS mod gLSerpPer) / gLSerpPer into tP
+   put sin(3.14159265 * tP) into tEm                    -- 0 at the lips, 1 at the centre peak (literal pi: kPI is declared later in the script, and a forward constant ref leaves it unresolved on OXT - which pinned tEm at 0 and kept the serpent submerged forever)
+   put gLSerpL + (gLSerpR - gLSerpL) * tP into tX
+   put gLSerpLavaY - (gLSerpLavaY - gLSerpPeakY) * tEm into tHeadY
+   if tHeadY >= gLSerpLavaY - 6 then
+      -- submerged (head at/below the lava line): hide it; the loop reset lands here
+      if gLSerpVis then
+         set the visible of gLSerpSpr to false
+         put false into gLSerpVis
+      end if
+      exit pfTickLavaSerpent
    end if
-   repeat with i = 1 to gCollapseN
-      if gCollapseB[i] is empty then next repeat
-      switch gCollapseState[i]
-         case "set"
-            put gCollapseHomeX[i] into tCx
-            if b2kPlayerOnGround() and abs(gHeroPX - tCx) < gCollapseStep * 0.5 \
-                  and gHeroPY > gCollapseY - 90 and gHeroPY < gCollapseY - 20 then
-               put "shaking" into gCollapseState[i]
-               put tMS + 300 into gCollapseT[i]
-               put true into gCollapseDirty
-               set the backgroundColor of gCollapseB[i] to "205,95,55"
-               b2kSound "creak"
-            end if
-            break
-         case "shaking"
-            if tMS >= gCollapseT[i] then
-               put "falling" into gCollapseState[i]
-               b2kSetDynamic gCollapseB[i]   -- gravity (+ the rider) takes it down
-               b2kSetGravityScale gCollapseB[i], 1.8   -- assert gravity like the thwomp ("slam, not float"): a fresh b2kAddBox body stays put without it, so the plank only recoloured and never dropped
-               b2kSound "smash"
-            end if
-            break
-         case "falling"
-            put b2kPosition(gCollapseB[i]) into tPos
-            if tPos is empty then next repeat
-            put item 2 of tPos into tY
-            if tY > 660 then
-               put "gone" into gCollapseState[i]
-               b2kSetStatic gCollapseB[i]
-               b2kMoveTo gCollapseB[i], gCollapseHomeX[i], 2000   -- parked below; static, so the kill floor ignores it
-            end if
-            break
-      end switch
-   end repeat
-end pfTickCollapse
+   if not gLSerpVis then
+      set the visible of gLSerpSpr to true
+      put true into gLSerpVis
+   end if
+   put tHeadY + gLSerpHalfH into tCy                     -- head at the sprite top, so centre = head + half-height
+   b2kSpriteMoveTo gLSerpSpr, tX, tCy
+   -- proximity HURT (the saw rule): the head's strike zone. Mistime the crossing
+   -- and the rearing head bounces you back to the near bank (pfOuch), not a kill.
+   if gHurtLock is not true and abs(gHeroPX - tX) < 34 and abs(gHeroPY - tHeadY) < 84 then pfOuch tX
+end pfTickLavaSerpent
 
 -- The powder keg: idle until the hero is near, then the fuse lights
 -- (bomb_active); a beat later b2kExplode scatters the woodpile, knocks the
@@ -5730,17 +5840,19 @@ end b2kContact
 -- bowled snail leaves its shell behind. (A frame a sheet lacks is a
 -- safe no-op inside the Kit: the art simply keeps its last pose.)
 command pfSquashSlime pWhich
-   local tFlat
+   local tFlat, tPos
    if gSlimeB[pWhich] is empty then exit pfSquashSlime
    b2kSound "stomp"
+   set the itemDelimiter to comma
+   put b2kPosition(gSlimeB[pWhich]) into tPos   -- the squash point, for the dust poof
    switch gSlimeKind[pWhich]
       case "bat"
       case "batfly"
-         put "bat_hit.png" into tFlat
+         put "bat_dead.png" into tFlat       -- Phase D: a proper DEAD pose, not the _hit flash
          break
       case "mimic"
       case "mimiclive"
-         put "grassBlock_hit.png" into tFlat
+         put "grassBlock_dead.png" into tFlat
          break
       case "snail"
       case "shell"
@@ -5758,9 +5870,16 @@ command pfSquashSlime pWhich
       if tFlat is not empty then b2kSpriteSetFrame gSlimeSpr[pWhich], tFlat
       b2kSpriteUnbind gSlimeSpr[pWhich]
    end if
+   if tPos is not empty then pfDustBurst (item 1 of tPos), (item 2 of tPos)   -- Phase D: a dust POOF at the squash
    b2kRemove gSlimeB[pWhich]      -- body gone; the death art lingers a moment
    put empty into gSlimeB[pWhich]
    put the milliseconds + 700 into gSlimeGoneAt[pWhich]
+   if tPos is not empty then     -- Phase D: remember the squash point so it POPS up as it fades
+      put item 1 of tPos into gSlimeDeadX[pWhich]
+      put item 2 of tPos into gSlimeDeadY[pWhich]
+   else
+      put empty into gSlimeDeadY[pWhich]
+   end if
 end pfSquashSlime
 
 -- The RESPAWN path -- Wave 2 reserves it for LETHAL hits (pits, the

@@ -10,6 +10,63 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: the LAVA SERPENT + a widened L4 lava pit (asset-expansion Phase
+  E).** L4's old collapsing bridge (which never read right) is **gone**; in its
+  place the lava pit is widened to a **512px chasm** (2944..3456, up from a 192px
+  strip) crossed in **two ~160px hops** over a middle **stepping-stone**, and a
+  rearing **LAVA SERPENT** (`snakeLava` art, bodiless) rises OUT of the lava, arcs
+  ACROSS it and sinks back in on a sine path, **peaking at the stepping-stone** so
+  it contests the very rock you must land on (time your hops between its rises).
+  New `pfMakeLavaSerpent` / `pfTickLavaSerpent`: a pure sprite created BEFORE the
+  lava tiles so the y576 tile row occludes its submerged lower body (it reads as
+  rising from / sinking into the lava), with a visibility toggle backing the
+  no-tile fallback; the head's strike zone is a proximity-poll knockback (the saw
+  rule, gotcha 16), never a stomp. The collapsing-bridge maker/tick/globals were
+  removed wholesale. Self-gates on `gSpooksOK` - absent the spooks sheet the pit is
+  simply a two-hop lava gap (always completable).
+- **Platformer: SNAKES - the slither movement type (asset-expansion Phase E).** A
+  new slime-family kind `snake` with its own tick: it crawls the floor and
+  AUTO-REVERSES at a pit edge or wall (a single floor-probe `b2kOverlap`
+  ahead-and-below the body per frame), so you place it without hand-tuning a patrol
+  band - `pMinX/pMaxX` are just the outer safety bound. Stompable on top / hurts on
+  a side touch like a slime (kind "snake" falls through to the classic verdict),
+  and the Phase-D defeat juice (dead pose, poof, fade, pop) carries it for free.
+  `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY` is the LOW (`snake.png`) crawler; the
+  tall rearing `snakeLava`/`snakeSlime` art is the lava serpent above. Spook-sheet
+  `.png` art, so it self-gates on `gSpooksOK`. Deployed on L3 (turns at the spike
+  pit) and L4's lava-pit approach (turns at the entry pit and the lava lip).
+- **Platformer: spook slime/snake sprites sit ON the ground (alignment fix).** The
+  new spook-sheet skins (green/blue slime, snake) had inherited the FOES bind
+  offset (`pDY -6/-8`), which floated them ~9px: the foes art has soft, sparse
+  bottom rows that want a deep frame-sink, but the spook frames fill edge-to-edge
+  (zero transparent padding, measured against `enemies.png`), so feet-on-ground is
+  just `pFullH/2 - frameH*0.9/2`. Re-derived per frame (snake `pDY 3`, slimes `4`);
+  needs an OXT pass to confirm to the pixel (art alignment is statically
+  unverifiable). Example-side only; static gates clean, audit 0 findings.
+- **Platformer: defeat-animation juice (asset-expansion Phase D).** Pure polish,
+  no new mechanics, on the one shared slime-family defeat path (so it lifts every
+  level at once). A stomped foe now **fades out** over its ~700ms linger
+  (`blendLevel` 0 -> ~96) instead of blinking off, and the spook foes show a
+  proper **dead** pose rather than a hit-flash: the bat `bat_hit.png` ->
+  `bat_dead.png`, the mimic `grassBlock_hit.png` -> `grassBlock_dead.png`. The
+  slimes/snail/block-slime already played their `_flat`/`_shell`/`_rest` squash
+  poses, and the telegraphing foes already idle on rest frames (`barnacle_*_rest`,
+  `block_rest`, `bat_hang`). The fade window is short and only a stomped foe or
+  two ever fade at once.
+  - **A stomp DUST-POOF** (more juice): four little pale motes arc out of a
+    squashed foe (`pfMakeDustPool`/`pfDustBurst`/`pfTickDust`, the pooled-debris
+    pattern - eight bodies parked off-world, flung on the stomp, re-parked ~0.5s
+    later, so nothing is created mid-game). The motes are `b2kSpawnBall` bodies
+    (no new art) born in the camera group, so they scroll with the world. Built
+    every level.
+  Example-side only; static gates clean, audit 0 findings.
+  - **A defeat POP + second SKINS** (more juice): the squashed art now also POPS
+    up on an ease-out arc (~50px) as it fades; and the bestiary gains variants -
+    a **green** and **blue** slime (the `spooks` `.png` skins, via `pfMakeCritter`
+    which now takes an optional sheet; `gSpooksOK`-gated, a normal slime without
+    it) reskin two L1 slimes, and the **ring worm** (`worm_ring_*`, native foes)
+    reskins L2's worm. `tools/audit-platformer.py` learned that two same-index
+    makers are a conditional reskin (`if gSpooksOK ... else ...`), not two foes.
 - **Platformer: MULTI-KEY doors + a two-key puzzle in L2 (asset-expansion Phase C,
   slice 3 - part 1).** `pfMakeKeyDoor` was single-instance (one door per level via
   shared globals); it now appends to a per-door table, so a level can plant

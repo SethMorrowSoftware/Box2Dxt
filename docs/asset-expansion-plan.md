@@ -209,21 +209,47 @@ needs an OXT eye.
 - **Level:** a fortress interior — strong `block_strong_*` ?-blocks, a key/switch
   puzzle wing, spinner gauntlets, stone cliffs/overhangs.
 
-### Phase D — The defeat-animation & bestiary fill-in  (S–M)
+### Phase D — The defeat-animation & bestiary fill-in  (S–M)  — IN PROGRESS
 - **Assets:** `*_squashed/_hit/_dead` across `spooks` and `foes` `_rest` poses;
   `worm_ring_*` (second worm skin); `slimeBlue*`/`slimeGreen*` skins.
 - **Polish, every level:** play the proper **squash/dead** frame on a stomp (slimes,
   snail, snake, etc.) instead of just dropping the art; **rest/idle** poses for
   sleeping/telegraphing foes. Adds juice without new mechanics.
 - *Pure example-side; no new levels.* Good "between big phases" polish.
+- **Done (pending OXT):** the stomped foe now **fades out** over its linger
+  (`blendLevel` ramp) instead of blinking off; the bat + mimic show a proper
+  `_dead` pose (was a `_hit` flash); and a **dust-POOF** (four pooled `b2kSpawnBall`
+  motes, the debris pattern) bursts from the squash. Slimes/snail/block already
+  had `_flat`/`_shell`/`_rest` squash poses; telegraphing foes already idle on rest.
+- **Done (round 2):** a defeat **POP** (the squashed art arcs up ~50px as it
+  fades) and the **second skins** - a green + blue slime (`slimeGreen/Blue`,
+  `spooks`, via `pfMakeCritter`'s new optional sheet param, `gSpooksOK`-gated) and
+  the **ring worm** (`worm_ring`, native foes). Phase D essentially complete.
 
-### Phase E — Snakes & the slither biome beat  (M)
+### Phase E — Snakes & the slither biome beat  (M)  — BEGUN
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.
 - **New movement type:** **slither** — a ground crawler that hugs the floor and
-  reverses at edges/walls (slime-family kind `snake`, animated `_walk`). `snakeLava`
-  belongs by the L4 lava / Phase-B cavern; `snakeSlime` by slime pools.
-- Woven into L4 and the new biomes (no dedicated level needed, but could anchor a
-  "serpent pit" beat).
+  reverses at edges/walls (slime-family kind `snake`, animated `_walk`). The LOW
+  `snake.png` is the crawler; the TALL rearing `snakeLava`/`snakeSlime` art is the
+  rising **lava serpent** (a separate bodiless mover, not a floor crawler).
+- Woven into L4 and the new biomes (no dedicated level needed).
+- **Done (pending OXT):**
+  - The `snake` kind + slither tick (floor-probe edge/wall reversal) +
+    `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY` — the plain low crawler, `gSpooksOK`-
+    gated, via `pfMakeCritter`'s sheet param. Deployed: L3's ice platform (turns at
+    the spike pit) and L4's lava-pit approach (turns at the entry pit + lava lip).
+  - **The "serpent pit" beat (`pfMakeLavaSerpent`/`pfTickLavaSerpent`):** L4's old
+    collapsing bridge is removed; the lava pit is widened to a 512px chasm crossed
+    in two hops over a middle stepping-stone, and a rearing `snakeLava` serpent
+    rises out / arcs across / sinks back in on a sine path, peaking at the stone
+    (a proximity-poll knockback, the saw rule). Created under the lava tiles so its
+    submerged body is occluded.
+  - **Sprite grounding fix:** the spook skins fill their frames edge-to-edge (no
+    transparent padding, measured), so their bind offset is the plain geometric
+    `pFullH/2 - frameH*0.9/2`, not the FOES soft-bottom sink that floated them ~9px.
+- **TODO:** a `snakeSlime` home (a slime-pool beat) and more snake placements;
+  optionally teach `audit-platformer.py` the `pfMakeSnake`/`pfMakeLavaSerpent`
+  makers (currently ignored — harmless, the pit isn't gap-checked).
 
 ### Phase F — Collectibles & a health model  (M)
 - **Assets:** `coin_bronze/silver(_side)`, `star`, `heart`, `hud_heart(_half/
