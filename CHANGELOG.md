@@ -10,6 +10,18 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: MULTI-KEY doors + a two-key puzzle in L2 (asset-expansion Phase C,
+  slice 3 - part 1).** `pfMakeKeyDoor` was single-instance (one door per level via
+  shared globals); it now appends to a per-door table, so a level can plant
+  several coloured key+door pairs. The hero carries a SET of keys (`gKeysHeld`,
+  shown in the HUD as `[KEYS yellow,blue]`); each key tags itself `uPfKeyWord` =
+  its colour, rides along the shoulder (fanned out when you hold several), and is
+  CONSUMED when it opens its own colour of door (`pfTickDoors` loops every door).
+  Single-door levels (L3's red door) are unchanged. **L2 "The Works"** now ends on
+  a **two-key lockgate** - a yellow key on the main run, a blue key up on the hop
+  clouds, and a double door before the flag - and gains coins to **24** (was 19).
+  Example-side only; gates clean, audit 0 findings. (The floor **switch -> gate**
+  half of slice 3 lands next.)
 - **Platformer: LEVEL 7 "STONE KEEP" expanded to a blade-and-warden gauntlet (the
   length + variety pass, vertical edition).** The climbing tower roughly doubles
   in height (1,280 -> ~2,300px, **8 -> 16 ledges**) and goes from 8 coins / 2

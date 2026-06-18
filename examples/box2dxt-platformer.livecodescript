@@ -401,7 +401,11 @@ local gHeroPX, gHeroPY, gHeroState, gJumpMS
 local gHeroHalfH        -- the hero capsule's half-height (head reach for bonks)
 local gDebrisNext, gDebrisUntil
 local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
-local gHasKey, gKeySpr, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB
+-- MULTI-KEY doors (Phase C slice 3): a level may now plant SEVERAL coloured
+-- key+door pairs. gKeysHeld is the comma-list of colours the hero is carrying;
+-- gKeyRide[colour] is each one's ride-along sprite; the rest are per-door arrays
+-- indexed 1..gDoorN (gDoorX/gDoorWord were single globals - one door per level).
+local gKeysHeld, gKeyRide, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gDoorHostNm
 local gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
 local gBlockChainA, gBlockChainB, gBlockFace
 local gGoalSpr, gNoticeUntil, gFlagNoteMS
@@ -978,12 +982,14 @@ command pfStartGame
    put true into gSawOn
    put empty into gSawMov
    put empty into gSawSpr
-   put false into gHasKey
-   put empty into gKeySpr
-   put false into gDoorOpen
+   put 0 into gDoorN
+   put empty into gKeysHeld
+   put empty into gKeyRide
+   put empty into gDoorOpen
    put empty into gLockSpr
    put empty into gDoorSprT
    put empty into gDoorSprB
+   put empty into gDoorHostNm
    put 0 into gDebrisNext
    put empty into gDebrisB
    put empty into gDebrisSpr
@@ -2090,36 +2096,49 @@ end pfMakeLever
 -- is reachable ONLY through the door: the gate is structural, and the
 -- level reads "find the key" at a glance. The unlock is a proximity
 -- POLL; only the door's 128px passage ever clears - the wall stays.
+-- A coloured KEY + the locked DOOR it opens. Now MULTI-INSTANCE (Phase C slice
+-- 3): each call appends door #gDoorN, so a level may plant several pairs (the
+-- key tags itself with uPfKeyWord = its colour). The key is a sensor pickup,
+-- the door a solid stone wall + a panel host that drops away once you reach it
+-- carrying the matching key (pfTickDoors). Single-door levels (L2/L3) just plant
+-- one and behave exactly as before.
 command pfMakeKeyDoor pKeyX, pKeyY, pWallX, pColour
-   local tRef, tY, tCX
+   local tRef, tY, tCX, tI, tWall, tHost
+   add 1 to gDoorN
+   put gDoorN into tI
    put pWallX + 32 into tCX
-   put tCX into gDoorX
-   put pColour into gDoorWord
+   put tCX into gDoorX[tI]
+   put pColour into gDoorWord[tI]
+   put false into gDoorOpen[tI]
+   put ("pf_doorWall" & tI) into tWall
+   put ("pf_doorHost" & tI) into tHost
+   put tHost into gDoorHostNm[tI]
    b2kSpriteNew "tiles", "key_" & pColour, pKeyX, pKeyY
    put the result into tRef
    if tRef is not empty then
       set the uPfKeyFlag of tRef to true
+      set the uPfKeyWord of tRef to pColour   -- which coloured door this key opens
       b2kAddSensor tRef, "ball"
    end if
-   create graphic "pf_doorWall"
+   create graphic tWall
    set the style of it to "rectangle"
    set the rect of it to pWallX, 0, pWallX + 64, 448
    set the visible of it to false
-   b2kAddStatic the long id of graphic "pf_doorWall"
+   b2kAddStatic the long id of graphic tWall
    repeat with tY = 0 to 320 step 64
       pfTile "terrain_stone_block_center", pWallX, tY
    end repeat
    b2kSpriteNew "tiles", "lock_" & pColour, tCX, 416
-   put the result into gLockSpr
-   create graphic "pf_doorHost"
+   put the result into gLockSpr[tI]
+   create graphic tHost
    set the style of it to "rectangle"
    set the rect of it to pWallX, 448, pWallX + 64, 576
    set the visible of it to false
-   b2kAddStatic the long id of graphic "pf_doorHost"
+   b2kAddStatic the long id of graphic tHost
    b2kSpriteNew "tiles", "door_closed_top", tCX, 480
-   put the result into gDoorSprT
+   put the result into gDoorSprT[tI]
    b2kSpriteNew "tiles", "door_closed", tCX, 544
-   put the result into gDoorSprB
+   put the result into gDoorSprB[tI]
 end pfMakeKeyDoor
 
 -- The PLAYABLE box, belt AND braces: thick slabs (the solver's clean
@@ -3062,7 +3081,12 @@ command pfL2Scene
    end if
    if gToysOK is true then
       pfMakeLever 1120        -- stand here to power the FIRST sweep saw down
+      -- THE TWO-KEY LOCKGATE (Phase C slice 3): the works' exit is now a DOUBLE
+      -- door - a YELLOW key early on the main run, a BLUE key up on the hop
+      -- clouds, and BOTH gates stand between you and the flag (the HUD lists the
+      -- keys you carry). Multi-instance pfMakeKeyDoor; each key opens its colour.
       pfMakeKeyDoor 1740, 500, 5344, "yellow"
+      pfMakeKeyDoor 4904, 356, 5600, "blue"
    end if
 end pfL2Scene
 
@@ -3088,7 +3112,13 @@ command pfL2Cast
    pfMakeCoin 5124, 392     -- up on the second hop cloud, before the door
    pfMakeCoin 5700, 448     -- over the first stone step
    pfMakeCoin 5774, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 5440, 500   -- just PAST the door (still gated by it), clear of the closed-door face (was 5392 on the door tile)
+   -- length pass: a few more coins for the longer two-key finish (L2 -> ~24)
+   pfMakeCoin 1130, 500     -- the early run, between the lever and the first saw
+   pfMakeCoin 2360, 500     -- the open stretch before the checkpoint
+   pfMakeCoin 4750, 500     -- the run out of the green crusher alley
+   pfMakeCoin 5250, 392     -- on the second hop cloud, by the lockgate
+   pfMakeCoin 5500, 500     -- in the lockgate POCKET, between the two doors
+   if gToysOK is true then pfMakeCoin 5440, 500   -- just PAST the yellow door (still gated by it), clear of the closed-door face
    -- the bee patrols the breather cloud
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 2210, 310
@@ -4331,7 +4361,7 @@ on b2kFrame
    pfTickBonks
    pfTickDebris
    pfTickLever
-   pfTickDoor
+   pfTickDoors
    pfTickPlants
    pfTickGhost
    pfTickBarnacles   -- Wave 6 (bestiary II)
@@ -4355,7 +4385,7 @@ on b2kFrame
    end if
    put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
    if gGemsTotal > 0 then put "   gems " & gGems & "/" & gGemsTotal after tHud
-   if gHasKey is true then put "   [KEY]" after tHud
+   if gKeysHeld is not empty then put "   [KEYS " & gKeysHeld & "]" after tHud
    if gCamOK is true then
       put the hScroll of b2kCamGroup() into tHS   -- read the scroll once
       put "   |   view " & tHS & "-" & (tHS + 1024) after tHud
@@ -5079,39 +5109,56 @@ end pfTickLever
 -- the park); nothing is deleted inside the frame loop. Only the 128px
 -- passage clears - the wall above is permanent, and the lock tile
 -- dissolves into plain stone so the wall stays visually whole.
-command pfTickDoor
-   if gDoorOpen is true then exit pfTickDoor
-   if gDoorSprB is empty then exit pfTickDoor
-   if abs(gHeroPX - gDoorX) >= 80 or gHeroPY <= 360 then exit pfTickDoor
-   if gHasKey is not true then
-      -- keyless at the wall: say WHY the way is shut (shares the deny
-      -- throttle with the flag so banners never fight each other)
-      if the milliseconds > gFlagNoteMS then
-         put the milliseconds + 2600 into gFlagNoteMS
-         b2kSound "deny"
-         pfNotice "LOCKED - find the " & gDoorWord & " KEY, back along the way", 2400
+-- Every coloured door, polled: at the wall you reach (within 80px, jumped up
+-- to the lintel) the matching KEY opens it - each colour independent, and the
+-- key is CONSUMED so it opens exactly its own door. Keyless = a throttled
+-- "LOCKED, find the <colour> key" note (shared with the flag deny throttle).
+command pfTickDoors
+   local i, tWord, k, tNew
+   if gDoorN is 0 or gDoorN is empty then exit pfTickDoors
+   set the itemDelimiter to comma
+   repeat with i = 1 to gDoorN
+      if gDoorOpen[i] is true then next repeat
+      if gDoorSprB[i] is empty then next repeat
+      if abs(gHeroPX - gDoorX[i]) >= 80 or gHeroPY <= 360 then next repeat
+      put gDoorWord[i] into tWord
+      if tWord is not among the items of gKeysHeld then
+         if the milliseconds > gFlagNoteMS then
+            put the milliseconds + 2600 into gFlagNoteMS
+            b2kSound "deny"
+            pfNotice "LOCKED - find the " & tWord & " KEY, back along the way", 2400
+         end if
+         next repeat
       end if
-      exit pfTickDoor
-   end if
-   put true into gDoorOpen
-   put false into gHasKey
-   b2kSound "unlock"
-   b2kCamShake 3, 150
-   -- the lock dissolves into the wall (removing it would punch a
-   -- see-through hole in front of the still-solid wall host)
-   if gLockSpr is not empty then b2kSpriteSetFrame gLockSpr, "terrain_stone_block_center"
-   if gKeySpr is not empty then b2kSpriteRemove gKeySpr
-   put empty into gKeySpr
-   if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
-   b2kSpriteSetFrame gDoorSprB, "door_open"
-   if there is a graphic "pf_doorHost" then
-      b2kMoveTo the long id of graphic "pf_doorHost", gDoorX, -2000
-      try
-         b2kDisable the long id of graphic "pf_doorHost"
-      catch tErr
-      end try
-   end if
-end pfTickDoor
+      -- UNLOCK door i and consume its key from the held set
+      put true into gDoorOpen[i]
+      put empty into tNew
+      repeat for each item k in gKeysHeld
+         if k is not tWord then
+            if tNew is empty then put k into tNew else put tNew & "," & k into tNew
+         end if
+      end repeat
+      put tNew into gKeysHeld
+      b2kSound "unlock"
+      b2kCamShake 3, 150
+      -- the lock dissolves into the wall (removing it would punch a
+      -- see-through hole in front of the still-solid wall host)
+      if gLockSpr[i] is not empty then b2kSpriteSetFrame gLockSpr[i], "terrain_stone_block_center"
+      if gKeyRide[tWord] is not empty then
+         b2kSpriteRemove gKeyRide[tWord]
+         put empty into gKeyRide[tWord]
+      end if
+      if gDoorSprT[i] is not empty then b2kSpriteSetFrame gDoorSprT[i], "door_open_top"
+      b2kSpriteSetFrame gDoorSprB[i], "door_open"
+      if there is a graphic gDoorHostNm[i] then
+         b2kMoveTo the long id of graphic gDoorHostNm[i], gDoorX[i], -2000
+         try
+            b2kDisable the long id of graphic gDoorHostNm[i]
+         catch tErr
+         end try
+      end if
+   end repeat
+end pfTickDoors
 
 -- The boulder cycle: parked static at the top, released on a timer with a
 -- nudge + rumble, re-parked the moment it rolls past the reset line (so it
@@ -5295,20 +5342,28 @@ end pfTickBarrel
 -- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
-   local tKPos, tPopAt
+   local tKPos, tPopAt, tWord, tN
    if pSensorCtrl is empty then exit b2kSensorEnter
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfKeyFlag of pSensorCtrl is true then
-      if gHasKey is not true then
-         put true into gHasKey
+      put the uPfKeyWord of pSensorCtrl into tWord
+      if tWord is empty then put "yellow" into tWord
+      set the itemDelimiter to comma
+      if tWord is not among the items of gKeysHeld then
+         if gKeysHeld is empty then
+            put tWord into gKeysHeld
+         else
+            put gKeysHeld & "," & tWord into gKeysHeld
+         end if
          b2kSound "key"
          b2kSpriteRemove pSensorCtrl
-         -- the key rides along, floating off the hero's shoulder
-         set the itemDelimiter to comma
+         -- the key rides along on the hero's shoulder; FAN multiple keys out so
+         -- two or three are all readable (stacked by held-count)
+         put the number of items of gKeysHeld into tN
          put b2kPosition(gHero) into tKPos
-         b2kSpriteNew "tiles", "key_" & gDoorWord, item 1 of tKPos - 34, item 2 of tKPos - 34
-         put the result into gKeySpr
-         if gKeySpr is not empty then b2kSpriteBind gKeySpr, gHero, -34, -34
+         b2kSpriteNew "tiles", "key_" & tWord, (item 1 of tKPos) - 34, (item 2 of tKPos) - 34 - (tN - 1) * 16
+         put the result into gKeyRide[tWord]
+         if gKeyRide[tWord] is not empty then b2kSpriteBind gKeyRide[tWord], gHero, -34, -34 - (tN - 1) * 16
       end if
       exit b2kSensorEnter
    end if
