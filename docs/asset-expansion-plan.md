@@ -209,13 +209,19 @@ needs an OXT eye.
 - **Level:** a fortress interior — strong `block_strong_*` ?-blocks, a key/switch
   puzzle wing, spinner gauntlets, stone cliffs/overhangs.
 
-### Phase D — The defeat-animation & bestiary fill-in  (S–M)
+### Phase D — The defeat-animation & bestiary fill-in  (S–M)  — IN PROGRESS
 - **Assets:** `*_squashed/_hit/_dead` across `spooks` and `foes` `_rest` poses;
   `worm_ring_*` (second worm skin); `slimeBlue*`/`slimeGreen*` skins.
 - **Polish, every level:** play the proper **squash/dead** frame on a stomp (slimes,
   snail, snake, etc.) instead of just dropping the art; **rest/idle** poses for
   sleeping/telegraphing foes. Adds juice without new mechanics.
 - *Pure example-side; no new levels.* Good "between big phases" polish.
+- **Done (pending OXT):** the stomped foe now **fades out** over its linger
+  (`blendLevel` ramp) instead of blinking off; the bat + mimic show a proper
+  `_dead` pose (was a `_hit` flash). Slimes/snail/block already had `_flat`/
+  `_shell`/`_rest` squash poses; telegraphing foes already idle on rest frames.
+- **TODO (optional):** the second skins (`worm_ring_*`, `slimeBlue/Green*`) and a
+  defeat dust-poof (pooled), if more juice is wanted.
 
 ### Phase E — Snakes & the slither biome beat  (M)
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.

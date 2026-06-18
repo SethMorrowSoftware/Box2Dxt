@@ -4609,10 +4609,20 @@ command pfTickSlimes
    repeat with i = 1 to gSlimeN
       if gSlimeGoneAt[i] is not empty then
          if tMS > gSlimeGoneAt[i] then
-            if gSlimeSpr[i] is not empty then b2kSpriteRemove gSlimeSpr[i]
+            if gSlimeSpr[i] is not empty then
+               set the blendLevel of gSlimeSpr[i] to 0   -- clear the fade before the sprite is freed/reused
+               b2kSpriteRemove gSlimeSpr[i]
+            end if
             put empty into gSlimeSpr[i]
             if there is a graphic ("pf_slimeBody" & i) then delete graphic ("pf_slimeBody" & i)
             put empty into gSlimeGoneAt[i]
+         else
+            -- Phase D juice: the defeated art FADES out over its ~700ms linger
+            -- (blendLevel 0 -> ~96) instead of blinking off. The window is short
+            -- and only a stomped foe or two are ever fading at once.
+            if gSlimeSpr[i] is not empty then
+               set the blendLevel of gSlimeSpr[i] to min(96, round((tMS - gSlimeGoneAt[i] + 700) / 7))
+            end if
          end if
          next repeat
       end if
@@ -5736,11 +5746,11 @@ command pfSquashSlime pWhich
    switch gSlimeKind[pWhich]
       case "bat"
       case "batfly"
-         put "bat_hit.png" into tFlat
+         put "bat_dead.png" into tFlat       -- Phase D: a proper DEAD pose, not the _hit flash
          break
       case "mimic"
       case "mimiclive"
-         put "grassBlock_hit.png" into tFlat
+         put "grassBlock_dead.png" into tFlat
          break
       case "snail"
       case "shell"

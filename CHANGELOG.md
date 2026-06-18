@@ -10,6 +10,16 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: defeat-animation juice (asset-expansion Phase D).** Pure polish,
+  no new mechanics, on the one shared slime-family defeat path (so it lifts every
+  level at once). A stomped foe now **fades out** over its ~700ms linger
+  (`blendLevel` 0 -> ~96) instead of blinking off, and the spook foes show a
+  proper **dead** pose rather than a hit-flash: the bat `bat_hit.png` ->
+  `bat_dead.png`, the mimic `grassBlock_hit.png` -> `grassBlock_dead.png`. The
+  slimes/snail/block-slime already played their `_flat`/`_shell`/`_rest` squash
+  poses, and the telegraphing foes already idle on rest frames (`barnacle_*_rest`,
+  `block_rest`, `bat_hang`). The fade window is short and only a stomped foe or
+  two ever fade at once. Example-side only; static gates clean.
 - **Platformer: MULTI-KEY doors + a two-key puzzle in L2 (asset-expansion Phase C,
   slice 3 - part 1).** `pfMakeKeyDoor` was single-instance (one door per level via
   shared globals); it now appends to a per-door table, so a level can plant
