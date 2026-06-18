@@ -377,7 +377,7 @@ local gBgPanel, gBgLastHS
 -- replaces). gHudOK = the art HUD is active (false = no hud_* art -> the text
 -- field stays as the fallback, so the demo never ships blank). gHudCoinD = the two
 -- collected-count digit sprites; gHudCoinLast caches the last value drawn.
-local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinLast
+local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinLast, gHudKey, gHudKeysLast
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -413,10 +413,12 @@ local gHeroHalfH        -- the hero capsule's half-height (head reach for bonks)
 local gDebrisNext, gDebrisUntil
 local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
 -- MULTI-KEY doors (Phase C slice 3): a level may now plant SEVERAL coloured
--- key+door pairs. gKeysHeld is the comma-list of colours the hero is carrying;
--- gKeyRide[colour] is each one's ride-along sprite; the rest are per-door arrays
--- indexed 1..gDoorN (gDoorX/gDoorWord were single globals - one door per level).
-local gKeysHeld, gKeyRide, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gDoorHostNm
+-- key+door pairs. gKeysHeld is the comma-list of colours the hero is carrying
+-- (Phase F: shown as hud_key_* icons in the art HUD, which appear on pickup and
+-- vanish when a door consumes the key - this retired the ride-along key sprite).
+-- The rest are per-door arrays indexed 1..gDoorN (gDoorX/gDoorWord were single
+-- globals - one door per level).
+local gKeysHeld, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gDoorHostNm
 -- LATCHING switch-gates (Phase C slice 3, part 2): a floor/ledge switch that,
 -- once pressed, opens its coloured gate FOR GOOD (the kinematic gate rises out
 -- of the way and rests). Indexed 1..gSwN; gSwDone[i] = open AND settled (idles
@@ -826,14 +828,27 @@ end pfBuildBackdrop
 -- 1: just the coin counter (an icon + two collected-count digits, top-left), to
 -- prove the card-fixed sprite + digit path on OXT before the rest is layered on.
 command pfBuildHud
+   local tK
    put false into gHudOK
    put empty into gHudCoinLast
+   put empty into gHudKeysLast
    if gAssetsOK is not true or not b2kSheetHasFrame("hud", "hud_coin") then exit pfBuildHud
    b2kSpriteNew "hud", "hud_coin", 40, 20
    put the result into gHudCoinIcon
    if gHudCoinIcon is empty then exit pfBuildHud
    put pfHudDigit(74, 20) into gHudCoinD[1]
    put pfHudDigit(98, 20) into gHudCoinD[2]
+   -- the KEY icons (one slot per colour): created hidden, then shown + packed
+   -- left-aligned by pfUpdateHud as the hero collects them - and hidden again the
+   -- moment a door consumes one. This replaced the ride-along key-on-shoulder sprite.
+   set the itemDelimiter to comma
+   repeat for each item tK in "blue,green,red,yellow"
+      if b2kSheetHasFrame("hud", "hud_key_" & tK) then
+         b2kSpriteNew "hud", "hud_key_" & tK, 150, 20
+         put the result into gHudKey[tK]
+         if gHudKey[tK] is not empty then set the visible of gHudKey[tK] to false
+      end if
+   end repeat
    put true into gHudOK
    -- the art HUD owns the top-left now: retire the demo TITLE field (the intro
    -- splash carries the level name; pfHelp + its diagnostics stay for now).
@@ -862,13 +877,33 @@ command pfHudSetNum2 pD1, pD2, pValue
    end if
 end pfHudSetNum2
 
--- Refresh the art HUD (called at 4 Hz). Cheap: the coin digits swap only when the
--- count changes. O(1) out when the art HUD is not active (the text-field fallback).
+-- Refresh the art HUD (called at 4 Hz). Cheap: each element redraws only when its
+-- own value changes. O(1) out when the art HUD is not active (the text fallback).
 command pfUpdateHud
+   local tSlot, k
    if gHudOK is not true then exit pfUpdateHud
-   if gCoins is gHudCoinLast then exit pfUpdateHud
-   put gCoins into gHudCoinLast
-   pfHudSetNum2 gHudCoinD[1], gHudCoinD[2], gCoins
+   -- coins (on change)
+   if gCoins is not gHudCoinLast then
+      put gCoins into gHudCoinLast
+      pfHudSetNum2 gHudCoinD[1], gHudCoinD[2], gCoins
+   end if
+   -- keys (on change): pack the carried set left-aligned in pickup order, hide the
+   -- rest. gKeysHeld drops a colour the instant a door consumes it, so the icon goes.
+   if gKeysHeld is not gHudKeysLast then
+      put gKeysHeld into gHudKeysLast
+      set the itemDelimiter to comma
+      repeat for each item k in "blue,green,red,yellow"
+         if gHudKey[k] is not empty then set the visible of gHudKey[k] to false
+      end repeat
+      put 0 into tSlot
+      repeat for each item k in gKeysHeld
+         if gHudKey[k] is not empty then
+            set the loc of gHudKey[k] to (150 + tSlot * 36) & comma & 20
+            set the visible of gHudKey[k] to true
+            add 1 to tSlot
+         end if
+      end repeat
+   end if
 end pfUpdateHud
 
 -- The CAVERN (L6) has no outdoor SCENE in the bg atlas, and Kenney's flat
@@ -1074,7 +1109,6 @@ command pfStartGame
    put empty into gSawSpr
    put 0 into gDoorN
    put empty into gKeysHeld
-   put empty into gKeyRide
    put empty into gDoorOpen
    put empty into gLockSpr
    put empty into gDoorSprT
@@ -4507,6 +4541,9 @@ command pfChromeFront
       if gHudCoinIcon is not empty then set the layer of gHudCoinIcon to tN
       if gHudCoinD[1] is not empty then set the layer of gHudCoinD[1] to tN
       if gHudCoinD[2] is not empty then set the layer of gHudCoinD[2] to tN
+      repeat for each item tC in "blue,green,red,yellow"
+         if gHudKey[tC] is not empty then set the layer of gHudKey[tC] to tN
+      end repeat
    end if
    repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText"
       if there is a field tC then set the layer of field tC to tN
@@ -5530,10 +5567,8 @@ command pfTickDoors
       -- the lock dissolves into the wall (removing it would punch a
       -- see-through hole in front of the still-solid wall host)
       if gLockSpr[i] is not empty then b2kSpriteSetFrame gLockSpr[i], "terrain_stone_block_center"
-      if gKeyRide[tWord] is not empty then
-         b2kSpriteRemove gKeyRide[tWord]
-         put empty into gKeyRide[tWord]
-      end if
+      -- the key was just dropped from gKeysHeld above, so its hud_key_* icon
+      -- vanishes on the next pfUpdateHud (the old ride-along sprite is gone)
       if gDoorSprT[i] is not empty then b2kSpriteSetFrame gDoorSprT[i], "door_open_top"
       b2kSpriteSetFrame gDoorSprB[i], "door_open"
       if there is a graphic gDoorHostNm[i] then
@@ -5702,7 +5737,7 @@ end pfTickBarrel
 -- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
-   local tKPos, tPopAt, tWord, tN
+   local tPopAt, tWord
    if pSensorCtrl is empty then exit b2kSensorEnter
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfKeyFlag of pSensorCtrl is true then
@@ -5717,13 +5752,8 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
          end if
          b2kSound "key"
          b2kSpriteRemove pSensorCtrl
-         -- the key rides along on the hero's shoulder; FAN multiple keys out so
-         -- two or three are all readable (stacked by held-count)
-         put the number of items of gKeysHeld into tN
-         put b2kPosition(gHero) into tKPos
-         b2kSpriteNew "tiles", "key_" & tWord, (item 1 of tKPos) - 34, (item 2 of tKPos) - 34 - (tN - 1) * 16
-         put the result into gKeyRide[tWord]
-         if gKeyRide[tWord] is not empty then b2kSpriteBind gKeyRide[tWord], gHero, -34, -34 - (tN - 1) * 16
+         -- the carried key now shows as a hud_key_* icon in the art HUD
+         -- (pfUpdateHud reads gKeysHeld), which retired the ride-along sprite.
       end if
       exit b2kSensorEnter
    end if
