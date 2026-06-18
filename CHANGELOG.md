@@ -10,6 +10,17 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: the BLOCK SLIME - a hopping cube (asset-expansion Phase B,
+  slice 2).** The previously-unused `slime_block_*` foes art becomes a new
+  slime-family kind `block`: a cube that arcs back and forth across its band in
+  hops (the `_jump` frame in the air, a `walk_a/b` squish idle when settled),
+  reversing at the band edges and sleeping between hops. Stompable on the
+  classic path (a stomp squashes it to `slime_block_rest`, a side touch knocks
+  back) - no new contact case. Debuts in L6 "Cavern Depths" (it replaces a plain
+  slime, so the cavern's signature foe is the hopper). New `pfMakeBlockSlime`
+  maker + a `case "block"` in `pfTickSlimes`; `tools/audit-platformer.py` gains
+  its parse branch and clears L6 (still 0 findings). Example-side only (no Kit
+  change, no harness bump). Statically verified; needs an OXT pass.
 - **Platformer: LEVEL 6 "CAVERN DEPTHS" - the DIRT biome (asset-expansion
   Phase B, slice 1).** A sixth level built on the previously-unused
   `terrain_dirt_*` tile set (block tops, `block_center` mass under the mound,

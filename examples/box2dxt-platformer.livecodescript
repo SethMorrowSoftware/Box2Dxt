@@ -90,7 +90,8 @@
 --   LEVEL 6  CAVERN DEPTHS (3040px) - the asset-expansion DIRT biome: a
 --            WALL-JUMP SHAFT of floating dirt columns over the entry (slot
 --            coin), a spike GAP to leap (checkpoint past it), a DIRT-RAMP
---            mound, a one-way DIRT CLOUD high route, two slimes + a snail,
+--            mound, a one-way DIRT CLOUD high route, a slime, a hopping BLOCK
+--            SLIME + a snail,
 --            and carved dirt steps to the flag (the win). A bonus GEM rides
 --            high above the wall-jump shaft. (Block slime + conveyor in
 --            slices 2-3.)
@@ -288,9 +289,11 @@
 --      by wall-jump AND a straight double-jump (never trick-only), and the bonus
 --      GEM above the shaft is reachable (lower it if not); (f) the dirt MOUND
 --      walks up/across/down with no fall-through; the DIRT CLOUD is solid to its
---      ends and DOWN+JUMP drops through it; the spike GAP is a clean leap; both
---      slimes + the snail patrol on solid ground; the win screen says ALL SIX
---      LEVELS CLEAR. (Block slime + conveyor arrive in slices 2-3.)
+--      ends and DOWN+JUMP drops through it; the spike GAP is a clean leap; the
+--      slime, the snail, and the BLOCK SLIME (slice 2) all patrol solid ground -
+--      the block slime HOPS its band (jump frame airborne, squish idle settled,
+--      no apex-flicker) and stomps to slime_block_rest; the win screen says ALL
+--      SIX LEVELS CLEAR. (The conveyor belt arrives in slice 3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -573,6 +576,7 @@ function pfLoadSheets
    b2kAnimDef "foes", "sawspin", "saw_a,saw_b", 10, true
    b2kAnimDef "foes", "slimewalk", "slime_normal_walk_a,slime_normal_walk_b", 4, true
    b2kAnimDef "foes", "spikewalk", "slime_spike_walk_a,slime_spike_walk_b", 4, true
+   b2kAnimDef "foes", "blockidle", "slime_block_walk_a,slime_block_walk_b", 4, true   -- the block slime's settled squish between hops (Phase B)
    b2kAnimDef "foes", "snailwalk", "snail_walk_a,snail_walk_b", 4, true
    -- the showcase round's new walker species (all native 64px foes art,
    -- so no sheet/scale juggling; they ride the slime FAMILY as new kinds)
@@ -1632,6 +1636,51 @@ command pfMakeFrog pIdx, pX, pMinX, pMaxX, pTopY
    put the milliseconds + 600 + random(500) into gSlimeT[pIdx]
    put false into gFrogAir[pIdx]
 end pfMakeFrog
+
+-- A BLOCK SLIME (asset-expansion Phase B): a hopping CUBE that arcs back and
+-- forth across its band (slime_block_* foes art, previously unused). A
+-- slime-family kind "block" - stompable via the CLASSIC path (a stomp squashes
+-- it to slime_block_rest, a side touch knocks back), so it needs no b2kContact
+-- case. The _jump frame shows on the hop, the squish idle (walk_a/b) when
+-- settled. Reuses gFrogAir as its airborne flag (per-index, like the frog).
+command pfMakeBlockSlime pIdx, pX, pMinX, pMaxX, pTopY
+   local tName, tBody, tSpr
+   put "pf_slimeBody" & pIdx into tName
+   create graphic tName
+   set the style of it to "rectangle"
+   set the rect of it to pX - 24, pTopY - 44, pX + 24, pTopY
+   set the filled of it to true
+   set the backgroundColor of it to "150,120,200"   -- a purple cube (no-art fallback)
+   set the visible of it to false
+   put the long id of graphic tName into tBody
+   b2kAddBox tBody
+   b2kSetFixedRotation tBody, true
+   b2kSetFriction tBody, 0.4
+   put empty into tSpr
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "slime_block_rest") then
+      b2kSpriteNew "foes", "slime_block_rest", pX, pTopY - 28
+      put the result into tSpr
+      if tSpr is not empty then
+         b2kSpriteBind tSpr, tBody, 0, -8
+         b2kSpritePlay tSpr, "blockidle"
+      end if
+   end if
+   if tSpr is empty then set the visible of graphic tName to true
+   if the visible of graphic tName is true then b2kCamAdopt tBody
+   if pIdx > gSlimeN then put pIdx into gSlimeN
+   put tBody into gSlimeB[pIdx]
+   put tSpr into gSlimeSpr[pIdx]
+   put "block" into gSlimeKind[pIdx]
+   put 100 into gSlimeSpeed[pIdx]
+   put 100 into gSlimeDir[pIdx]
+   put "slime_block_rest" into gSlimeFlat[pIdx]   -- the defeat pose (the only static cube frame)
+   put false into gSlimeFlip[pIdx]
+   put pMinX into gSlimeMin[pIdx]
+   put pMaxX into gSlimeMax[pIdx]
+   put empty into gSlimeGoneAt[pIdx]
+   put the milliseconds + 500 + random(400) into gSlimeT[pIdx]
+   put false into gFrogAir[pIdx]
+end pfMakeBlockSlime
 
 -- A piranha burrow at pX: the plant is a bodiless sprite pfTickPlants
 -- raises and sinks; its dark mouth-hole is drawn by the SCENE (so it
@@ -3558,11 +3607,11 @@ command pfL6Cast
    pfMakeCoin 1568, 468     -- atop the dirt mound crest
    pfMakeCoin 2048, 408     -- on the one-way dirt cloud (the high route)
    pfMakeCoin 2200, 500     -- past the snail, on the lower run
-   pfMakeCoin 2560, 500     -- the second slime's beat
+   pfMakeCoin 2560, 500     -- the block slime's beat (grab it between hops)
    pfMakeCoin 2820, 476     -- on the first goal step
    pfMakeGem 428, 204, "green"   -- BONUS gem ABOVE the wall-jump shaft: master the wall-jump to reach it (OXT: confirm it is reachable; lower it a touch if not)
    pfMakeSlime 1, "normal", 760, 640, 900, 576
-   pfMakeSlime 2, "normal", 2560, 2440, 2680, 576
+   pfMakeBlockSlime 2, 2560, 2440, 2680, 576   -- the cavern's hopping CUBE (Phase B; stomp it or time the hops)
    pfMakeSnail 3, 2050, 1980, 2120
    pfMakeCheckpoint 1900    -- past the cavern gap, before the depths
    pfMakeGoal 3000, 416
@@ -3931,6 +3980,29 @@ command pfTickSlimes
                      b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
                      b2kSpriteSetFrame gSlimeSpr[i], "frog_jump"
                   end if
+               end if
+            end if
+            break
+         case "block"
+            -- Phase B: a HOPPING cube that arcs back and forth across its band
+            -- (jump frame in the air, the squish idle when settled), reversing
+            -- at the band edges. Always active; one velocity read per live
+            -- block-slime. Stomp/knockback live on the classic path (b2kContact).
+            put item 2 of b2kVelocity(tBody) into tVX   -- vy, reusing tVX like the frog
+            if gFrogAir[i] is true then
+               if abs(tVX) < 8 then
+                  put false into gFrogAir[i]   -- landed: settle into the squish idle
+                  if gSlimeSpr[i] is not empty then b2kSpritePlay gSlimeSpr[i], "blockidle"
+               end if
+            else if tMS > gSlimeT[i] and abs(tVX) < 8 then
+               if tX <= gSlimeMin[i] then put gSlimeSpeed[i] into gSlimeDir[i]
+               if tX >= gSlimeMax[i] then put -gSlimeSpeed[i] into gSlimeDir[i]
+               b2kSetVelocity tBody, gSlimeDir[i], -320
+               put tMS + 650 + random(350) into gSlimeT[i]
+               put true into gFrogAir[i]
+               if gSlimeSpr[i] is not empty then
+                  b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
+                  b2kSpriteSetFrame gSlimeSpr[i], "slime_block_jump"
                end if
             end if
             break

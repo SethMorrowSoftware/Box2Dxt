@@ -122,6 +122,9 @@ def parse():
             if s.startswith("pfMakeFrog"):
                 v = nums(s)  # idx,x,minx,maxx,topy
                 L.enemies.append(("frog", v[0], v[1], v[2], v[3], v[4], 22)); continue
+            if s.startswith("pfMakeBlockSlime"):
+                v = nums(s)  # idx,x,minx,maxx,topy  (a hopping cube; patrols its band)
+                L.enemies.append(("block", v[0], v[1], v[2], v[3], v[4], 24)); continue
             if s.startswith("pfMakeThwomp"):
                 body = s.split("--", 1)[0]
                 # chained = the weight+chain look: no tile-face string, not a faced block
