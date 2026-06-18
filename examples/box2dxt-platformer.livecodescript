@@ -1584,7 +1584,10 @@ command pfMakeThwomp pIdx, pX, pFaced, pTileFace
 end pfMakeThwomp
 
 -- The checkpoint flag at pX: touch it once and respawns restart there
--- (the off flag hoists red).
+-- (the off flag hoists red). MULTI-CHECKPOINT SAFE: each flag carries its
+-- OWN respawn x (uPfCheckX) and a one-shot guard (uPfCheckDone), so a level
+-- may plant several and each banks/raises independently (the single gCheck*
+-- globals only ever tracked ONE - three in L6 made all but the last dead).
 command pfMakeCheckpoint pX
    local tRef
    put empty into gCheckSpr
@@ -1594,6 +1597,8 @@ command pfMakeCheckpoint pX
       put the result into tRef
       if tRef is not empty then
          set the uPfCheckFlag of tRef to true
+         set the uPfCheckX of tRef to pX        -- THIS flag's own respawn x
+         set the uPfCheckDone of tRef to false  -- raised + banked only on first touch
          put tRef into gCheckSpr
          b2kAddSensor tRef, "ball"
       end if
@@ -5197,11 +5202,20 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       exit b2kSensorEnter
    end if
    if the uPfCheckFlag of pSensorCtrl is true then
-      if gCheckpointOn is not true then
+      -- activate the FLAG YOU TOUCHED (not a single global), raise it once, and
+      -- only ever ADVANCE the respawn point - so an earlier flag re-touched on a
+      -- knockback can never drag the respawn backward. (The bug this fixes: with
+      -- the old single gCheck* globals, three checkpoints in L6 meant touching
+      -- any flag banked the LAST one's x and raised the LAST flag, so the first
+      -- never lit and a later one stood pre-raised.)
+      if the uPfCheckDone of pSensorCtrl is not true then
+         set the uPfCheckDone of pSensorCtrl to true
          put true into gCheckpointOn
-         put gCheckX into gRespawnX
-         put 470 into gRespawnY
-         if gCheckSpr is not empty then b2kSpritePlay gCheckSpr, "checkwave"
+         if the uPfCheckX of pSensorCtrl > gRespawnX then
+            put the uPfCheckX of pSensorCtrl into gRespawnX
+            put 470 into gRespawnY
+         end if
+         b2kSpritePlay pSensorCtrl, "checkwave"
          b2kSound "check"
          b2kCamShake 3, 180
       end if
