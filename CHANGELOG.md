@@ -19,7 +19,14 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   slimes/snail/block-slime already played their `_flat`/`_shell`/`_rest` squash
   poses, and the telegraphing foes already idle on rest frames (`barnacle_*_rest`,
   `block_rest`, `bat_hang`). The fade window is short and only a stomped foe or
-  two ever fade at once. Example-side only; static gates clean.
+  two ever fade at once.
+  - **A stomp DUST-POOF** (more juice): four little pale motes arc out of a
+    squashed foe (`pfMakeDustPool`/`pfDustBurst`/`pfTickDust`, the pooled-debris
+    pattern - eight bodies parked off-world, flung on the stomp, re-parked ~0.5s
+    later, so nothing is created mid-game). The motes are `b2kSpawnBall` bodies
+    (no new art) born in the camera group, so they scroll with the world. Built
+    every level.
+  Example-side only; static gates clean, audit 0 findings.
 - **Platformer: MULTI-KEY doors + a two-key puzzle in L2 (asset-expansion Phase C,
   slice 3 - part 1).** `pfMakeKeyDoor` was single-instance (one door per level via
   shared globals); it now appends to a per-door table, so a level can plant

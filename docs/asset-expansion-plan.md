@@ -218,10 +218,11 @@ needs an OXT eye.
 - *Pure example-side; no new levels.* Good "between big phases" polish.
 - **Done (pending OXT):** the stomped foe now **fades out** over its linger
   (`blendLevel` ramp) instead of blinking off; the bat + mimic show a proper
-  `_dead` pose (was a `_hit` flash). Slimes/snail/block already had `_flat`/
-  `_shell`/`_rest` squash poses; telegraphing foes already idle on rest frames.
+  `_dead` pose (was a `_hit` flash); and a **dust-POOF** (four pooled `b2kSpawnBall`
+  motes, the debris pattern) bursts from the squash. Slimes/snail/block already
+  had `_flat`/`_shell`/`_rest` squash poses; telegraphing foes already idle on rest.
 - **TODO (optional):** the second skins (`worm_ring_*`, `slimeBlue/Green*`) and a
-  defeat dust-poof (pooled), if more juice is wanted.
+  defeat "pop" (the foe flips up as it fades), if still more juice is wanted.
 
 ### Phase E — Snakes & the slither biome beat  (M)
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.

@@ -412,6 +412,10 @@ local gKeysHeld, gKeyRide, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gD
 -- in one compare thereafter).
 local gSwN, gSwX, gSwWord, gSwOpen, gSwDone, gSwGate, gSwSpr, gSwGateSprA, gSwGateSprB, gSwGateVel
 local gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
+-- Phase D juice: a small pool of DUST motes flung from a stomped foe (the
+-- debris pattern - pooled bodies parked off-world, flung on the event, re-parked
+-- by pfTickDust - so nothing is created mid-game). Built every level.
+local gDustB, gDustUntil, gDustNext
 local gBlockChainA, gBlockChainB, gBlockFace
 local gGoalSpr, gNoticeUntil, gFlagNoteMS
 -- Polish pass (the showcase round): three classic mechanisms riding the
@@ -1009,6 +1013,9 @@ command pfStartGame
    put empty into gDebrisB
    put empty into gDebrisSpr
    put empty into gDebrisUntil
+   put 0 into gDustNext
+   put empty into gDustB
+   put empty into gDustUntil
    put 0 into gHeroPX
    put 0 into gHeroPY
    put empty into gHeroState
@@ -1190,6 +1197,7 @@ command pfStartGame
    b2kPlayerSet "duckScale", 1        -- DOWN brakes to a stop in place (no hitbox reshape)
    b2kPlayerSet "platformCarry", 1    -- ride the moving platforms (the L2 lift bay)
    put 75 into gIntroPan   -- a splash beat (~1.2 s), then control
+   pfMakeDustPool   -- Phase D: the stomp dust-poof pool (every level; needs gHero)
    -- ===== LEVEL CAST (coins, enemies, checkpoint, the goal flag) =====
    switch gLevel
       case 2
@@ -4439,6 +4447,7 @@ on b2kFrame
    pfTickSpring
    pfTickBonks
    pfTickDebris
+   pfTickDust
    pfTickLever
    pfTickDoors
    pfTickPlants
@@ -5200,6 +5209,60 @@ command pfTickDebris
    end repeat
 end pfTickDebris
 
+-- Phase D: the DUST-POOF pool. Eight tiny pale balls parked off-world; a stomp
+-- flings four of them out of the foe (pfDustBurst), and pfTickDust re-parks them
+-- ~0.5s later. The balls ARE the art (no sprite), so a dust mote is just a small
+-- light circle arcing up out of the squash - the classic stomp poof, no new
+-- frames. Bodies (not graphics), so b2kMoveTo handles the camera scroll for free.
+command pfMakeDustPool
+   local i, tRef
+   put 0 into gDustNext
+   repeat with i = 1 to 8
+      put empty into gDustB[i]
+      put 0 into gDustUntil[i]
+      b2kSpawnBall -800 + i * 18, 300, 6, "238,234,216"
+      put the result into tRef
+      if tRef is empty then next repeat
+      b2kNoCollide tRef, gHero
+      b2kSetStatic tRef
+      put tRef into gDustB[i]
+   end repeat
+end pfMakeDustPool
+
+-- Fling four pooled dust motes out of (pX,pY) - call it the moment a foe is
+-- squashed. Nothing is created here; see pfMakeDustPool.
+command pfDustBurst pX, pY
+   local i, tSlot, tDX, tVX
+   if gDustNext is empty then exit pfDustBurst   -- no pool on this build
+   set the itemDelimiter to comma
+   repeat with i = 1 to 4
+      put item i of "-14,14,-6,6" into tDX
+      put item i of "-130,130,-55,55" into tVX
+      add 1 to gDustNext
+      if gDustNext > 8 then put 1 into gDustNext
+      put gDustNext into tSlot
+      if gDustB[tSlot] is empty then next repeat
+      b2kSetDynamic gDustB[tSlot]
+      b2kMoveTo gDustB[tSlot], pX + tDX, pY - 8
+      b2kSetVelocity gDustB[tSlot], tVX, -210 - i * 22
+      put the milliseconds + 500 into gDustUntil[tSlot]
+   end repeat
+end pfDustBurst
+
+-- Flung motes re-park ~0.5s out (before the kill floor eats them). Eight array
+-- reads per frame while none are flying.
+command pfTickDust
+   local i
+   repeat with i = 1 to 8
+      if gDustUntil[i] is 0 or gDustUntil[i] is empty then next repeat
+      if the milliseconds < gDustUntil[i] then next repeat
+      put 0 into gDustUntil[i]
+      if gDustB[i] is empty then next repeat
+      b2kSetStatic gDustB[i]
+      b2kMoveTo gDustB[i], -800 + i * 18, 300
+   end repeat
+end pfTickDust
+
 -- The lever: STOP at it (grounded in its band, near-zero vx) to toggle
 -- the sweeping saw's power - running through never flips it, so the
 -- main path stays accident-free. A leave-the-band latch re-arms it; no
@@ -5740,9 +5803,11 @@ end b2kContact
 -- bowled snail leaves its shell behind. (A frame a sheet lacks is a
 -- safe no-op inside the Kit: the art simply keeps its last pose.)
 command pfSquashSlime pWhich
-   local tFlat
+   local tFlat, tPos
    if gSlimeB[pWhich] is empty then exit pfSquashSlime
    b2kSound "stomp"
+   set the itemDelimiter to comma
+   put b2kPosition(gSlimeB[pWhich]) into tPos   -- the squash point, for the dust poof
    switch gSlimeKind[pWhich]
       case "bat"
       case "batfly"
@@ -5768,6 +5833,7 @@ command pfSquashSlime pWhich
       if tFlat is not empty then b2kSpriteSetFrame gSlimeSpr[pWhich], tFlat
       b2kSpriteUnbind gSlimeSpr[pWhich]
    end if
+   if tPos is not empty then pfDustBurst (item 1 of tPos), (item 2 of tPos)   -- Phase D: a dust POOF at the squash
    b2kRemove gSlimeB[pWhich]      -- body gone; the death art lingers a moment
    put empty into gSlimeB[pWhich]
    put the milliseconds + 700 into gSlimeGoneAt[pWhich]
