@@ -3871,8 +3871,8 @@ command pfL7Scene
    pfMakeTorch 928, 440
    pfMakeTorch 96, 264
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "window") then
-      pfTile "window", 16, 900     -- set into the tower walls
-      pfTile "window", 912, 500
+      pfTile "window", 0, 900      -- centred IN the left wall column (origin 0, like its stone)
+      pfTile "window", 960, 500    -- centred IN the right wall column (origin 960)
    end if
 end pfL7Scene
 
