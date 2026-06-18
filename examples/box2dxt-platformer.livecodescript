@@ -320,8 +320,13 @@
 --      help/buttons/level-picker) stays put while the world scrolls; (g) the
 --      tower is CENTRED and the stone SIDE-WALLS fill the viewport margins each
 --      side (the play column is narrower than the view) - no dead backdrop at
---      ground level or up the climb. The win screen says ALL SEVEN LEVELS
---      CLEAR. (Spinner + puzzles: slices 2-3.)
+--      ground level or up the climb; (h) SLICE 2 - two SPINNING BLADES (the
+--      spooks sheet) sweep the shaft across a climb gap each (lower L1->L2,
+--      upper L4->L5): you can stand SAFE on the lower ledge and time the jump,
+--      a mistime is knockback (never lethal), and the blades spin via animation
+--      (not body rotation). Confirm the timing is FAIR (tune pPerX if frantic);
+--      no art (no enemies.png) = the spots are simply safe. The win screen says
+--      ALL SEVEN LEVELS CLEAR. (Multi-key / switch puzzles: slice 3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -599,6 +604,8 @@ function pfLoadSheets
       b2kSheetScale "spooks", 0.9
       b2kAnimDef "spooks", "batfly", "bat_fly.png,bat.png", 8, true
       b2kAnimDef "spooks", "spiderwalk", "spider_walk1.png,spider_walk2.png", 8, true   -- Wave 6
+      b2kAnimDef "spooks", "spin", "spinner.png,spinner_spin.png", 12, true             -- Phase C: the keep's blade
+      b2kAnimDef "spooks", "spinhalf", "spinnerHalf.png,spinnerHalf_spin.png", 12, true -- wall-mounted half-blade
    end if
    -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -1326,6 +1333,36 @@ command pfAddMover pSpr, pX, pY, pAmpX, pPerX, pAmpY, pPerY, pHurtW, pHurtH, pFa
    put pHurtH into gMovHurtH[gMovN]
    put (pFaceTravel is true) into gMovFlip[gMovN]
 end pfAddMover
+
+-- A SPINNING-BLADE hazard (asset-expansion Phase C, the keep's hazard): a
+-- bodiless spooks-sheet sprite that spins in place (animation, not body
+-- rotation - gotcha 23) and SWEEPS a horizontal sine path, hurting by plain
+-- proximity like the saw. It is an UNKILLABLE hazard - the "saw rule": you
+-- TIME it, you never stomp it (knockback via pfOuch in pfTickMovers, never a
+-- respawn). pAmpX/pPerX set the sweep (amp 0 = a blade fixed in place); pHalf
+-- selects the wall-mounted HALF-blade (spinnerHalf) over the full disc. The
+-- art is OPTIONAL (enemies.png / gSpooksOK): absent, the maker no-ops and the
+-- spot is simply safe (the climb never depends on a hazard being present).
+command pfMakeSpinner pX, pY, pAmpX, pPerX, pHalf
+   local tRef, tFrame, tAnim, tHurtH
+   if gSpooksOK is not true then exit pfMakeSpinner
+   if pHalf is true then
+      put "spinnerHalf.png" into tFrame
+      put "spinhalf" into tAnim
+      put 15 into tHurtH        -- the half-blade is flat (63x31): a short hurt box
+   else
+      put "spinner.png" into tFrame
+      put "spin" into tAnim
+      put 28 into tHurtH        -- the full disc (~57px after the 0.9 scale): hurt ~ the blade
+   end if
+   if not b2kSheetHasFrame("spooks", tFrame) then exit pfMakeSpinner
+   b2kSpriteNew "spooks", tFrame, pX, pY
+   put the result into tRef
+   if tRef is empty then exit pfMakeSpinner
+   b2kSpritePlay tRef, tAnim
+   -- a spinning disc is symmetric: no facing flip (pFaceTravel false)
+   pfAddMover tRef, pX, pY, pAmpX, pPerX, 0, 1, 28, tHurtH, false
+end pfMakeSpinner
 
 command pfMakeCoin pX, pY
    local tRef
@@ -3886,6 +3923,14 @@ command pfL7Cast
    pfMakeCoin 512, 272      -- ledge 7
    pfMakeCoin 448, 144      -- on the keep top
    pfMakeGem 544, 80, "blue"   -- BONUS gem: a double-jump above the keep top (the summit)
+   -- the keep's SPINNING BLADES (Phase C slice 2): two sweep the shaft across
+   -- a climb gap each - stand SAFE on the lower ledge, read the blade, jump the
+   -- gap when it has swept clear (the saw rule; a mistime is knockback, never
+   -- lethal). Each sits in the GAP (standing-safe on both adjacent ledges, ~66px
+   -- of the 38px-half hero clear): the lower across L1->L2, the upper L4->L5
+   -- (tighter + faster). OXT: confirm the timing is fair; widen pPerX if frantic.
+   pfMakeSpinner 512, 986, 320, 1300, false   -- lower: guards the L1->L2 crossing
+   pfMakeSpinner 512, 602, 300, 1050, false   -- upper: a tighter, faster sweep
    pfMakeGoal 544, 160      -- the flag, atop the keep
 end pfL7Cast
 

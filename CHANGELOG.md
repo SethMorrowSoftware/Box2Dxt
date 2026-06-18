@@ -10,6 +10,21 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: the SPINNER - a spinning-blade hazard (asset-expansion Phase C,
+  slice 2).** The previously-unused `spinner*` art (the `spooks` / `enemies.png`
+  sheet) becomes the keep's hazard: `pfMakeSpinner pX, pY, pAmpX, pPerX, pHalf`
+  registers a bodiless sprite that spins via ANIMATION (not body rotation,
+  gotcha 23) and sweeps a horizontal sine path, hurting by plain proximity like
+  the saw - an UNKILLABLE "saw-rule" hazard you TIME, never stomp (knockback via
+  `pfOuch` in `pfTickMovers`, never a respawn). Built on the existing mover
+  table (no new per-frame tick). `pHalf` selects the wall-mounted half-blade
+  (`spinnerHalf`) for slice 3's puzzle wing. L7 deploys two full blades, each
+  sweeping the shaft across a climb gap (lower L1->L2, upper L4->L5) and placed
+  STANDING-SAFE on both adjacent ledges (the hero waits on the lower ledge and
+  times the jump). Optional art (gated on `gSpooksOK`): no `enemies.png` = the
+  maker no-ops and those spots are simply safe (the climb never depends on a
+  hazard). Example-side only (no Kit change, no harness bump); static gates
+  clean. **The blade timing needs the OXT feel-pass** (tune `pPerX` if frantic).
 - **Platformer: a LEVEL PICKER (dev/test convenience).** A top-right option-menu
   dropdown jumps straight to any level (`menuPick` -> `pfJumpToLevel`, a fresh
   run-state rebuild), so levels already approved need not be replayed after every

@@ -181,8 +181,13 @@ needs an OXT eye.
   `gLevel >= 7`. The audit skips the vertical level. **The vertical camera scroll
   is the OXT unknown.** (Earlier horizontal passes were redesigned after the user
   asked for a true vertical level.)
-- **Slices 2–3 — TODO:** the **spinner** hazard (slice 2), then the **multi-key /
-  switch puzzles** (slice 3) — the keep's real identity.
+- **Slice 2 — DONE (pending OXT):** the **spinner** hazard. `pfMakeSpinner` (a
+  bodiless `spooks`-sheet sprite spinning via animation + sweeping a sine path,
+  proximity knockback like the saw — the saw-rule, you time it). L7 gets two
+  sweeping blades across the L1->L2 and L4->L5 climb gaps, standing-safe on the
+  adjacent ledges. `pHalf` provides the wall-mounted `spinnerHalf` for slice 3.
+  Gated on `gSpooksOK` (no `enemies.png` = safe). **Blade timing is the OXT feel-pass.**
+- **Slice 3 — TODO:** the **multi-key / switch puzzles** — the keep's real identity.
 - **Assets:** `terrain_stone_*` (full), `switch_{blue,green,red}(_pressed)`,
   `key_{blue,green}`, `lock_{blue,green}`, `spinner*`/`spinnerHalf*`,
   `block_strong_*`.
