@@ -2982,26 +2982,26 @@ end pfL1Cast
 command pfL2Scene
    local tX, tRef
    put "THE WORKS" into gLevelName
-   pfBounds kPfEdgeL, 5844 + kPfEndCap   -- right edge hugs the goal flag (5844)
-   pfSlab "pf_ground1", 0, 576, 5952, 640
-   pfSlab "pf_plat1", 5568, 512, 5760, 576
-   pfSlab "pf_plat2", 5760, 448, 5888, 576
+   pfBounds kPfEdgeL, 6272 + kPfEndCap   -- the stone VAULT finale gives the two-key gates room (flag at 6272)
+   pfSlab "pf_ground1", 0, 576, 6384, 640
+   pfSlab "pf_plat1", 6016, 512, 6208, 576
+   pfSlab "pf_plat2", 6208, 448, 6336, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 5888 step 64
-         if tX >= 5568 then
-            -- the finale plays in STONE past the walled door
+      repeat with tX = 0 to 6320 step 64
+         if tX >= 5344 then
+            -- the VAULT finale plays in STONE, entered through the first (yellow) gate
             pfTile "terrain_stone_block_top", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
       end repeat
-      pfTile "terrain_stone_block_top_left", 5568, 512
-      pfTile "terrain_stone_block_top", 5632, 512
-      pfTile "terrain_stone_block_top_right", 5696, 512
-      pfTile "terrain_stone_block_top", 5760, 448
-      pfTile "terrain_stone_block_top", 5824, 448
-      pfTile "terrain_stone_block_center", 5760, 512
-      pfTile "terrain_stone_block_center", 5824, 512
+      pfTile "terrain_stone_block_top_left", 6016, 512
+      pfTile "terrain_stone_block_top", 6080, 512
+      pfTile "terrain_stone_block_top_right", 6144, 512
+      pfTile "terrain_stone_block_top", 6208, 448
+      pfTile "terrain_stone_block_top", 6272, 448
+      pfTile "terrain_stone_block_center", 6208, 512
+      pfTile "terrain_stone_block_center", 6272, 512
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -3145,7 +3145,7 @@ command pfL2Scene
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
       pfTile "sign", 3980, 512        -- a way-marker into the crusher alley
-      pfTile "bush", 5400, 512
+      pfTile "bush", 5160, 512        -- last greenery before the stone vault (was 5400, now inside the stone finale)
    end if
    if gToysOK is true then
       pfMakeLever 1120        -- stand here to power the FIRST sweep saw down
@@ -3153,13 +3153,17 @@ command pfL2Scene
       -- door - a YELLOW key early on the main run, a BLUE key up on the hop
       -- clouds, and BOTH gates stand between you and the flag (the HUD lists the
       -- keys you carry). Multi-instance pfMakeKeyDoor; each key opens its colour.
+      -- THE VAULT'S TWO-KEY LOCKGATE (Phase C slice 3): the stone finale is
+      -- entered through a YELLOW gate, then a corridor, then a BLUE gate before
+      -- the flag - each its own beat, well clear of the steps (the HUD lists the
+      -- keys you carry). Yellow key on the main run, blue key up on the hop clouds.
       pfMakeKeyDoor 1740, 500, 5344, "yellow"
-      pfMakeKeyDoor 4904, 356, 5600, "blue"
+      pfMakeKeyDoor 4904, 356, 5760, "blue"
       -- a GREEN SWITCH-GATE (slice 3 part 2): the green gate bars the way into
       -- the crusher alley until you climb to the third-bay cloud and press the
       -- switch up there (it latches open) - a "find the switch" beat. Skip it and
       -- the closed gate at 4060 sends you back to look for the cloud.
-      pfMakeSwitchGate 3828, "green", 4060, 448
+      pfMakeSwitchGate 3828, "green", 4000, 448
    end if
 end pfL2Scene
 
@@ -3183,15 +3187,16 @@ command pfL2Cast
    pfMakeCoin 4590, 500     -- ...and the last gap
    pfMakeCoin 4904, 392     -- up on the first hop cloud
    pfMakeCoin 5124, 392     -- up on the second hop cloud, before the door
-   pfMakeCoin 5700, 448     -- over the first stone step
-   pfMakeCoin 5774, 392     -- over the top step, by the flag
+   pfMakeCoin 6080, 460     -- over the first stone step
+   pfMakeCoin 6200, 420     -- on the climb to the flag (clear of the goal)
    -- length pass: a few more coins for the longer two-key finish (L2 -> ~24)
    pfMakeCoin 1130, 500     -- the early run, between the lever and the first saw
    pfMakeCoin 2360, 500     -- the open stretch before the checkpoint
    pfMakeCoin 4750, 500     -- the run out of the green crusher alley
-   pfMakeCoin 5250, 392     -- on the second hop cloud, by the lockgate
-   pfMakeCoin 5500, 500     -- in the lockgate POCKET, between the two doors
-   if gToysOK is true then pfMakeCoin 5440, 500   -- just PAST the yellow door (still gated by it), clear of the closed-door face
+   pfMakeCoin 5250, 392     -- on the second hop cloud, approaching the vault
+   pfMakeCoin 5560, 500     -- in the vault corridor, between the two gates
+   pfMakeCoin 5920, 500     -- past the blue gate, on the run to the steps
+   if gToysOK is true then pfMakeCoin 5440, 500   -- just PAST the yellow gate (still gated by it), clear of the closed-door face
    -- the bee patrols the breather cloud
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 2210, 310
@@ -3261,15 +3266,15 @@ command pfL2Cast
    -- the GREEN CRUSHER ALLEY (the works' marquee gauntlet): a row of four
    -- green-block thwomps you time your run beneath - each drops as you near
    -- it, so keep moving and snatch the coins in the gaps. They rest STATIC
-   -- then rise + re-arm, never blocking the alley for good. A fourth-bay
-   -- SNAIL guards the approach (snails liberally now).
-   pfMakeSnail 4, 3950, 3910, 3990
+   -- then rise + re-arm, never blocking the alley for good. The GREEN
+   -- SWITCH-GATE (above) now guards the approach - the redundant fourth-bay
+   -- snail was retired to give that gate clear air on both sides.
    pfMakeThwomp 5, 4140, false, "block_green"
    pfMakeThwomp 6, 4320, false, "block_green"
    pfMakeThwomp 7, 4500, false, "block_green"
    pfMakeThwomp 8, 4680, false, "block_green"
    pfMakeCheckpoint 2450   -- clear flat ground past the breather cloud (was 1000, right beside the floating bonus ledge's open span - it read as "a flag over a pit"); clear of both sweeping saws too
-   pfMakeGoal 5844, 416
+   pfMakeGoal 6272, 416
 end pfL2Cast
 
 -- =====================================================================

@@ -18,8 +18,10 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   its colour, rides along the shoulder (fanned out when you hold several), and is
   CONSUMED when it opens its own colour of door (`pfTickDoors` loops every door).
   Single-door levels (L3's red door) are unchanged. **L2 "The Works"** now ends on
-  a **two-key lockgate** - a yellow key on the main run, a blue key up on the hop
-  clouds, and a double door before the flag - and gains coins to **24** (was 19).
+  a **two-key lockgate** - its stone VAULT finale was extended (~5,884 -> ~6,312px)
+  into a proper corridor so the yellow gate, a stretch, the blue gate and the steps
+  are each their own beat (the first cut had the blue door embedded in the goal
+  step) - and gains coins to **25** (was 19).
   Example-side only; gates clean, audit 0 findings.
 - **Platformer: latching SWITCH-GATES + a switch puzzle in L2 (Phase C slice 3 -
   part 2).** `pfMakeSwitchGate pSwitchX, pColour, pGateL` plants a floor/ledge
