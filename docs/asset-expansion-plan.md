@@ -226,30 +226,35 @@ needs an OXT eye.
   `spooks`, via `pfMakeCritter`'s new optional sheet param, `gSpooksOK`-gated) and
   the **ring worm** (`worm_ring`, native foes). Phase D essentially complete.
 
-### Phase E — Snakes & the slither biome beat  (M)  — BEGUN
+### Phase E — Snakes & the slither biome beat  (M)  — DONE (pending OXT)
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.
 - **New movement type:** **slither** — a ground crawler that hugs the floor and
   reverses at edges/walls (slime-family kind `snake`, animated `_walk`). The LOW
   `snake.png` is the crawler; the TALL rearing `snakeLava`/`snakeSlime` art is the
-  rising **lava serpent** (a separate bodiless mover, not a floor crawler).
-- Woven into L4 and the new biomes (no dedicated level needed).
+  rising **serpent** (a separate bodiless mover, not a floor crawler).
+- Woven into L4 (lava), L6 (goo), and across the biomes (no dedicated level needed).
 - **Done (pending OXT):**
   - The `snake` kind + slither tick (floor-probe edge/wall reversal) +
     `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY` — the plain low crawler, `gSpooksOK`-
-    gated, via `pfMakeCritter`'s sheet param. Deployed: L3's ice platform (turns at
-    the spike pit) and L4's lava-pit approach (turns at the entry pit + lava lip).
-  - **The "serpent pit" beat (`pfMakeLavaSerpent`/`pfTickLavaSerpent`):** L4's old
-    collapsing bridge is removed; the lava pit is widened to a 512px chasm crossed
-    in two hops over a middle stepping-stone, and a rearing `snakeLava` serpent
-    rises out / arcs across / sinks back in on a sine path, peaking at the stone
-    (a proximity-poll knockback, the saw rule). Created under the lava tiles so its
-    submerged body is occluded.
+    gated, via `pfMakeCritter`'s sheet param. Deployed: L1 meadow, L3 ice, L4
+    lava-approach, L5 desert — the slither type across four biomes.
+  - **The serpent (`pfMakeSerpent`/`pfTickSerpent`, generic):** a rearing snake
+    that rises out of a hazard pool, arcs across on a sine path and sinks back in,
+    peaking high so it contests the crossing (a proximity-poll knockback, the saw
+    rule). Created under the pool surface so its submerged body is occluded.
+    Single-instance (one per level). Two homes:
+    - **L4 lava** (`snakeLava`): the old collapsing bridge is gone; the pit is a
+      512px chasm crossed in two hops over a middle stepping-stone the serpent
+      peaks at.
+    - **L6 goo** (`snakeSlime`): PIT2's spike chasm becomes a toxic **goo pool**
+      (`pfMakeSlimePool`, the slime-biome twin of `pfMakeLava`); the serpent peaks
+      at jump-arc height, so you time the double-jump for when it has sunk.
   - **Sprite grounding fix:** the spook skins fill their frames edge-to-edge (no
     transparent padding, measured), so their bind offset is the plain geometric
     `pFullH/2 - frameH*0.9/2`, not the FOES soft-bottom sink that floated them ~9px.
-- **TODO:** a `snakeSlime` home (a slime-pool beat) and more snake placements;
-  optionally teach `audit-platformer.py` the `pfMakeSnake`/`pfMakeLavaSerpent`
-  makers (currently ignored — harmless, the pit isn't gap-checked).
+- **TODO (optional):** more snake placements if wanted; `audit-platformer.py` now
+  tracks `pfMakeSlimePool` as a hazard but still ignores `pfMakeSnake`/`pfMakeSerpent`
+  (harmless — the pools aren't gap-checked and the snakes self-reverse).
 
 ### Phase F — Collectibles & a health model  (M)
 - **Assets:** `coin_bronze/silver(_side)`, `star`, `heart`, `hud_heart(_half/

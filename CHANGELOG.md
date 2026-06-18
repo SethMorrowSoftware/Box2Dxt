@@ -10,6 +10,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: the GOO SERPENT in a slime-pool beat + the serpent generalized
+  (asset-expansion Phase E, continued).** L6's PIT2 spike chasm becomes a **toxic
+  GOO POOL** (new `pfMakeSlimePool` — a green goo rect over a knockback hurt
+  sensor, the slime-biome twin of `pfMakeLava`) where a rearing **`snakeSlime`
+  serpent** rises out of the goo, arcs across and sinks back in, peaking at
+  jump-arc height so you time your double-jump for when it has sunk (a mistimed
+  leap or a slip into the goo is a recoverable knockback). The L4 lava serpent's
+  maker is generalized to `pfMakeSerpent pL,pR,pSurfY,pPeakY,pFrame,pAnim` (tick
+  `pfTickSerpent`), driving both the lava (`snakeLava`) and goo (`snakeSlime`)
+  skins from one code path (single-instance — one serpent per level, reset on each
+  build). Plus two more plain **snake** placements for variety: a meadow snake on
+  L1 and a sand snake on L5. Self-gates on `gSpooksOK`; static gates clean, audit
+  0 findings.
 - **Platformer: the LAVA SERPENT + a widened L4 lava pit (asset-expansion Phase
   E).** L4's old collapsing bridge (which never read right) is **gone**; in its
   place the lava pit is widened to a **512px chasm** (2944..3456, up from a 192px
@@ -17,9 +30,10 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   rearing **LAVA SERPENT** (`snakeLava` art, bodiless) rises OUT of the lava, arcs
   ACROSS it and sinks back in on a sine path, **peaking at the stepping-stone** so
   it contests the very rock you must land on (time your hops between its rises).
-  New `pfMakeLavaSerpent` / `pfTickLavaSerpent`: a pure sprite created BEFORE the
-  lava tiles so the y576 tile row occludes its submerged lower body (it reads as
-  rising from / sinking into the lava), with a visibility toggle backing the
+  `pfMakeSerpent` / `pfTickSerpent` (the generic serpent maker/tick): a pure
+  sprite created BEFORE the lava tiles so the y576 tile row occludes its submerged
+  lower body (it reads as rising from / sinking into the lava), with a visibility
+  toggle backing the
   no-tile fallback; the head's strike zone is a proximity-poll knockback (the saw
   rule, gotcha 16), never a stomp. The collapsing-bridge maker/tick/globals were
   removed wholesale. Self-gates on `gSpooksOK` - absent the spooks sheet the pit is

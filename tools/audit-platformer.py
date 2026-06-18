@@ -103,6 +103,8 @@ def parse():
                 v = nums(s); L.spikes.append((v[0], v[1])); continue
             if s.startswith("pfMakeLava"):
                 v = nums(s); L.lava.append((v[0], v[1])); continue
+            if s.startswith("pfMakeSlimePool"):   # Phase E goo pool = a lava-like surface hazard
+                v = nums(s); L.lava.append((v[0], v[1])); continue
             if s.startswith("pfMakeWater"):
                 v = nums(s); L.water.append((v[0], v[1], v[2], v[3])); continue
             if s.startswith("pfMakeCoin"):

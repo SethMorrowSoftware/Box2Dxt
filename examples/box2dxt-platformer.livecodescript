@@ -262,7 +262,7 @@
 --      hidden by the lava tiles), its head reaches the stepping-stone deck at the
 --      peak, each hop is clearable by a running/double jump, and the mid-stone
 --      coin is grabbable between rises; tune gLSerpPer (the crossing period) in
---      pfMakeLavaSerpent to taste.
+--      pfMakeSerpent to taste. (L6 reuses the same serpent as a GOO-pool snake.)
 --  18. WAVE 6 BESTIARY II (frog / barnacle / spider - all example-side, no Kit
 --      change, no harness bump). FROG (L1 far meadow, ~x4660): a native-art
 --      HOPPER that crouches then LEAPS at you when near; STOMP it from above (it
@@ -443,14 +443,14 @@ local gBarrelN, gBarrelB, gBarrelSpr, gBarrelX, gBarrelY, gBarrelState, gBarrelT
 -- gLiftVX caches the last-written vx so the tick never re-sets an unchanged
 -- velocity (gotcha 17). Indexed 1..gLiftN.
 local gLiftN, gLift, gLiftMin, gLiftMax, gLiftSpeed, gLiftVX
--- Phase E: the LAVA SERPENT (L4). A bodiless rearing-snake sprite that rises out
--- of the lava pit, arcs across it and sinks back in, peaking at the middle
--- stepping-stone so it CONTESTS the platform (gotcha 16: a proximity-poll hurt,
--- the saw rule - you TIME it, you never stomp it). gLSerpL/R = the lava lips it
--- travels between; gLSerpLavaY = the surface it emerges from; gLSerpPeakY = the
--- head's height at the centre peak; gLSerpVis caches its shown/hidden state so the
--- visibility flip is write-on-change. (It replaced the L4 collapsing bridge.)
-local gLSerpSpr, gLSerpL, gLSerpR, gLSerpLavaY, gLSerpPeakY, gLSerpPer
+-- Phase E: the rearing SERPENT (L4 lava, L6 goo). A bodiless snake sprite that
+-- rises out of a hazard pool, arcs across it and sinks back in, peaking high so it
+-- CONTESTS the crossing (gotcha 16: a proximity-poll hurt, the saw rule - you TIME
+-- it, you never stomp it). gLSerpL/R = the pool lips it travels between;
+-- gLSerpSurfY = the surface it emerges from; gLSerpPeakY = the head's height at the
+-- centre peak; gLSerpVis caches its shown/hidden state so the visibility flip is
+-- write-on-change. Single-instance (one serpent per level), reset on each build.
+local gLSerpSpr, gLSerpL, gLSerpR, gLSerpSurfY, gLSerpPeakY, gLSerpPer
 local gLSerpHalfH, gLSerpVis
 -- Wave 6 (bestiary II), all example-side: the FROG joins the slime family
 -- (gFrogAir, indexed by slime row, tracks its mid-hop pose so the crouch frame
@@ -1060,7 +1060,7 @@ command pfStartGame
    put empty into gBarrelY
    put empty into gBarrelState
    put empty into gBarrelT
-   -- the lava serpent starts empty (only L4 builds one)
+   -- the serpent starts empty (only the L4 lava / L6 goo pools build one)
    put empty into gLSerpSpr
    put false into gLSerpVis
    -- the Wave 5 moving-platform lifts start the run empty/idle
@@ -1583,8 +1583,8 @@ end pfMakeCritter
 -- gets its own tick: it crawls the floor and AUTO-REVERSES at a pit edge or a
 -- wall (pfTickSlimes "snake" case), so you place it without hand-tuning a band -
 -- pMinX/pMaxX are just the outer safety bound. This is the LOW (snake.png)
--- crawler; the taller snakeLava/snakeSlime art rears up and is the rising LAVA
--- SERPENT (pfMakeLavaSerpent). Spook-sheet art, so it SELF-GATES on gSpooksOK.
+-- crawler; the taller snakeLava/snakeSlime art rears up and is the rising
+-- SERPENT (pfMakeSerpent). Spook-sheet art, so it SELF-GATES on gSpooksOK.
 command pfMakeSnake pIdx, pX, pMinX, pMaxX, pTopY
    if gSpooksOK is not true then exit pfMakeSnake
    pfMakeCritter pIdx, "snake", pX, pMinX, pMaxX, pTopY, 46, "snake.png", "snakewalk", "snake_dead.png", 28, 24, "150,170,90", 3, "spooks"
@@ -2050,6 +2050,38 @@ command pfMakeLava pL, pR, pSensorTop
    b2kAddSensor tRef, "box"
 end pfMakeLava
 
+-- Phase E: a TOXIC GOO POOL - the slime-biome twin of pfMakeLava and the home of
+-- the snakeSlime SERPENT (L6's cavern). A green goo rect filling the pit (the y576
+-- row, so it occludes a serpent's submerged lower body exactly as the lava tiles
+-- do) over a knockback hurt sensor, plus a bright surface line. Like the lava,
+-- wading in knocks back (pfOuch via uPfHazardFlag) - it is not a respawn pit. A
+-- plain rect (the tiles sheet has no goo frame), so no gAssetsOK branch is needed.
+-- pSensorTop defaults to y596 (a hero on the bank is clear, a slip into the goo
+-- burns). Create the serpent BEFORE this so the goo draws OVER its lower body.
+command pfMakeSlimePool pL, pR, pSensorTop
+   local tRef
+   if pSensorTop is empty then put 596 into pSensorTop
+   create graphic ("pf_goo" & pL)
+   set the style of it to "rectangle"
+   set the rect of it to pL, 576, pR, 640
+   set the filled of it to true
+   set the backgroundColor of it to "96,176,72"      -- toxic green goo
+   b2kCamAdopt the long id of graphic ("pf_goo" & pL)
+   create graphic ("pf_gooSurf" & pL)
+   set the style of it to "line"
+   set the points of it to pL & comma & 578 & cr & pR & comma & 578
+   set the lineSize of it to 3
+   set the foregroundColor of it to "168,228,128"    -- a brighter goo surface line
+   b2kCamAdopt the long id of graphic ("pf_gooSurf" & pL)
+   create graphic ("pf_goosens" & pL)
+   set the style of it to "rectangle"
+   set the rect of it to pL + 6, pSensorTop, pR - 6, 640
+   set the visible of it to false
+   put the long id of graphic ("pf_goosens" & pL) into tRef
+   set the uPfHazardFlag of tRef to true
+   b2kAddSensor tRef, "box"
+end pfMakeSlimePool
+
 -- Wave 4: a SWIM basin. Registers the Kit swim zone (the controller polls
 -- it -- buoyant gravity, capped sink, UP/DOWN swim, SPACE strokes up) and
 -- draws the water as a blue rect with a bright surface line. The caller
@@ -2472,34 +2504,36 @@ command pfMakeBridge pL, pR, pY, pPlanks
    if tPrev is not empty then b2kHinge tPrev, empty, pR, pY   -- the far post
 end pfMakeBridge
 
--- Phase E: the LAVA SERPENT (L4, replacing the old collapsing bridge). A tall
--- rearing snake (snakeLava art) that rises out of the lava pit, arcs ACROSS it
--- and sinks back in, peaking at the middle stepping-stone so it CONTESTS the
--- platform. Bodiless: a pure sprite that pfTickLavaSerpent drives along a sine
--- arc (rise at the lips, peak over the centre) and hides while submerged - the
--- lava tiles occlude its lower body, so it must be created BEFORE pfMakeLava.
--- Unkillable, like the saws (gotcha 16: a proximity-poll knockback, never a
--- stomp). Optional art (enemies.png / gSpooksOK): absent, the maker no-ops and
--- the pit is simply a two-hop lava gap (the crossing never depends on it).
--- pL/pR are the lava lips; pLavaY the surface; pPeakY the head's height at peak.
-command pfMakeLavaSerpent pL, pR, pLavaY, pPeakY
+-- Phase E: a rearing SERPENT - a tall snake that rises out of a hazard pool
+-- (LAVA on L4, toxic GOO on L6), arcs ACROSS it on a sine path and sinks back
+-- in, peaking high so it CONTESTS the crossing (the L4 stepping-stone, the L6
+-- jump arc). Bodiless: a pure sprite that pfTickSerpent drives along the arc
+-- (rise at the lips, peak over the centre) and hides while submerged - the pool's
+-- surface (lava tiles / goo rect) occludes its lower body, so it must be created
+-- BEFORE the pool. Unkillable, like the saws (gotcha 16: a proximity-poll
+-- knockback, never a stomp). pFrame/pAnim pick the skin (snakeLava / snakeSlime),
+-- both spook-sheet art, so it SELF-GATES on gSpooksOK - absent, the maker no-ops
+-- and the pit is simply a hazard gap (the crossing never depends on the serpent).
+-- pL/pR are the pool lips; pSurfY the surface it emerges from; pPeakY the head's
+-- height at the centre peak.
+command pfMakeSerpent pL, pR, pSurfY, pPeakY, pFrame, pAnim
    local tRef
-   if gSpooksOK is not true then exit pfMakeLavaSerpent
-   if not b2kSheetHasFrame("spooks", "snakeLava.png") then exit pfMakeLavaSerpent
-   b2kSpriteNew "spooks", "snakeLava.png", (pL + pR) / 2, pLavaY
+   if gSpooksOK is not true then exit pfMakeSerpent
+   if not b2kSheetHasFrame("spooks", pFrame) then exit pfMakeSerpent
+   b2kSpriteNew "spooks", pFrame, (pL + pR) / 2, pSurfY
    put the result into tRef
-   if tRef is empty then exit pfMakeLavaSerpent
-   b2kSpritePlay tRef, "snakelava"
+   if tRef is empty then exit pfMakeSerpent
+   b2kSpritePlay tRef, pAnim
    set the visible of tRef to false   -- starts submerged (the tick shows it as it rises)
    put tRef into gLSerpSpr
    put pL into gLSerpL
    put pR into gLSerpR
-   put pLavaY into gLSerpLavaY
+   put pSurfY into gLSerpSurfY
    put pPeakY into gLSerpPeakY
    put 4200 into gLSerpPer           -- one full lip-to-lip crossing; slow enough to read + time
-   put 66 into gLSerpHalfH           -- snakeLava is 147px * the 0.9 spooks scale ~= 132 tall; head at the sprite TOP, so half ~= 66
+   put 66 into gLSerpHalfH           -- snakeLava/Slime is 147px * the 0.9 spooks scale ~= 132 tall; head at the sprite TOP, so half ~= 66
    put false into gLSerpVis
-end pfMakeLavaSerpent
+end pfMakeSerpent
 
 -- A ROLLING BOULDER: a dynamic ball released across the ground (a flat
 -- icy SLIDE on level 3, signed pVX) toward the hero, who must outrun or
@@ -2932,6 +2966,10 @@ command pfL1Cast
    end if
    pfMakeSlime 1, "spike", 880, 760, 1000, 576
    pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
+   -- Phase E: a SNAKE slithers the open meadow stretch past the slimes (auto-
+   -- reverses at its band ends; clear of the pit at 2560). The showcase level gets
+   -- the slither type too. Optional spooks art - absent, the stretch is just open.
+   pfMakeSnake 11, 2050, 1700, 2300, 576
    if gSpooksOK is true then   -- Phase D: a GREEN slime variant (optional spooks art; a normal slime without it)
       pfMakeCritter 3, "normal", 2876, 2816, 2936, 576, 52, "slimeGreen.png", "slimegreen", "slimeGreen_squashed.png", 22, 36, "120,200,90", 4, "spooks"
    else
@@ -3619,7 +3657,7 @@ command pfL4Scene
    -- to the stepping-stone deck (y490) at its peak over the pit centre (x3200),
    -- CONTESTING the stone: time your two hops between its rises. Bodiless, the
    -- saw rule (gotcha 16) - a recoverable proximity knockback, never a stomp.
-   pfMakeLavaSerpent 2944, 3456, 596, 490
+   pfMakeSerpent 2944, 3456, 596, 490, "snakeLava.png", "snakelava"
    -- the WIDE lava pit (2944..3456, 512px - a real widening from the old 192px
    -- bridge strip) with a low hurt-top (y596) so a hero ON the banks / the
    -- stepping-stone is clear, but a slip INTO the lava burns. Crossed in TWO
@@ -3930,6 +3968,9 @@ command pfL5Cast
    -- ACT 1 cast
    pfMakeSlime 1, "normal", 680, 620, 760, 576
    pfMakeFrog 2, 1500, 1420, 1620, 576
+   -- Phase E: a SAND SNAKE slithers the open dune stretch before the snail (auto-
+   -- reverses at its band ends; clear of the snail at 2940). Optional spooks art.
+   pfMakeSnake 8, 2550, 2350, 2850, 576
    pfMakeSnail 3, 3000, 2940, 3060
    pfMakeBarnacle 1, 3300, 544
    -- ACT 2 cast: a desert FLY, a BOULDER rolling the dune, a FIRE slime, a 2nd frog
@@ -4089,8 +4130,16 @@ command pfL6Scene
    -- mechanic (Phase B, slice 3). Grid-aligned, on solid ground2.
    pfMakeConveyor 2176, 2368, -1
    -- ===== ACT 2/3 terrain (the asset-expansion LENGTH pass) =====
-   -- PIT2 - a WIDER spiked chasm (256px = four spikes) past the crusher gallery.
-   pfMakeSpikes 3520, 3776
+   -- PIT2 - the GOO PIT (Phase E): a 256px toxic-goo chasm past the crusher
+   -- gallery where a rearing snakeSlime SERPENT rises out of the goo, arcs across
+   -- and sinks back in. The serpent is created BEFORE pfMakeSlimePool so the goo
+   -- draws over its submerged body (it reads as rising OUT of the goo). It peaks at
+   -- y460 over the centre (x3648) - so time your double-jump for when it has sunk;
+   -- a mistimed leap is a knockback (pfOuch) to the near bank, and a slip into the
+   -- goo burns the same. Self-gates on gSpooksOK: absent the spooks sheet the goo
+   -- pit is just a plain double-jump gap (still completable).
+   pfMakeSerpent 3520, 3776, 596, 460, "snakeSlime.png", "snakeslime"
+   pfMakeSlimePool 3520, 3776, 596
    -- a one-way DIRT CLOUD high route on G3 (solid span 4416..4608), and a
    -- second on G4 (solid 5568..5760) - both ghost-padded a tile each side.
    b2kSmoothGround "4672,448" & cr & "4608,448" & cr & "4416,448" & cr & "4352,448"
@@ -4177,7 +4226,7 @@ command pfL6Cast
    pfMakeCoin 2880, 440     -- under the BATS (duck the swoop)
    pfMakeCoin 3088, 500     -- into the crusher gallery
    pfMakeCoin 3304, 500     -- threading the two crushers: grab it between drops
-   pfMakeCoin 3648, 452     -- mid-air over PIT2: leap the wider chasm
+   pfMakeCoin 3648, 452     -- mid-air over the GOO PIT: grab it as you leap, timed for when the serpent has sunk
    -- ACT 3 coins (the deep run + the descent to the flag)
    pfMakeCoin 3968, 470     -- under the dropping SPIDER (grab it as you dodge)
    pfMakeCoin 4180, 500     -- the ghost-stalked run
@@ -4499,7 +4548,7 @@ on b2kFrame
    pfTickBoulder
    pfTickLift
    pfTickConveyor    -- Phase B: belts carry the grounded hero
-   pfTickLavaSerpent -- Phase E: the L4 lava serpent's rise-cross-sink arc
+   pfTickSerpent     -- Phase E: the L4 lava / L6 goo serpent's rise-cross-sink arc
    pfTickBarrel
    pfTickParallax   -- Wave 8: drift the biome backdrop for depth
    -- HUD at 4 Hz, not 60: the ms readout changes every frame, so an
@@ -5489,30 +5538,30 @@ command pfTickLift
    end repeat
 end pfTickLift
 
--- The lava serpent's arc (Phase E): a sine EMERGENCE (0 at the lips, 1 over the
--- middle platform) drives both how far it has risen and where along the pit it
--- sits, so one parameter traces a rise-cross-sink path lip to lip; it loops, and
--- the reset lands while submerged (hidden), so the teleport back to the left lip
--- never shows. The lava tiles (the y576 row) occlude its lower body as it rises;
--- we ALSO hide it outright while its head is below the surface so the no-tile
--- fallback never shows a snake floating in the gap. Proximity HURT (the saw
--- rule, gotcha 16) fires only while emerged - a recoverable knockback, never a
--- respawn. O(1) out when no serpent exists (the non-L4 case).
-command pfTickLavaSerpent
+-- The serpent's arc (Phase E): a sine EMERGENCE (0 at the lips, 1 over the centre)
+-- drives both how far it has risen and where along the pool it sits, so one
+-- parameter traces a rise-cross-sink path lip to lip; it loops, and the reset
+-- lands while submerged (hidden), so the teleport back to the left lip never
+-- shows. The pool surface (the y576 row) occludes its lower body as it rises; we
+-- ALSO hide it outright while its head is below the surface so the no-tile
+-- fallback never shows a snake floating in the gap. Proximity HURT (the saw rule,
+-- gotcha 16) fires only while emerged - a recoverable knockback, never a respawn.
+-- O(1) out when no serpent exists (every non-serpent level).
+command pfTickSerpent
    local tP, tEm, tX, tHeadY, tCy, tMS
-   if gLSerpSpr is empty then exit pfTickLavaSerpent
+   if gLSerpSpr is empty then exit pfTickSerpent
    put the milliseconds into tMS
    put (tMS mod gLSerpPer) / gLSerpPer into tP
    put sin(3.14159265 * tP) into tEm                    -- 0 at the lips, 1 at the centre peak (literal pi: kPI is declared later in the script, and a forward constant ref leaves it unresolved on OXT - which pinned tEm at 0 and kept the serpent submerged forever)
    put gLSerpL + (gLSerpR - gLSerpL) * tP into tX
-   put gLSerpLavaY - (gLSerpLavaY - gLSerpPeakY) * tEm into tHeadY
-   if tHeadY >= gLSerpLavaY - 6 then
-      -- submerged (head at/below the lava line): hide it; the loop reset lands here
+   put gLSerpSurfY - (gLSerpSurfY - gLSerpPeakY) * tEm into tHeadY
+   if tHeadY >= gLSerpSurfY - 6 then
+      -- submerged (head at/below the pool surface): hide it; the loop reset lands here
       if gLSerpVis then
          set the visible of gLSerpSpr to false
          put false into gLSerpVis
       end if
-      exit pfTickLavaSerpent
+      exit pfTickSerpent
    end if
    if not gLSerpVis then
       set the visible of gLSerpSpr to true
@@ -5523,7 +5572,7 @@ command pfTickLavaSerpent
    -- proximity HURT (the saw rule): the head's strike zone. Mistime the crossing
    -- and the rearing head bounces you back to the near bank (pfOuch), not a kill.
    if gHurtLock is not true and abs(gHeroPX - tX) < 34 and abs(gHeroPY - tHeadY) < 84 then pfOuch tX
-end pfTickLavaSerpent
+end pfTickSerpent
 
 -- The powder keg: idle until the hero is near, then the fuse lights
 -- (bomb_active); a beat later b2kExplode scatters the woodpile, knocks the
