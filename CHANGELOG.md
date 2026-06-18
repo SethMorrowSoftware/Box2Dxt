@@ -33,6 +33,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   - `pfMakeLedge` builds the one-way stone climb platforms (`b2kSmoothGround` +
     `stone_cloud`); a zig-zag of 8 ledges, 8 coins, a summit gem, contained walls
     (a fall drops you to a lower ledge, no respawn).
+  - **Centred + enclosed (two OXT rounds).** The play column (64..960) is
+    narrower than the 1024 viewport, so `pfBoundsV` now sets the camera's X
+    bounds to a viewport-wide range CENTRED on the column (was left-aligning the
+    tower), and `pfDressWall` fills the leftover margin EACH side with solid
+    stone (`terrain_stone_block_center`, matching the floor) so the shaft reads
+    as an enclosed keep edge-to-edge - no dead backdrop at ground level. The
+    side-wall colliders that were invisible are now the visible walls.
   The win moves to L7 (`gLevel >= 7`); L6's flag now ADVANCES. Example-side only
   (no Kit change, no harness bump). `tools/audit-platformer.py` learned to skip a
   vertical level (the y=576 model doesn't apply); L1-L6 still 0 findings.

@@ -317,8 +317,11 @@
 --      respawn (the kill plane is off); (e) all 8 coins are grabbable up the
 --      climb, the summit GEM needs a double-jump off the top, the flag is atop
 --      the keep; (f) the backdrop is the dark stone keep and the chrome (HUD/
---      help/buttons/level-picker) stays put while the world scrolls. The win
---      screen says ALL SEVEN LEVELS CLEAR. (Spinner + puzzles: slices 2-3.)
+--      help/buttons/level-picker) stays put while the world scrolls; (g) the
+--      tower is CENTRED and the stone SIDE-WALLS fill the viewport margins each
+--      side (the play column is narrower than the view) - no dead backdrop at
+--      ground level or up the climb. The win screen says ALL SEVEN LEVELS
+--      CLEAR. (Spinner + puzzles: slices 2-3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -2079,6 +2082,28 @@ command pfBounds pLeft, pRight
    put 780 into gKillPlaneY
 end pfBounds
 
+-- Dress a vertical level's side MARGIN as a solid stone WALL so the gap beside
+-- the (narrower-than-viewport) play column reads as the keep's wall, not dead
+-- backdrop. pX1..pX2 is the margin span in world px, pTop..pBottom its height;
+-- it is stone-tiled (terrain_stone_block_center, matching the floor/ledges) at
+-- 64px, lowest layer so torches/coins/ledges draw in front. No stone art: the
+-- flat collider slab pSlab is made visible (and camera-adopted) as the fallback.
+command pfDressWall pSlab, pX1, pX2, pTop, pBottom
+   local tX, tY
+   if pX2 - pX1 < 1 then exit pfDressWall                  -- a zero-width margin (column == viewport): nothing to fill
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_center") then
+      repeat with tX = pX1 to pX2 - 64 step 64
+         repeat with tY = pTop to pBottom - 64 step 64
+            pfTile "terrain_stone_block_center", tX, tY
+         end repeat
+      end repeat
+   else if there is a graphic pSlab then
+      set the backgroundColor of graphic pSlab to "70,73,86"   -- lit stone, lighter than the backdrop
+      set the visible of graphic pSlab to true
+      b2kCamAdopt the long id of graphic pSlab
+   end if
+end pfDressWall
+
 -- VERTICAL bounds (the CLIMBING levels): a TALL world (pTop..pBottom), walls
 -- around the full box + a ceiling, and the camera scrolls VERTICALLY between
 -- gCamTopY..gCamBotY as the hero climbs. The kill plane sits well BELOW the
@@ -2098,12 +2123,16 @@ command pfBoundsV pLeft, pRight, pTop, pBottom
    b2kWall pLeft, pTop, pRight, pTop       -- the ceiling
    b2kKillFloor pBottom + 300              -- below the floor slab; the climb never reaches it
    -- the play column (pLeft..pRight) is NARROWER than the 1024 viewport, so the
-   -- camera's X bounds must be a viewport-wide range CENTRED on the column - if
-   -- they only spanned pLeft..pRight, the camera left-aligns to pLeft and the
-   -- whole tower sits shoved to the left with dead space on the right. The Y
-   -- bounds stay the full world height (that is what the vertical scroll rides).
+   -- camera's X bounds are a viewport-wide range CENTRED on the column (a bound
+   -- of just pLeft..pRight would left-align the tower with dead space on the
+   -- right). The leftover margin EACH side is then DRESSED as the keep's stone
+   -- side-walls (the collider slabs made visible / stone-tiled) so the shaft
+   -- reads enclosed, edge to edge - no dead backdrop. The Y bounds stay the
+   -- full world height (that is what the vertical scroll rides).
    put (pLeft + pRight) / 2 into tCx
    b2kCamBounds tCx - 512, pTop, tCx + 512, pBottom
+   pfDressWall "pf_wallL", tCx - 512, pLeft, pTop, pBottom      -- fill the LEFT margin
+   pfDressWall "pf_wallR", pRight, tCx + 512, pTop, pBottom     -- fill the RIGHT margin
    put pTop + 320 into gCamTopY            -- a 640-tall viewport sliding inside the tall world
    put pBottom - 320 into gCamBotY
    put pBottom + 300 into gKillPlaneY      -- the explicit kill check is effectively off (contained)
