@@ -370,6 +370,14 @@ local gGems, gGemsTotal, gGemsBank, gGemsAllTotal
 -- the PARALLAX backdrop: a per-biome scene tiled across 3 card panels that drift
 -- slower than the 1:1 foreground (depth). gBgLastHS gates the per-frame redraw.
 local gBgPanel, gBgLastHS
+-- Phase F: the ART HUD - screen-fixed hud_* sprites that replace the bottom text
+-- readout. Built card-fixed (before b2kCamOn, like the backdrop) from a 2nd "hud"
+-- view of the tiles atlas at HUD scale; digit FRAMES swap ON CHANGE only (the
+-- 4Hz/write-on-change rule, far cheaper than the per-frame field relayout it
+-- replaces). gHudOK = the art HUD is active (false = no hud_* art -> the text
+-- field stays as the fallback, so the demo never ships blank). gHudCoinD = the two
+-- collected-count digit sprites; gHudCoinLast caches the last value drawn.
+local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinLast
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -639,6 +647,12 @@ function pfLoadSheets
    b2kSheetLoadAtlas "tiles", tFolder & "/spritesheet-tiles-default.png"
    put the result into tN
    if tN < 1 then put "tiles atlas gave 0 frames. " after gLoadNote
+   -- Phase F: a SECOND view of the tiles atlas as "hud", scaled down for the
+   -- screen-chrome hud_* sprites (the 64px hud_ cells -> ~38px HUD elements). The
+   -- atlas decodes once (sheets persist across rebuilds); only the hud_* frames
+   -- the HUD actually uses ever get sliced, so the extra cost is negligible.
+   b2kSheetLoadAtlas "hud", tFolder & "/spritesheet-tiles-default.png"
+   if the result >= 1 then b2kSheetScale "hud", 0.6
    b2kSheetLoadAtlas "bg", tFolder & "/spritesheet-backgrounds-default.png"
    put the result into tN
    if tN < 1 then put "backgrounds atlas gave 0 frames. " after gLoadNote
@@ -803,6 +817,59 @@ command pfBuildBackdrop
       put tRef into gBgPanel[i]
    end repeat
 end pfBuildBackdrop
+
+-- Phase F: build the ART HUD - screen-fixed hud_* sprites that replace the bottom
+-- text readout. Created HERE (before b2kCamOn, like the backdrop) so they live on
+-- the CARD and never scroll. Rebuilt each level (b2kTeardown cleared the old Kit
+-- sprites). When the hud_* art is missing it no-ops and gHudOK stays false, so the
+-- text field readout remains the fallback (the demo never ships blank). Increment
+-- 1: just the coin counter (an icon + two collected-count digits, top-left), to
+-- prove the card-fixed sprite + digit path on OXT before the rest is layered on.
+command pfBuildHud
+   put false into gHudOK
+   put empty into gHudCoinLast
+   if gAssetsOK is not true or not b2kSheetHasFrame("hud", "hud_coin") then exit pfBuildHud
+   b2kSpriteNew "hud", "hud_coin", 40, 20
+   put the result into gHudCoinIcon
+   if gHudCoinIcon is empty then exit pfBuildHud
+   put pfHudDigit(74, 20) into gHudCoinD[1]
+   put pfHudDigit(98, 20) into gHudCoinD[2]
+   put true into gHudOK
+   -- the art HUD owns the top-left now: retire the demo TITLE field (the intro
+   -- splash carries the level name; pfHelp + its diagnostics stay for now).
+   if there is a field "pfTitle" then set the visible of field "pfTitle" to false
+end pfBuildHud
+
+-- One HUD digit sprite (hud_character_0..9) at a fixed screen point, from the
+-- scaled "hud" sheet. A plain card sprite (built before b2kCamOn = never scrolls).
+function pfHudDigit pX, pY
+   b2kSpriteNew "hud", "hud_character_0", pX, pY
+   return the result
+end pfHudDigit
+
+-- Draw a 0..99 value across two digit slots, right-aligned, hiding the leading
+-- slot below 10. Frames swap only when called; the caller gates on change.
+command pfHudSetNum2 pD1, pD2, pValue
+   if pValue < 0 then put 0 into pValue
+   if pValue > 99 then put 99 into pValue
+   if pD2 is not empty then b2kSpriteSetFrame pD2, "hud_character_" & (pValue mod 10)
+   if pD1 is empty then exit pfHudSetNum2
+   if pValue < 10 then
+      set the visible of pD1 to false
+   else
+      b2kSpriteSetFrame pD1, "hud_character_" & (pValue div 10)
+      set the visible of pD1 to true
+   end if
+end pfHudSetNum2
+
+-- Refresh the art HUD (called at 4 Hz). Cheap: the coin digits swap only when the
+-- count changes. O(1) out when the art HUD is not active (the text-field fallback).
+command pfUpdateHud
+   if gHudOK is not true then exit pfUpdateHud
+   if gCoins is gHudCoinLast then exit pfUpdateHud
+   put gCoins into gHudCoinLast
+   pfHudSetNum2 gHudCoinD[1], gHudCoinD[2], gCoins
+end pfUpdateHud
 
 -- The CAVERN (L6) has no outdoor SCENE in the bg atlas, and Kenney's flat
 -- "background_solid_*" frames read as a near-blank wash (the "no background"
@@ -1094,6 +1161,7 @@ command pfStartGame
    -- so the panels live on the CARD (not the scrolling camera group); the
    -- parallax tick in b2kFrame drifts + wraps them. =====
    pfBuildBackdrop
+   pfBuildHud   -- Phase F: the screen-fixed art HUD (before b2kCamOn, like the backdrop, so it does not scroll)
    -- ===== the camera: everything Kit-made from here lives in the view ====
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
@@ -4433,6 +4501,13 @@ command pfChromeFront
    local tN, tC
    put the number of controls of this card into tN
    set the itemDelimiter to comma
+   -- Phase F: the art HUD sprites are card-level (built before b2kCamOn), so they
+   -- ride below the camera viewport until raised here like the rest of the chrome.
+   if gHudOK is true then
+      if gHudCoinIcon is not empty then set the layer of gHudCoinIcon to tN
+      if gHudCoinD[1] is not empty then set the layer of gHudCoinD[1] to tN
+      if gHudCoinD[2] is not empty then set the layer of gHudCoinD[2] to tN
+   end if
    repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText"
       if there is a field tC then set the layer of field tC to tN
    end repeat
@@ -4557,6 +4632,7 @@ on b2kFrame
    local tSecs
    if the milliseconds < gHudNextMS then exit b2kFrame
    put the milliseconds + 250 into gHudNextMS
+   pfUpdateHud   -- Phase F: refresh the art HUD (coin count) on change
    if gWinSecs is not empty then
       put gWinSecs into tSecs
    else
