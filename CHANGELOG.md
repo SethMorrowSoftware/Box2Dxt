@@ -10,6 +10,21 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: LEVEL 7 "STONE KEEP" expanded to a blade-and-warden gauntlet (the
+  length + variety pass, vertical edition).** The climbing tower roughly doubles
+  in height (1,280 -> ~2,300px, **8 -> 16 ledges**) and goes from 8 coins / 2
+  spinners to **~22 coins / 2 bonus gems** and a real bestiary - all chosen to
+  work in a *vertical* shaft (bats/ghosts/snails/mimics hardcode a horizontal
+  ground-y and were ruled out): **five sweeping spinners** guarding the climb gaps
+  (each verified standing-safe on both adjacent ledges), a **stationary
+  half-blade** (`pHalf`) on the final ledge, and three **wardens** on the wide
+  "fight" ledges - a `pfMakeSlime` to stomp, a `pfMakeFrog`, and a spike-slime to
+  dodge (the makers that take an explicit surface-y, so they ride the one-way
+  ledges). `pfDressWall` now tiles the taller shaft. Example-side only; the
+  geometry audit skips vertical levels, so the spinner safety + ledge spacing were
+  hand-verified (script gates clean, L1-L6 still 0 findings). **Needs the OXT
+  pass** (the vertical-only checks: walkers resting on one-way ledges, the
+  spike-slime leap, blade timing).
 - **Platformer: LEVEL 5 "SCORCHED DUNES" expanded to a full three-act level (the
   length + variety pass, second of the audit).** From 4,200px / 12 coins / 3 foes
   to **~6,400px and 24 coins**, keeping Act 1 verbatim and appending two desert

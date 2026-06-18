@@ -100,13 +100,16 @@
 --            chasm a LIFT ferries, a rightward speed CONVEYOR + a second block
 --            slime, a FIRE slime, a treasure MIMIC and a finale crusher to the
 --            flag. ~24 coins, three checkpoints.
---   LEVEL 7  STONE KEEP (a VERTICAL TOWER, 1280px tall) - the asset-expansion
+--   LEVEL 7  STONE KEEP (a VERTICAL TOWER, ~2300px tall) - the asset-expansion
 --            STONE/CASTLE biome, CLIMBED not crossed: you JUMP UP one-way stone
 --            ledges that zig-zag to the top of the keep, and the camera SCROLLS
---            UP with you (the only level that scrolls vertically). Eight coins up
---            the climb, a bonus GEM at the very summit, the flag atop the keep
---            (the win); torchlit walls. A pure climb for slice 1 - the SPINNER
---            hazard + the multi-key/switch PUZZLES land in slices 2-3.
+--            UP with you (the only level that scrolls vertically). The length +
+--            variety pass makes it a BLADE-AND-WARDEN GAUNTLET: SIXTEEN ledges,
+--            FIVE sweeping spinners guarding the gaps + a stationary half-blade,
+--            and three WARDENS holding the wide "fight" ledges (a slime, a hopping
+--            frog, a SPIKE slime you dodge). ~22 coins up the climb, two bonus
+--            GEMs (mid + summit), the flag atop the keep (the win); torchlit walls
+--            and windows. (Multi-key/switch PUZZLES are the remaining slice 3.)
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -338,19 +341,22 @@
 --      (drop-through still works); (c) the zig-zag is climbable jump-to-jump (or
 --      with a double-jump) and the side WALLS keep you in the tower; (d) falling
 --      drops you to a lower ledge / the floor, never off the world or to a
---      respawn (the kill plane is off); (e) all 8 coins are grabbable up the
---      climb, the summit GEM needs a double-jump off the top, the flag is atop
---      the keep; (f) the backdrop is the dark stone keep and the chrome (HUD/
---      help/buttons/level-picker) stays put while the world scrolls; (g) the
---      tower is CENTRED and the stone SIDE-WALLS fill the viewport margins each
---      side (the play column is narrower than the view) - no dead backdrop at
---      ground level or up the climb; (h) SLICE 2 - two SPINNING BLADES (the
---      spooks sheet) sweep the shaft across a climb gap each (lower L1->L2,
---      upper L4->L5): you can stand SAFE on the lower ledge and time the jump,
---      a mistime is knockback (never lethal), and the blades spin via animation
---      (not body rotation). Confirm the timing is FAIR (tune pPerX if frantic);
---      no art (no enemies.png) = the spots are simply safe. The win screen says
---      ALL SEVEN LEVELS CLEAR. (Multi-key / switch puzzles: slice 3.)
+--      respawn (the kill plane is off); (e) all 22 coins are grabbable up the
+--      climb, BOTH bonus GEMs (mid-climb + the summit double-jump) are reachable,
+--      the flag is atop the keep; (f) the backdrop is the dark stone keep and the
+--      chrome (HUD/help/buttons/level-picker) stays put while the world scrolls;
+--      (g) the tower is CENTRED and the stone SIDE-WALLS fill the viewport margins
+--      each side - no dead backdrop, and the taller wall still builds fast; (h)
+--      THE LENGTH + VARIETY PASS (now ~2300px / SIXTEEN ledges / ~22 coins): FIVE
+--      sweeping SPINNERS guard the gaps (stand SAFE on the lower ledge, time the
+--      jump - a mistime is knockback, never lethal), a stationary HALF-BLADE sits
+--      on the final ledge (land clear, hop over), and three WARDENS hold the wide
+--      ledges - a slime to STOMP, a hopping FROG, and a SPIKE slime to DODGE (no
+--      stomp on the spikes). Confirm the walkers rest on their one-way ledges and
+--      patrol without falling off; the spike-slime leap to L14 is fair; spinner
+--      timing reads (tune pPerX if frantic); a missing enemies.png leaves the
+--      spinner spots safe but KEEPS the native slimes/frog (still a climb). The
+--      win screen says ALL SEVEN LEVELS CLEAR. (Multi-key/switch puzzles: slice 3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -4095,59 +4101,98 @@ end pfMakeLedge
 command pfL7Scene
    local tX
    put "STONE KEEP (the climb!)" into gLevelName
-   put 160 into gRespawnX      -- the hero starts at the BOTTOM of the tower
-   put 1140 into gRespawnY
-   pfBoundsV 64, 960, 0, 1280   -- a TALL world (climb it; camera scrolls UP); 64..960 wide = one viewport, no horizontal scroll
-   pfSlab "pf_ground1", 64, 1216, 960, 1280   -- the bottom floor (solid)
+   put 160 into gRespawnX      -- the hero starts at the BOTTOM of the TALL keep
+   put 2164 into gRespawnY
+   pfBoundsV 64, 960, 0, 2304   -- a TALL keep (~2300px): the camera scrolls UP the whole climb
+   pfSlab "pf_ground1", 64, 2240, 960, 2304   -- the bottom floor (solid)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
       repeat with tX = 64 to 896 step 64
-         pfTile "terrain_stone_block_top", tX, 1216
+         pfTile "terrain_stone_block_top", tX, 2240
       end repeat
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
-   -- THE CLIMB: one-way stone ledges zig-zag up to the keep's top, each ~128px
-   -- above the last and staggered side to side - jump (or double-jump) up
-   -- through each and land on top. The walls (pfBoundsV) keep you in the tower.
+   -- THE CLIMB: SIXTEEN one-way stone ledges zig-zag up to the keep's top, each
+   -- ~128px above the last and staggered side to side. The WIDE ledges (320..704)
+   -- are the "fight" landings - a warden or a blade waits there; the side walls
+   -- (pfBoundsV) keep you in the shaft. Jump (or double-jump) up through each.
+   pfMakeLedge 256, 448, 2112
+   pfMakeLedge 576, 768, 1984
+   pfMakeLedge 320, 704, 1856
+   pfMakeLedge 256, 448, 1728
+   pfMakeLedge 576, 768, 1600
+   pfMakeLedge 256, 448, 1472
+   pfMakeLedge 320, 704, 1344
+   pfMakeLedge 576, 768, 1216
    pfMakeLedge 256, 448, 1088
    pfMakeLedge 576, 768, 960
    pfMakeLedge 256, 448, 832
    pfMakeLedge 576, 768, 704
-   pfMakeLedge 256, 448, 576
+   pfMakeLedge 320, 704, 576
    pfMakeLedge 576, 768, 448
    pfMakeLedge 384, 640, 320
    pfMakeLedge 320, 704, 192      -- the KEEP TOP (the goal ledge; wide, to land + reach the flag)
-   -- TOWER DRESSING: torches climb the walls; a window or two in the stonework.
-   pfMakeTorch 96, 1000
-   pfMakeTorch 928, 824
-   pfMakeTorch 96, 632
+   -- TOWER DRESSING: torches climb both walls; windows in the stonework.
+   pfMakeTorch 96, 2120
+   pfMakeTorch 928, 1944
+   pfMakeTorch 96, 1768
+   pfMakeTorch 928, 1592
+   pfMakeTorch 96, 1416
+   pfMakeTorch 928, 1080
+   pfMakeTorch 96, 744
    pfMakeTorch 928, 440
    pfMakeTorch 96, 264
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "window") then
-      pfTile "window", 0, 900      -- centred IN the left wall column (origin 0, like its stone)
-      pfTile "window", 960, 500    -- centred IN the right wall column (origin 960)
+      pfTile "window", 0, 2040      -- centred IN the left wall column (origin 0)
+      pfTile "window", 960, 1640     -- ...the right column (origin 960)
+      pfTile "window", 0, 1140
+      pfTile "window", 960, 740
+      pfTile "window", 0, 340
    end if
 end pfL7Scene
 
 command pfL7Cast
-   pfMakeCoin 352, 1040     -- climbing: above ledge 1
-   pfMakeCoin 672, 912      -- ledge 2
-   pfMakeCoin 352, 784      -- ledge 3
-   pfMakeCoin 672, 656      -- ledge 4
-   pfMakeCoin 352, 528      -- ledge 5
-   pfMakeCoin 672, 400      -- ledge 6
-   pfMakeCoin 512, 272      -- ledge 7
+   -- coins up the climb: one near each ledge, plus gap bonuses to double-jump for
+   pfMakeCoin 512, 2176     -- just above the start floor
+   pfMakeCoin 352, 2064     -- ledge 1
+   pfMakeCoin 672, 1936     -- ledge 2
+   pfMakeCoin 512, 1808     -- the wide ledge (grab it past the slime)
+   pfMakeCoin 352, 1680     -- ledge 4
+   pfMakeCoin 672, 1552     -- ledge 5
+   pfMakeCoin 352, 1424     -- ledge 6
+   pfMakeCoin 400, 1296     -- the wide ledge (off-centre, past the frog)
+   pfMakeCoin 672, 1168     -- ledge 8
+   pfMakeCoin 352, 1040     -- ledge 9
+   pfMakeCoin 672, 912      -- ledge 10
+   pfMakeCoin 352, 784      -- ledge 11
+   pfMakeCoin 672, 656      -- ledge 12
+   pfMakeCoin 512, 528      -- the wide ledge (past the spike slime)
+   pfMakeCoin 672, 400      -- ledge 14
+   pfMakeCoin 420, 272      -- ledge 15 (off-centre, clear of the blade)
    pfMakeCoin 448, 144      -- on the keep top
-   pfMakeGem 544, 80, "blue"   -- BONUS gem: a double-jump above the keep top (the summit)
-   -- the keep's SPINNING BLADES (Phase C slice 2): two sweep the shaft across
-   -- a climb gap each - stand SAFE on the lower ledge, read the blade, jump the
-   -- gap when it has swept clear (the saw rule; a mistime is knockback, never
-   -- lethal). Each sits in the GAP (standing-safe on both adjacent ledges, ~66px
-   -- of the 38px-half hero clear): the lower across L1->L2, the upper L4->L5
-   -- (tighter + faster). OXT: confirm the timing is fair; widen pPerX if frantic.
-   pfMakeSpinner 512, 986, 320, 1300, false   -- lower: guards the L1->L2 crossing
-   pfMakeSpinner 512, 602, 300, 1050, false   -- upper: a tighter, faster sweep
+   pfMakeCoin 512, 1730     -- a gap bonus (double-jump between ledges)
+   pfMakeCoin 512, 1450     -- a gap bonus
+   pfMakeCoin 512, 1100     -- a gap bonus
+   pfMakeCoin 512, 850      -- a gap bonus
+   pfMakeCoin 512, 600      -- a gap bonus
+   pfMakeGem 544, 80, "blue"      -- BONUS gem: the summit, a double-jump above the keep top
+   pfMakeGem 512, 1180, "green"   -- BONUS gem: a mid-climb gap reward
+   -- THE BLADE GAUNTLET: FIVE sweeping spinners guard the climb gaps (stand SAFE
+   -- on the lower ledge, read the blade, jump when it has swept clear), and ONE
+   -- stationary HALF-BLADE sits on the final ledge (land clear of it, hop over).
+   -- The saw rule: time them, never stomp; a mistime is knockback, never lethal.
+   pfMakeSpinner 512, 2010, 320, 1300, false   -- gap L1->L2
+   pfMakeSpinner 512, 1626, 320, 1200, false   -- gap L4->L5
+   pfMakeSpinner 512, 1242, 300, 1100, false   -- gap L7->L8
+   pfMakeSpinner 512, 858, 300, 1050, false    -- gap L10->L11
+   pfMakeSpinner 512, 474, 280, 1000, false    -- gap L13->L14 (tightest, near the top)
+   pfMakeSpinner 512, 296, 0, 1, true          -- a stationary half-blade on the final ledge (y320)
+   -- THE KEEP'S WARDENS: walkers hold the wide "fight" ledges - a slime to stomp,
+   -- a hopping FROG, and a SPIKE slime you must dodge (no stomp on the spikes).
+   pfMakeSlime 1, "normal", 560, 460, 680, 1856
+   pfMakeFrog 2, 560, 460, 640, 1344
+   pfMakeSlime 3, "spike", 560, 460, 680, 576
    pfMakeGoal 544, 160      -- the flag, atop the keep
 end pfL7Cast
 
