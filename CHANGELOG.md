@@ -10,6 +10,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: LEVEL 7 "STONE KEEP" - the STONE/CASTLE biome (asset-expansion
+  Phase C, slice 1).** A seventh level on the previously-unused `terrain_stone_*`
+  tile set (block tops, `block_center`, carved corners, `ramp_long_a/b`,
+  `cloud_*`) over a built dark stone backdrop (`pfBuildStoneBackdrop`, gray-blue):
+  a WATCHTOWER (wall-jump, slot coin), a wide spiked MOAT (256px, four spikes) to
+  leap, a rubble RAMP, a one-way stone BATTLEMENT high route, two slimes + a
+  snail, a bonus GEM atop the tower, torchlit halls, and carved stone steps to
+  the flag. The win moves to L7 (`gLevel >= 7`); L6's flag now ADVANCES. Built on
+  the proven L6 geometry in stone; the SPINNER hazard and the multi-key/switch
+  PUZZLES (the keep's real identity) land in slices 2-3. Example-side only (no Kit
+  change, no harness bump); `tools/audit-platformer.py` auto-discovers and clears
+  L7 (9 coins, 3 walkers, 0 findings). Statically verified; needs an OXT pass
+  (header verify item 21).
 - **Platformer: the CONVEYOR BELT - a carried surface (asset-expansion Phase B,
   slice 3).** The previously-unused `conveyor` tile becomes a polled surface
   zone (`pfMakeConveyor pL, pR, pDir`) that adds a steady vx to the GROUNDED hero

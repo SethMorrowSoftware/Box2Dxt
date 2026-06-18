@@ -172,6 +172,14 @@ needs an OXT eye.
   a polled example-side version first.
 
 ### Phase C — Castle/dungeon biome → **Level 7 "STONE KEEP"**  (M–L)
+- **Slice 1 — DONE (statically verified; needs OXT):** the **stone biome + Level
+  7 skeleton** that completes start-to-finish. `terrain_stone_*` (block tops,
+  `block_center`, carved corners, `ramp_long_a/b`, `cloud_*`) over a built dark
+  stone backdrop (`pfBuildStoneBackdrop`): a watchtower (wall-jump), a wide spiked
+  moat, a rubble ramp, a stone battlement, reused slimes + a snail, a bonus gem,
+  torchlit halls. Win moved to `gLevel >= 7`. Example-side; audit clears L7.
+- **Slices 2–3 — TODO:** the **spinner** hazard (slice 2), then the **multi-key /
+  switch puzzles** (slice 3) — the keep's real identity.
 - **Assets:** `terrain_stone_*` (full), `switch_{blue,green,red}(_pressed)`,
   `key_{blue,green}`, `lock_{blue,green}`, `spinner*`/`spinnerHalf*`,
   `block_strong_*`.

@@ -1,7 +1,7 @@
 -- =====================================================================
 -- box2dxt-platformer.livecodescript  ·  Game Kit Phases 1+2+3+4 showcase
 --
--- A SIX-LEVEL collect-them-all platformer (each level its own
+-- A SEVEN-LEVEL collect-them-all platformer (each level its own
 -- scrolling world in a 1024px viewport) that exercises everything
 -- built so far: the Kit's PLAYER CONTROLLER (b2kPlayerAttach drives
 -- movement, jumping, grounding, state and animations - this file holds
@@ -14,8 +14,8 @@
 -- barrel), and variety walkers (mouse, worm, ladybug, fire slime).
 -- Collect EVERY coin on a level (the goal
 -- flag turns GOLD), touch the flag, and the next level builds; level
--- 6's flag is the win. Anything without sheet art falls back to plain
--- graphics, so all six levels run even with no asset folder (the coin
+-- 7's flag is the win. Anything without sheet art falls back to plain
+-- graphics, so all seven levels run even with no asset folder (the coin
 -- totals count themselves as each level builds).
 --
 -- HOW TO RUN
@@ -34,7 +34,7 @@
 --           are NOT draggable) · R restarts the CURRENT level · ESC pauses
 --           · M mutes the synthesized sound
 --
--- THE SIX LEVELS (every beat holds a coin; the flag advances):
+-- THE SEVEN LEVELS (every beat holds a coin; the flag advances):
 --   LEVEL 1  GREEN HILLS (8640px) - movement + the toys: the
 --            SPRINGBOARD mid-meadow (sky coin above; a 42px hop for
 --            non-bouncers), the BONK ROW (headbutt ?-boxes, SMASH bricks
@@ -92,8 +92,14 @@
 --            coin), a spike GAP to leap (checkpoint past it), a DIRT-RAMP
 --            mound, a one-way DIRT CLOUD high route, a slime, a hopping BLOCK
 --            SLIME + a snail, a CONVEYOR BELT (a treadmill you power across),
---            and carved dirt steps to the flag (the win). A bonus GEM rides
---            high above the wall-jump shaft.
+--            and carved dirt steps to the flag. A bonus GEM rides high above
+--            the wall-jump shaft.
+--   LEVEL 7  STONE KEEP (3040px) - the asset-expansion STONE/CASTLE biome: a
+--            WATCHTOWER (wall-jump, slot coin), a wide spiked MOAT to leap
+--            (checkpoint past it), a rubble RAMP, a one-way stone BATTLEMENT
+--            high route, two slimes + a snail, torchlit halls, and carved stone
+--            steps to the flag (the win). A bonus GEM tops the watchtower. (The
+--            SPINNER hazard + the multi-key/switch PUZZLES land in slices 2-3.)
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -295,7 +301,21 @@
 --      (slice 3) carries you LEFT when grounded on it - you walk slower toward
 --      the goal and faster back, you can still power across, and jumping over it
 --      is unaffected; the tread art faces the push direction (flip - OXT-verify
---      it reads). The win screen says ALL SIX LEVELS CLEAR.
+--      it reads). L6's flag now ADVANCES to L7 (the win moved to L7).
+--  21. ASSET-EXPANSION PHASE C, SLICE 1 - LEVEL 7 "STONE KEEP" (the STONE/CASTLE
+--      biome: terrain_stone_*, previously unused; the win now needs gLevel>=7).
+--      VERIFY on a full asset folder: (a) the BACKDROP is the dark stone keep
+--      (pfBuildStoneBackdrop), no border line on the two panels; (b) the stone
+--      ground/ramp/battlement/cliff-corners read with NO missing-frame
+--      fallbacks; (c) the WATCHTOWER slot coin is reachable by wall-jump AND a
+--      straight double-jump, and the bonus GEM atop it is reachable; (d) the
+--      wide MOAT (256px, four spikes) is a clean run/double-jump leap with the
+--      spikes FLUSH between the carved lips; (e) the rubble RAMP walks up/across/
+--      down with no fall-through; the stone BATTLEMENT is solid to its ends and
+--      DOWN+JUMP drops through it; (f) both slimes + the snail patrol solid
+--      ground; torches/chains light the halls (orientation OXT-verify); the win
+--      screen says ALL SEVEN LEVELS CLEAR. (Spinner + key/switch puzzles: slices
+--      2-3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -669,6 +689,10 @@ command pfBuildBackdrop
       pfBuildCaveBackdrop   -- the cavern gets a built dark backdrop, not a flat "solid_" frame
       exit pfBuildBackdrop
    end if
+   if gLevel is 7 then
+      pfBuildStoneBackdrop   -- the stone keep, like the cavern, has no outdoor scene
+      exit pfBuildBackdrop
+   end if
    switch gLevel
       case 3
          put "background_fade_hills" into tFrame      -- pale + cold for the frozen citadel
@@ -725,6 +749,28 @@ command pfBuildCaveBackdrop
    set the rect of graphic "pf_bgcave2" to 0, 388, 1064, 584
    set the layer of graphic "pf_bgcave2" to 2
 end pfBuildCaveBackdrop
+
+-- The STONE KEEP (L7) interior, like the cavern, has no outdoor scene in the bg
+-- atlas, so build a dark stone backdrop (cooler gray-blue than the cave's
+-- brown) from two card graphics. Not parallax-drifted - the depth comes from
+-- the scrolling stonework + torches in pfL7Scene. Reuses the pf_bgcave* names
+-- (one level's backdrop exists at a time; pfWipeStage clears them each build).
+command pfBuildStoneBackdrop
+   create graphic "pf_bgcave1"
+   set the style of graphic "pf_bgcave1" to "rectangle"
+   set the showBorder of graphic "pf_bgcave1" to false
+   set the filled of graphic "pf_bgcave1" to true
+   set the backgroundColor of graphic "pf_bgcave1" to "40,42,52"
+   set the rect of graphic "pf_bgcave1" to 0, 0, 1064, 640
+   set the layer of graphic "pf_bgcave1" to 1
+   create graphic "pf_bgcave2"
+   set the style of graphic "pf_bgcave2" to "rectangle"
+   set the showBorder of graphic "pf_bgcave2" to false
+   set the filled of graphic "pf_bgcave2" to true
+   set the backgroundColor of graphic "pf_bgcave2" to "58,61,74"
+   set the rect of graphic "pf_bgcave2" to 0, 388, 1064, 584
+   set the layer of graphic "pf_bgcave2" to 2
+end pfBuildStoneBackdrop
 
 -- Drift the backdrop slower than the 1:1 foreground (parallax depth) and wrap
 -- it seamlessly (the bg scenes tile at the 640px panel width). Gated on the
@@ -984,6 +1030,9 @@ command pfStartGame
       case 6
          pfL6Scene
          break
+      case 7
+         pfL7Scene
+         break
       default
          put 1 into gLevel
          pfL1Scene
@@ -1079,6 +1128,9 @@ command pfStartGame
       case 6
          pfL6Cast
          break
+      case 7
+         pfL7Cast
+         break
       default
          pfL1Cast
    end switch
@@ -1090,7 +1142,7 @@ command pfStartGame
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
-      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 6: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Six levels to win."
+      set the text of field "pfHelp" to "Arrows/A-D run, SPACE jumps - press it again in mid-air to DOUBLE JUMP, or off a wall to WALL-JUMP. SHIFT or X = DASH." & cr & "DOWN ducks to a stop (DOWN+JUMP drops through bridges/clouds); UP/DOWN climbs ladders. R restarts, ESC pauses, M mutes, MOUSE drags the crate." & cr & "LEVEL " & gLevel & " of 7: " & gLevelName & ". Collect ALL " & gCoinsTotal & " coins - the flag turns GOLD - then touch the flag. Seven levels to win."
    else
       if gAssetsOK is true then
          set the text of field "pfHelp" to "KENNEY CHARACTERS LOADED, but: " & gLoadNote & cr & "Missing atlases fall back to plain shapes." & cr & "Shift+Reset re-asks for the Spritesheets folder."
@@ -1099,7 +1151,7 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 6" & cr & gLevelName
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -3669,6 +3721,133 @@ command pfL6Cast
 end pfL6Cast
 
 
+-- =====================================================================
+-- LEVEL 7 - "STONE KEEP" (asset-expansion Phase C, slice 1): the CASTLE/
+-- DUNGEON biome. The whole terrain_stone_* set was unused before this
+-- (only door-walls). A fortress interior on a dark stone backdrop: a
+-- watchtower (wall-jump), a wide spiked MOAT, a rubble ramp, a stone
+-- BATTLEMENT high route, torchlit halls. Built on the proven L6 geometry
+-- in stone. Slice 1 reuses the slime/snail cast; the SPINNER (slice 2)
+-- and the multi-key / switch PUZZLES (slice 3) are the keep's real
+-- identity, landing next.
+-- =====================================================================
+command pfL7Scene
+   local tX
+   put "STONE KEEP (fortified!)" into gLevelName
+   pfBounds kPfEdgeL, 3000 + kPfEndCap   -- right edge hugs the goal flag (3000)
+   pfSlab "pf_ground1", 0, 576, 1024, 640
+   pfSlab "pf_ground2", 1280, 576, 3072, 640
+   pfSlab "pf_plat1", 2752, 512, 2912, 576
+   pfSlab "pf_plat2", 2912, 448, 3072, 576
+   -- the STONE biome: block tops across the keep floor (block_center under the
+   -- rubble ramp, one mass), carved CORNERS at the moat lips + the dais steps.
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
+      repeat with tX = 0 to 896 step 64
+         pfTile "terrain_stone_block_top", tX, 576
+      end repeat
+      pfTile "terrain_stone_block_top_right", 960, 576    -- the moat's LEFT lip (carved cliff edge)
+      pfTile "terrain_stone_block_top_left", 1280, 576    -- the moat's RIGHT lip
+      repeat with tX = 1344 to 3008 step 64
+         if tX >= 1408 and tX <= 1792 then
+            pfTile "terrain_stone_block_center", tX, 576   -- under the rubble ramp: one mass
+         else
+            pfTile "terrain_stone_block_top", tX, 576
+         end if
+      end repeat
+      pfTile "terrain_stone_block_top_left", 2752, 512
+      pfTile "terrain_stone_block_top", 2816, 512
+      pfTile "terrain_stone_block_top_right", 2880, 512
+      pfTile "terrain_stone_block_top", 2912, 448
+      pfTile "terrain_stone_block_top", 2976, 448
+      pfTile "terrain_stone_block_center", 2912, 512
+      pfTile "terrain_stone_block_center", 2976, 512
+      pfShowSlabs false
+   else
+      pfShowSlabs true
+   end if
+   -- the WATCHTOWER (wall-jump): two floating stone columns frame a slot over
+   -- the courtyard - wall-jump (or double-jump) up it for the slot coin. The
+   -- L3/L6 shaft recipe in stone; the columns float so the main path runs under.
+   pfSlab "pf_wjShaftL", 320, 256, 384, 448
+   pfSlab "pf_wjShaftR", 472, 256, 536, 448
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
+      pfTile "terrain_stone_block_top", 320, 256
+      pfTile "terrain_stone_block_center", 320, 320
+      pfTile "terrain_stone_block_center", 320, 384
+      pfTile "terrain_stone_block_top", 472, 256
+      pfTile "terrain_stone_block_center", 472, 320
+      pfTile "terrain_stone_block_center", 472, 384
+   else
+      set the backgroundColor of graphic "pf_wjShaftL" to "120,124,140"
+      set the backgroundColor of graphic "pf_wjShaftR" to "120,124,140"
+      set the visible of graphic "pf_wjShaftL" to true
+      set the visible of graphic "pf_wjShaftR" to true
+      b2kCamAdopt the long id of graphic "pf_wjShaftL"
+      b2kCamAdopt the long id of graphic "pf_wjShaftR"
+   end if
+   pfMakeCoin 428, 340   -- the slot coin (slot 384..472), built in the SCENE to align with the columns
+   -- the MOAT: a wide spiked chasm (256px = four spikes), cleared with a run/
+   -- double-jump; the checkpoint sits just past it. Carved stone lips finish it.
+   pfMakeSpikes 1024, 1280
+   -- a RUBBLE RAMP (stone slope): up the left ramp, across the crest, down the
+   -- right. Six-point chain, outer two ghost anchors; ramps mirrored.
+   b2kSmoothGround "1856,576" & cr & "1792,576" & cr & "1664,512" & cr & "1536,512" & cr & "1408,576" & cr & "1344,576"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_ramp_long_a") then
+      pfTile "terrain_stone_ramp_long_b", 1408, 512, true
+      pfTile "terrain_stone_ramp_long_a", 1472, 512, true
+      pfTile "terrain_stone_block_top", 1536, 512
+      pfTile "terrain_stone_block_top", 1600, 512
+      pfTile "terrain_stone_ramp_long_a", 1664, 512
+      pfTile "terrain_stone_ramp_long_b", 1728, 512
+   end if
+   -- a one-way STONE BATTLEMENT (drop through with DOWN+JUMP) for the high bonus
+   -- route; ghost-padded a tile past the art each side (solid span 1984..2176).
+   b2kSmoothGround "2240,448" & cr & "2176,448" & cr & "1984,448" & cr & "1920,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_cloud_left") then
+      pfTile "terrain_stone_cloud_left", 1984, 448
+      pfTile "terrain_stone_cloud_middle", 2048, 448
+      pfTile "terrain_stone_cloud_right", 2112, 448
+   else
+      create graphic "pf_cloudledgeS"
+      set the style of it to "line"
+      set the points of it to "1984,448" & cr & "2176,448"
+      set the lineSize of it to 4
+      set the foregroundColor of it to "150,154,170"
+      b2kCamAdopt the long id of graphic "pf_cloudledgeS"
+   end if
+   -- KEEP DRESSING: wall torches + hanging chains light the dungeon (torches/
+   -- chains are not audited decor). Orientation: OXT-verify (gotcha 26).
+   pfMakeTorch 352, 300     -- on the watchtower's left column
+   pfMakeTorch 504, 300     -- ...and its right column
+   pfMakeTorch 840, 452     -- the courtyard
+   pfMakeTorch 1360, 452    -- past the moat
+   pfMakeTorch 2360, 452    -- the keep run
+   pfMakeTorch 2860, 432    -- the climb to the dais
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "chain") then
+      pfTile "chain", 700, 96
+      pfTile "chain", 1640, 96
+      pfTile "chain", 2520, 96
+   end if
+end pfL7Scene
+
+command pfL7Cast
+   pfMakeCoin 240, 500      -- the courtyard
+   pfMakeCoin 700, 500      -- the first slime's beat
+   pfMakeCoin 1152, 452     -- mid-air over the MOAT: leap it
+   pfMakeCoin 1568, 468     -- atop the rubble ramp
+   pfMakeCoin 2048, 408     -- on the stone battlement (the high route)
+   pfMakeCoin 2300, 500     -- the keep run
+   pfMakeCoin 2560, 500     -- the second slime's beat
+   pfMakeCoin 2820, 476     -- on the first dais step
+   pfMakeGem 428, 204, "blue"   -- BONUS gem above the watchtower (master the wall-jump)
+   pfMakeSlime 1, "normal", 700, 600, 860, 576
+   pfMakeSlime 2, "normal", 2560, 2440, 2680, 576
+   pfMakeSnail 3, 2050, 1980, 2120
+   pfMakeCheckpoint 1360    -- just past the moat, before the keep
+   pfMakeGoal 3000, 416
+end pfL7Cast
+
+
 -- Every coin (sensor pickup or ?-box payout) lands here. The moment the
 -- LAST one arrives, the goal flag turns GOLD and a banner + chime send
 -- you to it - the win gate is a state you can SEE, never a surprise
@@ -4831,7 +5010,7 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       -- camera-dead fallback clamps play to one screen, so most coins are
       -- out of reach there: the near flag advances unconditionally instead
       if gCoins >= gCoinsTotal or gCamOK is not true then
-         if gLevel >= 6 then
+         if gLevel >= 7 then
             pfWin
          else
             pfLevelClear
@@ -5131,7 +5310,7 @@ command pfWin
       put the result into tC
       if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
    end repeat
-   put "ALL SIX LEVELS CLEAR!" & cr & cr into tMsg
+   put "ALL SEVEN LEVELS CLEAR!" & cr & cr into tMsg
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
    if gGemsAllTotal > 0 then put "Gems  " & gGemsBank & " / " & gGemsAllTotal & " collected" & cr & cr after tMsg
