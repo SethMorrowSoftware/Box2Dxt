@@ -226,13 +226,19 @@ needs an OXT eye.
   `spooks`, via `pfMakeCritter`'s new optional sheet param, `gSpooksOK`-gated) and
   the **ring worm** (`worm_ring`, native foes). Phase D essentially complete.
 
-### Phase E — Snakes & the slither biome beat  (M)
+### Phase E — Snakes & the slither biome beat  (M)  — BEGUN
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.
 - **New movement type:** **slither** — a ground crawler that hugs the floor and
   reverses at edges/walls (slime-family kind `snake`, animated `_walk`). `snakeLava`
   belongs by the L4 lava / Phase-B cavern; `snakeSlime` by slime pools.
 - Woven into L4 and the new biomes (no dedicated level needed, but could anchor a
   "serpent pit" beat).
+- **Done (pending OXT):** the `snake` kind + slither tick (floor-probe edge/wall
+  reversal) + `pfMakeSnake` (plain / `snakeLava` / `snakeSlime`, `gSpooksOK`-gated,
+  via `pfMakeCritter`'s sheet param). Deployed: a `snakeLava` on L4's lava bank, a
+  plain snake on L3's ice platform.
+- **TODO:** a `snakeSlime` home (a slime-pool beat), more snake placements, and a
+  possible "serpent pit" beat; teach `audit-platformer.py` the `pfMakeSnake` maker.
 
 ### Phase F — Collectibles & a health model  (M)
 - **Assets:** `coin_bronze/silver(_side)`, `star`, `heart`, `hud_heart(_half/

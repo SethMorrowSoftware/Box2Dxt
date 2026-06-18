@@ -652,6 +652,9 @@ function pfLoadSheets
       b2kAnimDef "spooks", "spinhalf", "spinnerHalf.png,spinnerHalf_spin.png", 12, true -- wall-mounted half-blade
       b2kAnimDef "spooks", "slimegreen", "slimeGreen.png,slimeGreen_walk.png", 4, true  -- Phase D: a GREEN slime skin
       b2kAnimDef "spooks", "slimeblue", "slimeBlue.png,slimeBlue_blue.png", 4, true     -- ...and a BLUE one
+      b2kAnimDef "spooks", "snakewalk", "snake.png,snake_walk.png", 5, true             -- Phase E: the SLITHER crawl
+      b2kAnimDef "spooks", "snakelava", "snakeLava.png,snakeLava_ani.png", 5, true
+      b2kAnimDef "spooks", "snakeslime", "snakeSlime.png,snakeSlime_ani.png", 5, true
    end if
    -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -1569,6 +1572,38 @@ command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAni
    put pMaxX into gSlimeMax[pIdx]
    put empty into gSlimeGoneAt[pIdx]
 end pfMakeCritter
+
+-- Phase E: a SNAKE - the SLITHER movement type. It joins the slime family as
+-- kind "snake" (stompable on top, hurts on a side touch, like a slime) but
+-- gets its own tick: it crawls the floor and AUTO-REVERSES at a pit edge or a
+-- wall (pfTickSlimes "snake" case), so you place it without hand-tuning a band -
+-- pMinX/pMaxX are just the outer safety bound. pSkin picks the variant:
+-- "snakeLava" (by lava/the cavern), "snakeSlime" (by slime), else the plain
+-- snake. Spooks-sheet art, so it SELF-GATES on gSpooksOK (absent = no snake).
+command pfMakeSnake pIdx, pX, pMinX, pMaxX, pTopY, pSkin
+   local tFrame, tAnim, tDead, tColor
+   if gSpooksOK is not true then exit pfMakeSnake
+   switch pSkin
+      case "snakeLava"
+         put "snakeLava.png" into tFrame
+         put "snakelava" into tAnim
+         put "snakeLava_dead.png" into tDead
+         put "220,110,60" into tColor
+         break
+      case "snakeSlime"
+         put "snakeSlime.png" into tFrame
+         put "snakeslime" into tAnim
+         put "snakeSlime_dead.png" into tDead
+         put "120,180,120" into tColor
+         break
+      default
+         put "snake.png" into tFrame
+         put "snakewalk" into tAnim
+         put "snake_dead.png" into tDead
+         put "150,170,90" into tColor
+   end switch
+   pfMakeCritter pIdx, "snake", pX, pMinX, pMaxX, pTopY, 46, tFrame, tAnim, tDead, 28, 24, tColor, -8, "spooks"
+end pfMakeSnake
 
 -- A thwomp (falling-block trap) perched at pX. Walking beneath wakes it
 -- (static -> dynamic) and it slams down. Only its UNDERSIDE is dangerous -
@@ -3517,6 +3552,9 @@ command pfL3Cast
    pfMakeThwomp 4, 4740, false, "block_blue"
    pfMakeThwomp 5, 4920, false, "block_blue"
    pfMakeThwomp 6, 5100, false, "block_blue"
+   -- Phase E: a SNAKE slithers the second ice platform, auto-turning at the
+   -- right spike pit (the new slither movement; clear of the ladybug's band).
+   pfMakeSnake 6, 1450, 1250, 1792, 576
    pfMakeCheckpoint 2048
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
    pfMakeGoal 6200, 416
@@ -3723,6 +3761,9 @@ command pfL4Cast
    pfMakeThwomp 5, 5180, false, "block_red"
    pfMakeThwomp 6, 5360, false, "block_red"
    pfMakeThwomp 7, 5540, false, "block_red"
+   -- Phase E: a LAVA SNAKE slithers the near bank of the lava pit, auto-turning
+   -- at the left chasm and the lava edge (the slither - it never falls in).
+   pfMakeSnake 10, 2500, 2048, 3136, 576, "snakeLava"
    pfMakeCheckpoint 2160
    pfMakeGoal 6524, 416
 end pfL4Cast
@@ -4786,6 +4827,22 @@ command pfTickSlimes
                   b2kSpriteSetFrame gSlimeSpr[i], "slime_block_jump"
                end if
             end if
+            break
+         case "snake"
+            -- Phase E SLITHER: crawl the floor, auto-reversing at a PIT EDGE as
+            -- well as the patrol bound (which also stops it at a wall). One
+            -- floor-probe AHEAD-and-BELOW the body per frame - it sits past the
+            -- snake's own box, so empty = a ledge ahead, flip around. Gravity
+            -- keeps vy, so it hugs the floor.
+            if gSlimeDir[i] is 0 then put gSlimeSpeed[i] into gSlimeDir[i]
+            if gSlimeDir[i] >= 0 then put tX + 40 into tEl
+            if gSlimeDir[i] < 0 then put tX - 40 into tEl
+            if tEl <= gSlimeMin[i] or tEl >= gSlimeMax[i] \
+                  or b2kOverlap(tEl - 8, tY + 18, tEl + 8, tY + 50) is empty then
+               put - gSlimeDir[i] into gSlimeDir[i]
+            end if
+            b2kSetVelocity tBody, gSlimeDir[i], item 2 of b2kVelocity(tBody)
+            if gSlimeSpr[i] is not empty then b2kSpriteFlipH gSlimeSpr[i], ((gSlimeDir[i] < 0) is not gSlimeFlip[i])
             break
          default
             -- the classic patroller (normal/spike slimes, walking snails,

@@ -10,6 +10,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: SNAKES - the slither movement type (asset-expansion Phase E,
+  begun).** A new slime-family kind `snake` with its own tick: it crawls the
+  floor and AUTO-REVERSES at a pit edge or wall (a single floor-probe
+  `b2kOverlap` ahead-and-below the body per frame), so you place it without
+  hand-tuning a patrol band - `pMinX/pMaxX` are just the outer safety bound.
+  Stompable on top / hurts on a side touch like a slime (kind "snake" falls
+  through to the classic verdict), and the Phase-D defeat juice (dead pose, poof,
+  fade, pop) carries it for free. `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY,pSkin`
+  picks the variant - plain `snake`, `snakeLava`, or `snakeSlime` (all spook-sheet
+  `.png` art, so it self-gates on `gSpooksOK`). Reuses `pfMakeCritter`'s new sheet
+  param. Deployed so far: a **lava snake** patrolling L4's lava-pit bank (turns at
+  the chasm and the lava) and a **plain snake** on L3's second ice platform (turns
+  at the spike pit). Example-side only; static gates clean, audit 0 findings.
 - **Platformer: defeat-animation juice (asset-expansion Phase D).** Pure polish,
   no new mechanics, on the one shared slime-family defeat path (so it lifts every
   level at once). A stomped foe now **fades out** over its ~700ms linger
