@@ -81,12 +81,14 @@
 --            SLIME, the POWDER KEG bay (an explosive barrel + woodpile,
 --            scattered by b2kExplode), the red crusher alley (its
 --            signature gauntlet), purple steps, the flag.
---   LEVEL 5  SCORCHED DUNES (4240px) - WAVE 7's DESERT biome: a sand
---            DUNE (ramp slope) to crest, a sand slime, a hopping FROG, a
---            THORN PIT to leap (checkpoint at the brink), a two-cloud
---            HOP, then bestiary II with room to read - a snail, a lurking
---            BARNACLE, a SPIDER on a sand overhang - and sand steps to
---            the final flag.
+--   LEVEL 5  SCORCHED DUNES (6400px) - WAVE 7's DESERT biome, run LONG (the
+--            length + variety pass): THREE acts across three THORN PITS. ACT 1 -
+--            a sand DUNE to crest, a sand slime, a hopping FROG, PIT1, a two-
+--            cloud HOP, a snail, a lurking BARNACLE. ACT 2 - a darting FLY, a
+--            second dune a sand BOULDER rolls down at you, a high SAND CLOUD
+--            route, a FIRE slime, a second frog. ACT 3 - a treasure MIMIC, a
+--            second fly, a final cloud route, a homeward snail, and sand steps
+--            to the summit flag. ~24 coins, three checkpoints.
 --   LEVEL 6  CAVERN DEPTHS (6400px) - the asset-expansion DIRT biome, run DEEP
 --            (the length + variety pass): THREE acts across three pits. ACT 1 -
 --            the WALL-JUMP SHAFT of floating dirt columns (slot coin + bonus
@@ -98,13 +100,16 @@
 --            chasm a LIFT ferries, a rightward speed CONVEYOR + a second block
 --            slime, a FIRE slime, a treasure MIMIC and a finale crusher to the
 --            flag. ~24 coins, three checkpoints.
---   LEVEL 7  STONE KEEP (a VERTICAL TOWER, 1280px tall) - the asset-expansion
+--   LEVEL 7  STONE KEEP (a VERTICAL TOWER, ~2300px tall) - the asset-expansion
 --            STONE/CASTLE biome, CLIMBED not crossed: you JUMP UP one-way stone
 --            ledges that zig-zag to the top of the keep, and the camera SCROLLS
---            UP with you (the only level that scrolls vertically). Eight coins up
---            the climb, a bonus GEM at the very summit, the flag atop the keep
---            (the win); torchlit walls. A pure climb for slice 1 - the SPINNER
---            hazard + the multi-key/switch PUZZLES land in slices 2-3.
+--            UP with you (the only level that scrolls vertically). The length +
+--            variety pass makes it a BLADE-AND-WARDEN GAUNTLET: SIXTEEN ledges,
+--            FIVE sweeping spinners guarding the gaps + a stationary half-blade,
+--            and three WARDENS holding the wide "fight" ledges (a slime, a hopping
+--            frog, a SPIKE slime you dodge). ~22 coins up the climb, two bonus
+--            GEMs (mid + summit), the flag atop the keep (the win); torchlit walls
+--            and windows. (Multi-key/switch PUZZLES are the remaining slice 3.)
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -284,6 +289,14 @@
 --      sand STEPS + flag finale plays; the HUD/help/splash now say "of 6"
 --      and L5's flag ADVANCES to level 6 (the win moved to L6 - see item 20).
 --      New biome: confirm the sand art reads with no missing-frame fallbacks.
+--      THE LENGTH + VARIETY PASS (now ~6400px / ~24 coins / three checkpoints):
+--      ACT 2 adds a darting FLY, a second dune a sand BOULDER rolls DOWN at you
+--      (it re-parks at 4160 so the bank you land on stays safe - confirm it does
+--      not trap you), a high SAND CLOUD route, a FIRE slime (no stomp) and a 2nd
+--      frog; ACT 3 adds a treasure MIMIC, a 2nd fly, a final cloud route and a
+--      homeward snail. Confirm the boulder is dodgeable on the climb, the fire
+--      slime cannot be stomped, and the three thorn pits (PIT1 2000, PIT2 3840,
+--      PIT3 5376) each have a working brink/far-bank checkpoint.
 --  20. ASSET-EXPANSION PHASE B, SLICE 1 - LEVEL 6 "CAVERN DEPTHS" (the DIRT
 --      biome: terrain_dirt_*, previously unused; the win now needs gLevel>=6).
 --      VERIFY on a full asset folder: (a) the BACKDROP is the dark cave (not
@@ -328,19 +341,22 @@
 --      (drop-through still works); (c) the zig-zag is climbable jump-to-jump (or
 --      with a double-jump) and the side WALLS keep you in the tower; (d) falling
 --      drops you to a lower ledge / the floor, never off the world or to a
---      respawn (the kill plane is off); (e) all 8 coins are grabbable up the
---      climb, the summit GEM needs a double-jump off the top, the flag is atop
---      the keep; (f) the backdrop is the dark stone keep and the chrome (HUD/
---      help/buttons/level-picker) stays put while the world scrolls; (g) the
---      tower is CENTRED and the stone SIDE-WALLS fill the viewport margins each
---      side (the play column is narrower than the view) - no dead backdrop at
---      ground level or up the climb; (h) SLICE 2 - two SPINNING BLADES (the
---      spooks sheet) sweep the shaft across a climb gap each (lower L1->L2,
---      upper L4->L5): you can stand SAFE on the lower ledge and time the jump,
---      a mistime is knockback (never lethal), and the blades spin via animation
---      (not body rotation). Confirm the timing is FAIR (tune pPerX if frantic);
---      no art (no enemies.png) = the spots are simply safe. The win screen says
---      ALL SEVEN LEVELS CLEAR. (Multi-key / switch puzzles: slice 3.)
+--      respawn (the kill plane is off); (e) all 22 coins are grabbable up the
+--      climb, BOTH bonus GEMs (mid-climb + the summit double-jump) are reachable,
+--      the flag is atop the keep; (f) the backdrop is the dark stone keep and the
+--      chrome (HUD/help/buttons/level-picker) stays put while the world scrolls;
+--      (g) the tower is CENTRED and the stone SIDE-WALLS fill the viewport margins
+--      each side - no dead backdrop, and the taller wall still builds fast; (h)
+--      THE LENGTH + VARIETY PASS (now ~2300px / SIXTEEN ledges / ~22 coins): FIVE
+--      sweeping SPINNERS guard the gaps (stand SAFE on the lower ledge, time the
+--      jump - a mistime is knockback, never lethal), a stationary HALF-BLADE sits
+--      on the final ledge (land clear, hop over), and three WARDENS hold the wide
+--      ledges - a slime to STOMP, a hopping FROG, and a SPIKE slime to DODGE (no
+--      stomp on the spikes). Confirm the walkers rest on their one-way ledges and
+--      patrol without falling off; the spike-slime leap to L14 is fair; spinner
+--      timing reads (tune pPerX if frantic); a missing enemies.png leaves the
+--      spinner spots safe but KEEPS the native slimes/frog (still a climb). The
+--      win screen says ALL SEVEN LEVELS CLEAR. (Multi-key/switch puzzles: slice 3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -385,7 +401,16 @@ local gHeroPX, gHeroPY, gHeroState, gJumpMS
 local gHeroHalfH        -- the hero capsule's half-height (head reach for bonks)
 local gDebrisNext, gDebrisUntil
 local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
-local gHasKey, gKeySpr, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB
+-- MULTI-KEY doors (Phase C slice 3): a level may now plant SEVERAL coloured
+-- key+door pairs. gKeysHeld is the comma-list of colours the hero is carrying;
+-- gKeyRide[colour] is each one's ride-along sprite; the rest are per-door arrays
+-- indexed 1..gDoorN (gDoorX/gDoorWord were single globals - one door per level).
+local gKeysHeld, gKeyRide, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gDoorHostNm
+-- LATCHING switch-gates (Phase C slice 3, part 2): a floor/ledge switch that,
+-- once pressed, opens its coloured gate FOR GOOD (the kinematic gate rises out
+-- of the way and rests). Indexed 1..gSwN; gSwDone[i] = open AND settled (idles
+-- in one compare thereafter).
+local gSwN, gSwX, gSwWord, gSwOpen, gSwDone, gSwGate, gSwSpr, gSwGateSprA, gSwGateSprB, gSwGateVel
 local gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
 local gBlockChainA, gBlockChainB, gBlockFace
 local gGoalSpr, gNoticeUntil, gFlagNoteMS
@@ -962,12 +987,24 @@ command pfStartGame
    put true into gSawOn
    put empty into gSawMov
    put empty into gSawSpr
-   put false into gHasKey
-   put empty into gKeySpr
-   put false into gDoorOpen
+   put 0 into gDoorN
+   put empty into gKeysHeld
+   put empty into gKeyRide
+   put empty into gDoorOpen
    put empty into gLockSpr
    put empty into gDoorSprT
    put empty into gDoorSprB
+   put empty into gDoorHostNm
+   put 0 into gSwN
+   put empty into gSwX
+   put empty into gSwWord
+   put empty into gSwOpen
+   put empty into gSwDone
+   put empty into gSwGate
+   put empty into gSwSpr
+   put empty into gSwGateSprA
+   put empty into gSwGateSprB
+   put empty into gSwGateVel
    put 0 into gDebrisNext
    put empty into gDebrisB
    put empty into gDebrisSpr
@@ -2074,36 +2111,49 @@ end pfMakeLever
 -- is reachable ONLY through the door: the gate is structural, and the
 -- level reads "find the key" at a glance. The unlock is a proximity
 -- POLL; only the door's 128px passage ever clears - the wall stays.
+-- A coloured KEY + the locked DOOR it opens. Now MULTI-INSTANCE (Phase C slice
+-- 3): each call appends door #gDoorN, so a level may plant several pairs (the
+-- key tags itself with uPfKeyWord = its colour). The key is a sensor pickup,
+-- the door a solid stone wall + a panel host that drops away once you reach it
+-- carrying the matching key (pfTickDoors). Single-door levels (L2/L3) just plant
+-- one and behave exactly as before.
 command pfMakeKeyDoor pKeyX, pKeyY, pWallX, pColour
-   local tRef, tY, tCX
+   local tRef, tY, tCX, tI, tWall, tHost
+   add 1 to gDoorN
+   put gDoorN into tI
    put pWallX + 32 into tCX
-   put tCX into gDoorX
-   put pColour into gDoorWord
+   put tCX into gDoorX[tI]
+   put pColour into gDoorWord[tI]
+   put false into gDoorOpen[tI]
+   put ("pf_doorWall" & tI) into tWall
+   put ("pf_doorHost" & tI) into tHost
+   put tHost into gDoorHostNm[tI]
    b2kSpriteNew "tiles", "key_" & pColour, pKeyX, pKeyY
    put the result into tRef
    if tRef is not empty then
       set the uPfKeyFlag of tRef to true
+      set the uPfKeyWord of tRef to pColour   -- which coloured door this key opens
       b2kAddSensor tRef, "ball"
    end if
-   create graphic "pf_doorWall"
+   create graphic tWall
    set the style of it to "rectangle"
    set the rect of it to pWallX, 0, pWallX + 64, 448
    set the visible of it to false
-   b2kAddStatic the long id of graphic "pf_doorWall"
+   b2kAddStatic the long id of graphic tWall
    repeat with tY = 0 to 320 step 64
       pfTile "terrain_stone_block_center", pWallX, tY
    end repeat
    b2kSpriteNew "tiles", "lock_" & pColour, tCX, 416
-   put the result into gLockSpr
-   create graphic "pf_doorHost"
+   put the result into gLockSpr[tI]
+   create graphic tHost
    set the style of it to "rectangle"
    set the rect of it to pWallX, 448, pWallX + 64, 576
    set the visible of it to false
-   b2kAddStatic the long id of graphic "pf_doorHost"
+   b2kAddStatic the long id of graphic tHost
    b2kSpriteNew "tiles", "door_closed_top", tCX, 480
-   put the result into gDoorSprT
+   put the result into gDoorSprT[tI]
    b2kSpriteNew "tiles", "door_closed", tCX, 544
-   put the result into gDoorSprB
+   put the result into gDoorSprB[tI]
 end pfMakeKeyDoor
 
 -- The PLAYABLE box, belt AND braces: thick slabs (the solver's clean
@@ -2238,6 +2288,59 @@ command pfMakeGate pPlateX, pGateL
       b2kCamAdopt gGate
    end if
 end pfMakeGate
+
+-- A LATCHING SWITCH + the coloured GATE it opens (Phase C slice 3, part 2): step
+-- on the switch (switch_<colour>) ONCE and the kinematic gate (block_<colour> at
+-- pGateL) rises out of the way FOR GOOD - unlike pfMakeGate's momentary pad. A
+-- puzzle element: the switch can sit off the direct line so you must find it.
+-- pSwitchY is the switch's surface (default the ground at 448 of a cloud / 544 of
+-- a floor); the poll band sits just above it. Multi-instance (own table).
+command pfMakeSwitchGate pSwitchX, pColour, pGateL, pSwitchY
+   local tI, tCX
+   if pSwitchY is empty then put 448 into pSwitchY
+   add 1 to gSwN
+   put gSwN into tI
+   put pGateL + 32 into tCX
+   put pSwitchX into gSwX[tI]
+   put pColour into gSwWord[tI]
+   put false into gSwOpen[tI]
+   put false into gSwDone[tI]
+   put empty into gSwGateVel[tI]
+   -- the SWITCH plate, flush on its surface
+   create graphic ("pf_swPlate" & tI)
+   set the style of it to "rectangle"
+   set the rect of it to pSwitchX - 28, pSwitchY - 16, pSwitchX + 28, pSwitchY
+   set the filled of it to true
+   set the backgroundColor of it to "120,124,150"
+   b2kCamAdopt the long id of graphic ("pf_swPlate" & tI)
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "switch_" & pColour) then
+      set the visible of graphic ("pf_swPlate" & tI) to false
+      b2kSpriteNew "tiles", "switch_" & pColour, pSwitchX, pSwitchY - 28
+      put the result into gSwSpr[tI]
+   end if
+   -- the GATE it opens: a kinematic barrier, raised (closed) until pressed
+   create graphic ("pf_swGate" & tI)
+   set the style of it to "rectangle"
+   set the rect of it to pGateL, 448, pGateL + 64, 576
+   set the filled of it to true
+   set the backgroundColor of it to "120,124,150"
+   put the long id of graphic ("pf_swGate" & tI) into gSwGate[tI]
+   b2kAddBox gSwGate[tI]
+   b2kSetKinematic gSwGate[tI]
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_" & pColour) then
+      set the visible of graphic ("pf_swGate" & tI) to false
+      b2kSpriteNew "tiles", "block_" & pColour, tCX, 480
+      put the result into gSwGateSprA[tI]
+      if gSwGateSprA[tI] is not empty then b2kSpriteBind gSwGateSprA[tI], gSwGate[tI], 0, -32
+      b2kSpriteNew "tiles", "block_" & pColour, tCX, 544
+      put the result into gSwGateSprB[tI]
+      if gSwGateSprB[tI] is not empty then
+         b2kSpriteBind gSwGateSprB[tI], gSwGate[tI], 0, 32
+      end if
+   else
+      b2kCamAdopt gSwGate[tI]
+   end if
+end pfMakeSwitchGate
 
 -- A spike pit between pL and pR (the level's ground slabs leave the
 -- gap). Spike alpha is the BOTTOM 34px of the cell (measured), so
@@ -2879,26 +2982,26 @@ end pfL1Cast
 command pfL2Scene
    local tX, tRef
    put "THE WORKS" into gLevelName
-   pfBounds kPfEdgeL, 5844 + kPfEndCap   -- right edge hugs the goal flag (5844)
-   pfSlab "pf_ground1", 0, 576, 5952, 640
-   pfSlab "pf_plat1", 5568, 512, 5760, 576
-   pfSlab "pf_plat2", 5760, 448, 5888, 576
+   pfBounds kPfEdgeL, 6272 + kPfEndCap   -- the stone VAULT finale gives the two-key gates room (flag at 6272)
+   pfSlab "pf_ground1", 0, 576, 6384, 640
+   pfSlab "pf_plat1", 6016, 512, 6208, 576
+   pfSlab "pf_plat2", 6208, 448, 6336, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 5888 step 64
-         if tX >= 5568 then
-            -- the finale plays in STONE past the walled door
+      repeat with tX = 0 to 6320 step 64
+         if tX >= 5344 then
+            -- the VAULT finale plays in STONE, entered through the first (yellow) gate
             pfTile "terrain_stone_block_top", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
       end repeat
-      pfTile "terrain_stone_block_top_left", 5568, 512
-      pfTile "terrain_stone_block_top", 5632, 512
-      pfTile "terrain_stone_block_top_right", 5696, 512
-      pfTile "terrain_stone_block_top", 5760, 448
-      pfTile "terrain_stone_block_top", 5824, 448
-      pfTile "terrain_stone_block_center", 5760, 512
-      pfTile "terrain_stone_block_center", 5824, 512
+      pfTile "terrain_stone_block_top_left", 6016, 512
+      pfTile "terrain_stone_block_top", 6080, 512
+      pfTile "terrain_stone_block_top_right", 6144, 512
+      pfTile "terrain_stone_block_top", 6208, 448
+      pfTile "terrain_stone_block_top", 6272, 448
+      pfTile "terrain_stone_block_center", 6208, 512
+      pfTile "terrain_stone_block_center", 6272, 512
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -3042,11 +3145,25 @@ command pfL2Scene
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bush") then
       pfTile "sign", 3980, 512        -- a way-marker into the crusher alley
-      pfTile "bush", 5400, 512
+      pfTile "bush", 5160, 512        -- last greenery before the stone vault (was 5400, now inside the stone finale)
    end if
    if gToysOK is true then
       pfMakeLever 1120        -- stand here to power the FIRST sweep saw down
+      -- THE TWO-KEY LOCKGATE (Phase C slice 3): the works' exit is now a DOUBLE
+      -- door - a YELLOW key early on the main run, a BLUE key up on the hop
+      -- clouds, and BOTH gates stand between you and the flag (the HUD lists the
+      -- keys you carry). Multi-instance pfMakeKeyDoor; each key opens its colour.
+      -- THE VAULT'S TWO-KEY LOCKGATE (Phase C slice 3): the stone finale is
+      -- entered through a YELLOW gate, then a corridor, then a BLUE gate before
+      -- the flag - each its own beat, well clear of the steps (the HUD lists the
+      -- keys you carry). Yellow key on the main run, blue key up on the hop clouds.
       pfMakeKeyDoor 1740, 500, 5344, "yellow"
+      pfMakeKeyDoor 4904, 356, 5760, "blue"
+      -- a GREEN SWITCH-GATE (slice 3 part 2): the green gate bars the way into
+      -- the crusher alley until you climb to the third-bay cloud and press the
+      -- switch up there (it latches open) - a "find the switch" beat. Skip it and
+      -- the closed gate at 4060 sends you back to look for the cloud.
+      pfMakeSwitchGate 3828, "green", 4000, 448
    end if
 end pfL2Scene
 
@@ -3070,9 +3187,16 @@ command pfL2Cast
    pfMakeCoin 4590, 500     -- ...and the last gap
    pfMakeCoin 4904, 392     -- up on the first hop cloud
    pfMakeCoin 5124, 392     -- up on the second hop cloud, before the door
-   pfMakeCoin 5700, 448     -- over the first stone step
-   pfMakeCoin 5774, 392     -- over the top step, by the flag
-   if gToysOK is true then pfMakeCoin 5440, 500   -- just PAST the door (still gated by it), clear of the closed-door face (was 5392 on the door tile)
+   pfMakeCoin 6080, 460     -- over the first stone step
+   pfMakeCoin 6200, 420     -- on the climb to the flag (clear of the goal)
+   -- length pass: a few more coins for the longer two-key finish (L2 -> ~24)
+   pfMakeCoin 1130, 500     -- the early run, between the lever and the first saw
+   pfMakeCoin 2360, 500     -- the open stretch before the checkpoint
+   pfMakeCoin 4750, 500     -- the run out of the green crusher alley
+   pfMakeCoin 5250, 392     -- on the second hop cloud, approaching the vault
+   pfMakeCoin 5560, 500     -- in the vault corridor, between the two gates
+   pfMakeCoin 5920, 500     -- past the blue gate, on the run to the steps
+   if gToysOK is true then pfMakeCoin 5440, 500   -- just PAST the yellow gate (still gated by it), clear of the closed-door face
    -- the bee patrols the breather cloud
    if gAssetsOK is true and b2kSheetHasFrame("foes", "bee_a") then
       b2kSpriteNew "foes", "bee_a", 2210, 310
@@ -3142,15 +3266,15 @@ command pfL2Cast
    -- the GREEN CRUSHER ALLEY (the works' marquee gauntlet): a row of four
    -- green-block thwomps you time your run beneath - each drops as you near
    -- it, so keep moving and snatch the coins in the gaps. They rest STATIC
-   -- then rise + re-arm, never blocking the alley for good. A fourth-bay
-   -- SNAIL guards the approach (snails liberally now).
-   pfMakeSnail 4, 3950, 3910, 3990
+   -- then rise + re-arm, never blocking the alley for good. The GREEN
+   -- SWITCH-GATE (above) now guards the approach - the redundant fourth-bay
+   -- snail was retired to give that gate clear air on both sides.
    pfMakeThwomp 5, 4140, false, "block_green"
    pfMakeThwomp 6, 4320, false, "block_green"
    pfMakeThwomp 7, 4500, false, "block_green"
    pfMakeThwomp 8, 4680, false, "block_green"
    pfMakeCheckpoint 2450   -- clear flat ground past the breather cloud (was 1000, right beside the floating bonus ledge's open span - it read as "a flag over a pit"); clear of both sweeping saws too
-   pfMakeGoal 5844, 416
+   pfMakeGoal 6272, 416
 end pfL2Cast
 
 -- =====================================================================
@@ -3592,29 +3716,45 @@ end pfL4Cast
 command pfL5Scene
    local tX
    put "SCORCHED DUNES (hot!)" into gLevelName
-   pfBounds kPfEdgeL, 4200 + kPfEndCap   -- right edge hugs the goal flag (4200)
+   -- the dunes run LONG now (the asset-expansion length + variety pass): THREE
+   -- acts across ~6300px and three THORN PITS - the entry dune, a BOULDER dune
+   -- with a fire-slime run, then the deep desert past the treasure mimic to the
+   -- summit flag. FOUR sand floors with three spiked chasms between them.
+   pfBounds kPfEdgeL, 6400
    pfSlab "pf_ground1", 0, 576, 2000, 640
-   pfSlab "pf_ground2", 2256, 576, 4288, 640   -- far edge of the widened THORN PIT (2000..2256, was 2192 = only 3 spikes)
-   pfSlab "pf_plat1", 3936, 512, 4128, 576
-   pfSlab "pf_plat2", 4128, 448, 4256, 576
+   pfSlab "pf_ground2", 2256, 576, 3840, 640
+   pfSlab "pf_ground3", 4096, 576, 5376, 640
+   pfSlab "pf_ground4", 5568, 576, 6400, 640
+   pfSlab "pf_plat1", 6080, 512, 6272, 576
+   pfSlab "pf_plat2", 6272, 448, 6400, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_block_top") then
       repeat with tX = 0 to 1936 step 64
          if tX >= 864 and tX <= 1184 then
-            pfTile "terrain_sand_block_center", tX, 576   -- under the dune: one mass
+            pfTile "terrain_sand_block_center", tX, 576   -- under the first dune: one mass
          else
             pfTile "terrain_sand_block_top", tX, 576
          end if
       end repeat
-      repeat with tX = 2256 to 4224 step 64
+      repeat with tX = 2256 to 3776 step 64
          pfTile "terrain_sand_block_top", tX, 576
       end repeat
-      pfTile "terrain_sand_block_top_left", 3936, 512
-      pfTile "terrain_sand_block_top", 4000, 512
-      pfTile "terrain_sand_block_top_right", 4064, 512
-      pfTile "terrain_sand_block_top", 4128, 448
-      pfTile "terrain_sand_block_top", 4192, 448
-      pfTile "terrain_sand_block_center", 4128, 512
-      pfTile "terrain_sand_block_center", 4192, 512
+      repeat with tX = 4096 to 5312 step 64
+         if tX >= 4352 and tX <= 4672 then
+            pfTile "terrain_sand_block_center", tX, 576   -- under the second (boulder) dune
+         else
+            pfTile "terrain_sand_block_top", tX, 576
+         end if
+      end repeat
+      repeat with tX = 5568 to 6016 step 64
+         pfTile "terrain_sand_block_top", tX, 576
+      end repeat
+      pfTile "terrain_sand_block_top_left", 6080, 512
+      pfTile "terrain_sand_block_top", 6144, 512
+      pfTile "terrain_sand_block_top_right", 6208, 512
+      pfTile "terrain_sand_block_top", 6272, 448
+      pfTile "terrain_sand_block_top", 6336, 448
+      pfTile "terrain_sand_block_center", 6272, 512
+      pfTile "terrain_sand_block_center", 6336, 512
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -3637,10 +3777,9 @@ command pfL5Scene
       set the backgroundColor of it to "200,170,110"
       b2kCamAdopt the long id of graphic "pf_dune"
    end if
-   -- the THORN PIT (leap it; a slip burns then drops to the kill floor): the
-   -- gap between the two ground slabs, spike tips flush with the floor line.
-   -- Widened to 256px (FOUR spikes) for a proper spiked chasm - clear it with a
-   -- running/double jump (the checkpoint at the brink, 1900, makes a slip a quick retry).
+   -- PIT1 - the THORN PIT (leap it; a slip burns then drops to the kill floor):
+   -- 256px (FOUR spikes), spike tips flush with the floor line. The checkpoint
+   -- at the brink (1900) makes a slip a quick retry.
    pfMakeSpikes 2000, 2256
    -- the two-cloud HOP (one-way sand clouds, each ghost-padded a tile past the
    -- art each side): jump up for the coins, DOWN+JUMP to drop off
@@ -3667,39 +3806,109 @@ command pfL5Scene
       set the foregroundColor of it to "200,170,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeN"
    end if
-   -- (no SPIDER here: a ceiling-crawler needs a ceiling, and a sand bar floating
-   -- in the open desert sky read as a glitch. The spider stays showcased in L4's
-   -- cave biome, where the overhang reads as a real ceiling fragment.)
+   -- ===== ACT 2/3 terrain (the length + variety pass) =====
+   -- PIT2 - a second THORN chasm (256px, four spikes) onto the boulder bank.
+   pfMakeSpikes 3840, 4096
+   -- the SECOND DUNE - a sand mound a BOULDER rolls DOWN at you (crest 4480..4608,
+   -- mirror the Act 1 recipe). The boulder lives in the cast; it rolls to 4160
+   -- and re-parks, so the far bank you land on stays safe.
+   b2kSmoothGround "4800,576" & cr & "4736,576" & cr & "4608,512" & cr & "4480,512" & cr & "4352,576" & cr & "4288,576"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_ramp_long_a") then
+      pfTile "terrain_sand_ramp_long_b", 4352, 512, true
+      pfTile "terrain_sand_ramp_long_a", 4416, 512, true
+      pfTile "terrain_sand_block_top", 4480, 512
+      pfTile "terrain_sand_block_top", 4544, 512
+      pfTile "terrain_sand_ramp_long_a", 4608, 512
+      pfTile "terrain_sand_ramp_long_b", 4672, 512
+   end if
+   -- a one-way SAND CLOUD high route over the fire-slime run (solid 4928..5120),
+   -- and a final one on G4 (solid 5696..5888) - both ghost-padded a tile each side.
+   b2kSmoothGround "5184,448" & cr & "5120,448" & cr & "4928,448" & cr & "4864,448"
+   b2kSmoothGround "5952,448" & cr & "5888,448" & cr & "5696,448" & cr & "5632,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_cloud_left") then
+      pfTile "terrain_sand_cloud_left", 4928, 448
+      pfTile "terrain_sand_cloud_middle", 4992, 448
+      pfTile "terrain_sand_cloud_right", 5056, 448
+      pfTile "terrain_sand_cloud_left", 5696, 448
+      pfTile "terrain_sand_cloud_middle", 5760, 448
+      pfTile "terrain_sand_cloud_right", 5824, 448
+   end if
+   -- PIT3 - the last THORN chasm (192px, three spikes) before the summit run.
+   pfMakeSpikes 5376, 5568
    -- desert decor, placed clear of every beat (cacti, a rock, the way-markers)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "cactus") then
       pfTile "sign", 160, 512
       pfTile "cactus", 320, 512
       pfTile "cactus", 1700, 512
       pfTile "cactus", 2300, 512
-      pfTile "rock", 3760, 512
+      pfTile "rock", 3520, 512
+      pfTile "cactus", 4760, 512
+      pfTile "rock", 6020, 512
    end if
 end pfL5Scene
 
 command pfL5Cast
+   local tRef
+   -- ACT 1 coins (the entry dune + the thorn pit + the cloud hop)
    pfMakeCoin 480, 500      -- the opening run
    pfMakeCoin 680, 500      -- the sand slime's beat
    pfMakeCoin 1056, 460     -- atop the dune (jump it as you crest)
-   pfMakeGem 1056, 400, "blue"   -- BONUS gem above the dune crest (double-jump for it)
    pfMakeCoin 1500, 500     -- the desert frog's beat (stomp it; do not stand by it)
-   pfMakeCoin 2128, 440     -- mid-air over the (widened) thorn pit: leap it
+   pfMakeCoin 2128, 440     -- mid-air over PIT1: leap it
    pfMakeCoin 2480, 392     -- on the first sand cloud
    pfMakeCoin 2784, 392     -- on the second sand cloud
    pfMakeCoin 3000, 500     -- the snail's beat (shell it, kick it)
-   pfMakeCoin 3552, 500     -- on the clear run home (was the spider beat; the spider is L4-only now)
-   pfMakeCoin 3750, 500     -- the clear run home to the steps
-   pfMakeCoin 3990, 448     -- over the first sand step
-   pfMakeCoin 4100, 420     -- on the climb to the summit (moved off the flag: 4180 overlapped the goal flag at 4200)
+   pfMakeCoin 3260, 500     -- past the barnacle, on the run to PIT2
+   -- ACT 2 coins (the boulder dune + the fire-slime run)
+   pfMakeCoin 3520, 500     -- the open run to PIT2
+   pfMakeCoin 3968, 440     -- mid-air over PIT2: leap it
+   pfMakeCoin 4160, 500     -- landing on the boulder bank
+   pfMakeCoin 4280, 500     -- approaching the dune (mind the boulder rolling down)
+   pfMakeCoin 4544, 452     -- atop the boulder dune (grab it as you crest)
+   pfMakeCoin 4720, 500     -- down the far side of the dune
+   pfMakeCoin 5024, 408     -- on the sand cloud (the high route over the fire slime)
+   pfMakeCoin 5240, 500     -- the second frog's beat
+   -- ACT 3 coins (the deep desert + the summit)
+   pfMakeCoin 5472, 440     -- mid-air over PIT3: leap it
+   pfMakeCoin 5700, 500     -- the treasure mimic's beat (chest, or not?)
+   pfMakeCoin 5792, 408     -- on the final sand cloud (the high route)
+   pfMakeCoin 5888, 408     -- ...and along it
+   pfMakeCoin 5980, 500     -- the homeward snail's beat
+   pfMakeCoin 6160, 460     -- over the first sand step
+   pfMakeCoin 6240, 460     -- on the climb to the summit (clear of the flag)
+   pfMakeGem 1056, 400, "blue"   -- BONUS gem above the dune crest (double-jump for it)
+   -- ACT 1 cast
    pfMakeSlime 1, "normal", 680, 620, 760, 576
    pfMakeFrog 2, 1500, 1420, 1620, 576
    pfMakeSnail 3, 3000, 2940, 3060
    pfMakeBarnacle 1, 3300, 544
-   pfMakeCheckpoint 1900    -- at the brink of the thorn pit: a slip is a retry, not a replay
-   pfMakeGoal 4200, 416
+   -- ACT 2 cast: a desert FLY, a BOULDER rolling the dune, a FIRE slime, a 2nd frog
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
+      b2kSpriteNew "foes", "fly_a", 4700, 380
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "flit"
+         pfAddMover tRef, 4700, 380, 80, 720, 50, 450, 36, 44, true
+      end if
+   end if
+   pfMakeBoulder 4544, 458, 4160, -90    -- a sand BOULDER rolls down the dune at you, re-parks at 4160
+   pfMakeCritter 4, "spike", 5000, 4940, 5060, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6   -- a FIRE slime (scorched!): no stomp
+   pfMakeFrog 5, 5240, 5160, 5320, 576
+   -- ACT 3 cast: a treasure MIMIC, a 2nd fly, a homeward snail
+   pfMakeMimic 6, 5700
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
+      b2kSpriteNew "foes", "fly_a", 5850, 380
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "flit"
+         pfAddMover tRef, 5850, 380, 90, 760, 40, 470, 36, 44, true
+      end if
+   end if
+   pfMakeSnail 7, 5980, 5920, 6040
+   pfMakeCheckpoint 1900    -- at the brink of PIT1: a slip is a retry, not a replay
+   pfMakeCheckpoint 4160    -- past PIT2, on the boulder bank
+   pfMakeCheckpoint 5632    -- past PIT3, before the summit run
+   pfMakeGoal 6336, 416
 end pfL5Cast
 
 
@@ -4000,59 +4209,98 @@ end pfMakeLedge
 command pfL7Scene
    local tX
    put "STONE KEEP (the climb!)" into gLevelName
-   put 160 into gRespawnX      -- the hero starts at the BOTTOM of the tower
-   put 1140 into gRespawnY
-   pfBoundsV 64, 960, 0, 1280   -- a TALL world (climb it; camera scrolls UP); 64..960 wide = one viewport, no horizontal scroll
-   pfSlab "pf_ground1", 64, 1216, 960, 1280   -- the bottom floor (solid)
+   put 160 into gRespawnX      -- the hero starts at the BOTTOM of the TALL keep
+   put 2164 into gRespawnY
+   pfBoundsV 64, 960, 0, 2304   -- a TALL keep (~2300px): the camera scrolls UP the whole climb
+   pfSlab "pf_ground1", 64, 2240, 960, 2304   -- the bottom floor (solid)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
       repeat with tX = 64 to 896 step 64
-         pfTile "terrain_stone_block_top", tX, 1216
+         pfTile "terrain_stone_block_top", tX, 2240
       end repeat
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
-   -- THE CLIMB: one-way stone ledges zig-zag up to the keep's top, each ~128px
-   -- above the last and staggered side to side - jump (or double-jump) up
-   -- through each and land on top. The walls (pfBoundsV) keep you in the tower.
+   -- THE CLIMB: SIXTEEN one-way stone ledges zig-zag up to the keep's top, each
+   -- ~128px above the last and staggered side to side. The WIDE ledges (320..704)
+   -- are the "fight" landings - a warden or a blade waits there; the side walls
+   -- (pfBoundsV) keep you in the shaft. Jump (or double-jump) up through each.
+   pfMakeLedge 256, 448, 2112
+   pfMakeLedge 576, 768, 1984
+   pfMakeLedge 320, 704, 1856
+   pfMakeLedge 256, 448, 1728
+   pfMakeLedge 576, 768, 1600
+   pfMakeLedge 256, 448, 1472
+   pfMakeLedge 320, 704, 1344
+   pfMakeLedge 576, 768, 1216
    pfMakeLedge 256, 448, 1088
    pfMakeLedge 576, 768, 960
    pfMakeLedge 256, 448, 832
    pfMakeLedge 576, 768, 704
-   pfMakeLedge 256, 448, 576
+   pfMakeLedge 320, 704, 576
    pfMakeLedge 576, 768, 448
    pfMakeLedge 384, 640, 320
    pfMakeLedge 320, 704, 192      -- the KEEP TOP (the goal ledge; wide, to land + reach the flag)
-   -- TOWER DRESSING: torches climb the walls; a window or two in the stonework.
-   pfMakeTorch 96, 1000
-   pfMakeTorch 928, 824
-   pfMakeTorch 96, 632
+   -- TOWER DRESSING: torches climb both walls; windows in the stonework.
+   pfMakeTorch 96, 2120
+   pfMakeTorch 928, 1944
+   pfMakeTorch 96, 1768
+   pfMakeTorch 928, 1592
+   pfMakeTorch 96, 1416
+   pfMakeTorch 928, 1080
+   pfMakeTorch 96, 744
    pfMakeTorch 928, 440
    pfMakeTorch 96, 264
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "window") then
-      pfTile "window", 0, 900      -- centred IN the left wall column (origin 0, like its stone)
-      pfTile "window", 960, 500    -- centred IN the right wall column (origin 960)
+      pfTile "window", 0, 2040      -- centred IN the left wall column (origin 0)
+      pfTile "window", 960, 1640     -- ...the right column (origin 960)
+      pfTile "window", 0, 1140
+      pfTile "window", 960, 740
+      pfTile "window", 0, 340
    end if
 end pfL7Scene
 
 command pfL7Cast
-   pfMakeCoin 352, 1040     -- climbing: above ledge 1
-   pfMakeCoin 672, 912      -- ledge 2
-   pfMakeCoin 352, 784      -- ledge 3
-   pfMakeCoin 672, 656      -- ledge 4
-   pfMakeCoin 352, 528      -- ledge 5
-   pfMakeCoin 672, 400      -- ledge 6
-   pfMakeCoin 512, 272      -- ledge 7
+   -- coins up the climb: one near each ledge, plus gap bonuses to double-jump for
+   pfMakeCoin 512, 2176     -- just above the start floor
+   pfMakeCoin 352, 2064     -- ledge 1
+   pfMakeCoin 672, 1936     -- ledge 2
+   pfMakeCoin 512, 1808     -- the wide ledge (grab it past the slime)
+   pfMakeCoin 352, 1680     -- ledge 4
+   pfMakeCoin 672, 1552     -- ledge 5
+   pfMakeCoin 352, 1424     -- ledge 6
+   pfMakeCoin 400, 1296     -- the wide ledge (off-centre, past the frog)
+   pfMakeCoin 672, 1168     -- ledge 8
+   pfMakeCoin 352, 1040     -- ledge 9
+   pfMakeCoin 672, 912      -- ledge 10
+   pfMakeCoin 352, 784      -- ledge 11
+   pfMakeCoin 672, 656      -- ledge 12
+   pfMakeCoin 512, 528      -- the wide ledge (past the spike slime)
+   pfMakeCoin 672, 400      -- ledge 14
+   pfMakeCoin 420, 272      -- ledge 15 (off-centre, clear of the blade)
    pfMakeCoin 448, 144      -- on the keep top
-   pfMakeGem 544, 80, "blue"   -- BONUS gem: a double-jump above the keep top (the summit)
-   -- the keep's SPINNING BLADES (Phase C slice 2): two sweep the shaft across
-   -- a climb gap each - stand SAFE on the lower ledge, read the blade, jump the
-   -- gap when it has swept clear (the saw rule; a mistime is knockback, never
-   -- lethal). Each sits in the GAP (standing-safe on both adjacent ledges, ~66px
-   -- of the 38px-half hero clear): the lower across L1->L2, the upper L4->L5
-   -- (tighter + faster). OXT: confirm the timing is fair; widen pPerX if frantic.
-   pfMakeSpinner 512, 986, 320, 1300, false   -- lower: guards the L1->L2 crossing
-   pfMakeSpinner 512, 602, 300, 1050, false   -- upper: a tighter, faster sweep
+   pfMakeCoin 512, 1730     -- a gap bonus (double-jump between ledges)
+   pfMakeCoin 512, 1450     -- a gap bonus
+   pfMakeCoin 512, 1100     -- a gap bonus
+   pfMakeCoin 512, 850      -- a gap bonus
+   pfMakeCoin 512, 600      -- a gap bonus
+   pfMakeGem 544, 80, "blue"      -- BONUS gem: the summit, a double-jump above the keep top
+   pfMakeGem 512, 1180, "green"   -- BONUS gem: a mid-climb gap reward
+   -- THE BLADE GAUNTLET: FIVE sweeping spinners guard the climb gaps (stand SAFE
+   -- on the lower ledge, read the blade, jump when it has swept clear), and ONE
+   -- stationary HALF-BLADE sits on the final ledge (land clear of it, hop over).
+   -- The saw rule: time them, never stomp; a mistime is knockback, never lethal.
+   pfMakeSpinner 512, 2010, 320, 1300, false   -- gap L1->L2
+   pfMakeSpinner 512, 1626, 320, 1200, false   -- gap L4->L5
+   pfMakeSpinner 512, 1242, 300, 1100, false   -- gap L7->L8
+   pfMakeSpinner 512, 858, 300, 1050, false    -- gap L10->L11
+   pfMakeSpinner 512, 474, 280, 1000, false    -- gap L13->L14 (tightest, near the top)
+   pfMakeSpinner 512, 296, 0, 1, true          -- a stationary half-blade on the final ledge (y320)
+   -- THE KEEP'S WARDENS: walkers hold the wide "fight" ledges - a slime to stomp,
+   -- a hopping FROG, and a SPIKE slime you must dodge (no stomp on the spikes).
+   pfMakeSlime 1, "normal", 560, 460, 680, 1856
+   pfMakeFrog 2, 560, 460, 640, 1344
+   pfMakeSlime 3, "spike", 560, 460, 680, 576
    pfMakeGoal 544, 160      -- the flag, atop the keep
 end pfL7Cast
 
@@ -4184,6 +4432,7 @@ on b2kFrame
    end if
    put gHeroState into gPrevState
    pfTickGate
+   pfTickSwitchGates
    pfTickSlimes
    pfTickThwomps
    pfTickMovers
@@ -4191,7 +4440,7 @@ on b2kFrame
    pfTickBonks
    pfTickDebris
    pfTickLever
-   pfTickDoor
+   pfTickDoors
    pfTickPlants
    pfTickGhost
    pfTickBarnacles   -- Wave 6 (bestiary II)
@@ -4215,7 +4464,7 @@ on b2kFrame
    end if
    put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
    if gGemsTotal > 0 then put "   gems " & gGems & "/" & gGemsTotal after tHud
-   if gHasKey is true then put "   [KEY]" after tHud
+   if gKeysHeld is not empty then put "   [KEYS " & gKeysHeld & "]" after tHud
    if gCamOK is true then
       put the hScroll of b2kCamGroup() into tHS   -- read the scroll once
       put "   |   view " & tHS & "-" & (tHS + 1024) after tHud
@@ -4301,6 +4550,52 @@ command pfTickGate
       b2kSetVelocity gGate, 0, tVel
    end if
 end pfTickGate
+
+-- Every LATCHING switch-gate, polled. A still-closed switch polls its pad each
+-- frame (b2kOverlapMoving - moving bodies only, so the ground slab never reads
+-- as "pressed"); once pressed it latches OPEN and the kinematic gate rises to
+-- y342 and rests. After it settles, gSwDone short-circuits to one compare/frame.
+command pfTickSwitchGates
+   local i, tOn, tY, tTarget, tVel
+   if gSwN is 0 or gSwN is empty then exit pfTickSwitchGates
+   set the itemDelimiter to comma   -- item 2 of b2kPosition is the gate's y
+   repeat with i = 1 to gSwN
+      if gSwDone[i] is true then next repeat
+      if gSwGate[i] is empty then next repeat
+      if gSwOpen[i] is not true then
+         put (b2kOverlapMoving(gSwX[i] - 30, 420, gSwX[i] + 30, 452) is not empty) into tOn
+         if tOn then
+            put true into gSwOpen[i]
+            b2kSound "gate"
+            b2kCamShake 2, 120
+            if gSwSpr[i] is not empty then b2kSpriteSetFrame gSwSpr[i], "switch_" & gSwWord[i] & "_pressed"
+            if there is a graphic ("pf_swPlate" & i) then set the backgroundColor of graphic ("pf_swPlate" & i) to "90,92,112"
+         end if
+      end if
+      -- drive the gate toward its target (open=342 raised, closed=512); the
+      -- velocity is written only on change, and gSwDone freezes it once open
+      if gSwOpen[i] is true then
+         put 342 into tTarget
+      else
+         put 512 into tTarget
+      end if
+      put item 2 of b2kPosition(gSwGate[i]) into tY
+      if abs(tY - tTarget) <= 6 then
+         put 0 into tVel
+      else
+         if tTarget < tY then
+            put -160 into tVel
+         else
+            put 160 into tVel
+         end if
+      end if
+      if tVel is not gSwGateVel[i] then
+         put tVel into gSwGateVel[i]
+         b2kSetVelocity gSwGate[i], 0, tVel
+      end if
+      if gSwOpen[i] is true and tVel is 0 then put true into gSwDone[i]
+   end repeat
+end pfTickSwitchGates
 
 -- The slime-FAMILY tick: the classic patrollers plus the Wave 3 kinds.
 -- One position read per live row; each kind costs a couple of compares
@@ -4939,39 +5234,56 @@ end pfTickLever
 -- the park); nothing is deleted inside the frame loop. Only the 128px
 -- passage clears - the wall above is permanent, and the lock tile
 -- dissolves into plain stone so the wall stays visually whole.
-command pfTickDoor
-   if gDoorOpen is true then exit pfTickDoor
-   if gDoorSprB is empty then exit pfTickDoor
-   if abs(gHeroPX - gDoorX) >= 80 or gHeroPY <= 360 then exit pfTickDoor
-   if gHasKey is not true then
-      -- keyless at the wall: say WHY the way is shut (shares the deny
-      -- throttle with the flag so banners never fight each other)
-      if the milliseconds > gFlagNoteMS then
-         put the milliseconds + 2600 into gFlagNoteMS
-         b2kSound "deny"
-         pfNotice "LOCKED - find the " & gDoorWord & " KEY, back along the way", 2400
+-- Every coloured door, polled: at the wall you reach (within 80px, jumped up
+-- to the lintel) the matching KEY opens it - each colour independent, and the
+-- key is CONSUMED so it opens exactly its own door. Keyless = a throttled
+-- "LOCKED, find the <colour> key" note (shared with the flag deny throttle).
+command pfTickDoors
+   local i, tWord, k, tNew
+   if gDoorN is 0 or gDoorN is empty then exit pfTickDoors
+   set the itemDelimiter to comma
+   repeat with i = 1 to gDoorN
+      if gDoorOpen[i] is true then next repeat
+      if gDoorSprB[i] is empty then next repeat
+      if abs(gHeroPX - gDoorX[i]) >= 80 or gHeroPY <= 360 then next repeat
+      put gDoorWord[i] into tWord
+      if tWord is not among the items of gKeysHeld then
+         if the milliseconds > gFlagNoteMS then
+            put the milliseconds + 2600 into gFlagNoteMS
+            b2kSound "deny"
+            pfNotice "LOCKED - find the " & tWord & " KEY, back along the way", 2400
+         end if
+         next repeat
       end if
-      exit pfTickDoor
-   end if
-   put true into gDoorOpen
-   put false into gHasKey
-   b2kSound "unlock"
-   b2kCamShake 3, 150
-   -- the lock dissolves into the wall (removing it would punch a
-   -- see-through hole in front of the still-solid wall host)
-   if gLockSpr is not empty then b2kSpriteSetFrame gLockSpr, "terrain_stone_block_center"
-   if gKeySpr is not empty then b2kSpriteRemove gKeySpr
-   put empty into gKeySpr
-   if gDoorSprT is not empty then b2kSpriteSetFrame gDoorSprT, "door_open_top"
-   b2kSpriteSetFrame gDoorSprB, "door_open"
-   if there is a graphic "pf_doorHost" then
-      b2kMoveTo the long id of graphic "pf_doorHost", gDoorX, -2000
-      try
-         b2kDisable the long id of graphic "pf_doorHost"
-      catch tErr
-      end try
-   end if
-end pfTickDoor
+      -- UNLOCK door i and consume its key from the held set
+      put true into gDoorOpen[i]
+      put empty into tNew
+      repeat for each item k in gKeysHeld
+         if k is not tWord then
+            if tNew is empty then put k into tNew else put tNew & "," & k into tNew
+         end if
+      end repeat
+      put tNew into gKeysHeld
+      b2kSound "unlock"
+      b2kCamShake 3, 150
+      -- the lock dissolves into the wall (removing it would punch a
+      -- see-through hole in front of the still-solid wall host)
+      if gLockSpr[i] is not empty then b2kSpriteSetFrame gLockSpr[i], "terrain_stone_block_center"
+      if gKeyRide[tWord] is not empty then
+         b2kSpriteRemove gKeyRide[tWord]
+         put empty into gKeyRide[tWord]
+      end if
+      if gDoorSprT[i] is not empty then b2kSpriteSetFrame gDoorSprT[i], "door_open_top"
+      b2kSpriteSetFrame gDoorSprB[i], "door_open"
+      if there is a graphic gDoorHostNm[i] then
+         b2kMoveTo the long id of graphic gDoorHostNm[i], gDoorX[i], -2000
+         try
+            b2kDisable the long id of graphic gDoorHostNm[i]
+         catch tErr
+         end try
+      end if
+   end repeat
+end pfTickDoors
 
 -- The boulder cycle: parked static at the top, released on a timer with a
 -- nudge + rumble, re-parked the moment it rolls past the reset line (so it
@@ -5155,20 +5467,28 @@ end pfTickBarrel
 -- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
-   local tKPos, tPopAt
+   local tKPos, tPopAt, tWord, tN
    if pSensorCtrl is empty then exit b2kSensorEnter
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfKeyFlag of pSensorCtrl is true then
-      if gHasKey is not true then
-         put true into gHasKey
+      put the uPfKeyWord of pSensorCtrl into tWord
+      if tWord is empty then put "yellow" into tWord
+      set the itemDelimiter to comma
+      if tWord is not among the items of gKeysHeld then
+         if gKeysHeld is empty then
+            put tWord into gKeysHeld
+         else
+            put gKeysHeld & "," & tWord into gKeysHeld
+         end if
          b2kSound "key"
          b2kSpriteRemove pSensorCtrl
-         -- the key rides along, floating off the hero's shoulder
-         set the itemDelimiter to comma
+         -- the key rides along on the hero's shoulder; FAN multiple keys out so
+         -- two or three are all readable (stacked by held-count)
+         put the number of items of gKeysHeld into tN
          put b2kPosition(gHero) into tKPos
-         b2kSpriteNew "tiles", "key_" & gDoorWord, item 1 of tKPos - 34, item 2 of tKPos - 34
-         put the result into gKeySpr
-         if gKeySpr is not empty then b2kSpriteBind gKeySpr, gHero, -34, -34
+         b2kSpriteNew "tiles", "key_" & tWord, (item 1 of tKPos) - 34, (item 2 of tKPos) - 34 - (tN - 1) * 16
+         put the result into gKeyRide[tWord]
+         if gKeyRide[tWord] is not empty then b2kSpriteBind gKeyRide[tWord], gHero, -34, -34 - (tN - 1) * 16
       end if
       exit b2kSensorEnter
    end if
