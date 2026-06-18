@@ -10,19 +10,39 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
-- **Platformer: SNAKES - the slither movement type (asset-expansion Phase E,
-  begun).** A new slime-family kind `snake` with its own tick: it crawls the
-  floor and AUTO-REVERSES at a pit edge or wall (a single floor-probe
-  `b2kOverlap` ahead-and-below the body per frame), so you place it without
-  hand-tuning a patrol band - `pMinX/pMaxX` are just the outer safety bound.
-  Stompable on top / hurts on a side touch like a slime (kind "snake" falls
-  through to the classic verdict), and the Phase-D defeat juice (dead pose, poof,
-  fade, pop) carries it for free. `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY,pSkin`
-  picks the variant - plain `snake`, `snakeLava`, or `snakeSlime` (all spook-sheet
-  `.png` art, so it self-gates on `gSpooksOK`). Reuses `pfMakeCritter`'s new sheet
-  param. Deployed so far: a **lava snake** patrolling L4's lava-pit bank (turns at
-  the chasm and the lava) and a **plain snake** on L3's second ice platform (turns
-  at the spike pit). Example-side only; static gates clean, audit 0 findings.
+- **Platformer: the LAVA SERPENT + a widened L4 lava pit (asset-expansion Phase
+  E).** L4's old collapsing bridge (which never read right) is **gone**; in its
+  place the lava pit is widened to a **512px chasm** (2944..3456, up from a 192px
+  strip) crossed in **two ~160px hops** over a middle **stepping-stone**, and a
+  rearing **LAVA SERPENT** (`snakeLava` art, bodiless) rises OUT of the lava, arcs
+  ACROSS it and sinks back in on a sine path, **peaking at the stepping-stone** so
+  it contests the very rock you must land on (time your hops between its rises).
+  New `pfMakeLavaSerpent` / `pfTickLavaSerpent`: a pure sprite created BEFORE the
+  lava tiles so the y576 tile row occludes its submerged lower body (it reads as
+  rising from / sinking into the lava), with a visibility toggle backing the
+  no-tile fallback; the head's strike zone is a proximity-poll knockback (the saw
+  rule, gotcha 16), never a stomp. The collapsing-bridge maker/tick/globals were
+  removed wholesale. Self-gates on `gSpooksOK` - absent the spooks sheet the pit is
+  simply a two-hop lava gap (always completable).
+- **Platformer: SNAKES - the slither movement type (asset-expansion Phase E).** A
+  new slime-family kind `snake` with its own tick: it crawls the floor and
+  AUTO-REVERSES at a pit edge or wall (a single floor-probe `b2kOverlap`
+  ahead-and-below the body per frame), so you place it without hand-tuning a patrol
+  band - `pMinX/pMaxX` are just the outer safety bound. Stompable on top / hurts on
+  a side touch like a slime (kind "snake" falls through to the classic verdict),
+  and the Phase-D defeat juice (dead pose, poof, fade, pop) carries it for free.
+  `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY` is the LOW (`snake.png`) crawler; the
+  tall rearing `snakeLava`/`snakeSlime` art is the lava serpent above. Spook-sheet
+  `.png` art, so it self-gates on `gSpooksOK`. Deployed on L3 (turns at the spike
+  pit) and L4's lava-pit approach (turns at the entry pit and the lava lip).
+- **Platformer: spook slime/snake sprites sit ON the ground (alignment fix).** The
+  new spook-sheet skins (green/blue slime, snake) had inherited the FOES bind
+  offset (`pDY -6/-8`), which floated them ~9px: the foes art has soft, sparse
+  bottom rows that want a deep frame-sink, but the spook frames fill edge-to-edge
+  (zero transparent padding, measured against `enemies.png`), so feet-on-ground is
+  just `pFullH/2 - frameH*0.9/2`. Re-derived per frame (snake `pDY 3`, slimes `4`);
+  needs an OXT pass to confirm to the pixel (art alignment is statically
+  unverifiable). Example-side only; static gates clean, audit 0 findings.
 - **Platformer: defeat-animation juice (asset-expansion Phase D).** Pure polish,
   no new mechanics, on the one shared slime-family defeat path (so it lifts every
   level at once). A stomped foe now **fades out** over its ~700ms linger

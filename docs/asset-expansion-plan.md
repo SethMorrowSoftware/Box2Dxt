@@ -229,16 +229,27 @@ needs an OXT eye.
 ### Phase E — Snakes & the slither biome beat  (M)  — BEGUN
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.
 - **New movement type:** **slither** — a ground crawler that hugs the floor and
-  reverses at edges/walls (slime-family kind `snake`, animated `_walk`). `snakeLava`
-  belongs by the L4 lava / Phase-B cavern; `snakeSlime` by slime pools.
-- Woven into L4 and the new biomes (no dedicated level needed, but could anchor a
-  "serpent pit" beat).
-- **Done (pending OXT):** the `snake` kind + slither tick (floor-probe edge/wall
-  reversal) + `pfMakeSnake` (plain / `snakeLava` / `snakeSlime`, `gSpooksOK`-gated,
-  via `pfMakeCritter`'s sheet param). Deployed: a `snakeLava` on L4's lava bank, a
-  plain snake on L3's ice platform.
-- **TODO:** a `snakeSlime` home (a slime-pool beat), more snake placements, and a
-  possible "serpent pit" beat; teach `audit-platformer.py` the `pfMakeSnake` maker.
+  reverses at edges/walls (slime-family kind `snake`, animated `_walk`). The LOW
+  `snake.png` is the crawler; the TALL rearing `snakeLava`/`snakeSlime` art is the
+  rising **lava serpent** (a separate bodiless mover, not a floor crawler).
+- Woven into L4 and the new biomes (no dedicated level needed).
+- **Done (pending OXT):**
+  - The `snake` kind + slither tick (floor-probe edge/wall reversal) +
+    `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY` — the plain low crawler, `gSpooksOK`-
+    gated, via `pfMakeCritter`'s sheet param. Deployed: L3's ice platform (turns at
+    the spike pit) and L4's lava-pit approach (turns at the entry pit + lava lip).
+  - **The "serpent pit" beat (`pfMakeLavaSerpent`/`pfTickLavaSerpent`):** L4's old
+    collapsing bridge is removed; the lava pit is widened to a 512px chasm crossed
+    in two hops over a middle stepping-stone, and a rearing `snakeLava` serpent
+    rises out / arcs across / sinks back in on a sine path, peaking at the stone
+    (a proximity-poll knockback, the saw rule). Created under the lava tiles so its
+    submerged body is occluded.
+  - **Sprite grounding fix:** the spook skins fill their frames edge-to-edge (no
+    transparent padding, measured), so their bind offset is the plain geometric
+    `pFullH/2 - frameH*0.9/2`, not the FOES soft-bottom sink that floated them ~9px.
+- **TODO:** a `snakeSlime` home (a slime-pool beat) and more snake placements;
+  optionally teach `audit-platformer.py` the `pfMakeSnake`/`pfMakeLavaSerpent`
+  makers (currently ignored — harmless, the pit isn't gap-checked).
 
 ### Phase F — Collectibles & a health model  (M)
 - **Assets:** `coin_bronze/silver(_side)`, `star`, `heart`, `hud_heart(_half/

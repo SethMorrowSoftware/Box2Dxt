@@ -57,7 +57,6 @@ class Level:
         self.checkpoint = None
         self.goal = None
         self.bridge = None
-        self.collapse = None
         self.conveyors = []  # (pL,pR,dir)
         self.edgeL = 64
         self.edgeR = None
@@ -148,13 +147,11 @@ def parse():
                 v = nums(s); L.goal = (v[0], v[1]); continue
             if s.startswith("pfMakeBridge"):
                 v = nums(s); L.bridge = (v[0], v[1], v[2]); continue
-            if s.startswith("pfMakeCollapseBridge"):
-                v = nums(s); L.collapse = (v[0], v[1], v[2]); continue
         levels[n] = L
     return levels
 
 # ---- terrain helpers -------------------------------------------------------
-GROUND_NAMES = ("pf_ground", "pf_plat", "pf_pond", "pf_liftped", "pf_dune")
+GROUND_NAMES = ("pf_ground", "pf_plat", "pf_pond", "pf_liftped", "pf_dune", "pf_lavastep")
 
 def solid_top_at(L, x, y_tol_top=8):
     """Return the highest solid TOP surface at column x (slabs + clouds), or None."""
@@ -167,8 +164,6 @@ def solid_top_at(L, x, y_tol_top=8):
             tops.append(cy)
     if L.bridge and L.bridge[0] <= x <= L.bridge[1]:
         tops.append(L.bridge[2])
-    if L.collapse and L.collapse[0] <= x <= L.collapse[1]:
-        tops.append(L.collapse[2])
     return min(tops) if tops else None   # min y = highest surface
 
 def inside_solid(L, x, y, pad=6):
