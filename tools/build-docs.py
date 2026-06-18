@@ -36,6 +36,7 @@ EXTERNAL = [
     ("Game engine spec", "The Game Kit design, in depth.",        "game-engine-spec.md"),
     ("Building",         "Compile the native library yourself.",  "building.md"),
     ("Expansion prep",   "The internal roadmap & intake plan.",   "expansion-prep.md"),
+    ("Asset expansion plan", "Using the whole spritesheet library.", "asset-expansion-plan.md"),
 ]
 
 
