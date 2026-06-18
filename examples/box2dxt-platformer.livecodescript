@@ -2087,6 +2087,7 @@ end pfBounds
 -- Coords stay POSITIVE (the off-card collision worry was NEGATIVE coords; a
 -- tall positive world collides the same way the horizontal walls do).
 command pfBoundsV pLeft, pRight, pTop, pBottom
+   local tCx
    put pLeft into gEdgeL
    put pRight into gEdgeR
    put pRight into gLevelW
@@ -2096,7 +2097,13 @@ command pfBoundsV pLeft, pRight, pTop, pBottom
    b2kWall pRight, pTop, pRight, pBottom
    b2kWall pLeft, pTop, pRight, pTop       -- the ceiling
    b2kKillFloor pBottom + 300              -- below the floor slab; the climb never reaches it
-   b2kCamBounds pLeft, pTop, pRight, pBottom
+   -- the play column (pLeft..pRight) is NARROWER than the 1024 viewport, so the
+   -- camera's X bounds must be a viewport-wide range CENTRED on the column - if
+   -- they only spanned pLeft..pRight, the camera left-aligns to pLeft and the
+   -- whole tower sits shoved to the left with dead space on the right. The Y
+   -- bounds stay the full world height (that is what the vertical scroll rides).
+   put (pLeft + pRight) / 2 into tCx
+   b2kCamBounds tCx - 512, pTop, tCx + 512, pBottom
    put pTop + 320 into gCamTopY            -- a 640-tall viewport sliding inside the tall world
    put pBottom - 320 into gCamBotY
    put pBottom + 300 into gKillPlaneY      -- the explicit kill check is effectively off (contained)
