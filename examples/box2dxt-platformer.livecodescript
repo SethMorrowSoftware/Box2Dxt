@@ -87,13 +87,17 @@
 --            HOP, then bestiary II with room to read - a snail, a lurking
 --            BARNACLE, a SPIDER on a sand overhang - and sand steps to
 --            the final flag.
---   LEVEL 6  CAVERN DEPTHS (3040px) - the asset-expansion DIRT biome: a
---            WALL-JUMP SHAFT of floating dirt columns over the entry (slot
---            coin), a spike GAP to leap (checkpoint past it), a DIRT-RAMP
---            mound, a one-way DIRT CLOUD high route, a slime, a hopping BLOCK
---            SLIME + a snail, a CONVEYOR BELT (a treadmill you power across),
---            and carved dirt steps to the flag. A bonus GEM rides high above
---            the wall-jump shaft.
+--   LEVEL 6  CAVERN DEPTHS (6400px) - the asset-expansion DIRT biome, run DEEP
+--            (the length + variety pass): THREE acts across three pits. ACT 1 -
+--            the WALL-JUMP SHAFT of floating dirt columns (slot coin + bonus
+--            GEM), a spike GAP, a DIRT-RAMP mound, a one-way DIRT CLOUD, a slime,
+--            a hopping BLOCK SLIME, a snail, a leftward CONVEYOR. ACT 2 - the
+--            CRUSHER GALLERY: two BATS roosting on a dirt overhang, two faced
+--            dirt crushers, a wider spike chasm. ACT 3 - the DEEP RUN: a dropping
+--            SPIDER, a stalking GHOST, a floor BARNACLE, a cave PLANT, a spiked
+--            chasm a LIFT ferries, a rightward speed CONVEYOR + a second block
+--            slime, a FIRE slime, a treasure MIMIC and a finale crusher to the
+--            flag. ~24 coins, three checkpoints.
 --   LEVEL 7  STONE KEEP (a VERTICAL TOWER, 1280px tall) - the asset-expansion
 --            STONE/CASTLE biome, CLIMBED not crossed: you JUMP UP one-way stone
 --            ledges that zig-zag to the top of the keep, and the camera SCROLLS
@@ -302,7 +306,17 @@
 --      (slice 3) carries you LEFT when grounded on it - you walk slower toward
 --      the goal and faster back, you can still power across, and jumping over it
 --      is unaffected; the tread art faces the push direction (flip - OXT-verify
---      it reads). L6's flag now ADVANCES to L7 (the win moved to L7).
+--      it reads). (h) THE LENGTH + VARIETY PASS (now ~6400px / ~24 coins): ACT 2
+--      is a CRUSHER GALLERY - two BATS roost on a dirt overhang (split bands, no
+--      mid-air collision), two faced crushers to dash between, a wider PIT2; ACT
+--      3 is the DEEP RUN - a SPIDER drops from its overhang as you pass, a GHOST
+--      stalks the stretch, a floor BARNACLE telegraphs, a cave PLANT snaps, a
+--      LIFT ferries the spiked PIT3 (or double-jump it), a rightward speed belt +
+--      a second block slime, a FIRE slime (no stomp), a treasure MIMIC and a
+--      finale crusher to the flag. Confirm spacing reads (not cramped), every
+--      enemy patrols solid ground, and a missing enemies.png degrades the spooks
+--      (bat/spider/ghost/mimic/plant) SILENTLY with the level still completable.
+--      L6's flag now ADVANCES to L7 (the win moved to L7).
 --  21. ASSET-EXPANSION PHASE C, SLICE 1 - LEVEL 7 "STONE KEEP" - a VERTICAL
 --      TOWER you CLIMB (the win now needs gLevel>=7). *** THE BIG OXT ITEM: the
 --      camera must SCROLL UP smoothly as the hero climbs *** - this is the only
@@ -3699,34 +3713,54 @@ end pfL5Cast
 command pfL6Scene
    local tX
    put "CAVERN DEPTHS (deep!)" into gLevelName
-   pfBounds kPfEdgeL, 3000 + kPfEndCap   -- right edge hugs the goal flag (3000)
+   -- the cavern runs DEEP now (the asset-expansion LENGTH + variety pass): THREE
+   -- acts across ~6300px - the entry shaft, a CRUSHER GALLERY under bat-hung
+   -- overhangs, then the DEEP RUN past a dropping spider, a stalking ghost and a
+   -- rolling boulder to the flag. FOUR floors with three pits between them: PIT1
+   -- spikes (1088..1280), PIT2 spikes (3520..3776), PIT3 a spiked chasm a lift
+   -- ferries (4736..4928). Every pit is still double-jumpable (the lift is flair).
+   pfBounds kPfEdgeL, 6400
    pfSlab "pf_ground1", 0, 576, 1088, 640
-   pfSlab "pf_ground2", 1280, 576, 3072, 640
-   pfSlab "pf_plat1", 2752, 512, 2912, 576
-   pfSlab "pf_plat2", 2912, 448, 3072, 576
-   -- the DIRT biome's debut: block tops across the cave floor (block_center
-   -- under the mound, for one earthen mass), carved CLIFF CORNERS finishing the
-   -- goal steps. terrain_dirt_* was entirely unused until this level.
+   pfSlab "pf_ground2", 1280, 576, 3520, 640
+   pfSlab "pf_ground3", 3776, 576, 4736, 640
+   pfSlab "pf_ground4", 4928, 576, 6400, 640
+   pfSlab "pf_plat1", 6016, 512, 6208, 576
+   pfSlab "pf_plat2", 6208, 448, 6400, 576
+   -- the DIRT biome's tiling: block tops across every floor (block_center under
+   -- the ramp mound's mass), carved CLIFF CORNERS at the pit edges, finished
+   -- steps at the goal climb. terrain_dirt_* was entirely unused before L6.
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_dirt_block_top") then
       repeat with tX = 0 to 960 step 64
          pfTile "terrain_dirt_block_top", tX, 576
       end repeat
-      pfTile "terrain_dirt_block_top_right", 1024, 576   -- carved LEFT lip of the spike pit (a finished cliff edge, not a raw cut)
-      pfTile "terrain_dirt_block_top_left", 1280, 576    -- carved RIGHT lip of the spike pit
-      repeat with tX = 1344 to 3008 step 64
+      pfTile "terrain_dirt_block_top_right", 1024, 576   -- carved LEFT lip of PIT1
+      pfTile "terrain_dirt_block_top_left", 1280, 576    -- carved RIGHT lip of PIT1
+      repeat with tX = 1344 to 3392 step 64
          if tX >= 1408 and tX <= 1792 then
             pfTile "terrain_dirt_block_center", tX, 576   -- under the dirt mound: one mass
          else
             pfTile "terrain_dirt_block_top", tX, 576
          end if
       end repeat
-      pfTile "terrain_dirt_block_top_left", 2752, 512
-      pfTile "terrain_dirt_block_top", 2816, 512
-      pfTile "terrain_dirt_block_top_right", 2880, 512
-      pfTile "terrain_dirt_block_top", 2912, 448
-      pfTile "terrain_dirt_block_top", 2976, 448
-      pfTile "terrain_dirt_block_center", 2912, 512
-      pfTile "terrain_dirt_block_center", 2976, 512
+      pfTile "terrain_dirt_block_top_right", 3456, 576   -- carved LEFT lip of PIT2
+      pfTile "terrain_dirt_block_top_left", 3776, 576    -- carved RIGHT lip of PIT2
+      repeat with tX = 3840 to 4608 step 64
+         pfTile "terrain_dirt_block_top", tX, 576
+      end repeat
+      pfTile "terrain_dirt_block_top_right", 4672, 576   -- carved LEFT lip of PIT3
+      pfTile "terrain_dirt_block_top_left", 4928, 576    -- carved RIGHT lip of PIT3
+      repeat with tX = 4992 to 5952 step 64
+         pfTile "terrain_dirt_block_top", tX, 576
+      end repeat
+      pfTile "terrain_dirt_block_top_left", 6016, 512    -- the goal climb's finished steps
+      pfTile "terrain_dirt_block_top", 6080, 512
+      pfTile "terrain_dirt_block_top_right", 6144, 512
+      pfTile "terrain_dirt_block_top", 6208, 448
+      pfTile "terrain_dirt_block_top", 6272, 448
+      pfTile "terrain_dirt_block_top", 6336, 448
+      pfTile "terrain_dirt_block_center", 6208, 512
+      pfTile "terrain_dirt_block_center", 6272, 512
+      pfTile "terrain_dirt_block_center", 6336, 512
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -3756,9 +3790,8 @@ command pfL6Scene
       b2kCamAdopt the long id of graphic "pf_wjShaftR"
    end if
    pfMakeCoin 428, 340   -- the slot coin, dead-centre between the columns (slot 384..472, centre 428): wall-jump up, or double-jump. Built in the SCENE so it aligns with the columns.
-   -- the CAVERN GAP: spikes seated FLUSH at the pit edge (192px = three
-   -- spikes); leap it - the checkpoint sits just past it. The carved dirt
-   -- cliff lips (block_top_right/left, above) finish the chasm.
+   -- PIT1 - the CAVERN GAP: spikes seated FLUSH at the pit edge (192px = three
+   -- spikes); leap it - the checkpoint sits just past it.
    pfMakeSpikes 1088, 1280
    -- a DIRT RAMP mound (the dirt biome's slopes): up the left ramp, across the
    -- crest, down the right. The six-point chain's outer two points are ghost
@@ -3788,54 +3821,138 @@ command pfL6Scene
       b2kCamAdopt the long id of graphic "pf_cloudledgeP"
    end if
    -- a CONVEYOR BELT on the lower run (pushes LEFT, back toward the cloud): a
-   -- treadmill you must power across to reach the block slime + the goal - the
-   -- cavern's mechanic (Phase B, slice 3). Grid-aligned, on solid ground2.
+   -- treadmill you must power across to reach the block slime - the cavern's
+   -- mechanic (Phase B, slice 3). Grid-aligned, on solid ground2.
    pfMakeConveyor 2176, 2368, -1
-   -- CAVE DRESSING: flickering wall TORCHES light the gloom; CHAINS and
-   -- STALACTITES hang from the unseen roof; ground decor (a rock, cave
-   -- mushrooms, a bush) breaks up the floor. Torches/chains/dirt-pieces are
-   -- not audited decor; the rock/mushrooms/bush sit clear of every beat.
-   -- (Stalactite + chain hang orientation: OXT-verify, gotcha 26.)
-   pfMakeTorch 352, 300     -- mounted on the wall-jump shaft's left column
+   -- ===== ACT 2/3 terrain (the asset-expansion LENGTH pass) =====
+   -- PIT2 - a WIDER spiked chasm (256px = four spikes) past the crusher gallery.
+   pfMakeSpikes 3520, 3776
+   -- a one-way DIRT CLOUD high route on G3 (solid span 4416..4608), and a
+   -- second on G4 (solid 5568..5760) - both ghost-padded a tile each side.
+   b2kSmoothGround "4672,448" & cr & "4608,448" & cr & "4416,448" & cr & "4352,448"
+   b2kSmoothGround "5824,448" & cr & "5760,448" & cr & "5568,448" & cr & "5504,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_dirt_cloud_left") then
+      pfTile "terrain_dirt_cloud_left", 4416, 448
+      pfTile "terrain_dirt_cloud_middle", 4480, 448
+      pfTile "terrain_dirt_cloud_right", 4544, 448
+      pfTile "terrain_dirt_cloud_left", 5568, 448
+      pfTile "terrain_dirt_cloud_middle", 5632, 448
+      pfTile "terrain_dirt_cloud_right", 5696, 448
+   end if
+   -- PIT3 - a spiked chasm a horizontal LIFT ferries across (ride it, or just
+   -- double-jump the 192px gap - the lift is variety, never a gate).
+   pfMakeSpikes 4736, 4928
+   pfMakeLift 4736, 544, 112, 24, 4720, 4944, 70
+   -- a SECOND CONVEYOR on the deep run, pushing RIGHT (+1) this time: it speeds
+   -- you along - control the slide so it does not carry you into the next beat.
+   pfMakeConveyor 5056, 5248, 1
+   -- CAVE DRESSING: flickering wall TORCHES light the gloom; bat-roost + spider
+   -- OVERHANGS (dirt ledges the cave-flyers hang under, drawn only with the
+   -- spooks sheet since those creatures are optional); CHAINS and STALACTITES
+   -- hang from the unseen roof; ground decor breaks up the floor, all clear of
+   -- the beats. (Overhang/stalactite hang orientation: OXT-verify, gotcha 26.)
+   pfMakeTorch 352, 300     -- the wall-jump shaft's left column
    pfMakeTorch 504, 300     -- ...and its right column
    pfMakeTorch 900, 452     -- the entry cave
    pfMakeTorch 1360, 452    -- past the spike gap
    pfMakeTorch 2360, 452    -- the lower run
-   pfMakeTorch 2860, 432    -- the climb to the flag
+   pfMakeTorch 3216, 452    -- the crusher gallery
+   pfMakeTorch 4080, 452    -- the deep run (the spider's reach)
+   pfMakeTorch 5024, 452    -- past the lift chasm
+   pfMakeTorch 6112, 388    -- the goal climb
+   if gSpooksOK is true and gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_dirt_horizontal_overhang_left") then
+      pfTile "terrain_dirt_horizontal_overhang_left", 2816, 256    -- the BAT ROOST (Act 2)
+      pfTile "terrain_dirt_horizontal_middle", 2880, 256
+      pfTile "terrain_dirt_horizontal_middle", 2944, 256
+      pfTile "terrain_dirt_horizontal_middle", 3008, 256
+      pfTile "terrain_dirt_horizontal_overhang_right", 3072, 256
+      pfTile "terrain_dirt_horizontal_overhang_left", 3904, 256    -- the SPIDER's overhang (Act 3)
+      pfTile "terrain_dirt_horizontal_middle", 3968, 256
+      pfTile "terrain_dirt_horizontal_overhang_right", 4032, 256
+      pfTile "terrain_dirt_horizontal_overhang_left", 5504, 256    -- a SECOND bat roost (Act 3)
+      pfTile "terrain_dirt_horizontal_middle", 5568, 256
+      pfTile "terrain_dirt_horizontal_overhang_right", 5632, 256
+   end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "chain") then
       pfTile "chain", 700, 96
       pfTile "chain", 1640, 96
       pfTile "chain", 2520, 96
+      pfTile "chain", 3360, 96
+      pfTile "chain", 4240, 96
+      pfTile "chain", 5360, 96
+      pfTile "chain", 6080, 96
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_dirt_vertical_bottom") then
       pfTile "terrain_dirt_vertical_bottom", 1120, 96    -- a stalactite over the spike gap
       pfTile "terrain_dirt_vertical_bottom", 2000, 96    -- ...and over the cloud route
+      pfTile "terrain_dirt_vertical_bottom", 3616, 96    -- ...over PIT2
+      pfTile "terrain_dirt_vertical_bottom", 4816, 96    -- ...over the lift chasm
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "rock") then
       pfTile "rock", 970, 512
+      pfTile "rock", 3824, 512    -- just past PIT2, clear of the deep-run beats
    end if
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "mushroom_brown") then
       pfTile "mushroom_brown", 1336, 512
       pfTile "mushroom_red", 2320, 512
       pfTile "bush", 2680, 512
+      pfTile "mushroom_brown", 4256, 512    -- in the gap between the ghost run and the barnacle
    end if
 end pfL6Scene
 
 command pfL6Cast
+   -- ACT 1 coins (the entry shaft + the first depths)
    pfMakeCoin 240, 500      -- the opening cave run
    pfMakeCoin 760, 500      -- before the gap (the first slime's beat)
-   pfMakeCoin 1184, 452     -- mid-air over the spike gap: leap it
+   pfMakeCoin 1184, 452     -- mid-air over PIT1: leap it
    pfMakeCoin 1568, 468     -- atop the dirt mound crest
    pfMakeCoin 2048, 408     -- on the one-way dirt cloud (the high route)
    pfMakeCoin 2200, 500     -- past the snail, on the lower run
    pfMakeCoin 2560, 500     -- the block slime's beat (grab it between hops)
-   pfMakeCoin 2820, 476     -- on the first goal step
+   -- ACT 2 coins (the crusher gallery, under the bat roost)
+   pfMakeCoin 2880, 440     -- under the BATS (duck the swoop)
+   pfMakeCoin 3088, 500     -- into the crusher gallery
+   pfMakeCoin 3304, 500     -- threading the two crushers: grab it between drops
+   pfMakeCoin 3648, 452     -- mid-air over PIT2: leap the wider chasm
+   -- ACT 3 coins (the deep run + the descent to the flag)
+   pfMakeCoin 3968, 470     -- under the dropping SPIDER (grab it as you dodge)
+   pfMakeCoin 4180, 500     -- the ghost-stalked run
+   pfMakeCoin 4512, 408     -- on the G3 dirt cloud (the high route)
+   pfMakeCoin 4640, 500     -- the cave plant's beat (time the snap)
+   pfMakeCoin 4832, 452     -- mid-air over PIT3 (ride the lift, or leap it)
+   pfMakeCoin 5120, 500     -- on the speed CONVEYOR (it carries you right)
+   pfMakeCoin 5440, 500     -- the fire slime's beat (do NOT stomp a slime on fire)
+   pfMakeCoin 5632, 408     -- on the G4 dirt cloud (the high route)
+   pfMakeCoin 5808, 500     -- by the treasure MIMIC (is it a chest, or not?)
+   pfMakeCoin 5984, 500     -- the final crusher's gap: grab it as you dash under
+   pfMakeCoin 6112, 476     -- on the first goal step
+   pfMakeCoin 6256, 412     -- on the climb to the flag
    pfMakeGem 428, 204, "green"   -- BONUS gem ABOVE the wall-jump shaft: master the wall-jump to reach it (OXT: confirm it is reachable; lower it a touch if not)
+   -- ACT 1 cast: the meadow-cave roster
    pfMakeSlime 1, "normal", 760, 640, 900, 576
    pfMakeBlockSlime 2, 2560, 2440, 2680, 576   -- the cavern's hopping CUBE (Phase B; stomp it or time the hops)
    pfMakeSnail 3, 2050, 1980, 2120
-   pfMakeCheckpoint 1900    -- past the cavern gap, before the depths
-   pfMakeGoal 3000, 416
+   -- ACT 2 cast: the BAT ROOST + the CRUSHER GALLERY (split bat bands so two
+   -- flying bodies never share a path and fight their velocity asserts; gotcha 18)
+   pfMakeBat 4, 2900, 300, 2840, 2960
+   pfMakeBat 5, 3060, 300, 3000, 3120
+   pfMakeThwomp 1, 3216, true    -- a faced dirt CRUSHER
+   pfMakeThwomp 2, 3392, true    -- ...and its twin (time the dash between them)
+   -- ACT 3 cast: the DEEP RUN's bestiary - a dropping spider, a stalking ghost,
+   -- a floor barnacle, a cave plant, a treasure mimic, a fire slime + a finale crusher
+   pfMakeSpider 1, 3968, 3904, 4032, 336    -- crawls the overhang, DROPS as you pass under
+   pfMakeGhost 4180, 360                    -- stalks the whole deep run
+   pfMakeBarnacle 1, 4400, 544              -- a clam-trap on the floor (it telegraphs)
+   pfMakeBat 6, 4544, 320, 4448, 4640       -- a lone bat by the G3 cloud
+   pfMakePlant 1, 4640                       -- a carnivorous cave plant (burrow-and-snap)
+   pfMakeBlockSlime 7, 5184, 5056, 5312, 576   -- a second hopping cube on the speed belt
+   pfMakeCritter 8, "spike", 5440, 5360, 5520, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6   -- a FIRE slime (hurts from every side)
+   pfMakeMimic 9, 5808                       -- a treasure MIMIC (lunges when you near)
+   pfMakeThwomp 3, 5984                       -- the finale's chained crusher before the flag
+   pfMakeCheckpoint 1900    -- past PIT1, before the depths
+   pfMakeCheckpoint 3840    -- past PIT2, entering the deep run
+   pfMakeCheckpoint 5008    -- past PIT3, before the descent
+   pfMakeGoal 6336, 416
 end pfL6Cast
 
 

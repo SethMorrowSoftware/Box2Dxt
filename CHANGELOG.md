@@ -10,6 +10,22 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: LEVEL 6 "CAVERN DEPTHS" expanded to a full three-act level (the
+  length + variety pass).** The thinnest level (2,976px, 9 coins, 3 foes) grows
+  to **~6,400px and 24 coins** with a rich cave bestiary, keeping all of Act 1
+  verbatim and appending two acts of proven geometry: **Act 2** a CRUSHER GALLERY
+  - two `pfMakeBat` roosting on a dirt overhang (split bands, gotcha 18), two
+  faced `pfMakeThwomp` crushers, a wider spike chasm (PIT2); **Act 3** the DEEP
+  RUN - a dropping `pfMakeSpider`, a stalking `pfMakeGhost`, a floor
+  `pfMakeBarnacle`, a `pfMakePlant`, a third spiked chasm a `pfMakeLift` ferries
+  (PIT3, still double-jumpable), a rightward speed `pfMakeConveyor` + a second
+  block slime, a fire `pfMakeCritter`, a treasure `pfMakeMimic` and a finale
+  crusher to the flag. Three checkpoints. The spook-sheet foes (bat/spider/ghost/
+  mimic/plant) are `gSpooksOK`-gated, so a missing `enemies.png` degrades them
+  silently and the level stays completable. First of the level-length audit pass
+  (L1 ~8.5k/29 coins is the reference; L5 and L7 follow). Example-side only;
+  geometry audit clean (`audit-platformer.py` caught a goal-past-the-ground edge,
+  a coin/decor crowding the flag and a checkpoint on the pit lip - all fixed).
 - **Platformer: the SPINNER - a spinning-blade hazard (asset-expansion Phase C,
   slice 2).** The previously-unused `spinner*` art (the `spooks` / `enemies.png`
   sheet) becomes the keep's hazard: `pfMakeSpinner pX, pY, pAmpX, pPerX, pHalf`
