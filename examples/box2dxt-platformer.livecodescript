@@ -81,12 +81,14 @@
 --            SLIME, the POWDER KEG bay (an explosive barrel + woodpile,
 --            scattered by b2kExplode), the red crusher alley (its
 --            signature gauntlet), purple steps, the flag.
---   LEVEL 5  SCORCHED DUNES (4240px) - WAVE 7's DESERT biome: a sand
---            DUNE (ramp slope) to crest, a sand slime, a hopping FROG, a
---            THORN PIT to leap (checkpoint at the brink), a two-cloud
---            HOP, then bestiary II with room to read - a snail, a lurking
---            BARNACLE, a SPIDER on a sand overhang - and sand steps to
---            the final flag.
+--   LEVEL 5  SCORCHED DUNES (6400px) - WAVE 7's DESERT biome, run LONG (the
+--            length + variety pass): THREE acts across three THORN PITS. ACT 1 -
+--            a sand DUNE to crest, a sand slime, a hopping FROG, PIT1, a two-
+--            cloud HOP, a snail, a lurking BARNACLE. ACT 2 - a darting FLY, a
+--            second dune a sand BOULDER rolls down at you, a high SAND CLOUD
+--            route, a FIRE slime, a second frog. ACT 3 - a treasure MIMIC, a
+--            second fly, a final cloud route, a homeward snail, and sand steps
+--            to the summit flag. ~24 coins, three checkpoints.
 --   LEVEL 6  CAVERN DEPTHS (6400px) - the asset-expansion DIRT biome, run DEEP
 --            (the length + variety pass): THREE acts across three pits. ACT 1 -
 --            the WALL-JUMP SHAFT of floating dirt columns (slot coin + bonus
@@ -284,6 +286,14 @@
 --      sand STEPS + flag finale plays; the HUD/help/splash now say "of 6"
 --      and L5's flag ADVANCES to level 6 (the win moved to L6 - see item 20).
 --      New biome: confirm the sand art reads with no missing-frame fallbacks.
+--      THE LENGTH + VARIETY PASS (now ~6400px / ~24 coins / three checkpoints):
+--      ACT 2 adds a darting FLY, a second dune a sand BOULDER rolls DOWN at you
+--      (it re-parks at 4160 so the bank you land on stays safe - confirm it does
+--      not trap you), a high SAND CLOUD route, a FIRE slime (no stomp) and a 2nd
+--      frog; ACT 3 adds a treasure MIMIC, a 2nd fly, a final cloud route and a
+--      homeward snail. Confirm the boulder is dodgeable on the climb, the fire
+--      slime cannot be stomped, and the three thorn pits (PIT1 2000, PIT2 3840,
+--      PIT3 5376) each have a working brink/far-bank checkpoint.
 --  20. ASSET-EXPANSION PHASE B, SLICE 1 - LEVEL 6 "CAVERN DEPTHS" (the DIRT
 --      biome: terrain_dirt_*, previously unused; the win now needs gLevel>=6).
 --      VERIFY on a full asset folder: (a) the BACKDROP is the dark cave (not
@@ -3592,29 +3602,45 @@ end pfL4Cast
 command pfL5Scene
    local tX
    put "SCORCHED DUNES (hot!)" into gLevelName
-   pfBounds kPfEdgeL, 4200 + kPfEndCap   -- right edge hugs the goal flag (4200)
+   -- the dunes run LONG now (the asset-expansion length + variety pass): THREE
+   -- acts across ~6300px and three THORN PITS - the entry dune, a BOULDER dune
+   -- with a fire-slime run, then the deep desert past the treasure mimic to the
+   -- summit flag. FOUR sand floors with three spiked chasms between them.
+   pfBounds kPfEdgeL, 6400
    pfSlab "pf_ground1", 0, 576, 2000, 640
-   pfSlab "pf_ground2", 2256, 576, 4288, 640   -- far edge of the widened THORN PIT (2000..2256, was 2192 = only 3 spikes)
-   pfSlab "pf_plat1", 3936, 512, 4128, 576
-   pfSlab "pf_plat2", 4128, 448, 4256, 576
+   pfSlab "pf_ground2", 2256, 576, 3840, 640
+   pfSlab "pf_ground3", 4096, 576, 5376, 640
+   pfSlab "pf_ground4", 5568, 576, 6400, 640
+   pfSlab "pf_plat1", 6080, 512, 6272, 576
+   pfSlab "pf_plat2", 6272, 448, 6400, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_block_top") then
       repeat with tX = 0 to 1936 step 64
          if tX >= 864 and tX <= 1184 then
-            pfTile "terrain_sand_block_center", tX, 576   -- under the dune: one mass
+            pfTile "terrain_sand_block_center", tX, 576   -- under the first dune: one mass
          else
             pfTile "terrain_sand_block_top", tX, 576
          end if
       end repeat
-      repeat with tX = 2256 to 4224 step 64
+      repeat with tX = 2256 to 3776 step 64
          pfTile "terrain_sand_block_top", tX, 576
       end repeat
-      pfTile "terrain_sand_block_top_left", 3936, 512
-      pfTile "terrain_sand_block_top", 4000, 512
-      pfTile "terrain_sand_block_top_right", 4064, 512
-      pfTile "terrain_sand_block_top", 4128, 448
-      pfTile "terrain_sand_block_top", 4192, 448
-      pfTile "terrain_sand_block_center", 4128, 512
-      pfTile "terrain_sand_block_center", 4192, 512
+      repeat with tX = 4096 to 5312 step 64
+         if tX >= 4352 and tX <= 4672 then
+            pfTile "terrain_sand_block_center", tX, 576   -- under the second (boulder) dune
+         else
+            pfTile "terrain_sand_block_top", tX, 576
+         end if
+      end repeat
+      repeat with tX = 5568 to 6016 step 64
+         pfTile "terrain_sand_block_top", tX, 576
+      end repeat
+      pfTile "terrain_sand_block_top_left", 6080, 512
+      pfTile "terrain_sand_block_top", 6144, 512
+      pfTile "terrain_sand_block_top_right", 6208, 512
+      pfTile "terrain_sand_block_top", 6272, 448
+      pfTile "terrain_sand_block_top", 6336, 448
+      pfTile "terrain_sand_block_center", 6272, 512
+      pfTile "terrain_sand_block_center", 6336, 512
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -3637,10 +3663,9 @@ command pfL5Scene
       set the backgroundColor of it to "200,170,110"
       b2kCamAdopt the long id of graphic "pf_dune"
    end if
-   -- the THORN PIT (leap it; a slip burns then drops to the kill floor): the
-   -- gap between the two ground slabs, spike tips flush with the floor line.
-   -- Widened to 256px (FOUR spikes) for a proper spiked chasm - clear it with a
-   -- running/double jump (the checkpoint at the brink, 1900, makes a slip a quick retry).
+   -- PIT1 - the THORN PIT (leap it; a slip burns then drops to the kill floor):
+   -- 256px (FOUR spikes), spike tips flush with the floor line. The checkpoint
+   -- at the brink (1900) makes a slip a quick retry.
    pfMakeSpikes 2000, 2256
    -- the two-cloud HOP (one-way sand clouds, each ghost-padded a tile past the
    -- art each side): jump up for the coins, DOWN+JUMP to drop off
@@ -3667,39 +3692,109 @@ command pfL5Scene
       set the foregroundColor of it to "200,170,110"
       b2kCamAdopt the long id of graphic "pf_cloudledgeN"
    end if
-   -- (no SPIDER here: a ceiling-crawler needs a ceiling, and a sand bar floating
-   -- in the open desert sky read as a glitch. The spider stays showcased in L4's
-   -- cave biome, where the overhang reads as a real ceiling fragment.)
+   -- ===== ACT 2/3 terrain (the length + variety pass) =====
+   -- PIT2 - a second THORN chasm (256px, four spikes) onto the boulder bank.
+   pfMakeSpikes 3840, 4096
+   -- the SECOND DUNE - a sand mound a BOULDER rolls DOWN at you (crest 4480..4608,
+   -- mirror the Act 1 recipe). The boulder lives in the cast; it rolls to 4160
+   -- and re-parks, so the far bank you land on stays safe.
+   b2kSmoothGround "4800,576" & cr & "4736,576" & cr & "4608,512" & cr & "4480,512" & cr & "4352,576" & cr & "4288,576"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_ramp_long_a") then
+      pfTile "terrain_sand_ramp_long_b", 4352, 512, true
+      pfTile "terrain_sand_ramp_long_a", 4416, 512, true
+      pfTile "terrain_sand_block_top", 4480, 512
+      pfTile "terrain_sand_block_top", 4544, 512
+      pfTile "terrain_sand_ramp_long_a", 4608, 512
+      pfTile "terrain_sand_ramp_long_b", 4672, 512
+   end if
+   -- a one-way SAND CLOUD high route over the fire-slime run (solid 4928..5120),
+   -- and a final one on G4 (solid 5696..5888) - both ghost-padded a tile each side.
+   b2kSmoothGround "5184,448" & cr & "5120,448" & cr & "4928,448" & cr & "4864,448"
+   b2kSmoothGround "5952,448" & cr & "5888,448" & cr & "5696,448" & cr & "5632,448"
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_cloud_left") then
+      pfTile "terrain_sand_cloud_left", 4928, 448
+      pfTile "terrain_sand_cloud_middle", 4992, 448
+      pfTile "terrain_sand_cloud_right", 5056, 448
+      pfTile "terrain_sand_cloud_left", 5696, 448
+      pfTile "terrain_sand_cloud_middle", 5760, 448
+      pfTile "terrain_sand_cloud_right", 5824, 448
+   end if
+   -- PIT3 - the last THORN chasm (192px, three spikes) before the summit run.
+   pfMakeSpikes 5376, 5568
    -- desert decor, placed clear of every beat (cacti, a rock, the way-markers)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "cactus") then
       pfTile "sign", 160, 512
       pfTile "cactus", 320, 512
       pfTile "cactus", 1700, 512
       pfTile "cactus", 2300, 512
-      pfTile "rock", 3760, 512
+      pfTile "rock", 3520, 512
+      pfTile "cactus", 4760, 512
+      pfTile "rock", 6020, 512
    end if
 end pfL5Scene
 
 command pfL5Cast
+   local tRef
+   -- ACT 1 coins (the entry dune + the thorn pit + the cloud hop)
    pfMakeCoin 480, 500      -- the opening run
    pfMakeCoin 680, 500      -- the sand slime's beat
    pfMakeCoin 1056, 460     -- atop the dune (jump it as you crest)
-   pfMakeGem 1056, 400, "blue"   -- BONUS gem above the dune crest (double-jump for it)
    pfMakeCoin 1500, 500     -- the desert frog's beat (stomp it; do not stand by it)
-   pfMakeCoin 2128, 440     -- mid-air over the (widened) thorn pit: leap it
+   pfMakeCoin 2128, 440     -- mid-air over PIT1: leap it
    pfMakeCoin 2480, 392     -- on the first sand cloud
    pfMakeCoin 2784, 392     -- on the second sand cloud
    pfMakeCoin 3000, 500     -- the snail's beat (shell it, kick it)
-   pfMakeCoin 3552, 500     -- on the clear run home (was the spider beat; the spider is L4-only now)
-   pfMakeCoin 3750, 500     -- the clear run home to the steps
-   pfMakeCoin 3990, 448     -- over the first sand step
-   pfMakeCoin 4100, 420     -- on the climb to the summit (moved off the flag: 4180 overlapped the goal flag at 4200)
+   pfMakeCoin 3260, 500     -- past the barnacle, on the run to PIT2
+   -- ACT 2 coins (the boulder dune + the fire-slime run)
+   pfMakeCoin 3520, 500     -- the open run to PIT2
+   pfMakeCoin 3968, 440     -- mid-air over PIT2: leap it
+   pfMakeCoin 4160, 500     -- landing on the boulder bank
+   pfMakeCoin 4280, 500     -- approaching the dune (mind the boulder rolling down)
+   pfMakeCoin 4544, 452     -- atop the boulder dune (grab it as you crest)
+   pfMakeCoin 4720, 500     -- down the far side of the dune
+   pfMakeCoin 5024, 408     -- on the sand cloud (the high route over the fire slime)
+   pfMakeCoin 5240, 500     -- the second frog's beat
+   -- ACT 3 coins (the deep desert + the summit)
+   pfMakeCoin 5472, 440     -- mid-air over PIT3: leap it
+   pfMakeCoin 5700, 500     -- the treasure mimic's beat (chest, or not?)
+   pfMakeCoin 5792, 408     -- on the final sand cloud (the high route)
+   pfMakeCoin 5888, 408     -- ...and along it
+   pfMakeCoin 5980, 500     -- the homeward snail's beat
+   pfMakeCoin 6160, 460     -- over the first sand step
+   pfMakeCoin 6240, 460     -- on the climb to the summit (clear of the flag)
+   pfMakeGem 1056, 400, "blue"   -- BONUS gem above the dune crest (double-jump for it)
+   -- ACT 1 cast
    pfMakeSlime 1, "normal", 680, 620, 760, 576
    pfMakeFrog 2, 1500, 1420, 1620, 576
    pfMakeSnail 3, 3000, 2940, 3060
    pfMakeBarnacle 1, 3300, 544
-   pfMakeCheckpoint 1900    -- at the brink of the thorn pit: a slip is a retry, not a replay
-   pfMakeGoal 4200, 416
+   -- ACT 2 cast: a desert FLY, a BOULDER rolling the dune, a FIRE slime, a 2nd frog
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
+      b2kSpriteNew "foes", "fly_a", 4700, 380
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "flit"
+         pfAddMover tRef, 4700, 380, 80, 720, 50, 450, 36, 44, true
+      end if
+   end if
+   pfMakeBoulder 4544, 458, 4160, -90    -- a sand BOULDER rolls down the dune at you, re-parks at 4160
+   pfMakeCritter 4, "spike", 5000, 4940, 5060, 576, 52, "slime_fire_walk_a", "firewalk", "slime_fire_flat", 24, 36, "230,120,60", -6   -- a FIRE slime (scorched!): no stomp
+   pfMakeFrog 5, 5240, 5160, 5320, 576
+   -- ACT 3 cast: a treasure MIMIC, a 2nd fly, a homeward snail
+   pfMakeMimic 6, 5700
+   if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
+      b2kSpriteNew "foes", "fly_a", 5850, 380
+      put the result into tRef
+      if tRef is not empty then
+         b2kSpritePlay tRef, "flit"
+         pfAddMover tRef, 5850, 380, 90, 760, 40, 470, 36, 44, true
+      end if
+   end if
+   pfMakeSnail 7, 5980, 5920, 6040
+   pfMakeCheckpoint 1900    -- at the brink of PIT1: a slip is a retry, not a replay
+   pfMakeCheckpoint 4160    -- past PIT2, on the boulder bank
+   pfMakeCheckpoint 5632    -- past PIT3, before the summit run
+   pfMakeGoal 6336, 416
 end pfL5Cast
 
 

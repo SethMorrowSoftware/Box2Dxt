@@ -10,6 +10,23 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: LEVEL 5 "SCORCHED DUNES" expanded to a full three-act level (the
+  length + variety pass, second of the audit).** From 4,200px / 12 coins / 3 foes
+  to **~6,400px and 24 coins**, keeping Act 1 verbatim and appending two desert
+  acts across three thorn pits: **Act 2** a darting `fly` (mover), a second dune a
+  sand `pfMakeBoulder` rolls down at you (re-parks at 4160 so the landing bank
+  stays safe), a high sand-cloud route, a fire `pfMakeCritter` (no stomp) and a
+  second `pfMakeFrog`; **Act 3** a treasure `pfMakeMimic`, a second fly, a final
+  cloud route and a homeward snail to the summit. Three checkpoints (now using
+  the fixed multi-checkpoint path). Example-side only; geometry audit clean (it
+  caught a summit coin overlapping the flag - fixed), 0 findings across 7 levels.
+- **Platformer: multi-checkpoint activation fix.** `pfMakeCheckpoint` tracked the
+  flag + its x in single globals that each call overwrote, and the sensor handler
+  banked that one x behind a one-time guard - so L6's three checkpoints left all
+  but the last dead (the first never lit, a later one stood pre-raised). Each flag
+  now carries its own respawn x (`uPfCheckX`) and a one-shot guard
+  (`uPfCheckDone`); touching a flag activates THAT flag and only ever advances the
+  respawn point. Single-checkpoint levels (L1-L4) are unchanged.
 - **Platformer: LEVEL 6 "CAVERN DEPTHS" expanded to a full three-act level (the
   length + variety pass).** The thinnest level (2,976px, 9 coins, 3 foes) grows
   to **~6,400px and 24 coins** with a rich cave bestiary, keeping all of Act 1
