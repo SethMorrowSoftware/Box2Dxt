@@ -187,15 +187,16 @@ needs an OXT eye.
   sweeping blades across the L1->L2 and L4->L5 climb gaps, standing-safe on the
   adjacent ledges. `pHalf` provides the wall-mounted `spinnerHalf` for slice 3.
   Gated on `gSpooksOK` (no `enemies.png` = safe). **Blade timing is the OXT feel-pass.**
-- **Slice 3 — IN PROGRESS:** the **multi-key / switch puzzles**. *Part 1 DONE
-  (pending OXT):* `pfMakeKeyDoor` generalised to N coloured doors (a per-door
-  table; the hero holds a `gKeysHeld` set, each key `uPfKeyWord`-tagged and
-  consumed at its door). Deployed as a **two-key lockgate** ending L2 "The Works"
-  (yellow + blue), which also tops L2 to ~24 coins. *Part 2 TODO:* floor
-  **switches** (latching `switch_*`/`_pressed` plates) that open coloured gates -
-  a switch guarding one of the keys for a real puzzle. (L7 went vertical, so the
-  puzzle wing lives in L2, the machinery level - switches/gates/keys fit a
-  factory.)
+- **Slice 3 — DONE (pending OXT):** the **multi-key / switch puzzles**, woven into
+  L2 "The Works" (L7 went vertical, so the puzzle wing lives in the machinery
+  level - switches/gates/keys fit a factory). *Part 1:* `pfMakeKeyDoor` generalised
+  to N coloured doors (a per-door table; the hero holds a `gKeysHeld` set, each key
+  `uPfKeyWord`-tagged and consumed at its door) - deployed as a **two-key lockgate**
+  (yellow + blue) ending L2, which also tops L2 to ~24 coins. *Part 2:*
+  `pfMakeSwitchGate` - a **latching** floor switch (`switch_<colour>`) that opens
+  its coloured kinematic gate (`block_<colour>`) for good - deployed as a **green
+  switch-gate** barring the crusher alley until you find + press the switch on the
+  third-bay cloud. Both gated on `gToysOK` (a missing tiles sheet = an open run).
 - **Assets:** `terrain_stone_*` (full), `switch_{blue,green,red}(_pressed)`,
   `key_{blue,green}`, `lock_{blue,green}`, `spinner*`/`spinnerHalf*`,
   `block_strong_*`.

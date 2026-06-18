@@ -20,8 +20,17 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   Single-door levels (L3's red door) are unchanged. **L2 "The Works"** now ends on
   a **two-key lockgate** - a yellow key on the main run, a blue key up on the hop
   clouds, and a double door before the flag - and gains coins to **24** (was 19).
-  Example-side only; gates clean, audit 0 findings. (The floor **switch -> gate**
-  half of slice 3 lands next.)
+  Example-side only; gates clean, audit 0 findings.
+- **Platformer: latching SWITCH-GATES + a switch puzzle in L2 (Phase C slice 3 -
+  part 2).** `pfMakeSwitchGate pSwitchX, pColour, pGateL` plants a floor/ledge
+  switch (`switch_<colour>`) and the coloured kinematic gate (`block_<colour>`)
+  it opens. Unlike `pfMakeGate`'s momentary pressure pad, it **latches**: step on
+  the switch once and the gate rises out of the way for good (`pfTickSwitchGates`
+  polls only-moving-bodies, then `gSwDone` idles it in one compare/frame). L2 gets
+  a **green switch-gate** - the gate bars the crusher alley until you climb to the
+  third-bay cloud and press the switch up there, a "find the switch" beat (both
+  the keys and the switch are `gToysOK`-gated, so a missing tiles sheet degrades to
+  an open run). Example-side only; gates clean, audit 0 findings. Slice 3 done.
 - **Platformer: LEVEL 7 "STONE KEEP" expanded to a blade-and-warden gauntlet (the
   length + variety pass, vertical edition).** The climbing tower roughly doubles
   in height (1,280 -> ~2,300px, **8 -> 16 ledges**) and goes from 8 coins / 2

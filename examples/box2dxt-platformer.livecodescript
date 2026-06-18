@@ -406,6 +406,11 @@ local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
 -- gKeyRide[colour] is each one's ride-along sprite; the rest are per-door arrays
 -- indexed 1..gDoorN (gDoorX/gDoorWord were single globals - one door per level).
 local gKeysHeld, gKeyRide, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gDoorHostNm
+-- LATCHING switch-gates (Phase C slice 3, part 2): a floor/ledge switch that,
+-- once pressed, opens its coloured gate FOR GOOD (the kinematic gate rises out
+-- of the way and rests). Indexed 1..gSwN; gSwDone[i] = open AND settled (idles
+-- in one compare thereafter).
+local gSwN, gSwX, gSwWord, gSwOpen, gSwDone, gSwGate, gSwSpr, gSwGateSprA, gSwGateSprB, gSwGateVel
 local gDebrisB, gDebrisSpr, gCrateB, gCrateSpr
 local gBlockChainA, gBlockChainB, gBlockFace
 local gGoalSpr, gNoticeUntil, gFlagNoteMS
@@ -990,6 +995,16 @@ command pfStartGame
    put empty into gDoorSprT
    put empty into gDoorSprB
    put empty into gDoorHostNm
+   put 0 into gSwN
+   put empty into gSwX
+   put empty into gSwWord
+   put empty into gSwOpen
+   put empty into gSwDone
+   put empty into gSwGate
+   put empty into gSwSpr
+   put empty into gSwGateSprA
+   put empty into gSwGateSprB
+   put empty into gSwGateVel
    put 0 into gDebrisNext
    put empty into gDebrisB
    put empty into gDebrisSpr
@@ -2274,6 +2289,59 @@ command pfMakeGate pPlateX, pGateL
    end if
 end pfMakeGate
 
+-- A LATCHING SWITCH + the coloured GATE it opens (Phase C slice 3, part 2): step
+-- on the switch (switch_<colour>) ONCE and the kinematic gate (block_<colour> at
+-- pGateL) rises out of the way FOR GOOD - unlike pfMakeGate's momentary pad. A
+-- puzzle element: the switch can sit off the direct line so you must find it.
+-- pSwitchY is the switch's surface (default the ground at 448 of a cloud / 544 of
+-- a floor); the poll band sits just above it. Multi-instance (own table).
+command pfMakeSwitchGate pSwitchX, pColour, pGateL, pSwitchY
+   local tI, tCX
+   if pSwitchY is empty then put 448 into pSwitchY
+   add 1 to gSwN
+   put gSwN into tI
+   put pGateL + 32 into tCX
+   put pSwitchX into gSwX[tI]
+   put pColour into gSwWord[tI]
+   put false into gSwOpen[tI]
+   put false into gSwDone[tI]
+   put empty into gSwGateVel[tI]
+   -- the SWITCH plate, flush on its surface
+   create graphic ("pf_swPlate" & tI)
+   set the style of it to "rectangle"
+   set the rect of it to pSwitchX - 28, pSwitchY - 16, pSwitchX + 28, pSwitchY
+   set the filled of it to true
+   set the backgroundColor of it to "120,124,150"
+   b2kCamAdopt the long id of graphic ("pf_swPlate" & tI)
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "switch_" & pColour) then
+      set the visible of graphic ("pf_swPlate" & tI) to false
+      b2kSpriteNew "tiles", "switch_" & pColour, pSwitchX, pSwitchY - 28
+      put the result into gSwSpr[tI]
+   end if
+   -- the GATE it opens: a kinematic barrier, raised (closed) until pressed
+   create graphic ("pf_swGate" & tI)
+   set the style of it to "rectangle"
+   set the rect of it to pGateL, 448, pGateL + 64, 576
+   set the filled of it to true
+   set the backgroundColor of it to "120,124,150"
+   put the long id of graphic ("pf_swGate" & tI) into gSwGate[tI]
+   b2kAddBox gSwGate[tI]
+   b2kSetKinematic gSwGate[tI]
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "block_" & pColour) then
+      set the visible of graphic ("pf_swGate" & tI) to false
+      b2kSpriteNew "tiles", "block_" & pColour, tCX, 480
+      put the result into gSwGateSprA[tI]
+      if gSwGateSprA[tI] is not empty then b2kSpriteBind gSwGateSprA[tI], gSwGate[tI], 0, -32
+      b2kSpriteNew "tiles", "block_" & pColour, tCX, 544
+      put the result into gSwGateSprB[tI]
+      if gSwGateSprB[tI] is not empty then
+         b2kSpriteBind gSwGateSprB[tI], gSwGate[tI], 0, 32
+      end if
+   else
+      b2kCamAdopt gSwGate[tI]
+   end if
+end pfMakeSwitchGate
+
 -- A spike pit between pL and pR (the level's ground slabs leave the
 -- gap). Spike alpha is the BOTTOM 34px of the cell (measured), so
 -- cells at y=576 put the tips at 606, base flush with the floor; the
@@ -3087,6 +3155,11 @@ command pfL2Scene
       -- keys you carry). Multi-instance pfMakeKeyDoor; each key opens its colour.
       pfMakeKeyDoor 1740, 500, 5344, "yellow"
       pfMakeKeyDoor 4904, 356, 5600, "blue"
+      -- a GREEN SWITCH-GATE (slice 3 part 2): the green gate bars the way into
+      -- the crusher alley until you climb to the third-bay cloud and press the
+      -- switch up there (it latches open) - a "find the switch" beat. Skip it and
+      -- the closed gate at 4060 sends you back to look for the cloud.
+      pfMakeSwitchGate 3828, "green", 4060, 448
    end if
 end pfL2Scene
 
@@ -4354,6 +4427,7 @@ on b2kFrame
    end if
    put gHeroState into gPrevState
    pfTickGate
+   pfTickSwitchGates
    pfTickSlimes
    pfTickThwomps
    pfTickMovers
@@ -4471,6 +4545,52 @@ command pfTickGate
       b2kSetVelocity gGate, 0, tVel
    end if
 end pfTickGate
+
+-- Every LATCHING switch-gate, polled. A still-closed switch polls its pad each
+-- frame (b2kOverlapMoving - moving bodies only, so the ground slab never reads
+-- as "pressed"); once pressed it latches OPEN and the kinematic gate rises to
+-- y342 and rests. After it settles, gSwDone short-circuits to one compare/frame.
+command pfTickSwitchGates
+   local i, tOn, tY, tTarget, tVel
+   if gSwN is 0 or gSwN is empty then exit pfTickSwitchGates
+   set the itemDelimiter to comma   -- item 2 of b2kPosition is the gate's y
+   repeat with i = 1 to gSwN
+      if gSwDone[i] is true then next repeat
+      if gSwGate[i] is empty then next repeat
+      if gSwOpen[i] is not true then
+         put (b2kOverlapMoving(gSwX[i] - 30, 420, gSwX[i] + 30, 452) is not empty) into tOn
+         if tOn then
+            put true into gSwOpen[i]
+            b2kSound "gate"
+            b2kCamShake 2, 120
+            if gSwSpr[i] is not empty then b2kSpriteSetFrame gSwSpr[i], "switch_" & gSwWord[i] & "_pressed"
+            if there is a graphic ("pf_swPlate" & i) then set the backgroundColor of graphic ("pf_swPlate" & i) to "90,92,112"
+         end if
+      end if
+      -- drive the gate toward its target (open=342 raised, closed=512); the
+      -- velocity is written only on change, and gSwDone freezes it once open
+      if gSwOpen[i] is true then
+         put 342 into tTarget
+      else
+         put 512 into tTarget
+      end if
+      put item 2 of b2kPosition(gSwGate[i]) into tY
+      if abs(tY - tTarget) <= 6 then
+         put 0 into tVel
+      else
+         if tTarget < tY then
+            put -160 into tVel
+         else
+            put 160 into tVel
+         end if
+      end if
+      if tVel is not gSwGateVel[i] then
+         put tVel into gSwGateVel[i]
+         b2kSetVelocity gSwGate[i], 0, tVel
+      end if
+      if gSwOpen[i] is true and tVel is 0 then put true into gSwDone[i]
+   end repeat
+end pfTickSwitchGates
 
 -- The slime-FAMILY tick: the classic patrollers plus the Wave 3 kinds.
 -- One position read per live row; each kind costs a couple of compares
