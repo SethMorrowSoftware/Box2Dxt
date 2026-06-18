@@ -94,12 +94,14 @@
 --            SLIME + a snail, a CONVEYOR BELT (a treadmill you power across),
 --            and carved dirt steps to the flag. A bonus GEM rides high above
 --            the wall-jump shaft.
---   LEVEL 7  STONE KEEP (3040px) - the asset-expansion STONE/CASTLE biome: a
---            WATCHTOWER (wall-jump, slot coin), a wide spiked MOAT to leap
---            (checkpoint past it), a rubble RAMP, a one-way stone BATTLEMENT
---            high route, two slimes + a snail, torchlit halls, and carved stone
---            steps to the flag (the win). A bonus GEM tops the watchtower. (The
---            SPINNER hazard + the multi-key/switch PUZZLES land in slices 2-3.)
+--   LEVEL 7  STONE KEEP (2940px) - the asset-expansion STONE/CASTLE biome,
+--            CLIMBED not crossed (distinct from the cavern's flat run): an
+--            approach with a spiked MOAT at the gate (leap it), a bailey with a
+--            slime + a snail, then a RAMPART STAIRCASE up three solid stone
+--            tiers to a high PARAPET where a BLOCK SLIME guards the battlements
+--            (windows + torches in the keep wall) and the flag waits (the win).
+--            A bonus GEM hangs above the parapet's edge. (The SPINNER hazard +
+--            the multi-key/switch PUZZLES land in slices 2-3.)
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -306,16 +308,19 @@
 --      biome: terrain_stone_*, previously unused; the win now needs gLevel>=7).
 --      VERIFY on a full asset folder: (a) the BACKDROP is the dark stone keep
 --      (pfBuildStoneBackdrop), no border line on the two panels; (b) the stone
---      ground/ramp/battlement/cliff-corners read with NO missing-frame
---      fallbacks; (c) the WATCHTOWER slot coin is reachable by wall-jump AND a
---      straight double-jump, and the bonus GEM atop it is reachable; (d) the
---      wide MOAT (256px, four spikes) is a clean run/double-jump leap with the
---      spikes FLUSH between the carved lips; (e) the rubble RAMP walks up/across/
---      down with no fall-through; the stone BATTLEMENT is solid to its ends and
---      DOWN+JUMP drops through it; (f) both slimes + the snail patrol solid
---      ground; torches/chains light the halls (orientation OXT-verify); the win
---      screen says ALL SEVEN LEVELS CLEAR. (Spinner + key/switch puzzles: slices
---      2-3.)
+--      ground/stair-tiers/parapet/cliff-lips read with NO missing-frame
+--      fallbacks and the keep wall looks SOLID (no transparent gaps in the
+--      tiered bodies); (c) the MOAT (192px, three spikes) is a clean leap with
+--      the spikes FLUSH between the carved lips; (d) the RAMPART STAIRCASE
+--      climbs cleanly - the hero hops bailey->step1->step2->parapet with no
+--      getting stuck against a tier face; (e) the bonus GEM above the parapet's
+--      edge is reachable by a double-jump (lower it if not); (f) the slime +
+--      snail patrol the bailey and the BLOCK SLIME hops the parapet, all on
+--      solid ground; windows/torches/chains read in the keep wall (orientation
+--      OXT-verify); the win screen says ALL SEVEN LEVELS CLEAR. (Spinner + key/
+--      switch puzzles: slices 2-3.) NOTE: this LEVEL WAS REDESIGNED from a
+--      stone-skinned L6 clone into a vertical fortress - confirm it now reads
+--      as its own level.
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -1259,7 +1264,7 @@ end pfTextureSlab
 command pfShowSlabs pFlag
    local tC
    set the itemDelimiter to comma
-   repeat for each item tC in "pf_ground1,pf_ground2,pf_ground3,pf_plat1,pf_plat2"
+   repeat for each item tC in "pf_ground1,pf_ground2,pf_ground3,pf_plat1,pf_plat2,pf_plat3"
       if there is a graphic tC then
          set the visible of graphic tC to pFlag
          if pFlag is true then b2kCamAdopt the long id of graphic tC
@@ -3746,117 +3751,85 @@ end pfL6Cast
 command pfL7Scene
    local tX
    put "STONE KEEP (fortified!)" into gLevelName
-   pfBounds kPfEdgeL, 3000 + kPfEndCap   -- right edge hugs the goal flag (3000)
-   pfSlab "pf_ground1", 0, 576, 1024, 640
-   pfSlab "pf_ground2", 1280, 576, 3072, 640
-   pfSlab "pf_plat1", 2752, 512, 2912, 576
-   pfSlab "pf_plat2", 2912, 448, 3072, 576
-   -- the STONE biome: block tops across the keep floor (block_center under the
-   -- rubble ramp, one mass), carved CORNERS at the moat lips + the dais steps.
+   pfBounds kPfEdgeL, 2900 + kPfEndCap   -- right edge hugs the goal on the parapet
+   -- a CASTLE, CLIMBED not crossed (distinct from the cavern's flat run): an
+   -- approach with a MOAT at the gate, a bailey, then a RAMPART STAIRCASE up
+   -- three solid stone tiers to a high PARAPET where the flag waits. The whole
+   -- terrain_stone_* set was unused before this level.
+   pfSlab "pf_ground1", 0, 576, 576, 640
+   pfSlab "pf_ground2", 768, 576, 1856, 640
+   pfSlab "pf_plat1", 1856, 512, 2048, 640   -- rampart step 1 (top y512)
+   pfSlab "pf_plat2", 2048, 448, 2240, 640   -- rampart step 2 (top y448)
+   pfSlab "pf_plat3", 2240, 384, 3008, 640   -- the upper PARAPET, the keep top (y384)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
-      repeat with tX = 0 to 896 step 64
+      -- the approach + the moat's carved lips
+      repeat with tX = 0 to 448 step 64
          pfTile "terrain_stone_block_top", tX, 576
       end repeat
-      pfTile "terrain_stone_block_top_right", 960, 576    -- the moat's LEFT lip (carved cliff edge)
-      pfTile "terrain_stone_block_top_left", 1280, 576    -- the moat's RIGHT lip
-      repeat with tX = 1344 to 3008 step 64
-         if tX >= 1408 and tX <= 1792 then
-            pfTile "terrain_stone_block_center", tX, 576   -- under the rubble ramp: one mass
-         else
-            pfTile "terrain_stone_block_top", tX, 576
-         end if
+      pfTile "terrain_stone_block_top_right", 512, 576   -- the moat's LEFT lip
+      pfTile "terrain_stone_block_top_left", 768, 576    -- the moat's RIGHT lip
+      -- the bailey floor
+      repeat with tX = 832 to 1792 step 64
+         pfTile "terrain_stone_block_top", tX, 576
       end repeat
-      pfTile "terrain_stone_block_top_left", 2752, 512
-      pfTile "terrain_stone_block_top", 2816, 512
-      pfTile "terrain_stone_block_top_right", 2880, 512
-      pfTile "terrain_stone_block_top", 2912, 448
-      pfTile "terrain_stone_block_top", 2976, 448
-      pfTile "terrain_stone_block_center", 2912, 512
-      pfTile "terrain_stone_block_center", 2976, 512
+      -- the RAMPART STAIRCASE: each tier's walkable TOP + its solid stone body
+      -- down to the floor line (a massive keep wall, not floating ledges)
+      repeat with tX = 1856 to 1984 step 64
+         pfTile "terrain_stone_block_top", tX, 512
+         pfTile "terrain_stone_block_center", tX, 576
+      end repeat
+      repeat with tX = 2048 to 2176 step 64
+         pfTile "terrain_stone_block_top", tX, 448
+         pfTile "terrain_stone_block_center", tX, 512
+         pfTile "terrain_stone_block_center", tX, 576
+      end repeat
+      repeat with tX = 2240 to 2944 step 64
+         pfTile "terrain_stone_block_top", tX, 384
+         pfTile "terrain_stone_block_center", tX, 448
+         pfTile "terrain_stone_block_center", tX, 512
+         pfTile "terrain_stone_block_center", tX, 576
+      end repeat
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
-   -- the WATCHTOWER (wall-jump): two floating stone columns frame a slot over
-   -- the courtyard - wall-jump (or double-jump) up it for the slot coin. The
-   -- L3/L6 shaft recipe in stone; the columns float so the main path runs under.
-   pfSlab "pf_wjShaftL", 320, 256, 384, 448
-   pfSlab "pf_wjShaftR", 472, 256, 536, 448
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
-      pfTile "terrain_stone_block_top", 320, 256
-      pfTile "terrain_stone_block_center", 320, 320
-      pfTile "terrain_stone_block_center", 320, 384
-      pfTile "terrain_stone_block_top", 472, 256
-      pfTile "terrain_stone_block_center", 472, 320
-      pfTile "terrain_stone_block_center", 472, 384
-   else
-      set the backgroundColor of graphic "pf_wjShaftL" to "120,124,140"
-      set the backgroundColor of graphic "pf_wjShaftR" to "120,124,140"
-      set the visible of graphic "pf_wjShaftL" to true
-      set the visible of graphic "pf_wjShaftR" to true
-      b2kCamAdopt the long id of graphic "pf_wjShaftL"
-      b2kCamAdopt the long id of graphic "pf_wjShaftR"
-   end if
-   pfMakeCoin 428, 340   -- the slot coin (slot 384..472), built in the SCENE to align with the columns
-   -- the MOAT: a wide spiked chasm (256px = four spikes), cleared with a run/
-   -- double-jump; the checkpoint sits just past it. Carved stone lips finish it.
-   pfMakeSpikes 1024, 1280
-   -- a RUBBLE RAMP (stone slope): up the left ramp, across the crest, down the
-   -- right. Six-point chain, outer two ghost anchors; ramps mirrored.
-   b2kSmoothGround "1856,576" & cr & "1792,576" & cr & "1664,512" & cr & "1536,512" & cr & "1408,576" & cr & "1344,576"
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_ramp_long_a") then
-      pfTile "terrain_stone_ramp_long_b", 1408, 512, true
-      pfTile "terrain_stone_ramp_long_a", 1472, 512, true
-      pfTile "terrain_stone_block_top", 1536, 512
-      pfTile "terrain_stone_block_top", 1600, 512
-      pfTile "terrain_stone_ramp_long_a", 1664, 512
-      pfTile "terrain_stone_ramp_long_b", 1728, 512
-   end if
-   -- a one-way STONE BATTLEMENT (drop through with DOWN+JUMP) for the high bonus
-   -- route; ghost-padded a tile past the art each side (solid span 1984..2176).
-   b2kSmoothGround "2240,448" & cr & "2176,448" & cr & "1984,448" & cr & "1920,448"
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_cloud_left") then
-      pfTile "terrain_stone_cloud_left", 1984, 448
-      pfTile "terrain_stone_cloud_middle", 2048, 448
-      pfTile "terrain_stone_cloud_right", 2112, 448
-   else
-      create graphic "pf_cloudledgeS"
-      set the style of it to "line"
-      set the points of it to "1984,448" & cr & "2176,448"
-      set the lineSize of it to 4
-      set the foregroundColor of it to "150,154,170"
-      b2kCamAdopt the long id of graphic "pf_cloudledgeS"
-   end if
-   -- KEEP DRESSING: wall torches + hanging chains light the dungeon (torches/
-   -- chains are not audited decor). Orientation: OXT-verify (gotcha 26).
-   pfMakeTorch 352, 300     -- on the watchtower's left column
-   pfMakeTorch 504, 300     -- ...and its right column
-   pfMakeTorch 840, 452     -- the courtyard
-   pfMakeTorch 1360, 452    -- past the moat
-   pfMakeTorch 2360, 452    -- the keep run
-   pfMakeTorch 2860, 432    -- the climb to the dais
+   -- the MOAT: a spiked chasm at the gate (192px = three spikes), leapt into the
+   -- bailey; carved stone lips finish it.
+   pfMakeSpikes 576, 768
+   -- CASTLE DRESSING: wall torches, hanging chains, and windows set into the
+   -- keep's stonework (torches/chains/windows are not audited decor; window/
+   -- torch facing: OXT-verify, gotcha 26).
+   pfMakeTorch 200, 452     -- the approach
+   pfMakeTorch 1000, 452    -- the bailey
+   pfMakeTorch 1520, 452    -- the bailey
+   pfMakeTorch 2400, 320    -- the parapet
+   pfMakeTorch 2780, 320    -- the parapet, near the flag
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "chain") then
-      pfTile "chain", 700, 96
+      pfTile "chain", 1100, 96
       pfTile "chain", 1640, 96
-      pfTile "chain", 2520, 96
+   end if
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "window") then
+      pfTile "window", 2400, 448    -- windows in the keep wall
+      pfTile "window", 2592, 448
+      pfTile "window", 2784, 448
    end if
 end pfL7Scene
 
 command pfL7Cast
-   pfMakeCoin 240, 500      -- the courtyard
-   pfMakeCoin 700, 500      -- the first slime's beat
-   pfMakeCoin 1152, 452     -- mid-air over the MOAT: leap it
-   pfMakeCoin 1568, 468     -- atop the rubble ramp
-   pfMakeCoin 2048, 408     -- on the stone battlement (the high route)
-   pfMakeCoin 2300, 500     -- the keep run
-   pfMakeCoin 2560, 500     -- the second slime's beat
-   pfMakeCoin 2820, 476     -- on the first dais step
-   pfMakeGem 428, 204, "blue"   -- BONUS gem above the watchtower (master the wall-jump)
-   pfMakeSlime 1, "normal", 700, 600, 860, 576
-   pfMakeSlime 2, "normal", 2560, 2440, 2680, 576
-   pfMakeSnail 3, 2050, 1980, 2120
-   pfMakeCheckpoint 1360    -- just past the moat, before the keep
-   pfMakeGoal 3000, 416
+   pfMakeCoin 240, 500      -- the approach
+   pfMakeCoin 672, 452      -- mid-air over the MOAT: leap it
+   pfMakeCoin 1050, 500     -- the bailey slime's beat
+   pfMakeCoin 1550, 500     -- the bailey snail's beat
+   pfMakeCoin 1952, 480     -- on rampart step 1
+   pfMakeCoin 2144, 416     -- on rampart step 2
+   pfMakeCoin 2500, 352     -- up on the parapet
+   pfMakeCoin 2700, 352     -- the parapet, the block slime's beat
+   pfMakeGem 2300, 304, "blue"   -- BONUS gem: a double-jump above the parapet's edge (OXT: confirm reachable; lower it if not)
+   pfMakeSlime 1, "normal", 1050, 900, 1250, 576
+   pfMakeSnail 2, 1550, 1420, 1680
+   pfMakeBlockSlime 3, 2620, 2400, 2840, 384   -- a CUBE hops the battlements (the parapet's guard)
+   pfMakeCheckpoint 1780    -- in the bailey, before the rampart climb
+   pfMakeGoal 2900, 352
 end pfL7Cast
 
 

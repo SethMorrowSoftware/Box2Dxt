@@ -19,17 +19,20 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   title field shrinks to make room. Example-side only.
 - **Platformer: LEVEL 7 "STONE KEEP" - the STONE/CASTLE biome (asset-expansion
   Phase C, slice 1).** A seventh level on the previously-unused `terrain_stone_*`
-  tile set (block tops, `block_center`, carved corners, `ramp_long_a/b`,
-  `cloud_*`) over a built dark stone backdrop (`pfBuildStoneBackdrop`, gray-blue):
-  a WATCHTOWER (wall-jump, slot coin), a wide spiked MOAT (256px, four spikes) to
-  leap, a rubble RAMP, a one-way stone BATTLEMENT high route, two slimes + a
-  snail, a bonus GEM atop the tower, torchlit halls, and carved stone steps to
-  the flag. The win moves to L7 (`gLevel >= 7`); L6's flag now ADVANCES. Built on
-  the proven L6 geometry in stone; the SPINNER hazard and the multi-key/switch
-  PUZZLES (the keep's real identity) land in slices 2-3. Example-side only (no Kit
-  change, no harness bump); `tools/audit-platformer.py` auto-discovers and clears
-  L7 (9 coins, 3 walkers, 0 findings). Statically verified; needs an OXT pass
-  (header verify item 21).
+  tile set over a built dark stone backdrop (`pfBuildStoneBackdrop`, gray-blue).
+  **A vertical FORTRESS, climbed not crossed** - deliberately distinct from L6's
+  flat cavern (an early build that stone-skinned L6's geometry was redesigned
+  after an OXT pass flagged it as a palette swap): an approach with a spiked
+  **moat** at the gate, a **bailey** (a slime + a snail), then a **rampart
+  staircase** up three solid stone tiers (`block_top` + `block_center` bodies) to
+  a high **parapet** where a block slime guards the battlements (windows + torches
+  set into the keep wall) and the flag waits. A bonus gem hangs above the
+  parapet's edge. The win moves to L7 (`gLevel >= 7`); L6's flag now ADVANCES.
+  The SPINNER hazard and the multi-key/switch PUZZLES (the keep's mechanics) land
+  in slices 2-3. Example-side only (no Kit change, no harness bump);
+  `tools/audit-platformer.py` auto-discovers and clears L7 (8 coins, 3 walkers,
+  0 findings; `pfShowSlabs` learned the new `pf_plat3` tier). Statically verified;
+  needs an OXT pass (header verify item 21).
 - **Platformer: the CONVEYOR BELT - a carried surface (asset-expansion Phase B,
   slice 3).** The previously-unused `conveyor` tile becomes a polled surface
   zone (`pfMakeConveyor pL, pR, pDir`) that adds a steady vx to the GROUNDED hero
