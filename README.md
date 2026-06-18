@@ -38,12 +38,13 @@ Box2D v3.1.0 (fetched by CMake)
 
 ## Quick start
 
-1. **Get the native library** for your platform from [`prebuilt/`](prebuilt/)
-   (or [Releases](../../releases)) and rename it to the bare name the loader
-   expects — `box2dxt.dll` / `box2dxt.dylib` / `box2dxt.so` (no `lib` prefix).
-2. **Load the extension** `box2dxt.lcb` in the Extension Manager.
-3. **Sanity check:** `put b2Version()` in the Message Box should print `4`.
-4. **Run a demo:** paste all of
+1. **Install the extension:** open [`src/box2dxt.lcb`](src/box2dxt.lcb) in OXT's
+   Extension Builder and click **Package** → install the resulting `box2dxt.lce`.
+   The native library for your platform is bundled inside
+   (`src/code/<arch>-<platform>/`), so it loads automatically — no separate
+   download, no rename, no `sudo`, no `/usr/lib`.
+2. **Sanity check:** `put b2Version()` in the Message Box should print `4`.
+3. **Run a demo:** paste all of
    [`examples/box2dxt-demo.livecodescript`](examples/box2dxt-demo.livecodescript)
    into a stack script and reopen the card — six interactive scenes, from a
    Newton's cradle to a drivable car. Or try the flagship
@@ -51,9 +52,12 @@ Box2D v3.1.0 (fetched by CMake)
    a full build-and-run physics sandbox with fans, magnets, lasers, bombs,
    motors, and save/load. Game-minded? The
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
-   Game Kit pushed hard — player controller (run, double-jump, wall-jump,
-   dash, climb, crawl, swim), scrolling camera, spritesheets, moving
-   platforms, coin puzzles, a hilltop swim pool — and the
+   Game Kit pushed hard — five scrolling levels (grass, stone, ice, haunted,
+   desert) with a full player controller (run, double-jump, wall-jump, dash,
+   duck, climb, swim, drop-through, platform-carry), a bestiary (bats, a
+   mimic, piranhas, a ghost, a kickable snail shell, crushers, and more),
+   joints (rope bridge, boulder, exploding barrel, collapsing bridge),
+   spritesheets, and synthesized audio — and the
    [slingshot](examples/box2dxt-slingshot.livecodescript) is pure physics
    joy: catapult cannonballs into toppling towers, angry-birds style
    (three levels, ballistic aim preview, zero assets). And the
@@ -91,9 +95,13 @@ x86) on every push; see [docs/building.md](docs/building.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the layer conventions, the
-embedded-Kit sync rule, and the static checks
-(`python3 tools/check-livecodescript.py`) that gate every change.
+The three layers and their conventions are in
+[docs/architecture.md](docs/architecture.md); the build is in
+[docs/building.md](docs/building.md). The Kit is the single source of truth —
+after editing `src/box2dxt-kit.livecodescript`, re-sync the embedded copies
+with `python3 tools/sync-embedded-kit.py`. Two static gates run on every change
+(and in CI): `python3 tools/check-livecodescript.py` (the script layer) and
+`python3 tools/sync-embedded-kit.py --check` (embedded-Kit drift).
 
 ## License
 

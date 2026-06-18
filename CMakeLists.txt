@@ -79,6 +79,22 @@ set_target_properties(box2dxt PROPERTIES
     OUTPUT_NAME "box2dxt"
 )
 
+# --- Linux loader assist (spike, opt-in) -----------------------------------
+# Build the library under its BARE deploy name (box2dxt.so / box2dxt.dylib)
+# instead of libbox2dxt.*. Dropping the prefix makes CMake stamp the ELF/Mach-O
+# soname as "box2dxt.so" -- the exact name OXT hands to dlopen at run time.
+# That match is what lets a script PRELOAD the file by absolute path (see
+# b2LoadNativeLib in src/box2dxt.lcb) and have the engine's later bare-name
+# bind resolve to the already-resident copy. glibc matches an already-loaded
+# object by soname, NOT by filename, so renaming libbox2dxt.so -> box2dxt.so
+# on disk is NOT enough; the soname has to be box2dxt.so too. As a bonus it
+# removes the rename-on-deploy step. OFF keeps the historical libbox2dxt.*
+# (rename-on-deploy) until the preload path is confirmed in OXT.
+option(BOX2DXT_BARE_SONAME "Emit the library under its bare deploy name so its soname matches what OXT dlopens (Linux loader assist)" OFF)
+if(BOX2DXT_BARE_SONAME)
+    set_target_properties(box2dxt PROPERTIES PREFIX "")
+endif()
+
 # Keep our own shim warning-clean (these flags apply only to box2d_lc.c).
 if(MSVC)
     target_compile_options(box2dxt PRIVATE /W3)

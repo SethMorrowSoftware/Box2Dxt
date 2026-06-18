@@ -24,22 +24,35 @@ Box2D v3.1.0 (fetched by CMake)
   `double`, booleans as `int`. Every handle is validated with Box2D's `b2*_IsValid` before use,
   so a stale/0 handle is a **harmless no-op** (getters return 0), never a crash. Exported C ABI
   symbols keep the historical **`b2lc_` prefix** for binary stability — **never rename them**.
+  The shim compiles into one shared library (`libbox2dxt.{so,dylib,dll}`) that **ships bundled
+  INSIDE the extension** under `src/code/<arch>-<platform>/box2dxt.{so,dll,dylib}` (bare token,
+  no `lib` prefix; platform-ids `x86_64-linux` / `x86-linux` / `x86_64-win32` / `x86-win32` /
+  `universal-mac`, architecture FIRST, Windows `-win32` for both bitnesses). `tools/package-extension.py`
+  lays the `prebuilt/` binaries into that tree; installing the packaged extension makes the engine
+  resolve the `c:box2dxt>` bindings via `the revLibraryMapping` automatically — **no loose library,
+  no rename, no sudo/`/usr/lib`/`LD_LIBRARY_PATH`** (see `docs/building.md`).
 - **LCB binding** (`src/box2dxt.lcb`, `library org.openxtalk.box2dxt`): declares `foreign handler`
   bindings to the shared library and public `b2PascalCase` handlers callable from xTalk. This API
   speaks **metres and radians**; body type codes are `0=static, 1=kinematic, 2=dynamic`.
-- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (260+ `b2k*`
+- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (312 `b2k*`
   handlers incl. the game modules: input, sprites, player controller, camera) that speaks
   **screen pixels and degrees**, binds bodies to LiveCode controls, and runs the animation
   loop. This is what the examples and most users actually call.
 
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
-`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`). Drop-in prebuilt
-binaries are in `prebuilt/`. The **Game Kit** (input/sprites/player/camera/sound modules, plan.md
-Phases 0-5) is implemented and user-verified on Win32; `plan.md`'s decision log is the as-built
-record. Six examples: demo, contraption builder, spike (Phase-0 harness), **platformer showcase**
-(the Game Kit pushed hard — the focus of this repo's game work), **slingshot** (angry-birds-style
-tower knockdown — the physics core carrying a whole game with zero events and zero assets), and the
-**self-test harness** (below).
+`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`, `asset-expansion-plan.md`). Prebuilt per-platform
+binaries are in `prebuilt/` — the SOURCE `tools/package-extension.py` lays into the extension's
+`src/code/<arch>-<platform>/` tree; the install is the packaged extension, not a loose drop-in (a
+loose `box2dxt.{so,dll,dylib}` beside a saved stack is only the dev/fallback path, mapped at runtime
+by the Kit's `b2kEnsureNativeLib`). The **Game Kit** (input/sprites/player/camera/sound modules) is
+implemented and user-verified; content **Waves 0-7 are built** (Wave 8, builder cross-pollination, is
+the only remaining roadmap item); `plan.md`'s decision log is the as-built record. Six examples: demo,
+contraption builder, **spike-gamekit** (the Phase-0 Game Kit harness), **platformer** (the flagship
+game showcase — the Game Kit pushed hard across 5 levels, with bestiary I + variety walkers + bestiary
+II frog/barnacle/spider — the focus of this repo's game work), **slingshot** (angry-birds-style tower
+knockdown over 3 levels — the physics core carrying a whole game with zero events and zero assets), and
+the **self-test harness** (below). (The single-screen micro-game was retired in Wave 5; its "whole game
+from the physics core" pattern survives only as `kit-guide` section 20 prose.)
 
 ## The golden rule: the embedded-Kit sync
 
@@ -95,9 +108,9 @@ failure. Run it after **every** `.livecodescript` edit.
 pass" and let the user confirm.
 
 **The self-test harness** (`examples/box2dxt-selftest.livecodescript`) is the runtime safety net:
-~125 deterministic assertions (currently **v12**) driving the real Kit (paused world +
-`b2kStepOnce` hand-stepping + `b2kInputInject` scripted keys). The workflow for every **Kit**
-change: (1) add/extend an assertion
+~180 deterministic assertions across 37 test handlers (currently **v22**) driving the real Kit
+(paused world + `b2kStepOnce` hand-stepping + `b2kInputInject` scripted keys). The workflow for
+every **Kit** change: (1) add/extend an assertion
 that captures the new behavior, (2) **bump `kStHarnessV`** (the report header prints it, so a
 stale paste identifies itself), (3) the user clicks RUN ALL TESTS and reports. **Example-only
 changes do NOT bump the harness** — the rule is conditional on Kit edits (Waves 1 and 3 shipped
@@ -385,7 +398,7 @@ Every kind must be wired through the **whole pipeline** or it half-works. Touch 
 rows; save-keys unique per kind; selection is non-destructive (`selectPart` stores `uSelFg`/`uSelLine`
 and `deselectPart` restores them, so highlighting never corrupts a part's real colours).
 
-## Contributing conventions (from CONTRIBUTING.md)
+## Contributing conventions
 
 - **Units/types across the FFI:** reals `double`, booleans `int` (0/1), handles positive `int`
   (0 invalid, opaque). `b2*` = metres/radians, `b2k*` = pixels/degrees.
