@@ -221,8 +221,10 @@ needs an OXT eye.
   `_dead` pose (was a `_hit` flash); and a **dust-POOF** (four pooled `b2kSpawnBall`
   motes, the debris pattern) bursts from the squash. Slimes/snail/block already
   had `_flat`/`_shell`/`_rest` squash poses; telegraphing foes already idle on rest.
-- **TODO (optional):** the second skins (`worm_ring_*`, `slimeBlue/Green*`) and a
-  defeat "pop" (the foe flips up as it fades), if still more juice is wanted.
+- **Done (round 2):** a defeat **POP** (the squashed art arcs up ~50px as it
+  fades) and the **second skins** - a green + blue slime (`slimeGreen/Blue`,
+  `spooks`, via `pfMakeCritter`'s new optional sheet param, `gSpooksOK`-gated) and
+  the **ring worm** (`worm_ring`, native foes). Phase D essentially complete.
 
 ### Phase E — Snakes & the slither biome beat  (M)
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.

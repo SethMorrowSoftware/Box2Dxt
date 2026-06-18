@@ -261,6 +261,8 @@ def audit(L):
         for b in range(a+1, len(spans)):
             xa, la, ra, ka, ia = spans[a]
             xb, lb, rb, kb, ib = spans[b]
+            if ia == ib:
+                continue   # same index = a conditional reskin (if gSpooksOK ... else ...), one foe, not two
             if la <= rb and lb <= ra:
                 flag("WARN", f"{ka}#{ia:.0f} ({la:.0f}..{ra:.0f}) and {kb}#{ib:.0f} ({lb:.0f}..{rb:.0f}) patrol RANGES overlap (collision/jitter risk)")
 

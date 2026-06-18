@@ -27,6 +27,13 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
     (no new art) born in the camera group, so they scroll with the world. Built
     every level.
   Example-side only; static gates clean, audit 0 findings.
+  - **A defeat POP + second SKINS** (more juice): the squashed art now also POPS
+    up on an ease-out arc (~50px) as it fades; and the bestiary gains variants -
+    a **green** and **blue** slime (the `spooks` `.png` skins, via `pfMakeCritter`
+    which now takes an optional sheet; `gSpooksOK`-gated, a normal slime without
+    it) reskin two L1 slimes, and the **ring worm** (`worm_ring_*`, native foes)
+    reskins L2's worm. `tools/audit-platformer.py` learned that two same-index
+    makers are a conditional reskin (`if gSpooksOK ... else ...`), not two foes.
 - **Platformer: MULTI-KEY doors + a two-key puzzle in L2 (asset-expansion Phase C,
   slice 3 - part 1).** `pfMakeKeyDoor` was single-instance (one door per level via
   shared globals); it now appends to a per-door table, so a level can plant

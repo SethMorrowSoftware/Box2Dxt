@@ -381,6 +381,7 @@ local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
 local gSlimeMin, gSlimeMax, gSlimeGoneAt
+local gSlimeDeadX, gSlimeDeadY   -- Phase D: the squash point, so the defeated art POPS up as it fades
 local gSlimeT          -- Wave 3: per-row timer (mimic hop cooldowns)
 local gBlockN, gBlockB, gBlockSpr, gBlockState, gBlockT, gBlockX
 local gMovN, gMovSpr, gMovX, gMovY, gMovAX, gMovPX, gMovAY, gMovPY
@@ -649,6 +650,8 @@ function pfLoadSheets
       b2kAnimDef "spooks", "spiderwalk", "spider_walk1.png,spider_walk2.png", 8, true   -- Wave 6
       b2kAnimDef "spooks", "spin", "spinner.png,spinner_spin.png", 12, true             -- Phase C: the keep's blade
       b2kAnimDef "spooks", "spinhalf", "spinnerHalf.png,spinnerHalf_spin.png", 12, true -- wall-mounted half-blade
+      b2kAnimDef "spooks", "slimegreen", "slimeGreen.png,slimeGreen_walk.png", 4, true  -- Phase D: a GREEN slime skin
+      b2kAnimDef "spooks", "slimeblue", "slimeBlue.png,slimeBlue_blue.png", 4, true     -- ...and a BLUE one
    end if
    -- the hero (beige; swap the colour word to re-skin)
    b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
@@ -673,6 +676,7 @@ function pfLoadSheets
    -- so no sheet/scale juggling; they ride the slime FAMILY as new kinds)
    b2kAnimDef "foes", "mousewalk", "mouse_walk_a,mouse_walk_b", 9, true
    b2kAnimDef "foes", "wormwalk", "worm_normal_move_a,worm_normal_move_b", 4, true
+   b2kAnimDef "foes", "wormring", "worm_ring_move_a,worm_ring_move_b", 4, true   -- Phase D: a second worm skin
    b2kAnimDef "foes", "ladywalk", "ladybug_walk_a,ladybug_walk_b", 7, true
    b2kAnimDef "foes", "firewalk", "slime_fire_walk_a,slime_fire_walk_b", 5, true
    -- aquatic foes for the swim pools (native 64px foes art, previously unused)
@@ -921,6 +925,8 @@ command pfStartGame
    put empty into gSlimeMin
    put empty into gSlimeMax
    put empty into gSlimeGoneAt
+   put empty into gSlimeDeadX
+   put empty into gSlimeDeadY
    put empty into gSlimeT
    put empty into gFrogAir   -- Wave 6: the frog's per-row hop-pose flag
    -- Wave 3 tables start the run empty
@@ -1526,8 +1532,9 @@ end pfMakeSlime
 -- squash frame (empty = the sheet has none, so the critter just drops
 -- and fades - a safe no-op, never wrong art). pHalfW/pFullH size the
 -- (invisible) collision box; pDY offsets the bound art.
-command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY
+command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY, pSheet
    local tName, tBody, tSpr
+   if pSheet is empty then put "foes" into pSheet   -- Phase D: default native foes; "spooks" for the .png slime skins
    put "pf_slimeBody" & pIdx into tName
    create graphic tName
    set the style of it to "rectangle"
@@ -1540,8 +1547,8 @@ command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAni
    b2kSetFixedRotation tBody, true
    b2kSetFriction tBody, 0.1
    put empty into tSpr
-   if gAssetsOK is true and b2kSheetHasFrame("foes", pFrame) then
-      b2kSpriteNew "foes", pFrame, pX, pTopY - pFullH div 2
+   if gAssetsOK is true and b2kSheetHasFrame(pSheet, pFrame) then
+      b2kSpriteNew pSheet, pFrame, pX, pTopY - pFullH div 2
       put the result into tSpr
       if tSpr is not empty then
          b2kSpriteBind tSpr, tBody, 0, pDY
@@ -2913,7 +2920,11 @@ command pfL1Cast
    end if
    pfMakeSlime 1, "spike", 880, 760, 1000, 576
    pfMakeSlime 2, "normal", 1130, 1080, 1180, 576
-   pfMakeSlime 3, "normal", 2876, 2816, 2936, 576
+   if gSpooksOK is true then   -- Phase D: a GREEN slime variant (optional spooks art; a normal slime without it)
+      pfMakeCritter 3, "normal", 2876, 2816, 2936, 576, 52, "slimeGreen.png", "slimegreen", "slimeGreen_squashed.png", 22, 36, "120,200,90", -6, "spooks"
+   else
+      pfMakeSlime 3, "normal", 2876, 2816, 2936, 576
+   end if
    pfMakeSlime 4, "normal", 3616, 3556, 3676, 576
    -- NEW variety walkers (native foes art, stomp like any slime): a FAST
    -- mouse skitters the second act; a LADYBUG ambles the far meadow
@@ -2924,7 +2935,11 @@ command pfL1Cast
    pfMakeFrog 10, 4660, 4600, 4780, 576
    -- the far-meadow gauntlet's two slimes (the cloud is above them) and a
    -- darting fly between - a classic run of stomps on the way to the flag
-   pfMakeSlime 7, "normal", 5040, 4980, 5100, 576
+   if gSpooksOK is true then   -- Phase D: a BLUE slime variant
+      pfMakeCritter 7, "normal", 5040, 4980, 5100, 576, 52, "slimeBlue.png", "slimeblue", "slimeBlue_squashed.png", 22, 36, "90,150,220", -6, "spooks"
+   else
+      pfMakeSlime 7, "normal", 5040, 4980, 5100, 576
+   end if
    pfMakeSlime 8, "normal", 5360, 5300, 5420, 576
    if gAssetsOK is true and b2kSheetHasFrame("foes", "fly_a") then
       b2kSpriteNew "foes", "fly_a", 5232, 452
@@ -3250,7 +3265,7 @@ command pfL2Cast
    pfMakeSlime 1, "normal", 2750, 2700, 2800, 576   -- guards the coin past the 2nd-bay crusher. (Was 4374, patrolling 4324..4460 INSIDE the green crusher alley: its sweep overlapped crushers 6@4320 and 7@4500 and it stuck to them. Crusher alleys are walker-free by convention - snails guard the APPROACH, never the gaps. The open 2590..2920 stretch gives it a real 100px patrol, 86px clear of the chained crusher at 2560.)
    -- a slow WORM crawls the run before the breather cloud (new variety;
    -- native foes art, stomps like any walker)
-   pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_normal_move_a", "wormwalk", empty, 22, 26, "210,120,170", -2
+   pfMakeCritter 2, "normal", 1990, 1920, 2060, 576, 38, "worm_ring_move_a", "wormring", empty, 22, 26, "210,150,120", -2   -- Phase D: the second (ring) worm skin
    -- the THIRD bay's snail (snails liberally now) and a third chained crusher
    pfMakeSnail 3, 3300, 3240, 3360
    pfMakeThwomp 1, 1640
@@ -4612,7 +4627,7 @@ end pfTickSwitchGates
 -- shell; bat -> batfly; mimic -> mimiclive. (The stomp/kick/hurt
 -- VERDICTS live in b2kContact - this tick is pure steering.)
 command pfTickSlimes
-   local i, j, tX, tY, tPos, tBody, tVX, tMS, tVel
+   local i, j, tX, tY, tPos, tBody, tVX, tMS, tVel, tEl, tInv
    set the itemDelimiter to comma
    put the milliseconds into tMS
    repeat with i = 1 to gSlimeN
@@ -4626,11 +4641,16 @@ command pfTickSlimes
             if there is a graphic ("pf_slimeBody" & i) then delete graphic ("pf_slimeBody" & i)
             put empty into gSlimeGoneAt[i]
          else
-            -- Phase D juice: the defeated art FADES out over its ~700ms linger
-            -- (blendLevel 0 -> ~96) instead of blinking off. The window is short
-            -- and only a stomped foe or two are ever fading at once.
+            -- Phase D juice: the defeated art FADES out (blendLevel 0 -> ~96) AND
+            -- POPS up on an ease-out arc (~50px) over its ~700ms linger, instead
+            -- of blinking off. Short window; only a stomped foe or two at once.
             if gSlimeSpr[i] is not empty then
-               set the blendLevel of gSlimeSpr[i] to min(96, round((tMS - gSlimeGoneAt[i] + 700) / 7))
+               put (tMS - gSlimeGoneAt[i] + 700) into tEl   -- 0..700 ms elapsed
+               set the blendLevel of gSlimeSpr[i] to min(96, round(tEl / 7))
+               if gSlimeDeadY[i] is not empty then
+                  put 1 - tEl / 700 into tInv
+                  b2kSpriteMoveTo gSlimeSpr[i], gSlimeDeadX[i], gSlimeDeadY[i] - 50 * (1 - tInv * tInv)
+               end if
             end if
          end if
          next repeat
@@ -5837,6 +5857,12 @@ command pfSquashSlime pWhich
    b2kRemove gSlimeB[pWhich]      -- body gone; the death art lingers a moment
    put empty into gSlimeB[pWhich]
    put the milliseconds + 700 into gSlimeGoneAt[pWhich]
+   if tPos is not empty then     -- Phase D: remember the squash point so it POPS up as it fades
+      put item 1 of tPos into gSlimeDeadX[pWhich]
+      put item 2 of tPos into gSlimeDeadY[pWhich]
+   else
+      put empty into gSlimeDeadY[pWhich]
+   end if
 end pfSquashSlime
 
 -- The RESPAWN path -- Wave 2 reserves it for LETHAL hits (pits, the
