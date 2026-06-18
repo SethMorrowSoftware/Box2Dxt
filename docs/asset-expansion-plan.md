@@ -172,12 +172,15 @@ needs an OXT eye.
   a polled example-side version first.
 
 ### Phase C — Castle/dungeon biome → **Level 7 "STONE KEEP"**  (M–L)
-- **Slice 1 — DONE (statically verified; needs OXT):** the **stone biome + Level
-  7 skeleton** that completes start-to-finish. `terrain_stone_*` (block tops,
-  `block_center`, carved corners, `ramp_long_a/b`, `cloud_*`) over a built dark
-  stone backdrop (`pfBuildStoneBackdrop`): a watchtower (wall-jump), a wide spiked
-  moat, a rubble ramp, a stone battlement, reused slimes + a snail, a bonus gem,
-  torchlit halls. Win moved to `gLevel >= 7`. Example-side; audit clears L7.
+- **Slice 1 — DONE (statically verified; needs OXT):** Level 7 as a **VERTICAL
+  climbing tower** on the `terrain_stone_*` set over the dark stone backdrop
+  (`pfBuildStoneBackdrop`). A new **gated vertical-camera mode** (`pfBoundsV` +
+  `gCamTopY/gCamBotY/gKillPlaneY`, spawn at `gRespawnX/Y`) scrolls the camera UP
+  as the hero jumps one-way `pfMakeLedge` stone ledges to the flag atop the keep;
+  8 coins + a summit gem. L1-L6 byte-for-byte unchanged. Win moved to
+  `gLevel >= 7`. The audit skips the vertical level. **The vertical camera scroll
+  is the OXT unknown.** (Earlier horizontal passes were redesigned after the user
+  asked for a true vertical level.)
 - **Slices 2–3 — TODO:** the **spinner** hazard (slice 2), then the **multi-key /
   switch puzzles** (slice 3) — the keep's real identity.
 - **Assets:** `terrain_stone_*` (full), `switch_{blue,green,red}(_pressed)`,

@@ -94,14 +94,13 @@
 --            SLIME + a snail, a CONVEYOR BELT (a treadmill you power across),
 --            and carved dirt steps to the flag. A bonus GEM rides high above
 --            the wall-jump shaft.
---   LEVEL 7  STONE KEEP (2940px) - the asset-expansion STONE/CASTLE biome,
---            CLIMBED not crossed (distinct from the cavern's flat run): an
---            approach with a spiked MOAT at the gate (leap it), a bailey with a
---            slime + a snail, then a RAMPART STAIRCASE up three solid stone
---            tiers to a high PARAPET where a BLOCK SLIME guards the battlements
---            (windows + torches in the keep wall) and the flag waits (the win).
---            A bonus GEM hangs above the parapet's edge. (The SPINNER hazard +
---            the multi-key/switch PUZZLES land in slices 2-3.)
+--   LEVEL 7  STONE KEEP (a VERTICAL TOWER, 1280px tall) - the asset-expansion
+--            STONE/CASTLE biome, CLIMBED not crossed: you JUMP UP one-way stone
+--            ledges that zig-zag to the top of the keep, and the camera SCROLLS
+--            UP with you (the only level that scrolls vertically). Eight coins up
+--            the climb, a bonus GEM at the very summit, the flag atop the keep
+--            (the win); torchlit walls. A pure climb for slice 1 - the SPINNER
+--            hazard + the multi-key/switch PUZZLES land in slices 2-3.
 --
 -- WHAT TO VERIFY (the Phase 3 + level-rebuild OXT pass)
 --   1. Feel: a TAPPED jump is clearly shorter than a HELD one; jumping
@@ -304,23 +303,22 @@
 --      the goal and faster back, you can still power across, and jumping over it
 --      is unaffected; the tread art faces the push direction (flip - OXT-verify
 --      it reads). L6's flag now ADVANCES to L7 (the win moved to L7).
---  21. ASSET-EXPANSION PHASE C, SLICE 1 - LEVEL 7 "STONE KEEP" (the STONE/CASTLE
---      biome: terrain_stone_*, previously unused; the win now needs gLevel>=7).
---      VERIFY on a full asset folder: (a) the BACKDROP is the dark stone keep
---      (pfBuildStoneBackdrop), no border line on the two panels; (b) the stone
---      ground/stair-tiers/parapet/cliff-lips read with NO missing-frame
---      fallbacks and the keep wall looks SOLID (no transparent gaps in the
---      tiered bodies); (c) the MOAT (192px, three spikes) is a clean leap with
---      the spikes FLUSH between the carved lips; (d) the RAMPART STAIRCASE
---      climbs cleanly - the hero hops bailey->step1->step2->parapet with no
---      getting stuck against a tier face; (e) the bonus GEM above the parapet's
---      edge is reachable by a double-jump (lower it if not); (f) the slime +
---      snail patrol the bailey and the BLOCK SLIME hops the parapet, all on
---      solid ground; windows/torches/chains read in the keep wall (orientation
---      OXT-verify); the win screen says ALL SEVEN LEVELS CLEAR. (Spinner + key/
---      switch puzzles: slices 2-3.) NOTE: this LEVEL WAS REDESIGNED from a
---      stone-skinned L6 clone into a vertical fortress - confirm it now reads
---      as its own level.
+--  21. ASSET-EXPANSION PHASE C, SLICE 1 - LEVEL 7 "STONE KEEP" - a VERTICAL
+--      TOWER you CLIMB (the win now needs gLevel>=7). *** THE BIG OXT ITEM: the
+--      camera must SCROLL UP smoothly as the hero climbs *** - this is the only
+--      level that scrolls vertically (pfBoundsV opens gCamTopY/gCamBotY; every
+--      other level pins y=320). If the vertical scroll is wrong, that is where
+--      to look (the per-frame camera in b2kFrame + pfBoundsV). ALSO VERIFY: (a)
+--      the hero spawns at the BOTTOM and the view starts there; (b) the one-way
+--      stone LEDGES are solid from above and you JUMP UP THROUGH them from below
+--      (drop-through still works); (c) the zig-zag is climbable jump-to-jump (or
+--      with a double-jump) and the side WALLS keep you in the tower; (d) falling
+--      drops you to a lower ledge / the floor, never off the world or to a
+--      respawn (the kill plane is off); (e) all 8 coins are grabbable up the
+--      climb, the summit GEM needs a double-jump off the top, the flag is atop
+--      the keep; (f) the backdrop is the dark stone keep and the chrome (HUD/
+--      help/buttons/level-picker) stays put while the world scrolls. The win
+--      screen says ALL SEVEN LEVELS CLEAR. (Spinner + puzzles: slices 2-3.)
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
@@ -340,6 +338,7 @@ local gBuilding, gLands, gPrevState, gHudNextMS, gGateVel, gAirMS
 -- totals carried across level clears for the final win screen
 local gLevel, gLevelW, gLevelName, gTotalFalls, gSecsBank
 local gEdgeL, gEdgeR   -- the playable L/R edges (content-hugging); set by pfBounds
+local gCamTopY, gCamBotY, gKillPlaneY   -- camera Y clamp + kill plane; pfBounds pins gCamTopY=gCamBotY=320 (no vertical scroll), pfBoundsV opens them for the climbing levels
 local gPlateX, gGateUpY, gGateDownY, gDoorX, gDoorWord, gCheckX
 -- enemy/trap tables, indexed 1..N (see pfMakeSlime/pfMakeThwomp/pfAddMover)
 local gSlimeN, gSlimeB, gSlimeSpr, gSlimeKind, gSlimeDir
@@ -857,6 +856,9 @@ command pfStartGame
    put 2880 into gLevelW
    put 64 into gEdgeL    -- pfBounds overrides both per level (belt-and-braces defaults)
    put 2880 into gEdgeR
+   put 320 into gCamTopY
+   put 320 into gCamBotY
+   put 780 into gKillPlaneY
    -- the indexed enemy/trap tables start the run empty
    put 0 into gSlimeN
    put empty into gSlimeB
@@ -1075,13 +1077,13 @@ command pfStartGame
    put tH / 2 into gHeroHalfH   -- bonks reach the brick at the real head
    create graphic "pf_heroBody"
    set the style of it to "rectangle"
-   set the rect of it to 120 - tW div 2, 480 - tH div 2, 120 + tW div 2, 480 + tH div 2
+   set the rect of it to gRespawnX - tW div 2, gRespawnY - tH div 2, gRespawnX + tW div 2, gRespawnY + tH div 2
    set the visible of it to false
    put the long id of graphic "pf_heroBody" into gHero
    if gAssetsOK is true then
-      b2kSpriteNew "chars", "character_beige_idle", 120, 480
+      b2kSpriteNew "chars", "character_beige_idle", gRespawnX, gRespawnY
    else
-      b2kSpriteNew "chars", 1, 120, 480
+      b2kSpriteNew "chars", 1, gRespawnX, gRespawnY
    end if
    put the result into gHeroSpr
    b2kSpriteBind gHeroSpr, gHero, 0, tDY
@@ -1154,7 +1156,7 @@ command pfStartGame
    -- Deferred to HERE so the whole world - scenery, hero AND cast - was built
    -- at scroll 0; no create-once pickup is scroll-shifted. Per-frame tracking
    -- takes over in b2kFrame once the intro beat ends.
-   b2kCamGoto gEdgeL + 512, 320
+   b2kCamGoto gEdgeL + 512, gCamBotY   -- gCamBotY=320 (horizontal) or the tower's bottom (vertical)
    -- help + the level banner on the splash (visible through the intro
    -- beat); gCoinsTotal counted itself during the build above
    if gAssetsOK is true and gLoadNote is empty then
@@ -2072,7 +2074,33 @@ command pfBounds pLeft, pRight
    -- stop you right at the content and the view never scrolls out onto bare
    -- floor past either end (no visible wall needed - the tight stop + clamp do it)
    b2kCamBounds pLeft, 0, pRight, 640
+   put 320 into gCamTopY    -- horizontal: the camera Y is pinned (the world is exactly one viewport tall)
+   put 320 into gCamBotY
+   put 780 into gKillPlaneY
 end pfBounds
+
+-- VERTICAL bounds (the CLIMBING levels): a TALL world (pTop..pBottom), walls
+-- around the full box + a ceiling, and the camera scrolls VERTICALLY between
+-- gCamTopY..gCamBotY as the hero climbs. The kill plane sits well BELOW the
+-- bottom floor: the climb is contained (a missed jump drops you onto a lower
+-- platform or the floor, never off the world), so there is no respawn-on-fall.
+-- Coords stay POSITIVE (the off-card collision worry was NEGATIVE coords; a
+-- tall positive world collides the same way the horizontal walls do).
+command pfBoundsV pLeft, pRight, pTop, pBottom
+   put pLeft into gEdgeL
+   put pRight into gEdgeR
+   put pRight into gLevelW
+   pfSlab "pf_wallL", 0, pTop, pLeft, pBottom        -- POSITIVE coords only (x 0..pLeft), like pfBounds
+   pfSlab "pf_wallR", pRight, pTop, pRight + 256, pBottom
+   b2kWall pLeft, pTop, pLeft, pBottom
+   b2kWall pRight, pTop, pRight, pBottom
+   b2kWall pLeft, pTop, pRight, pTop       -- the ceiling
+   b2kKillFloor pBottom + 300              -- below the floor slab; the climb never reaches it
+   b2kCamBounds pLeft, pTop, pRight, pBottom
+   put pTop + 320 into gCamTopY            -- a 640-tall viewport sliding inside the tall world
+   put pBottom - 320 into gCamBotY
+   put pBottom + 300 into gKillPlaneY      -- the explicit kill check is effectively off (contained)
+end pfBoundsV
 
 -- The button-and-gate machine: a polled pressure plate at pPlateX
 -- (pfTickGate reads gPlateX) drives a kinematic gate whose left edge
@@ -3739,97 +3767,90 @@ end pfL6Cast
 
 
 -- =====================================================================
--- LEVEL 7 - "STONE KEEP" (asset-expansion Phase C, slice 1): the CASTLE/
--- DUNGEON biome. The whole terrain_stone_* set was unused before this
--- (only door-walls). A fortress interior on a dark stone backdrop: a
--- watchtower (wall-jump), a wide spiked MOAT, a rubble ramp, a stone
--- BATTLEMENT high route, torchlit halls. Built on the proven L6 geometry
--- in stone. Slice 1 reuses the slime/snail cast; the SPINNER (slice 2)
--- and the multi-key / switch PUZZLES (slice 3) are the keep's real
--- identity, landing next.
+-- A one-way stone LEDGE for the vertical climb: a b2kSmoothGround chain (solid
+-- from ABOVE, pass up THROUGH from below), ghost-padded a tile each side, then
+-- skinned with stone_cloud tiles (a line in the no-art fallback). pL..pR is the
+-- SOLID span at height pY.
+command pfMakeLedge pL, pR, pY
+   local tX, tPts
+   put (pR + 64) & "," & pY & cr & pR & "," & pY & cr & pL & "," & pY & cr & (pL - 64) & "," & pY into tPts
+   b2kSmoothGround tPts
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_cloud_left") then
+      pfTile "terrain_stone_cloud_left", pL, pY
+      repeat with tX = pL + 64 to pR - 128 step 64
+         pfTile "terrain_stone_cloud_middle", tX, pY
+      end repeat
+      pfTile "terrain_stone_cloud_right", pR - 64, pY
+   else
+      create graphic ("pf_ledge" & pL & "_" & pY)
+      set the style of it to "line"
+      set the points of it to pL & "," & pY & cr & pR & "," & pY
+      set the lineSize of it to 4
+      set the foregroundColor of it to "150,154,170"
+      b2kCamAdopt the long id of graphic ("pf_ledge" & pL & "_" & pY)
+   end if
+end pfMakeLedge
+
+-- =====================================================================
+-- LEVEL 7 - "STONE KEEP" (asset-expansion Phase C, slice 1): a VERTICAL
+-- TOWER you CLIMB, not a level you cross. The terrain_stone_* set (unused
+-- before this) builds a tall keep; the camera SCROLLS UP as the hero
+-- jumps from one one-way stone ledge to the next (pfBoundsV opens the
+-- vertical camera; L1-L6 are untouched). A pure climb for slice 1; the
+-- SPINNER (slice 2) and the multi-key / switch PUZZLES (slice 3) are the
+-- keep's hazards, landing next. NOTE: the vertical camera scroll is the
+-- one thing that needs an OXT eye (every other level only scrolls
+-- horizontally) - if it is janky, that is where to look.
 -- =====================================================================
 command pfL7Scene
    local tX
-   put "STONE KEEP (fortified!)" into gLevelName
-   pfBounds kPfEdgeL, 2900 + kPfEndCap   -- right edge hugs the goal on the parapet
-   -- a CASTLE, CLIMBED not crossed (distinct from the cavern's flat run): an
-   -- approach with a MOAT at the gate, a bailey, then a RAMPART STAIRCASE up
-   -- three solid stone tiers to a high PARAPET where the flag waits. The whole
-   -- terrain_stone_* set was unused before this level.
-   pfSlab "pf_ground1", 0, 576, 576, 640
-   pfSlab "pf_ground2", 768, 576, 1856, 640
-   pfSlab "pf_plat1", 1856, 512, 2048, 640   -- rampart step 1 (top y512)
-   pfSlab "pf_plat2", 2048, 448, 2240, 640   -- rampart step 2 (top y448)
-   pfSlab "pf_plat3", 2240, 384, 3008, 640   -- the upper PARAPET, the keep top (y384)
+   put "STONE KEEP (the climb!)" into gLevelName
+   put 160 into gRespawnX      -- the hero starts at the BOTTOM of the tower
+   put 1140 into gRespawnY
+   pfBoundsV 64, 960, 0, 1280   -- a TALL world (climb it; camera scrolls UP); 64..960 wide = one viewport, no horizontal scroll
+   pfSlab "pf_ground1", 64, 1216, 960, 1280   -- the bottom floor (solid)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
-      -- the approach + the moat's carved lips
-      repeat with tX = 0 to 448 step 64
-         pfTile "terrain_stone_block_top", tX, 576
-      end repeat
-      pfTile "terrain_stone_block_top_right", 512, 576   -- the moat's LEFT lip
-      pfTile "terrain_stone_block_top_left", 768, 576    -- the moat's RIGHT lip
-      -- the bailey floor
-      repeat with tX = 832 to 1792 step 64
-         pfTile "terrain_stone_block_top", tX, 576
-      end repeat
-      -- the RAMPART STAIRCASE: each tier's walkable TOP + its solid stone body
-      -- down to the floor line (a massive keep wall, not floating ledges)
-      repeat with tX = 1856 to 1984 step 64
-         pfTile "terrain_stone_block_top", tX, 512
-         pfTile "terrain_stone_block_center", tX, 576
-      end repeat
-      repeat with tX = 2048 to 2176 step 64
-         pfTile "terrain_stone_block_top", tX, 448
-         pfTile "terrain_stone_block_center", tX, 512
-         pfTile "terrain_stone_block_center", tX, 576
-      end repeat
-      repeat with tX = 2240 to 2944 step 64
-         pfTile "terrain_stone_block_top", tX, 384
-         pfTile "terrain_stone_block_center", tX, 448
-         pfTile "terrain_stone_block_center", tX, 512
-         pfTile "terrain_stone_block_center", tX, 576
+      repeat with tX = 64 to 896 step 64
+         pfTile "terrain_stone_block_top", tX, 1216
       end repeat
       pfShowSlabs false
    else
       pfShowSlabs true
    end if
-   -- the MOAT: a spiked chasm at the gate (192px = three spikes), leapt into the
-   -- bailey; carved stone lips finish it.
-   pfMakeSpikes 576, 768
-   -- CASTLE DRESSING: wall torches, hanging chains, and windows set into the
-   -- keep's stonework (torches/chains/windows are not audited decor; window/
-   -- torch facing: OXT-verify, gotcha 26).
-   pfMakeTorch 200, 452     -- the approach
-   pfMakeTorch 1000, 452    -- the bailey
-   pfMakeTorch 1520, 452    -- the bailey
-   pfMakeTorch 2400, 320    -- the parapet
-   pfMakeTorch 2780, 320    -- the parapet, near the flag
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "chain") then
-      pfTile "chain", 1100, 96
-      pfTile "chain", 1640, 96
-   end if
+   -- THE CLIMB: one-way stone ledges zig-zag up to the keep's top, each ~128px
+   -- above the last and staggered side to side - jump (or double-jump) up
+   -- through each and land on top. The walls (pfBoundsV) keep you in the tower.
+   pfMakeLedge 256, 448, 1088
+   pfMakeLedge 576, 768, 960
+   pfMakeLedge 256, 448, 832
+   pfMakeLedge 576, 768, 704
+   pfMakeLedge 256, 448, 576
+   pfMakeLedge 576, 768, 448
+   pfMakeLedge 384, 640, 320
+   pfMakeLedge 320, 704, 192      -- the KEEP TOP (the goal ledge; wide, to land + reach the flag)
+   -- TOWER DRESSING: torches climb the walls; a window or two in the stonework.
+   pfMakeTorch 96, 1000
+   pfMakeTorch 928, 824
+   pfMakeTorch 96, 632
+   pfMakeTorch 928, 440
+   pfMakeTorch 96, 264
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "window") then
-      pfTile "window", 2400, 448    -- windows in the keep wall
-      pfTile "window", 2592, 448
-      pfTile "window", 2784, 448
+      pfTile "window", 16, 900     -- set into the tower walls
+      pfTile "window", 912, 500
    end if
 end pfL7Scene
 
 command pfL7Cast
-   pfMakeCoin 240, 500      -- the approach
-   pfMakeCoin 672, 452      -- mid-air over the MOAT: leap it
-   pfMakeCoin 1050, 500     -- the bailey slime's beat
-   pfMakeCoin 1550, 500     -- the bailey snail's beat
-   pfMakeCoin 1952, 480     -- on rampart step 1
-   pfMakeCoin 2144, 416     -- on rampart step 2
-   pfMakeCoin 2500, 352     -- up on the parapet
-   pfMakeCoin 2700, 352     -- the parapet, the block slime's beat
-   pfMakeGem 2300, 304, "blue"   -- BONUS gem: a double-jump above the parapet's edge (OXT: confirm reachable; lower it if not)
-   pfMakeSlime 1, "normal", 1050, 900, 1250, 576
-   pfMakeSnail 2, 1550, 1420, 1680
-   pfMakeBlockSlime 3, 2620, 2400, 2840, 384   -- a CUBE hops the battlements (the parapet's guard)
-   pfMakeCheckpoint 1780    -- in the bailey, before the rampart climb
-   pfMakeGoal 2900, 352
+   pfMakeCoin 352, 1040     -- climbing: above ledge 1
+   pfMakeCoin 672, 912      -- ledge 2
+   pfMakeCoin 352, 784      -- ledge 3
+   pfMakeCoin 672, 656      -- ledge 4
+   pfMakeCoin 352, 528      -- ledge 5
+   pfMakeCoin 672, 400      -- ledge 6
+   pfMakeCoin 512, 272      -- ledge 7
+   pfMakeCoin 448, 144      -- on the keep top
+   pfMakeGem 544, 80, "blue"   -- BONUS gem: a double-jump above the keep top (the summit)
+   pfMakeGoal 544, 160      -- the flag, atop the keep
 end pfL7Cast
 
 
@@ -3891,7 +3912,7 @@ end pfWipeStage
 -- The game tick
 -- =====================================================================
 on b2kFrame
-   local tHud, tPos, tHS, tCamX
+   local tHud, tPos, tHS, tCamX, tCamY
    if gHero is empty then exit b2kFrame
    -- THE HERO SNAPSHOT, once per frame: position and controller state
    -- feed the kill plane, edge failsafe, sound cues and every pf tick
@@ -3915,7 +3936,7 @@ on b2kFrame
    -- Plus the EDGE FAILSAFE: a solver squeeze must never leave the hero
    -- beyond a wall (with the thick slabs it should never fire; when it
    -- does not, it costs two compares)
-   if gHurtLock is not true and gHeroPY > 780 then pfHurt   -- the kill plane = respawn
+   if gHurtLock is not true and gHeroPY > gKillPlaneY then pfHurt   -- the kill plane = respawn (off, far below, on a contained vertical climb)
    -- the EDGE CLAMP runs ALWAYS now (containment is non-negotiable): a hard
    -- per-frame snap so a knockback, a dash, or a wall that failed to collide
    -- can never leave the box - b2kMoveTo teleports the body back inside.
@@ -3928,10 +3949,17 @@ on b2kFrame
    -- flags drew offset at the edges. b2kCamGoto keeps them in sync; we just
    -- pre-clamp the point (b2kCamBounds did not hold on the user's engine).
    if gIntroPan is 0 and gCamOK is true then
-      put gHeroPX into tCamX
-      if tCamX < gEdgeL + 512 then put gEdgeL + 512 into tCamX
-      if tCamX > gEdgeR - 512 then put gEdgeR - 512 into tCamX
-      b2kCamGoto tCamX, 320
+      if gEdgeR - gEdgeL <= 1024 then
+         put (gEdgeL + gEdgeR) / 2 into tCamX   -- a world no wider than the viewport (the tower): centre it, no horizontal scroll
+      else
+         put gHeroPX into tCamX
+         if tCamX < gEdgeL + 512 then put gEdgeL + 512 into tCamX
+         if tCamX > gEdgeR - 512 then put gEdgeR - 512 into tCamX
+      end if
+      put gHeroPY into tCamY    -- follow vertically too; gCamTopY=gCamBotY=320 pins it on horizontal levels
+      if tCamY < gCamTopY then put gCamTopY into tCamY
+      if tCamY > gCamBotY then put gCamBotY into tCamY
+      b2kCamGoto tCamX, tCamY
    end if
    -- centre-screen banners (pfNotice) expire here
    if gNoticeUntil > 0 and the milliseconds > gNoticeUntil then

@@ -17,22 +17,27 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   level. Chrome change, so `kPfUIVersion` bumps to "8" (older pasted stacks
   rebuild their UI once). Not part of the normal coin-gated progression; the
   title field shrinks to make room. Example-side only.
-- **Platformer: LEVEL 7 "STONE KEEP" - the STONE/CASTLE biome (asset-expansion
+- **Platformer: LEVEL 7 "STONE KEEP" - a VERTICAL climbing tower (asset-expansion
   Phase C, slice 1).** A seventh level on the previously-unused `terrain_stone_*`
-  tile set over a built dark stone backdrop (`pfBuildStoneBackdrop`, gray-blue).
-  **A vertical FORTRESS, climbed not crossed** - deliberately distinct from L6's
-  flat cavern (an early build that stone-skinned L6's geometry was redesigned
-  after an OXT pass flagged it as a palette swap): an approach with a spiked
-  **moat** at the gate, a **bailey** (a slime + a snail), then a **rampart
-  staircase** up three solid stone tiers (`block_top` + `block_center` bodies) to
-  a high **parapet** where a block slime guards the battlements (windows + torches
-  set into the keep wall) and the flag waits. A bonus gem hangs above the
-  parapet's edge. The win moves to L7 (`gLevel >= 7`); L6's flag now ADVANCES.
-  The SPINNER hazard and the multi-key/switch PUZZLES (the keep's mechanics) land
-  in slices 2-3. Example-side only (no Kit change, no harness bump);
-  `tools/audit-platformer.py` auto-discovers and clears L7 (8 coins, 3 walkers,
-  0 findings; `pfShowSlabs` learned the new `pf_plat3` tier). Statically verified;
-  needs an OXT pass (header verify item 21).
+  set, built as **a tall tower you CLIMB, not a level you cross** - the camera
+  **scrolls UP** as the hero jumps from one one-way stone ledge to the next, to
+  the flag atop the keep. The first level in the game that scrolls vertically.
+  (Two earlier passes - a stone-skinned L6 clone, then a single-screen fortress -
+  were redesigned after OXT feedback; the user asked for a true vertical level.)
+  - **New gated vertical-camera mode**, all parameterized so L1-L6 are byte-for-
+    byte unchanged: `pfBoundsV` (a tall world, walls + ceiling, a kill plane far
+    below) sets `gCamTopY`/`gCamBotY`/`gKillPlaneY`; the per-frame camera follows
+    the hero's Y clamped to those (horizontal levels keep `gCamTopY=gCamBotY=320`,
+    pinning Y as before) and centres X when the world is no wider than the
+    viewport; the hero spawns at `gRespawnX`/`gRespawnY` (L1-L6 still 120/480).
+  - `pfMakeLedge` builds the one-way stone climb platforms (`b2kSmoothGround` +
+    `stone_cloud`); a zig-zag of 8 ledges, 8 coins, a summit gem, contained walls
+    (a fall drops you to a lower ledge, no respawn).
+  The win moves to L7 (`gLevel >= 7`); L6's flag now ADVANCES. Example-side only
+  (no Kit change, no harness bump). `tools/audit-platformer.py` learned to skip a
+  vertical level (the y=576 model doesn't apply); L1-L6 still 0 findings.
+  Statically verified; **the vertical camera scroll needs the OXT pass** (verify
+  item 21) - it is the one thing untested on the engine.
 - **Platformer: the CONVEYOR BELT - a carried surface (asset-expansion Phase B,
   slice 3).** The previously-unused `conveyor` tile becomes a polled surface
   zone (`pfMakeConveyor pL, pR, pDir`) that adds a steady vx to the GROUNDED hero

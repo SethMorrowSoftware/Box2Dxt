@@ -61,6 +61,7 @@ class Level:
         self.conveyors = []  # (pL,pR,dir)
         self.edgeL = 64
         self.edgeR = None
+        self.vertical = False  # a VERTICAL climbing level (pfBoundsV): the y=576 ground model doesn't apply
 
 def parse():
     levels = {}
@@ -72,6 +73,9 @@ def parse():
                 continue
             mk = re.match(r"(pf\w+|b2kSmoothGround|b2kPlayerAddLadder)\b", s)
             if not s or not (mk or "pfBounds" in s):
+                continue
+            if s.startswith("pfBoundsV"):   # MUST precede the pfBounds test (startswith overlap)
+                L.vertical = True
                 continue
             if s.startswith("pfBounds"):
                 v = nums(s)
@@ -187,6 +191,14 @@ def audit(L):
     out = []
     def flag(sev, msg):
         out.append((sev, msg))
+
+    # A VERTICAL climbing level (pfBoundsV) uses the full height as play space and
+    # the camera scrolls; the horizontal y=576 ground model (coins-near-a-surface,
+    # walkers-on-ground, pit widths) does not apply, so skip the geometry checks
+    # here and lean on the OXT pass + check-livecodescript for it.
+    if L.vertical:
+        flag("INFO", "vertical climbing level - geometry audit skipped (the y=576 ground model does not apply; verify in OXT)")
+        return out
 
     # bounds
     lo, hi = L.edgeL, L.edgeR
@@ -377,13 +389,17 @@ def main():
     for n in sorted(levels):
         L = levels[n]
         res = audit(L)
-        head = f"===== LEVEL {n}  (bounds {L.edgeL:.0f}..{L.edgeR:.0f}, {len(L.coins)} coins, {len(L.enemies)} walkers) ====="
+        if L.vertical:
+            head = f"===== LEVEL {n}  (VERTICAL climb, {len(L.coins)} coins) ====="
+        else:
+            head = f"===== LEVEL {n}  (bounds {L.edgeL:.0f}..{L.edgeR:.0f}, {len(L.coins)} coins, {len(L.enemies)} walkers) ====="
         print(head)
         if not res:
             print("   (clean)")
         for sev, msg in sorted(res, key=lambda r: (r[0] != "ERR", r[1])):
             print(f"   {sev:4} {msg}")
-            total += 1
+            if sev != "INFO":
+                total += 1
         print()
     print(f"{total} finding(s) across {len(levels)} levels.")
 
