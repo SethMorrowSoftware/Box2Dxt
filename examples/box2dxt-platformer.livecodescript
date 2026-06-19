@@ -380,6 +380,9 @@ local gBgPanel, gBgLastHS
 local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinTot, gHudCoinLast, gHudTotLast
 local gHudKey, gHudKeysLast
 local gHudGemIcon, gHudGemD, gHudGemLast, gHudGemTotLast
+-- Phase F: with the art HUD on, the old bottom text readout becomes a DEBUG
+-- overlay (the dev stats) toggled with the ` key. gShowDebug is its on/off state.
+local gShowDebug
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -875,9 +878,11 @@ command pfBuildHud
       if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
    end if
    put true into gHudOK
-   -- the art HUD owns the top-left now: retire the demo TITLE field (the intro
-   -- splash carries the level name; pfHelp + its diagnostics stay for now).
+   -- the art HUD owns the screen chrome now: retire the demo TITLE field, and turn
+   -- the bottom text readout into the DEBUG overlay (hidden unless toggled with `).
+   -- pfHelp + its diagnostics stay for now (retired with the controls pass).
    if there is a field "pfTitle" then set the visible of field "pfTitle" to false
+   if there is a field "pfHud" then set the visible of field "pfHud" to (gShowDebug is true)
 end pfBuildHud
 
 -- One HUD digit sprite (hud_character_0..9) at a fixed screen point, from the
@@ -1403,6 +1408,14 @@ command pfStartGame
    end if
    if there is a field "pfSplash" then
       set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName
+      -- the dark-backdrop levels (the cavern + the stone keep) need LIGHT splash
+      -- text so the title - and the centre notices, which reuse this field - read
+      -- against the dark scene; the bright biomes keep dark text.
+      if gLevel is 6 or gLevel is 7 then
+         set the textColor of field "pfSplash" to "245,246,236"
+      else
+         set the textColor of field "pfSplash" to "28,30,42"
+      end if
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -4579,6 +4592,15 @@ command pfNotice pText, pMS
    put the milliseconds + pMS into gNoticeUntil
 end pfNotice
 
+-- Phase F: toggle the bottom DEBUG overlay (the old text readout: state/ms/awake/
+-- view/audio + the run stats) with the ` key. Only meaningful when the art HUD is
+-- on; without hud_ art the field is the always-on readout fallback.
+command pfToggleDebug
+   if gHudOK is not true then exit pfToggleDebug
+   put (gShowDebug is not true) into gShowDebug
+   if there is a field "pfHud" then set the visible of field "pfHud" to gShowDebug
+end pfToggleDebug
+
 command pfChromeFront
    local tN, tC
    put the number of controls of this card into tN
@@ -4723,7 +4745,10 @@ on b2kFrame
    local tSecs
    if the milliseconds < gHudNextMS then exit b2kFrame
    put the milliseconds + 250 into gHudNextMS
-   pfUpdateHud   -- Phase F: refresh the art HUD (coin count) on change
+   pfUpdateHud   -- Phase F: refresh the art HUD (coins/gems/keys) on change
+   -- with the art HUD on, the bottom field is the DEBUG overlay - skip building it
+   -- unless the ` toggle is up. With no hud_ art it stays the full text fallback.
+   if gHudOK is true and gShowDebug is not true then exit b2kFrame
    if gWinSecs is not empty then
       put gWinSecs into tSecs
    else
@@ -4739,13 +4764,19 @@ on b2kFrame
    if not b2kIsAwake(gHero) then put "   [ASLEEP?!]" after tHud   -- must never show
    if b2kSoundStatus() is not empty then put "   [audio: " & b2kSoundStatus() & "]" after tHud
    if b2kSoundMuted() then put "   [muted]" after tHud
-   if gWon is true then
-      put "WINNER!   " before tHud
-   else
-      if gFlagHint is true and gCoins < gCoinsTotal then
-         put "Find ALL the coins, then return to the flag!   " before tHud
+   -- the flag hints belong to the TEXT-readout fallback; with the art HUD on they
+   -- already reach the player as centre-screen pfNotice banners (the flag's "find
+   -- N more coins" / pfGainCoin's "ALL COINS" / the win screen), so they are not
+   -- echoed into the debug overlay.
+   if gHudOK is not true then
+      if gWon is true then
+         put "WINNER!   " before tHud
+      else
+         if gFlagHint is true and gCoins < gCoinsTotal then
+            put "Find ALL the coins, then return to the flag!   " before tHud
+         end if
+         if gCoins >= gCoinsTotal then put "All coins - to the FLAG!   " before tHud
       end if
-      if gCoins >= gCoinsTotal then put "All coins - to the FLAG!   " before tHud
    end if
    if tHud is not gHudLast then
       put tHud into gHudLast
@@ -6305,6 +6336,10 @@ on rawKeyDown pKeyCode
    end if
    if pKeyCode is 109 or pKeyCode is 77 then
       b2kSoundMute (not b2kSoundMuted())
+      exit rawKeyDown
+   end if
+   if pKeyCode is 96 then   -- the ` (backquote) key toggles the dev debug overlay
+      pfToggleDebug
       exit rawKeyDown
    end if
    pass rawKeyDown
