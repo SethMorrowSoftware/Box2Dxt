@@ -5438,7 +5438,13 @@ command pfTickMovers
       put gMovY[i] + gMovAY[i] * sin(tMS / gMovPY[i]) into tMY
       b2kSpriteMoveTo gMovSpr[i], tMX, tMY
       if gMovFlip[i] is true and gMovAX[i] > 0 then
-         b2kSpriteFlipH gMovSpr[i], (cos(tMS / gMovPX[i]) < 0)
+         -- FACE TRAVEL. Position is X + A*sin(t/P), so the x-velocity sign is
+         -- cos(t/P): cos>0 = moving RIGHT. Every facing mover here is foes-sheet
+         -- flyer art (bee/fly/fish/ladybug) which - like the snail (gotcha 26) -
+         -- is drawn facing LEFT, so it must show UNFLIPPED when moving left and
+         -- MIRROR when moving right: flip on cos>0. (Was cos<0, which assumed
+         -- right-facing art and ran every flyer backwards.)
+         b2kSpriteFlipH gMovSpr[i], (cos(tMS / gMovPX[i]) > 0)
       end if
       if gMovHurtW[i] > 0 and gHurtLock is not true then
          -- a brush with a mover (saw, fly) knocks back, never respawns
