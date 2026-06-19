@@ -10,6 +10,18 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: HEALTH - a forgiving five-heart buffer (asset-expansion Phase F).**
+  The hero starts each level with **5 full hearts** (`kHearts`), drawn as a heart
+  row (`hud_heart`/`hud_heart_empty`) low along the bottom-left of the art HUD. A
+  contact hit (`pfOuch`, the single knockback chokepoint) spends ONE pip; the
+  existing mercy window between hits means at most one pip per hit, so the buffer
+  can't drain in a single frame of overlap. Emptying the row makes that hit
+  LETHAL - it hands off to the respawn (`pfHurt`), which returns the hero to the
+  checkpoint and REFILLS the buffer (falls and the kill-plane refill it too), so
+  the hero never hard-fails on a contact, it just loses ground. `pfUpdateHearts`
+  redraws the row on change only (the 4 Hz / write-on-change rule); the debug
+  overlay gained an `HP n/5` field. Hearts reset to full each level. Example-side
+  only; static gates clean, audit 0 findings.
 - **Platformer: the GOO SERPENT in a slime-pool beat + the serpent generalized
   (asset-expansion Phase E, continued).** L6's PIT2 spike chasm becomes a **toxic
   GOO POOL** (new `pfMakeSlimePool` — a green goo rect over a knockback hurt

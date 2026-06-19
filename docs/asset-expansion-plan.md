@@ -263,9 +263,15 @@ needs an OXT eye.
   gates on a coin *count*, or migrate the gate to a tier total — design call).
 - **A hidden `star` per level** (a hard-to-reach challenge collectible, like the
   gems but rarer; banked to the win screen).
-- **Optional 3-heart health** (`hud_heart*`): replace/augment the knockback-mercy
-  model with hearts; losing all → the respawn flow. *This is the one design-heavy
-  item — prototype carefully, it changes the difficulty contract.*
+- **Health — a forgiving FIVE-heart buffer (SHIPPED).** The hero starts each level
+  with 5 hearts (`hud_heart`/`hud_heart_empty`, a bottom-left row; `kHearts`). A
+  contact hit (`pfOuch`) spends one pip *atop* the existing knockback + mercy window
+  (so at most one pip per hit — the buffer can't drain in a frame of overlap);
+  emptying the row makes that hit lethal and routes to the respawn (`pfHurt`), which
+  REFILLS it. Falls / the kill-plane refill too, so the meter never hard-fails on
+  contact — it *augments* the knockback model with a visible "you've been pushing
+  your luck" gauge rather than replacing it. Shipped at **5** (forgiving), not the
+  spec's 3.
 - **Art HUD — retire the LiveCode text chrome (`hud_*`).** Today the demo frames
   the play area with LiveCode **fields**: `pfTitle` + `pfHelp` across the **top**
   and the live `pfHud` readout across the **bottom**. **Remove those persistent
@@ -278,7 +284,9 @@ needs an OXT eye.
     replaces — see the 4 Hz / write-on-change rule).
   - **Keys:** light a `hud_key_{blue,green,red,yellow}` icon as each key is taken
     (pairs with the Phase-C multi-key puzzles).
-  - **Hearts** (if Phase F's health model ships): `hud_heart(_half/_empty)`.
+  - **Hearts (SHIPPED):** a `hud_heart`/`hud_heart_empty` row low at the bottom-left
+    (`pfBuildHud` builds five, `pfUpdateHearts` redraws on change). The `_half` frame
+    is unused — pips are integer.
   - **Hero portrait:** `hud_player_*` / `hud_player_helmet_*` (pairs with the
     Phase-G character select).
   - **Placement:** the `hud_*` sprites are screen chrome, not world objects — fixed
@@ -379,7 +387,7 @@ Track usage per sheet; "done" = used or a one-line documented reason it isn't.
 
 - [ ] `backgrounds` — biome scenes used (Phase A partial); solids/clouds for new biomes (B/H).
 - [ ] `tiles` terrain — dirt (B) + stone (C) biomes; corner/edge/ramp/overhang pieces across biomes.
-- [ ] `tiles` items — coin tiers + star + heart (F); torches + conveyor + planks (B/C); multi-colour locks/switches (C); `flag_green`.
+- [ ] `tiles` items — coin tiers + star (F); **heart (F, SHIPPED — `hud_heart*` HUD row)**; torches + conveyor + planks (B/C); multi-colour locks/switches (C); `flag_green`.
 - [ ] `tiles` HUD strip — art HUD (F), **removing the LiveCode top/bottom fields**.
 - [ ] `foes` — block slime, worm ring, rest poses (B/D).
 - [ ] `spooks` — snakes (E), spinners (C), squash/dead states everywhere (D), alt fish.
@@ -411,8 +419,11 @@ Track usage per sheet; "done" = used or a one-line documented reason it isn't.
 
 ## 8. Open questions / risks
 
-1. **Health model (F):** add hearts, or keep the knockback-mercy contract? It
-   reshapes difficulty across all levels — needs a deliberate decision.
+1. **Health model (F): DECIDED — a forgiving five-heart buffer LAYERED ON the
+   knockback-mercy contract** (not a replacement). A contact hit costs one pip but
+   still knocks back with mercy; the buffer only gates the *fifth* hit into a
+   checkpoint respawn (which refills), so existing per-level difficulty is
+   preserved and merely softened. Shipped at 5, not the spec's 3.
 2. **Coin gate vs score:** if coin tiers (F) feed a score, does the flag still gate
    on *count*, or on a tier *total*? Keep the "collect all to gild the flag" clarity.
 3. **City/alien atlases (H/I):** different grids/styles — confirm they read at the
