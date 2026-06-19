@@ -1891,7 +1891,7 @@ end pfMakeSlime
 -- squash frame (empty = the sheet has none, so the critter just drops
 -- and fades - a safe no-op, never wrong art). pHalfW/pFullH size the
 -- (invisible) collision box; pDY offsets the bound art.
-command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY, pSheet
+command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY, pSheet, pFaceFlip
    local tName, tBody, tSpr
    if pSheet is empty then put "foes" into pSheet   -- Phase D: default native foes; "spooks" for the .png slime skins
    put "pf_slimeBody" & pIdx into tName
@@ -1923,7 +1923,10 @@ command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAni
    put pSpeed into gSlimeDir[pIdx]
    put pSpeed into gSlimeSpeed[pIdx]
    put pFlat into gSlimeFlat[pIdx]
-   put false into gSlimeFlip[pIdx]
+   -- facing polarity (gotcha 26): most foes art faces RIGHT (flip false), but some
+   -- sheets (the ground ladybug) face LEFT like the snail - pass pFaceFlip true to
+   -- invert. The flying ladybug/bee/fish (pfAddMover) carry their own correction.
+   put (pFaceFlip is true) into gSlimeFlip[pIdx]
    put pMinX into gSlimeMin[pIdx]
    put pMaxX into gSlimeMax[pIdx]
    put empty into gSlimeGoneAt[pIdx]
@@ -2190,7 +2193,7 @@ command pfMakeFrog pIdx, pX, pMinX, pMaxX, pTopY
    put 0 into gSlimeDir[pIdx]
    put 0 into gSlimeSpeed[pIdx]
    put empty into gSlimeFlat[pIdx]    -- no squashed frame: it drops and fades
-   put false into gSlimeFlip[pIdx]
+   put true into gSlimeFlip[pIdx]     -- the frog sheet art faces LEFT (like the snail, gotcha 26)
    put pMinX into gSlimeMin[pIdx]
    put pMaxX into gSlimeMax[pIdx]
    put empty into gSlimeGoneAt[pIdx]
@@ -3332,7 +3335,7 @@ command pfL1Cast
    -- NEW variety walkers (native foes art, stomp like any slime): a FAST
    -- mouse skitters the second act; a LADYBUG ambles the far meadow
    pfMakeCritter 5, "normal", 3076, 3000, 3160, 576, 120, "mouse_walk_a", "mousewalk", empty, 20, 30, "150,140,150", -4
-   pfMakeCritter 6, "normal", 4456, 4360, 4540, 576, 72, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4
+   pfMakeCritter 6, "normal", 4456, 4360, 4540, 576, 72, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4, empty, true   -- ladybug art faces LEFT: pFaceFlip true
    -- Wave 6 (bestiary II): a meadow FROG hops at you in the far-meadow clearing
    -- (between the ladybug and the gauntlet cloud). Stomp it; do not stand by it.
    pfMakeFrog 10, 4660, 4600, 4780, 576
@@ -3897,7 +3900,7 @@ command pfL3Cast
    end if
    pfMakeSlime 1, "normal", 2113, 2078, 2118, 576   -- right limit pulled IN off the crusher: at 2148 its right edge (2172) all but touched the crusher body (left 2178 - a 6px gap) and the two stuck together; 2118 -> far edge 2142 clears the crusher by 36px (the slime body is 48px wide). Coin stays at 2113, inside the band.
    -- a LADYBUG ambles the early ice (new variety; native foes art)
-   pfMakeCritter 2, "normal", 1100, 1010, 1180, 576, 64, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4
+   pfMakeCritter 2, "normal", 1100, 1010, 1180, 576, 64, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4, empty, true   -- ladybug art faces LEFT: pFaceFlip true
    pfMakeThwomp 1, 2208     -- it guards the red key
    -- the glacier's ROLLING ICE BOULDER: it slides the icy flat HEAD-ON at
    -- the climbing hero, who must leap it (jumping lifts him clear of the

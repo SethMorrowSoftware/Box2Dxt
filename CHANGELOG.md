@@ -312,6 +312,15 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
   (saw/spinner, `gMovFlip` false) are untouched. Example-side only; static gates
   clean, audit 0 findings. Needs an OXT pass to confirm the facing.
 
+- **Platformer: GROUND ladybugs + frogs no longer face backwards either.** The
+  follow-on to the flying-mover fix above, on the *other* facing path: the
+  slime-family walkers flip via `gSlimeFlip` (the snail's left-facing correction).
+  The frog and the ground ladybug art also face LEFT, but their makers set
+  `gSlimeFlip` false (right-facing). `pfMakeFrog` now sets it true; `pfMakeCritter`
+  gained an optional `pFaceFlip` arg (the ground-ladybug calls pass true) so the
+  ladybug inverts WITHOUT touching the mice / worms / fire-slimes / slime skins
+  that share the maker and already face correctly. Example-side only; gates clean.
+
 - **Platformer: spike pits now align FLUSH with the pit edges (all levels).**
   Found over two OXT rounds:
   - *Horizontal (the real misalignment).* `pfTile` treats its `(x,y)` as the
