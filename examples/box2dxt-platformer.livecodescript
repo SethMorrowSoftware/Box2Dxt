@@ -380,6 +380,10 @@ local gBgPanel, gBgLastHS
 local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinTot, gHudCoinLast, gHudTotLast
 local gHudKey, gHudKeysLast
 local gHudGemIcon, gHudGemD, gHudGemLast, gHudGemTotLast
+-- Phase F health: gHearts = the live pip count (reset to kHearts each level);
+-- gHudHeart = the five heart icon sprites along the bottom-left; gHudHeartLast
+-- caches the last count drawn so pfUpdateHearts only redraws on change (4Hz rule).
+local gHearts, gHudHeart, gHudHeartLast
 -- Phase F: with the art HUD on, the old bottom text readout becomes a DEBUG
 -- overlay (the dev stats) toggled with the ` key. gShowDebug is its on/off state.
 local gShowDebug
@@ -480,6 +484,13 @@ local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
 constant kPfUIVersion = "9"
+-- Phase F health: the forgiving five-heart buffer. A contact hit (pfOuch) costs
+-- ONE pip with a mercy window between hits; emptying the row routes to the
+-- respawn (pfHurt), which REFILLS it - so the hero never hard-fails on contact,
+-- it just loses ground back to the checkpoint. Declared up here so its first use
+-- (pfStartGame/pfBuildHud) is lexically AFTER it (gotcha 29: a constant
+-- referenced before its declaration resolves to nothing and silently zeroes).
+constant kHearts = 5
 -- The playable box hugs the level CONTENT, not the raw world width. The hero
 -- spawns at x 120 and each goal flag sits near the right end, so the side
 -- walls sit just past the spawn (kPfEdgeL) and just past the flag
@@ -861,13 +872,14 @@ end pfBuildBackdrop
 -- 1: just the coin counter (an icon + two collected-count digits, top-left), to
 -- prove the card-fixed sprite + digit path on OXT before the rest is layered on.
 command pfBuildHud
-   local tK
+   local tK, tI
    put false into gHudOK
    put empty into gHudCoinLast
    put empty into gHudTotLast
    put empty into gHudKeysLast
    put empty into gHudGemLast
    put empty into gHudGemTotLast
+   put empty into gHudHeartLast
    if gAssetsOK is not true or not b2kSheetHasFrame("hud", "hud_coin") then exit pfBuildHud
    b2kSpriteNew "hud", "hud_coin", 40, 20
    put the result into gHudCoinIcon
@@ -904,6 +916,19 @@ command pfBuildHud
       put pfHudDigit(263, 20) into gHudGemD[2]
       if gHudGemD[1] is not empty then set the visible of gHudGemD[1] to false
       if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
+   end if
+   -- the HEARTS (health): five hud_heart icons in the DIRT band at the very
+   -- bottom-left, BELOW the grass line (per the OXT pass - at y560 they sat up in
+   -- the play area among the world props; y620 drops them into the dirt strip,
+   -- clear of the scene). They build FULL; pfUpdateHearts swaps a slot to
+   -- hud_heart_empty as contact damage drains the buffer, and a respawn refills
+   -- it. Like the coin/gem digits these are card sprites (built before b2kCamOn)
+   -- so they never scroll; pfChromeFront raises them above the viewport.
+   if b2kSheetHasFrame("hud", "hud_heart") then
+      repeat with tI = 1 to kHearts
+         b2kSpriteNew "hud", "hud_heart", 40 + (tI - 1) * 36, 620
+         put the result into gHudHeart[tI]
+      end repeat
    end if
    put true into gHudOK
    -- the art HUD + the splash/pause overlay own the screen chrome now: retire the
@@ -987,7 +1012,25 @@ command pfUpdateHud
          end if
       end repeat
    end if
+   pfUpdateHearts
 end pfUpdateHud
+
+-- Refresh the heart row (from pfUpdateHud at 4Hz, on change only). Slots 1..gHearts
+-- show hud_heart; the rest go hud_heart_empty so the buffer size always reads.
+command pfUpdateHearts
+   local tI
+   if gHudOK is not true then exit pfUpdateHearts
+   if gHearts is gHudHeartLast then exit pfUpdateHearts
+   put gHearts into gHudHeartLast
+   repeat with tI = 1 to kHearts
+      if gHudHeart[tI] is empty then next repeat
+      if tI <= gHearts then
+         b2kSpriteSetFrame gHudHeart[tI], "hud_heart"
+      else
+         b2kSpriteSetFrame gHudHeart[tI], "hud_heart_empty"
+      end if
+   end repeat
+end pfUpdateHearts
 
 -- The CAVERN (L6) has no outdoor SCENE in the bg atlas, and Kenney's flat
 -- "background_solid_*" frames read as a near-blank wash (the "no background"
@@ -1080,6 +1123,7 @@ command pfStartGame
    put 0 into gFalls
    put 0 into gOuches
    put 0 into gLands
+   put kHearts into gHearts   -- a fresh, forgiving five-heart buffer each level
    put 0 into gHudNextMS
    put empty into gGateVel
    put 0 into gAirMS
@@ -4640,7 +4684,7 @@ command pfToggleDebug
 end pfToggleDebug
 
 command pfChromeFront
-   local tN, tC
+   local tN, tC, tI
    put the number of controls of this card into tN
    set the itemDelimiter to comma
    -- Phase F: the art HUD sprites are card-level (built before b2kCamOn), so they
@@ -4657,6 +4701,9 @@ command pfChromeFront
       if gHudGemD[2] is not empty then set the layer of gHudGemD[2] to tN
       repeat for each item tC in "blue,green,red,yellow"
          if gHudKey[tC] is not empty then set the layer of gHudKey[tC] to tN
+      end repeat
+      repeat with tI = 1 to kHearts
+         if gHudHeart[tI] is not empty then set the layer of gHudHeart[tI] to tN
       end repeat
    end if
    repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText"
@@ -4792,7 +4839,7 @@ on b2kFrame
    else
       put (the milliseconds - gRunStart) div 1000 into tSecs
    end if
-   put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
+   put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   HP " & gHearts & "/" & kHearts & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
    if gGemsTotal > 0 then put "   gems " & gGems & "/" & gGemsTotal after tHud
    if gKeysHeld is not empty then put "   [KEYS " & gKeysHeld & "]" after tHud
    if gCamOK is true then
@@ -6166,6 +6213,7 @@ command pfHurt
    if gHurtLock is true or gWinLock is true then exit pfHurt
    put true into gHurtLock
    add 1 to gFalls
+   put kHearts into gHearts   -- a respawn restores the full buffer (the forgiving model)
    b2kSound "hurt"
    b2kCamShake 7, 280
    -- the controller must not steer or re-anim during the hit pose; it
@@ -6186,6 +6234,17 @@ command pfOuch pFromX
    if gHurtLock is true or gWinLock is true then exit pfOuch
    if b2kPlayerHurtIs() then exit pfOuch
    add 1 to gOuches
+   -- Phase F health: each contact hit spends one heart. The mercy window
+   -- (b2kPlayerHurtIs, above) means you can lose at most one pip per hit, so
+   -- the five-heart buffer can't drain in a single frame of overlap. Empty the
+   -- row and the hit becomes LETHAL: hand off to pfHurt, which respawns at the
+   -- checkpoint and REFILLS the hearts (pfHurt does its own sound/shake).
+   subtract 1 from gHearts
+   if gHearts <= 0 then
+      put 0 into gHearts
+      pfHurt
+      exit pfOuch
+   end if
    b2kSound "hurt"
    b2kCamShake 5, 200
    b2kPlayerHurt pFromX
