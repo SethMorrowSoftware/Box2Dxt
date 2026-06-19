@@ -917,14 +917,16 @@ command pfBuildHud
       if gHudGemD[1] is not empty then set the visible of gHudGemD[1] to false
       if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
    end if
-   -- the HEARTS (health): five hud_heart icons low along the bottom-left, above
-   -- the (normally hidden) debug strip. They build FULL; pfUpdateHearts swaps a
-   -- slot to hud_heart_empty as contact damage drains the buffer, and a respawn
-   -- refills it. Like the coin/gem digits these are card sprites (built before
-   -- b2kCamOn) so they never scroll; pfChromeFront raises them above the viewport.
+   -- the HEARTS (health): five hud_heart icons in the DIRT band at the very
+   -- bottom-left, BELOW the grass line (per the OXT pass - at y560 they sat up in
+   -- the play area among the world props; y620 drops them into the dirt strip,
+   -- clear of the scene). They build FULL; pfUpdateHearts swaps a slot to
+   -- hud_heart_empty as contact damage drains the buffer, and a respawn refills
+   -- it. Like the coin/gem digits these are card sprites (built before b2kCamOn)
+   -- so they never scroll; pfChromeFront raises them above the viewport.
    if b2kSheetHasFrame("hud", "hud_heart") then
       repeat with tI = 1 to kHearts
-         b2kSpriteNew "hud", "hud_heart", 40 + (tI - 1) * 36, 560
+         b2kSpriteNew "hud", "hud_heart", 40 + (tI - 1) * 36, 620
          put the result into gHudHeart[tI]
       end repeat
    end if
