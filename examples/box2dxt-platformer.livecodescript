@@ -370,6 +370,19 @@ local gGems, gGemsTotal, gGemsBank, gGemsAllTotal
 -- the PARALLAX backdrop: a per-biome scene tiled across 3 card panels that drift
 -- slower than the 1:1 foreground (depth). gBgLastHS gates the per-frame redraw.
 local gBgPanel, gBgLastHS
+-- Phase F: the ART HUD - screen-fixed hud_* sprites that replace the bottom text
+-- readout. Built card-fixed (before b2kCamOn, like the backdrop) from a 2nd "hud"
+-- view of the tiles atlas at HUD scale; digit FRAMES swap ON CHANGE only (the
+-- 4Hz/write-on-change rule, far cheaper than the per-frame field relayout it
+-- replaces). gHudOK = the art HUD is active (false = no hud_* art -> the text
+-- field stays as the fallback, so the demo never ships blank). gHudCoinD = the two
+-- collected-count digit sprites; gHudCoinLast caches the last value drawn.
+local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinTot, gHudCoinLast, gHudTotLast
+local gHudKey, gHudKeysLast
+local gHudGemIcon, gHudGemD, gHudGemLast, gHudGemTotLast
+-- Phase F: with the art HUD on, the old bottom text readout becomes a DEBUG
+-- overlay (the dev stats) toggled with the ` key. gShowDebug is its on/off state.
+local gShowDebug
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -405,10 +418,12 @@ local gHeroHalfH        -- the hero capsule's half-height (head reach for bonks)
 local gDebrisNext, gDebrisUntil
 local gLeverSpr, gLeverX, gLeverArmed, gSawOn, gSawMov, gSawSpr
 -- MULTI-KEY doors (Phase C slice 3): a level may now plant SEVERAL coloured
--- key+door pairs. gKeysHeld is the comma-list of colours the hero is carrying;
--- gKeyRide[colour] is each one's ride-along sprite; the rest are per-door arrays
--- indexed 1..gDoorN (gDoorX/gDoorWord were single globals - one door per level).
-local gKeysHeld, gKeyRide, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gDoorHostNm
+-- key+door pairs. gKeysHeld is the comma-list of colours the hero is carrying
+-- (Phase F: shown as hud_key_* icons in the art HUD, which appear on pickup and
+-- vanish when a door consumes the key - this retired the ride-along key sprite).
+-- The rest are per-door arrays indexed 1..gDoorN (gDoorX/gDoorWord were single
+-- globals - one door per level).
+local gKeysHeld, gDoorN, gDoorOpen, gLockSpr, gDoorSprT, gDoorSprB, gDoorHostNm
 -- LATCHING switch-gates (Phase C slice 3, part 2): a floor/ledge switch that,
 -- once pressed, opens its coloured gate FOR GOOD (the kinematic gate rises out
 -- of the way and rests). Indexed 1..gSwN; gSwDone[i] = open AND settled (idles
@@ -464,7 +479,7 @@ local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
-constant kPfUIVersion = "8"
+constant kPfUIVersion = "9"
 -- The playable box hugs the level CONTENT, not the raw world width. The hero
 -- spawns at x 120 and each goal flag sits near the right end, so the side
 -- walls sit just past the spawn (kPfEdgeL) and just past the flag
@@ -522,12 +537,20 @@ end closeCard
 -- Chrome (version-tagged; rebuilds when a newer example is pasted in)
 -- =====================================================================
 command buildPfUI
-   if there is a field "pfTitle" then delete field "pfTitle"
-   if there is a field "pfHelp" then delete field "pfHelp"
-   if there is a field "pfHud" then delete field "pfHud"
-   if there is a button "pfbtn_pause" then delete button "pfbtn_pause"
-   if there is a button "pfbtn_reset" then delete button "pfbtn_reset"
-   if there is a button "pfbtn_level" then delete button "pfbtn_level"
+   local tC
+   -- clear EVERY chrome control this handler creates before rebuilding, so a
+   -- kPfUIVersion bump never leaves a duplicate behind (the splash/win/pause
+   -- overlays were previously omitted here, which would have duplicated them).
+   set the itemDelimiter to comma
+   repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText,pfPauseText"
+      if there is a field tC then delete field tC
+   end repeat
+   repeat for each item tC in "pfWinShade,pfPauseShade"
+      if there is a graphic tC then delete graphic tC
+   end repeat
+   repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_level,pfbtn_again"
+      if there is a button tC then delete button tC
+   end repeat
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -604,6 +627,26 @@ command buildPfUI
    set the label of it to "Play again"
    set the traversalOn of it to false
    set the visible of it to false
+   -- the PAUSE overlay (Phase F): the controls reference, now that the top help
+   -- bar is retired. Shown by pfTogglePause on ESC / the pause button.
+   create graphic "pfPauseShade"
+   set the style of it to "roundrect"
+   set the rect of it to 152, 150, 872, 500
+   set the filled of it to true
+   set the backgroundColor of it to "24,28,40"
+   set the blendLevel of it to 16
+   set the visible of it to false
+   create field "pfPauseText"
+   set the rect of it to 172, 176, 852, 484
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textAlign of it to "center"
+   set the textSize of it to 17
+   set the textColor of it to "248,249,240"
+   set the opaque of it to false
+   set the showBorder of it to false
+   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  ·  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
+   set the visible of it to false
    set the uPfUIVersionTag of this stack to kPfUIVersion
 end buildPfUI
 
@@ -639,6 +682,12 @@ function pfLoadSheets
    b2kSheetLoadAtlas "tiles", tFolder & "/spritesheet-tiles-default.png"
    put the result into tN
    if tN < 1 then put "tiles atlas gave 0 frames. " after gLoadNote
+   -- Phase F: a SECOND view of the tiles atlas as "hud", scaled down for the
+   -- screen-chrome hud_* sprites (the 64px hud_ cells -> ~38px HUD elements). The
+   -- atlas decodes once (sheets persist across rebuilds); only the hud_* frames
+   -- the HUD actually uses ever get sliced, so the extra cost is negligible.
+   b2kSheetLoadAtlas "hud", tFolder & "/spritesheet-tiles-default.png"
+   if the result >= 1 then b2kSheetScale "hud", 0.6
    b2kSheetLoadAtlas "bg", tFolder & "/spritesheet-backgrounds-default.png"
    put the result into tN
    if tN < 1 then put "backgrounds atlas gave 0 frames. " after gLoadNote
@@ -804,6 +853,142 @@ command pfBuildBackdrop
    end repeat
 end pfBuildBackdrop
 
+-- Phase F: build the ART HUD - screen-fixed hud_* sprites that replace the bottom
+-- text readout. Created HERE (before b2kCamOn, like the backdrop) so they live on
+-- the CARD and never scroll. Rebuilt each level (b2kTeardown cleared the old Kit
+-- sprites). When the hud_* art is missing it no-ops and gHudOK stays false, so the
+-- text field readout remains the fallback (the demo never ships blank). Increment
+-- 1: just the coin counter (an icon + two collected-count digits, top-left), to
+-- prove the card-fixed sprite + digit path on OXT before the rest is layered on.
+command pfBuildHud
+   local tK
+   put false into gHudOK
+   put empty into gHudCoinLast
+   put empty into gHudTotLast
+   put empty into gHudKeysLast
+   put empty into gHudGemLast
+   put empty into gHudGemTotLast
+   if gAssetsOK is not true or not b2kSheetHasFrame("hud", "hud_coin") then exit pfBuildHud
+   b2kSpriteNew "hud", "hud_coin", 40, 20
+   put the result into gHudCoinIcon
+   if gHudCoinIcon is empty then exit pfBuildHud
+   put pfHudDigit(74, 20) into gHudCoinD[1]
+   put pfHudDigit(98, 20) into gHudCoinD[2]
+   -- the "/" between the collected count and the total (the hud_character_* set
+   -- has no slash glyph, so draw a tiny card line; pfWipeStage clears it each build)
+   create graphic "pf_hudslash"
+   set the style of graphic "pf_hudslash" to "line"
+   set the points of graphic "pf_hudslash" to "112,31" & cr & "120,9"
+   set the lineSize of graphic "pf_hudslash" to 2
+   set the foregroundColor of graphic "pf_hudslash" to "215,215,215"
+   put pfHudDigit(134, 20) into gHudCoinTot[1]
+   put pfHudDigit(158, 20) into gHudCoinTot[2]
+   -- the KEY icons (one slot per colour): created hidden, then shown + packed
+   -- left-aligned by pfUpdateHud as the hero collects them - and hidden again the
+   -- moment a door consumes one. This replaced the ride-along key-on-shoulder sprite.
+   set the itemDelimiter to comma
+   repeat for each item tK in "blue,green,red,yellow"
+      if b2kSheetHasFrame("hud", "hud_key_" & tK) then
+         b2kSpriteNew "hud", "hud_key_" & tK, 200, 20
+         put the result into gHudKey[tK]
+         if gHudKey[tK] is not empty then set the visible of gHudKey[tK] to false
+      end if
+   end repeat
+   -- the GEM counter (a bonus tally): an icon + collected-count digits, created
+   -- hidden and revealed by pfUpdateHud only on levels that actually have gems.
+   if b2kSheetHasFrame("hud", "gem_blue") then
+      b2kSpriteNew "hud", "gem_blue", 205, 20
+      put the result into gHudGemIcon
+      if gHudGemIcon is not empty then set the visible of gHudGemIcon to false
+      put pfHudDigit(239, 20) into gHudGemD[1]
+      put pfHudDigit(263, 20) into gHudGemD[2]
+      if gHudGemD[1] is not empty then set the visible of gHudGemD[1] to false
+      if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
+   end if
+   put true into gHudOK
+   -- the art HUD + the splash/pause overlay own the screen chrome now: retire the
+   -- demo TITLE and the top CONTROLS bar, and turn the bottom readout into the
+   -- DEBUG overlay (hidden unless toggled with `). pfHelp is RE-SHOWN below only if
+   -- the camera is unavailable, where it carries the diagnostic.
+   if there is a field "pfTitle" then set the visible of field "pfTitle" to false
+   if there is a field "pfHelp" then set the visible of field "pfHelp" to false
+   if there is a field "pfHud" then set the visible of field "pfHud" to (gShowDebug is true)
+end pfBuildHud
+
+-- One HUD digit sprite (hud_character_0..9) at a fixed screen point, from the
+-- scaled "hud" sheet. A plain card sprite (built before b2kCamOn = never scrolls).
+function pfHudDigit pX, pY
+   b2kSpriteNew "hud", "hud_character_0", pX, pY
+   return the result
+end pfHudDigit
+
+-- Draw a 0..99 value across two digit slots, right-aligned, hiding the leading
+-- slot below 10. Frames swap only when called; the caller gates on change.
+command pfHudSetNum2 pD1, pD2, pValue
+   if pValue < 0 then put 0 into pValue
+   if pValue > 99 then put 99 into pValue
+   if pD2 is not empty then
+      b2kSpriteSetFrame pD2, "hud_character_" & (pValue mod 10)
+      set the visible of pD2 to true   -- the ones digit always shows (matters for slots built hidden, e.g. gems)
+   end if
+   if pD1 is empty then exit pfHudSetNum2
+   if pValue < 10 then
+      set the visible of pD1 to false
+   else
+      b2kSpriteSetFrame pD1, "hud_character_" & (pValue div 10)
+      set the visible of pD1 to true
+   end if
+end pfHudSetNum2
+
+-- Refresh the art HUD (called at 4 Hz). Cheap: each element redraws only when its
+-- own value changes. O(1) out when the art HUD is not active (the text fallback).
+command pfUpdateHud
+   local tSlot, k, tKeyBase
+   if gHudOK is not true then exit pfUpdateHud
+   -- coins collected + total (each on its own change; the total settles once at
+   -- build, the collected count ticks as you grab coins)
+   if gCoins is not gHudCoinLast then
+      put gCoins into gHudCoinLast
+      pfHudSetNum2 gHudCoinD[1], gHudCoinD[2], gCoins
+   end if
+   if gCoinsTotal is not gHudTotLast then
+      put gCoinsTotal into gHudTotLast
+      pfHudSetNum2 gHudCoinTot[1], gHudCoinTot[2], gCoinsTotal
+   end if
+   -- gems (a bonus tally): the counter shows only on levels that planted gems
+   if gGems is not gHudGemLast or gGemsTotal is not gHudGemTotLast then
+      put gGems into gHudGemLast
+      put gGemsTotal into gHudGemTotLast
+      if gGemsTotal > 0 then
+         if gHudGemIcon is not empty then set the visible of gHudGemIcon to true
+         pfHudSetNum2 gHudGemD[1], gHudGemD[2], gGems
+      else
+         if gHudGemIcon is not empty then set the visible of gHudGemIcon to false
+         if gHudGemD[1] is not empty then set the visible of gHudGemD[1] to false
+         if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
+      end if
+   end if
+   -- keys (on change): pack the carried set left-aligned in pickup order after the
+   -- coin (and, where present, gem) counters; hide the rest. gKeysHeld drops a
+   -- colour the instant a door consumes it, so the icon goes.
+   if gKeysHeld is not gHudKeysLast then
+      put gKeysHeld into gHudKeysLast
+      set the itemDelimiter to comma
+      if gGemsTotal > 0 then put 305 into tKeyBase else put 200 into tKeyBase
+      repeat for each item k in "blue,green,red,yellow"
+         if gHudKey[k] is not empty then set the visible of gHudKey[k] to false
+      end repeat
+      put 0 into tSlot
+      repeat for each item k in gKeysHeld
+         if gHudKey[k] is not empty then
+            set the loc of gHudKey[k] to (tKeyBase + tSlot * 36) & comma & 20
+            set the visible of gHudKey[k] to true
+            add 1 to tSlot
+         end if
+      end repeat
+   end if
+end pfUpdateHud
+
 -- The CAVERN (L6) has no outdoor SCENE in the bg atlas, and Kenney's flat
 -- "background_solid_*" frames read as a near-blank wash (the "no background"
 -- report), so build a guaranteed-visible dark UNDERGROUND void from two card
@@ -905,6 +1090,10 @@ command pfStartGame
    if there is a graphic "pfWinShade" then set the visible of graphic "pfWinShade" to false
    if there is a field "pfWinText" then set the visible of field "pfWinText" to false
    if there is a button "pfbtn_again" then set the visible of button "pfbtn_again" to false
+   -- a fresh build is never paused: clear the pause overlay + reset the button
+   if there is a graphic "pfPauseShade" then set the visible of graphic "pfPauseShade" to false
+   if there is a field "pfPauseText" then set the visible of field "pfPauseText" to false
+   if there is a button "pfbtn_pause" then set the label of button "pfbtn_pause" to "Pause"
    if there is a field "pfSplash" then set the visible of field "pfSplash" to true
    put 0 into gPlateHoldMS
    put empty into gPlateLook
@@ -1007,7 +1196,6 @@ command pfStartGame
    put empty into gSawSpr
    put 0 into gDoorN
    put empty into gKeysHeld
-   put empty into gKeyRide
    put empty into gDoorOpen
    put empty into gLockSpr
    put empty into gDoorSprT
@@ -1094,6 +1282,7 @@ command pfStartGame
    -- so the panels live on the CARD (not the scrolling camera group); the
    -- parallax tick in b2kFrame drifts + wraps them. =====
    pfBuildBackdrop
+   pfBuildHud   -- Phase F: the screen-fixed art HUD (before b2kCamOn, like the backdrop, so it does not scroll)
    -- ===== the camera: everything Kit-made from here lives in the view ====
    b2kCamOn
    put (b2kCamIsOn() and b2kCamStatus() is empty) into gCamOK
@@ -1252,7 +1441,17 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName
+      -- the level title + a one-line controls reminder (the full reference now
+      -- lives in the ESC pause overlay, since the top help bar is retired)
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName & cr & "Arrows/WASD · SPACE jump · ESC = controls"
+      -- the dark-backdrop levels (the cavern + the stone keep) need LIGHT splash
+      -- text so the title - and the centre notices, which reuse this field - read
+      -- against the dark scene; the bright biomes keep dark text.
+      if gLevel is 6 or gLevel is 7 then
+         set the textColor of field "pfSplash" to "245,246,236"
+      else
+         set the textColor of field "pfSplash" to "28,30,42"
+      end if
    end if
    -- ===== camera-dead fallback: clamp play to the visible screen ====
    if gCamOK is not true then
@@ -1279,6 +1478,8 @@ command pfStartGame
          b2kAddSensor tRef, "box"
       end if
       set the text of field "pfHelp" to "CAMERA UNAVAILABLE on this engine (" & b2kCamStatus() & ") - the level is clamped" & cr & "to this screen and the flag moved here so it stays completable. Everything else works." & cr & "Please report the quoted reason."
+      -- this diagnostic matters, so override the art-HUD retirement of pfHelp
+      if there is a field "pfHelp" then set the visible of field "pfHelp" to true
    end if
    -- diagnostics: prove world membership at a glance (line 3 of the help)
    if gCamOK is true and gHeroSpr is not empty then
@@ -4429,10 +4630,35 @@ command pfNotice pText, pMS
    put the milliseconds + pMS into gNoticeUntil
 end pfNotice
 
+-- Phase F: toggle the bottom DEBUG overlay (the old text readout: state/ms/awake/
+-- view/audio + the run stats) with the ` key. Only meaningful when the art HUD is
+-- on; without hud_ art the field is the always-on readout fallback.
+command pfToggleDebug
+   if gHudOK is not true then exit pfToggleDebug
+   put (gShowDebug is not true) into gShowDebug
+   if there is a field "pfHud" then set the visible of field "pfHud" to gShowDebug
+end pfToggleDebug
+
 command pfChromeFront
    local tN, tC
    put the number of controls of this card into tN
    set the itemDelimiter to comma
+   -- Phase F: the art HUD sprites are card-level (built before b2kCamOn), so they
+   -- ride below the camera viewport until raised here like the rest of the chrome.
+   if gHudOK is true then
+      if gHudCoinIcon is not empty then set the layer of gHudCoinIcon to tN
+      if gHudCoinD[1] is not empty then set the layer of gHudCoinD[1] to tN
+      if gHudCoinD[2] is not empty then set the layer of gHudCoinD[2] to tN
+      if gHudCoinTot[1] is not empty then set the layer of gHudCoinTot[1] to tN
+      if gHudCoinTot[2] is not empty then set the layer of gHudCoinTot[2] to tN
+      if there is a graphic "pf_hudslash" then set the layer of graphic "pf_hudslash" to tN
+      if gHudGemIcon is not empty then set the layer of gHudGemIcon to tN
+      if gHudGemD[1] is not empty then set the layer of gHudGemD[1] to tN
+      if gHudGemD[2] is not empty then set the layer of gHudGemD[2] to tN
+      repeat for each item tC in "blue,green,red,yellow"
+         if gHudKey[tC] is not empty then set the layer of gHudKey[tC] to tN
+      end repeat
+   end if
    repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText"
       if there is a field tC then set the layer of field tC to tN
    end repeat
@@ -4557,6 +4783,10 @@ on b2kFrame
    local tSecs
    if the milliseconds < gHudNextMS then exit b2kFrame
    put the milliseconds + 250 into gHudNextMS
+   pfUpdateHud   -- Phase F: refresh the art HUD (coins/gems/keys) on change
+   -- with the art HUD on, the bottom field is the DEBUG overlay - skip building it
+   -- unless the ` toggle is up. With no hud_ art it stays the full text fallback.
+   if gHudOK is true and gShowDebug is not true then exit b2kFrame
    if gWinSecs is not empty then
       put gWinSecs into tSecs
    else
@@ -4572,13 +4802,19 @@ on b2kFrame
    if not b2kIsAwake(gHero) then put "   [ASLEEP?!]" after tHud   -- must never show
    if b2kSoundStatus() is not empty then put "   [audio: " & b2kSoundStatus() & "]" after tHud
    if b2kSoundMuted() then put "   [muted]" after tHud
-   if gWon is true then
-      put "WINNER!   " before tHud
-   else
-      if gFlagHint is true and gCoins < gCoinsTotal then
-         put "Find ALL the coins, then return to the flag!   " before tHud
+   -- the flag hints belong to the TEXT-readout fallback; with the art HUD on they
+   -- already reach the player as centre-screen pfNotice banners (the flag's "find
+   -- N more coins" / pfGainCoin's "ALL COINS" / the win screen), so they are not
+   -- echoed into the debug overlay.
+   if gHudOK is not true then
+      if gWon is true then
+         put "WINNER!   " before tHud
+      else
+         if gFlagHint is true and gCoins < gCoinsTotal then
+            put "Find ALL the coins, then return to the flag!   " before tHud
+         end if
+         if gCoins >= gCoinsTotal then put "All coins - to the FLAG!   " before tHud
       end if
-      if gCoins >= gCoinsTotal then put "All coins - to the FLAG!   " before tHud
    end if
    if tHud is not gHudLast then
       put tHud into gHudLast
@@ -5454,10 +5690,8 @@ command pfTickDoors
       -- the lock dissolves into the wall (removing it would punch a
       -- see-through hole in front of the still-solid wall host)
       if gLockSpr[i] is not empty then b2kSpriteSetFrame gLockSpr[i], "terrain_stone_block_center"
-      if gKeyRide[tWord] is not empty then
-         b2kSpriteRemove gKeyRide[tWord]
-         put empty into gKeyRide[tWord]
-      end if
+      -- the key was just dropped from gKeysHeld above, so its hud_key_* icon
+      -- vanishes on the next pfUpdateHud (the old ride-along sprite is gone)
       if gDoorSprT[i] is not empty then b2kSpriteSetFrame gDoorSprT[i], "door_open_top"
       b2kSpriteSetFrame gDoorSprB[i], "door_open"
       if there is a graphic gDoorHostNm[i] then
@@ -5626,7 +5860,7 @@ end pfTickBarrel
 -- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
-   local tKPos, tPopAt, tWord, tN
+   local tPopAt, tWord
    if pSensorCtrl is empty then exit b2kSensorEnter
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfKeyFlag of pSensorCtrl is true then
@@ -5641,13 +5875,8 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
          end if
          b2kSound "key"
          b2kSpriteRemove pSensorCtrl
-         -- the key rides along on the hero's shoulder; FAN multiple keys out so
-         -- two or three are all readable (stacked by held-count)
-         put the number of items of gKeysHeld into tN
-         put b2kPosition(gHero) into tKPos
-         b2kSpriteNew "tiles", "key_" & tWord, (item 1 of tKPos) - 34, (item 2 of tKPos) - 34 - (tN - 1) * 16
-         put the result into gKeyRide[tWord]
-         if gKeyRide[tWord] is not empty then b2kSpriteBind gKeyRide[tWord], gHero, -34, -34 - (tN - 1) * 16
+         -- the carried key now shows as a hud_key_* icon in the art HUD
+         -- (pfUpdateHud reads gKeysHeld), which retired the ride-along sprite.
       end if
       exit b2kSensorEnter
    end if
@@ -6042,12 +6271,25 @@ on pfPopDone pSprite, pAnim
 end pfPopDone
 
 command pfTogglePause
+   local tTop
    if b2kIsRunning() then
       b2kPause
       set the label of button "pfbtn_pause" to "Resume"
+      -- show the controls overlay, raised to the very top (above the HUD + world)
+      if there is a graphic "pfPauseShade" then
+         put the number of controls of this card into tTop
+         set the layer of graphic "pfPauseShade" to tTop
+         set the layer of field "pfPauseText" to tTop
+         set the visible of graphic "pfPauseShade" to true
+         set the visible of field "pfPauseText" to true
+      end if
    else
       b2kResume
       set the label of button "pfbtn_pause" to "Pause"
+      if there is a graphic "pfPauseShade" then
+         set the visible of graphic "pfPauseShade" to false
+         set the visible of field "pfPauseText" to false
+      end if
    end if
 end pfTogglePause
 
@@ -6145,6 +6387,10 @@ on rawKeyDown pKeyCode
    end if
    if pKeyCode is 109 or pKeyCode is 77 then
       b2kSoundMute (not b2kSoundMuted())
+      exit rawKeyDown
+   end if
+   if pKeyCode is 96 then   -- the ` (backquote) key toggles the dev debug overlay
+      pfToggleDebug
       exit rawKeyDown
    end if
    pass rawKeyDown
