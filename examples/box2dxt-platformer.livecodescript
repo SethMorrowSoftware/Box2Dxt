@@ -377,7 +377,9 @@ local gBgPanel, gBgLastHS
 -- replaces). gHudOK = the art HUD is active (false = no hud_* art -> the text
 -- field stays as the fallback, so the demo never ships blank). gHudCoinD = the two
 -- collected-count digit sprites; gHudCoinLast caches the last value drawn.
-local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinLast, gHudKey, gHudKeysLast
+local gHudOK, gHudCoinIcon, gHudCoinD, gHudCoinTot, gHudCoinLast, gHudTotLast
+local gHudKey, gHudKeysLast
+local gHudGemIcon, gHudGemD, gHudGemLast, gHudGemTotLast
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -831,24 +833,47 @@ command pfBuildHud
    local tK
    put false into gHudOK
    put empty into gHudCoinLast
+   put empty into gHudTotLast
    put empty into gHudKeysLast
+   put empty into gHudGemLast
+   put empty into gHudGemTotLast
    if gAssetsOK is not true or not b2kSheetHasFrame("hud", "hud_coin") then exit pfBuildHud
    b2kSpriteNew "hud", "hud_coin", 40, 20
    put the result into gHudCoinIcon
    if gHudCoinIcon is empty then exit pfBuildHud
    put pfHudDigit(74, 20) into gHudCoinD[1]
    put pfHudDigit(98, 20) into gHudCoinD[2]
+   -- the "/" between the collected count and the total (the hud_character_* set
+   -- has no slash glyph, so draw a tiny card line; pfWipeStage clears it each build)
+   create graphic "pf_hudslash"
+   set the style of graphic "pf_hudslash" to "line"
+   set the points of graphic "pf_hudslash" to "112,31" & cr & "120,9"
+   set the lineSize of graphic "pf_hudslash" to 2
+   set the foregroundColor of graphic "pf_hudslash" to "215,215,215"
+   put pfHudDigit(134, 20) into gHudCoinTot[1]
+   put pfHudDigit(158, 20) into gHudCoinTot[2]
    -- the KEY icons (one slot per colour): created hidden, then shown + packed
    -- left-aligned by pfUpdateHud as the hero collects them - and hidden again the
    -- moment a door consumes one. This replaced the ride-along key-on-shoulder sprite.
    set the itemDelimiter to comma
    repeat for each item tK in "blue,green,red,yellow"
       if b2kSheetHasFrame("hud", "hud_key_" & tK) then
-         b2kSpriteNew "hud", "hud_key_" & tK, 150, 20
+         b2kSpriteNew "hud", "hud_key_" & tK, 200, 20
          put the result into gHudKey[tK]
          if gHudKey[tK] is not empty then set the visible of gHudKey[tK] to false
       end if
    end repeat
+   -- the GEM counter (a bonus tally): an icon + collected-count digits, created
+   -- hidden and revealed by pfUpdateHud only on levels that actually have gems.
+   if b2kSheetHasFrame("hud", "gem_blue") then
+      b2kSpriteNew "hud", "gem_blue", 205, 20
+      put the result into gHudGemIcon
+      if gHudGemIcon is not empty then set the visible of gHudGemIcon to false
+      put pfHudDigit(239, 20) into gHudGemD[1]
+      put pfHudDigit(263, 20) into gHudGemD[2]
+      if gHudGemD[1] is not empty then set the visible of gHudGemD[1] to false
+      if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
+   end if
    put true into gHudOK
    -- the art HUD owns the top-left now: retire the demo TITLE field (the intro
    -- splash carries the level name; pfHelp + its diagnostics stay for now).
@@ -867,7 +892,10 @@ end pfHudDigit
 command pfHudSetNum2 pD1, pD2, pValue
    if pValue < 0 then put 0 into pValue
    if pValue > 99 then put 99 into pValue
-   if pD2 is not empty then b2kSpriteSetFrame pD2, "hud_character_" & (pValue mod 10)
+   if pD2 is not empty then
+      b2kSpriteSetFrame pD2, "hud_character_" & (pValue mod 10)
+      set the visible of pD2 to true   -- the ones digit always shows (matters for slots built hidden, e.g. gems)
+   end if
    if pD1 is empty then exit pfHudSetNum2
    if pValue < 10 then
       set the visible of pD1 to false
@@ -880,25 +908,45 @@ end pfHudSetNum2
 -- Refresh the art HUD (called at 4 Hz). Cheap: each element redraws only when its
 -- own value changes. O(1) out when the art HUD is not active (the text fallback).
 command pfUpdateHud
-   local tSlot, k
+   local tSlot, k, tKeyBase
    if gHudOK is not true then exit pfUpdateHud
-   -- coins (on change)
+   -- coins collected + total (each on its own change; the total settles once at
+   -- build, the collected count ticks as you grab coins)
    if gCoins is not gHudCoinLast then
       put gCoins into gHudCoinLast
       pfHudSetNum2 gHudCoinD[1], gHudCoinD[2], gCoins
    end if
-   -- keys (on change): pack the carried set left-aligned in pickup order, hide the
-   -- rest. gKeysHeld drops a colour the instant a door consumes it, so the icon goes.
+   if gCoinsTotal is not gHudTotLast then
+      put gCoinsTotal into gHudTotLast
+      pfHudSetNum2 gHudCoinTot[1], gHudCoinTot[2], gCoinsTotal
+   end if
+   -- gems (a bonus tally): the counter shows only on levels that planted gems
+   if gGems is not gHudGemLast or gGemsTotal is not gHudGemTotLast then
+      put gGems into gHudGemLast
+      put gGemsTotal into gHudGemTotLast
+      if gGemsTotal > 0 then
+         if gHudGemIcon is not empty then set the visible of gHudGemIcon to true
+         pfHudSetNum2 gHudGemD[1], gHudGemD[2], gGems
+      else
+         if gHudGemIcon is not empty then set the visible of gHudGemIcon to false
+         if gHudGemD[1] is not empty then set the visible of gHudGemD[1] to false
+         if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
+      end if
+   end if
+   -- keys (on change): pack the carried set left-aligned in pickup order after the
+   -- coin (and, where present, gem) counters; hide the rest. gKeysHeld drops a
+   -- colour the instant a door consumes it, so the icon goes.
    if gKeysHeld is not gHudKeysLast then
       put gKeysHeld into gHudKeysLast
       set the itemDelimiter to comma
+      if gGemsTotal > 0 then put 305 into tKeyBase else put 200 into tKeyBase
       repeat for each item k in "blue,green,red,yellow"
          if gHudKey[k] is not empty then set the visible of gHudKey[k] to false
       end repeat
       put 0 into tSlot
       repeat for each item k in gKeysHeld
          if gHudKey[k] is not empty then
-            set the loc of gHudKey[k] to (150 + tSlot * 36) & comma & 20
+            set the loc of gHudKey[k] to (tKeyBase + tSlot * 36) & comma & 20
             set the visible of gHudKey[k] to true
             add 1 to tSlot
          end if
@@ -4541,6 +4589,12 @@ command pfChromeFront
       if gHudCoinIcon is not empty then set the layer of gHudCoinIcon to tN
       if gHudCoinD[1] is not empty then set the layer of gHudCoinD[1] to tN
       if gHudCoinD[2] is not empty then set the layer of gHudCoinD[2] to tN
+      if gHudCoinTot[1] is not empty then set the layer of gHudCoinTot[1] to tN
+      if gHudCoinTot[2] is not empty then set the layer of gHudCoinTot[2] to tN
+      if there is a graphic "pf_hudslash" then set the layer of graphic "pf_hudslash" to tN
+      if gHudGemIcon is not empty then set the layer of gHudGemIcon to tN
+      if gHudGemD[1] is not empty then set the layer of gHudGemD[1] to tN
+      if gHudGemD[2] is not empty then set the layer of gHudGemD[2] to tN
       repeat for each item tC in "blue,green,red,yellow"
          if gHudKey[tC] is not empty then set the layer of gHudKey[tC] to tN
       end repeat
