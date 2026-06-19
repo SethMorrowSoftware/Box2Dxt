@@ -49,6 +49,7 @@ class Level:
         self.water = []      # (L,T,R,B) swim basins -- coins inside are underwater pickups
         self.coins = []      # (x,y)
         self.gems = []       # (x,y) bonus pickups
+        self.stars = []      # (x,y) the hidden star (one per level, a distinct collectible)
         self.enemies = []    # (kind,idx,x,minx,maxx,topy,halfw)
         self.thwomps = []    # (idx,x)
         self.barnacles = []  # (idx,x,y)
@@ -92,7 +93,12 @@ def parse():
                     L.slabs.append((nm, v[0], v[1], v[2], v[3]))
                 continue
             if s.startswith("b2kSmoothGround"):
-                xs = [float(x) for x in re.findall(NUM, s)]
+                # drop the handler name FIRST: the "2" in "b2kSmoothGround" is a
+                # digit the NUM regex would otherwise capture as a coordinate,
+                # shifting every x,y pair by one (a latent bug exposed by the star
+                # surface check -- nothing read cloud spans before it).
+                body = s[len("b2kSmoothGround"):]
+                xs = [float(x) for x in re.findall(NUM, body)]
                 # points are "x,y" pairs; solid span = inner xs (ghost rule)
                 pts = list(zip(xs[0::2], xs[1::2]))
                 xsv = sorted(p[0] for p in pts)
@@ -111,6 +117,8 @@ def parse():
                 v = nums(s); L.coins.append((v[0], v[1])); continue
             if s.startswith("pfMakeGem"):
                 v = nums(s); L.gems.append((v[0], v[1])); continue
+            if s.startswith("pfMakeStar"):
+                v = nums(s); L.stars.append((v[0], v[1])); continue
             mt = re.match(r'pfTile "([^"]+)",\s*' + NUM + r',\s*' + NUM, s)
             if mt and mt.group(1) in ("cactus","rock","bush","fence","fence_broken",
                     "mushroom_brown","mushroom_red","sign","grass_purple"):
@@ -232,6 +240,30 @@ def audit(L):
                 flag("WARN", f"gem {x:.0f},{y:.0f} overlaps coin ({cx:.0f},{cy:.0f})")
         if L.goal and math.hypot(x - L.goal[0], y - (L.goal[1] + 16)) < 48:
             flag("ERR", f"gem {x:.0f},{y:.0f} overlaps the goal flag")
+
+    # stars: the hidden challenge pickup -- the user's hard rule is REACHABILITY,
+    # so each star must sit ON a surface the player provably stands on (a cloud /
+    # slab / stepping-stone top ~56px below it, the pickup convention), be in
+    # bounds, not buried, and clear of coins/gems/goal (a distinct collectible).
+    # A star with no surface ~24-110px below it is flagged: it would be a bare
+    # mid-air grab (the reachability risk).
+    for (x, y) in L.stars:
+        if x < lo or x > hi:
+            flag("ERR", f"star {x:.0f},{y:.0f} OUTSIDE play bounds [{lo:.0f}..{hi:.0f}]")
+        nm = inside_solid(L, x, y)
+        if nm:
+            flag("ERR", f"star {x:.0f},{y:.0f} BURIED inside slab '{nm}'")
+        gt = solid_top_at(L, x)
+        if gt is None or not (y + 20 <= gt <= y + 110):
+            flag("ERR", f"star {x:.0f},{y:.0f} has NO surface to stand on ~56px below it (nearest top {gt}) -- a bare mid-air grab, may be unreachable")
+        for (cx, cy) in L.coins:
+            if math.hypot(x - cx, y - cy) < 48:
+                flag("WARN", f"star {x:.0f},{y:.0f} overlaps coin ({cx:.0f},{cy:.0f})")
+        for (cx, cy) in L.gems:
+            if math.hypot(x - cx, y - cy) < 48:
+                flag("WARN", f"star {x:.0f},{y:.0f} overlaps gem ({cx:.0f},{cy:.0f})")
+        if L.goal and math.hypot(x - L.goal[0], y - (L.goal[1] + 16)) < 48:
+            flag("ERR", f"star {x:.0f},{y:.0f} overlaps the goal flag")
 
     # enemies: patrol must stay on a continuous ground top at ~topy
     walkers = [e for e in L.enemies if e[0] in ("slime", "critter", "snail", "frog")]

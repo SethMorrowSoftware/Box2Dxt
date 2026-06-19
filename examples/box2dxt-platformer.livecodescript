@@ -367,6 +367,15 @@ local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
 -- bonus tally shown in the HUD + the win screen; the flag never depends on them.
 -- gGems/gGemsTotal are per-level; gGemsBank/gGemsAllTotal carry the run total.
 local gGems, gGemsTotal, gGemsBank, gGemsAllTotal
+-- Phase F collectibles. COIN SCORE: bronze/silver/gold coins are worth 1/2/3;
+-- the flag still gates on the coin COUNT (gCoins/gCoinsTotal, unchanged), so this
+-- is a pure bonus tally (gScore/gScoreTotal per level, banked across the run and
+-- shown on the win screen). The hidden STAR: one hard-to-reach challenge pickup
+-- per level (gStars/gStarsTotal are 0/1 per level), its own dim->lit HUD slot and
+-- a win-screen line, mirroring the gem banking exactly.
+local gScore, gScoreTotal, gScoreBank, gScoreAllTotal
+local gStars, gStarsTotal, gStarsBank, gStarsAllTotal
+local gHudStar, gHudStarLast
 -- the PARALLAX backdrop: a per-biome scene tiled across 3 card panels that drift
 -- slower than the 1:1 foreground (depth). gBgLastHS gates the per-frame redraw.
 local gBgPanel, gBgLastHS
@@ -534,6 +543,10 @@ on openCard
       put 0 into gSecsBank
       put 0 into gGemsBank
       put 0 into gGemsAllTotal
+      put 0 into gScoreBank
+      put 0 into gScoreAllTotal
+      put 0 into gStarsBank
+      put 0 into gStarsAllTotal
       pfStartGame
    end if
    pass openCard
@@ -752,9 +765,14 @@ function pfLoadSheets
    b2kAnimDef "foes", "fishyellow", "fish_yellow_swim_a,fish_yellow_swim_b", 6, true
    b2kAnimDef "foes", "ladyflit", "ladybug_fly,ladybug_walk_a", 10, true
    b2kAnimDef "tiles", "spin", "coin_gold,coin_gold_side", 4, true
+   b2kAnimDef "tiles", "spinsilver", "coin_silver,coin_silver_side", 4, true   -- Phase F coin tiers
+   b2kAnimDef "tiles", "spinbronze", "coin_bronze,coin_bronze_side", 4, true
+   b2kAnimDef "tiles", "starspin", "star", 1, true                             -- the hidden star (single frame)
    b2kAnimDef "tiles", "wave", "flag_blue_a,flag_blue_b", 4, true
    b2kAnimDef "tiles", "wavegold", "flag_yellow_a,flag_yellow_b", 4, true
    b2kAnimDef "tiles", "coinpop", "coin_gold_side,coin_gold,coin_gold_side", 14, false
+   b2kAnimDef "tiles", "coinpopsilver", "coin_silver_side,coin_silver,coin_silver_side", 14, false   -- tier-matched pickup pops
+   b2kAnimDef "tiles", "coinpopbronze", "coin_bronze_side,coin_bronze,coin_bronze_side", 14, false
    b2kAnimDef "tiles", "checkwave", "flag_red_a,flag_red_b", 4, true
    b2kAnimDef "tiles", "torch", "torch_on_a,torch_on_b", 5, true   -- flickering wall torch (cavern ambiance, L6)
    b2kAnimDef "foes", "flit", "fly_a,fly_b", 10, true
@@ -880,6 +898,7 @@ command pfBuildHud
    put empty into gHudGemLast
    put empty into gHudGemTotLast
    put empty into gHudHeartLast
+   put empty into gHudStarLast
    if gAssetsOK is not true or not b2kSheetHasFrame("hud", "hud_coin") then exit pfBuildHud
    b2kSpriteNew "hud", "hud_coin", 40, 20
    put the result into gHudCoinIcon
@@ -929,6 +948,15 @@ command pfBuildHud
          b2kSpriteNew "hud", "hud_heart", 40 + (tI - 1) * 36, 620
          put the result into gHudHeart[tI]
       end repeat
+   end if
+   -- the hidden STAR slot (top-right, just left of the level picker): built DIM,
+   -- lit BRIGHT the instant the level's star is collected (the pickup + pfUpdateHud).
+   -- One per level - a single icon, not a counter. pfUpdateHud hides it on any
+   -- level that planted no star.
+   if b2kSheetHasFrame("hud", "star") then
+      b2kSpriteNew "hud", "star", 806, 22
+      put the result into gHudStar
+      if gHudStar is not empty then set the blendLevel of gHudStar to 62
    end if
    put true into gHudOK
    -- the art HUD + the splash/pause overlay own the screen chrome now: retire the
@@ -1011,6 +1039,23 @@ command pfUpdateHud
             add 1 to tSlot
          end if
       end repeat
+   end if
+   -- the hidden STAR slot: hidden on levels without one; else dim until found and
+   -- bright once collected (the pickup also lights it instantly). On change only.
+   if gStars is not gHudStarLast then
+      put gStars into gHudStarLast
+      if gHudStar is not empty then
+         if gStarsTotal is 0 then
+            set the visible of gHudStar to false
+         else
+            set the visible of gHudStar to true
+            if gStars > 0 then
+               set the blendLevel of gHudStar to 0
+            else
+               set the blendLevel of gHudStar to 62
+            end if
+         end if
+      end if
    end if
    pfUpdateHearts
 end pfUpdateHud
@@ -1131,6 +1176,10 @@ command pfStartGame
    put 0 into gCoins
    put 0 into gGems       -- gem bonus tally (gGemsTotal counts itself as gems build, like coins)
    put 0 into gGemsTotal
+   put 0 into gScore      -- Phase F coin-tier bonus score (gScoreTotal self-counts as coins build)
+   put 0 into gScoreTotal
+   put 0 into gStars      -- the hidden star (gStarsTotal self-counts as the star builds)
+   put 0 into gStarsTotal
    if there is a graphic "pfWinShade" then set the visible of graphic "pfWinShade" to false
    if there is a field "pfWinText" then set the visible of field "pfWinText" to false
    if there is a button "pfbtn_again" then set the visible of button "pfbtn_again" to false
@@ -1682,25 +1731,54 @@ command pfMakeSpinner pX, pY, pAmpX, pPerX, pHalf
    pfAddMover tRef, pX, pY, pAmpX, pPerX, 0, 1, 28, tHurtH, false
 end pfMakeSpinner
 
-command pfMakeCoin pX, pY
-   local tRef
-   add 1 to gCoinsTotal   -- the total counts itself as the level builds
+-- A COIN. The flag gates on COUNT (every coin), so each coin still adds 1 to
+-- gCoinsTotal. Phase F adds a TIER (bronze/silver/gold = 1/2/3) feeding a bonus
+-- SCORE (gScore/gScoreTotal): auto-assigned by height (higher = harder to reach
+-- = worth more) unless an explicit pTier is passed. The tier picks the art, the
+-- spin anim and the fallback colour; the score total counts itself as coins build.
+command pfMakeCoin pX, pY, pTier
+   local tRef, tVal, tAnim, tColor
+   add 1 to gCoinsTotal   -- the total counts itself as the level builds (the flag gate)
+   if pTier is empty then
+      if pY <= 360 then put "gold" into pTier         -- a high bonus coin
+      else if pY > 520 then put "bronze" into pTier   -- a ground-level coin
+      else put "silver" into pTier                    -- the main jump-grab band
+   end if
+   switch pTier
+      case "gold"
+         put 3 into tVal
+         put "spin" into tAnim
+         put "240,200,70" into tColor
+         break
+      case "bronze"
+         put 1 into tVal
+         put "spinbronze" into tAnim
+         put "205,135,80" into tColor
+         break
+      default            -- silver (and any unexpected tier)
+         put "silver" into pTier
+         put 2 into tVal
+         put "spinsilver" into tAnim
+         put "200,205,215" into tColor
+   end switch
+   add tVal to gScoreTotal   -- the bonus score counts itself as coins build
    put empty into tRef
-   if gAssetsOK is true and b2kSheetHasFrame("tiles", "coin_gold") then
-      b2kSpriteNew "tiles", "coin_gold", pX, pY
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "coin_" & pTier) then
+      b2kSpriteNew "tiles", "coin_" & pTier, pX, pY
       put the result into tRef
-      if tRef is not empty then b2kSpritePlay tRef, "spin"
+      if tRef is not empty then b2kSpritePlay tRef, tAnim
    end if
    if tRef is empty then
       create graphic ("pf_coin" & pX)
       set the style of it to "oval"
       set the rect of it to pX - 16, pY - 16, pX + 16, pY + 16
       set the filled of it to true
-      set the backgroundColor of it to "240,200,70"
+      set the backgroundColor of it to tColor
       put the long id of it into tRef
       b2kCamAdopt tRef
    end if
    set the uPfCoinFlag of tRef to true
+   set the uPfCoinVal of tRef to tVal
    b2kAddSensor tRef, "ball"
 end pfMakeCoin
 
@@ -1727,6 +1805,34 @@ command pfMakeGem pX, pY, pColour
    set the uPfGemFlag of tRef to true
    b2kAddSensor tRef, "ball"
 end pfMakeGem
+
+-- The hidden STAR: one per level, a hard-to-reach CHALLENGE pickup (like the gems
+-- but rarer - one per level), banked to the win screen and lighting its own HUD
+-- slot. A bonus only: it NEVER gates the flag, so it can sit on the hardest route
+-- without locking progress. pX,pY is the star's centre; place it ON or just above
+-- a surface the player provably reaches (a ledge/cloud/ladder top), never at a
+-- bare max-jump apex.
+command pfMakeStar pX, pY
+   local tRef
+   add 1 to gStarsTotal
+   put empty into tRef
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "star") then
+      b2kSpriteNew "tiles", "star", pX, pY
+      put the result into tRef
+      if tRef is not empty then b2kSpritePlay tRef, "starspin"
+   end if
+   if tRef is empty then
+      create graphic ("pf_star" & pX)
+      set the style of it to "oval"   -- a simple bead when the star art is missing
+      set the rect of it to pX - 14, pY - 14, pX + 14, pY + 14
+      set the filled of it to true
+      set the backgroundColor of it to "245,210,70"
+      put the long id of it into tRef
+      b2kCamAdopt tRef
+   end if
+   set the uPfStarFlag of tRef to true
+   b2kAddSensor tRef, "ball"
+end pfMakeStar
 
 -- A patrolling slime: an invisible dynamic body, art bound on top.
 -- pKind "normal" stomps flat; "spike" hurts from EVERY side. pTopY is the
@@ -1785,7 +1891,7 @@ end pfMakeSlime
 -- squash frame (empty = the sheet has none, so the critter just drops
 -- and fades - a safe no-op, never wrong art). pHalfW/pFullH size the
 -- (invisible) collision box; pDY offsets the bound art.
-command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY, pSheet
+command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAnim, pFlat, pHalfW, pFullH, pColor, pDY, pSheet, pFaceFlip
    local tName, tBody, tSpr
    if pSheet is empty then put "foes" into pSheet   -- Phase D: default native foes; "spooks" for the .png slime skins
    put "pf_slimeBody" & pIdx into tName
@@ -1817,7 +1923,10 @@ command pfMakeCritter pIdx, pKind, pX, pMinX, pMaxX, pTopY, pSpeed, pFrame, pAni
    put pSpeed into gSlimeDir[pIdx]
    put pSpeed into gSlimeSpeed[pIdx]
    put pFlat into gSlimeFlat[pIdx]
-   put false into gSlimeFlip[pIdx]
+   -- facing polarity (gotcha 26): most foes art faces RIGHT (flip false), but some
+   -- sheets (the ground ladybug) face LEFT like the snail - pass pFaceFlip true to
+   -- invert. The flying ladybug/bee/fish (pfAddMover) carry their own correction.
+   put (pFaceFlip is true) into gSlimeFlip[pIdx]
    put pMinX into gSlimeMin[pIdx]
    put pMaxX into gSlimeMax[pIdx]
    put empty into gSlimeGoneAt[pIdx]
@@ -2084,7 +2193,7 @@ command pfMakeFrog pIdx, pX, pMinX, pMaxX, pTopY
    put 0 into gSlimeDir[pIdx]
    put 0 into gSlimeSpeed[pIdx]
    put empty into gSlimeFlat[pIdx]    -- no squashed frame: it drops and fades
-   put false into gSlimeFlip[pIdx]
+   put true into gSlimeFlip[pIdx]     -- the frog sheet art faces LEFT (like the snail, gotcha 26)
    put pMinX into gSlimeMin[pIdx]
    put pMaxX into gSlimeMax[pIdx]
    put empty into gSlimeGoneAt[pIdx]
@@ -2388,6 +2497,7 @@ command pfMakeBonk pKind, pCX
    if pKind is "box" then
       put "block_coin" into tFrame
       add 1 to gCoinsTotal   -- a ?-box pays one coin when headbutted
+      add 1 to gScoreTotal   -- ...worth 1 toward the bonus score (matches pfGainCoin's default)
    else
       put "bricks_brown" into tFrame
       -- PRE-WARM the debris frame: icon slicing is lazy and costs
@@ -3160,6 +3270,7 @@ command pfL1Cast
    pfMakeCoin 1130, 500     -- the meadow slime's beat
    pfMakeCoin 1568, 460     -- on the mound plateau
    pfMakeGem 1568, 400, "yellow"   -- BONUS gem above the mound (double-jump for it)
+   pfMakeStar 2400, 264   -- hidden STAR: ON the highest cloud (top y320, art 2240-2432), the peak of the cloud-hop sequence
    pfMakeCoin 2336, 264     -- on the high cloud (mind the fly)
    pfMakeCoin 2656, 440     -- mid-air over the spike pit: grab it mid-jump
    pfMakeCoin 2876, 500     -- the second act's slime beat
@@ -3224,7 +3335,7 @@ command pfL1Cast
    -- NEW variety walkers (native foes art, stomp like any slime): a FAST
    -- mouse skitters the second act; a LADYBUG ambles the far meadow
    pfMakeCritter 5, "normal", 3076, 3000, 3160, 576, 120, "mouse_walk_a", "mousewalk", empty, 20, 30, "150,140,150", -4
-   pfMakeCritter 6, "normal", 4456, 4360, 4540, 576, 72, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4
+   pfMakeCritter 6, "normal", 4456, 4360, 4540, 576, 72, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4, empty, true   -- ladybug art faces LEFT: pFaceFlip true
    -- Wave 6 (bestiary II): a meadow FROG hops at you in the far-meadow clearing
    -- (between the ladybug and the gauntlet cloud). Stomp it; do not stand by it.
    pfMakeFrog 10, 4660, 4600, 4780, 576
@@ -3489,6 +3600,7 @@ command pfL2Cast
    local tRef
    pfMakeCoin 800, 296      -- on the LADDER's bonus ledge (Wave 2 climb)
    pfMakeGem 800, 236, "blue"   -- BONUS gem above the bonus ledge (climb + double-jump)
+   pfMakeStar 720, 296   -- hidden STAR: ON the ladder-reached bonus ledge (top y352), left of the gem
    pfMakeCoin 1430, 448     -- above the sweeping saw: time the hop
    pfMakeCoin 1912, 96      -- ride the second thwomp's head up, then hop RIGHT for it. (Was 1840,64 - dead in the chain's column: the chain tiles at x1840 span y44..172, so a coin at y64 sat BEHIND the chain art. 1912 clears the chain's right edge (~1872) by 40px, still reachable from the rising weight's apex.)
    pfMakeCoin 1990, 500     -- the worm's beat, before the breather cloud
@@ -3743,6 +3855,7 @@ command pfL3Cast
    -- (the WALL-JUMP SHAFT's slot coin is built in pfL3Scene with the columns, so it stays centred between them)
    pfMakeCoin 1100, 500     -- the ladybug's beat, after the spring landing
    pfMakeGem 364, 288, "green"   -- BONUS gem atop the WALL-JUMP SHAFT (reward the full climb)
+   pfMakeStar 2784, 392   -- hidden STAR: ON the snow cloud (top y448, art 2752-2944) in the glacier run
    pfMakeCoin 1300, 500     -- under the bonk row
    pfMakeCoin 1640, 448     -- above the first sweeping saw
    pfMakeCoin 1888, 440     -- mid-air over the second pit
@@ -3787,7 +3900,7 @@ command pfL3Cast
    end if
    pfMakeSlime 1, "normal", 2113, 2078, 2118, 576   -- right limit pulled IN off the crusher: at 2148 its right edge (2172) all but touched the crusher body (left 2178 - a 6px gap) and the two stuck together; 2118 -> far edge 2142 clears the crusher by 36px (the slime body is 48px wide). Coin stays at 2113, inside the band.
    -- a LADYBUG ambles the early ice (new variety; native foes art)
-   pfMakeCritter 2, "normal", 1100, 1010, 1180, 576, 64, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4
+   pfMakeCritter 2, "normal", 1100, 1010, 1180, 576, 64, "ladybug_walk_a", "ladywalk", empty, 22, 30, "200,70,70", -4, empty, true   -- ladybug art faces LEFT: pFaceFlip true
    pfMakeThwomp 1, 2208     -- it guards the red key
    -- the glacier's ROLLING ICE BOULDER: it slides the icy flat HEAD-ON at
    -- the climbing hero, who must leap it (jumping lifts him clear of the
@@ -3970,6 +4083,7 @@ command pfL4Cast
    pfMakeCoin 1952, 430     -- mid-air over the pit
    pfMakeCoin 2415, 480     -- threading the FOUR-burrow piranha row: time
    pfMakeGem 2415, 408, "red"   -- BONUS gem high over the piranha row (a risky double-jump grab)
+   pfMakeStar 3140, 434   -- hidden STAR: ON the mid-lava stepping-stone (top y490, span 3104-3296) - grab it mid-crossing, between serpent rises
    pfMakeCoin 2565, 480     -- the bites and snatch a coin between each pair
    pfMakeCoin 2715, 480
    pfMakeCoin 3200, 450     -- up on the mid-lava STEPPING-STONE: grab it between the serpent's rises
@@ -4210,6 +4324,7 @@ command pfL5Cast
    pfMakeCoin 6160, 460     -- over the first sand step
    pfMakeCoin 6240, 460     -- on the climb to the summit (clear of the flag)
    pfMakeGem 1056, 400, "blue"   -- BONUS gem above the dune crest (double-jump for it)
+   pfMakeStar 4960, 392   -- hidden STAR: ON the act-2 sand cloud (top y448, art 4928-5120), deep in the dunes
    -- ACT 1 cast
    pfMakeSlime 1, "normal", 680, 620, 760, 576
    pfMakeFrog 2, 1500, 1420, 1620, 576
@@ -4486,6 +4601,7 @@ command pfL6Cast
    pfMakeCoin 6112, 476     -- on the first goal step
    pfMakeCoin 6256, 412     -- on the climb to the flag
    pfMakeGem 428, 204, "green"   -- BONUS gem ABOVE the wall-jump shaft: master the wall-jump to reach it (OXT: confirm it is reachable; lower it a touch if not)
+   pfMakeStar 4448, 392   -- hidden STAR: ON the act-3 dirt cloud (top y448, art 4416-4608), deep in the cavern
    -- ACT 1 cast: the meadow-cave roster
    pfMakeSlime 1, "normal", 760, 640, 900, 576
    pfMakeBlockSlime 2, 2560, 2440, 2680, 576   -- the cavern's hopping CUBE (Phase B; stomp it or time the hops)
@@ -4630,6 +4746,7 @@ command pfL7Cast
    pfMakeCoin 512, 600      -- a gap bonus
    pfMakeGem 544, 80, "blue"      -- BONUS gem: the summit, a double-jump above the keep top
    pfMakeGem 512, 1180, "green"   -- BONUS gem: a mid-climb gap reward
+   pfMakeStar 420, 776   -- hidden STAR: ON the mid-upper climb ledge (pfMakeLedge 256,448,832), right end - clear of the ledge's coin (352,784) and both gems
    -- THE BLADE GAUNTLET: FIVE sweeping spinners guard the climb gaps (stand SAFE
    -- on the lower ledge, read the blade, jump when it has swept clear), and ONE
    -- stationary HALF-BLADE sits on the final ledge (land clear of it, hop over).
@@ -4653,8 +4770,10 @@ end pfL7Cast
 -- LAST one arrives, the goal flag turns GOLD and a banner + chime send
 -- you to it - the win gate is a state you can SEE, never a surprise
 -- delivered only at the flag.
-command pfGainCoin
+command pfGainCoin pVal
    add 1 to gCoins
+   if pVal is empty then put 1 into pVal   -- the ?-box payout passes nothing -> worth 1
+   add pVal to gScore                       -- the bonus tier score (count gate is unchanged)
    b2kSound "coin"
    if gCoins >= gCoinsTotal then
       if gGoalSpr is not empty and b2kSheetHasFrame("tiles", "flag_yellow_a") then
@@ -4705,6 +4824,7 @@ command pfChromeFront
       repeat with tI = 1 to kHearts
          if gHudHeart[tI] is not empty then set the layer of gHudHeart[tI] to tN
       end repeat
+      if gHudStar is not empty then set the layer of gHudStar to tN
    end if
    repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText"
       if there is a field tC then set the layer of field tC to tN
@@ -4841,6 +4961,8 @@ on b2kFrame
    end if
    put "L" & gLevel & "   " & gCoins & "/" & gCoinsTotal & "   " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "   HP " & gHearts & "/" & kHearts & "   falls " & gFalls & "   hits " & gOuches & "   lands " & gLands & "   |   " & gHeroState & "/" & b2kSpriteAnim(gHeroSpr) & "   " & round(b2kFrameMS() * 10) / 10 & " ms   awake " & b2kAwakeBodyCount() & "/" & b2kBodyCount() into tHud
    if gGemsTotal > 0 then put "   gems " & gGems & "/" & gGemsTotal after tHud
+   if gStarsTotal > 0 then put "   star " & gStars & "/" & gStarsTotal after tHud
+   put "   score " & gScore & "/" & gScoreTotal after tHud
    if gKeysHeld is not empty then put "   [KEYS " & gKeysHeld & "]" after tHud
    if gCamOK is true then
       put the hScroll of b2kCamGroup() into tHS   -- read the scroll once
@@ -5913,7 +6035,7 @@ end pfTickBarrel
 -- the pressure plate is POLLED in pfTickGate, not event-counted
 -- =====================================================================
 on b2kSensorEnter pSensorCtrl, pVisitorCtrl
-   local tPopAt, tWord
+   local tPopAt, tWord, tCoinVal, tPopFrame, tPopAnim
    if pSensorCtrl is empty then exit b2kSensorEnter
    if pVisitorCtrl is not gHero then exit b2kSensorEnter
    if the uPfKeyFlag of pSensorCtrl is true then
@@ -5943,21 +6065,45 @@ on b2kSensorEnter pSensorCtrl, pVisitorCtrl
       end try
       exit b2kSensorEnter
    end if
+   if the uPfStarFlag of pSensorCtrl is true then
+      add 1 to gStars
+      b2kSound "gem"   -- a celebratory pickup chime (shares the gem tone for now)
+      if gHudStar is not empty then set the blendLevel of gHudStar to 0   -- light the HUD slot at once
+      b2kSpriteRemove pSensorCtrl
+      try
+         delete pSensorCtrl   -- fallback bead is not Kit-spawned
+      catch tErr
+      end try
+      pfNotice "STAR found - the hidden collectible!", 1900
+      exit b2kSensorEnter
+   end if
    if the uPfCoinFlag of pSensorCtrl is true then
-      pfGainCoin
+      put the uPfCoinVal of pSensorCtrl into tCoinVal   -- the tier value, before removal
+      pfGainCoin tCoinVal
       put b2kPosition(pSensorCtrl) into tPopAt   -- world px, from its body
       b2kSpriteRemove pSensorCtrl
       try
          delete pSensorCtrl         -- fallback oval is not Kit-spawned
       catch tErr
       end try
-      if tPopAt is not empty and b2kSheetHasFrame("tiles", "coin_gold_side") then
+      -- the pickup POP matches the coin's tier (most coins are silver/bronze now,
+      -- so a gold pop on every grab would jar)
+      put "coin_gold_side" into tPopFrame
+      put "coinpop" into tPopAnim
+      if tCoinVal is 2 then
+         put "coin_silver_side" into tPopFrame
+         put "coinpopsilver" into tPopAnim
+      else if tCoinVal is 1 then
+         put "coin_bronze_side" into tPopFrame
+         put "coinpopbronze" into tPopAnim
+      end if
+      if tPopAt is not empty and b2kSheetHasFrame("tiles", tPopFrame) then
          set the itemDelimiter to comma
-         b2kSpriteNew "tiles", "coin_gold_side", item 1 of tPopAt, item 2 of tPopAt
+         b2kSpriteNew "tiles", tPopFrame, item 1 of tPopAt, item 2 of tPopAt
          put the result into tPopAt   -- capture: the next command clears it
          if tPopAt is not empty then
             b2kSpriteOnFinish tPopAt, "pfPopDone"
-            b2kSpritePlay tPopAt, "coinpop"
+            b2kSpritePlay tPopAt, tPopAnim
          end if
       end if
       exit b2kSensorEnter
@@ -6273,6 +6419,10 @@ command pfLevelClear
    add (the milliseconds - gRunStart) div 1000 to gSecsBank
    add gGems to gGemsBank
    add gGemsTotal to gGemsAllTotal
+   add gScore to gScoreBank
+   add gScoreTotal to gScoreAllTotal
+   add gStars to gStarsBank
+   add gStarsTotal to gStarsAllTotal
    pfNotice "LEVEL " & gLevel & " CLEAR!", 1400
    send pfNextLevel to me in 1200 milliseconds
 end pfLevelClear
@@ -6300,6 +6450,10 @@ command pfWin
    add gFalls to gTotalFalls
    add gGems to gGemsBank
    add gGemsTotal to gGemsAllTotal
+   add gScore to gScoreBank
+   add gScoreTotal to gScoreAllTotal
+   add gStars to gStarsBank
+   add gStarsTotal to gStarsAllTotal
    b2kSound "win"
    b2kPlayerControl false   -- the win dance owns the art from here
    set the itemDelimiter to comma
@@ -6321,6 +6475,8 @@ command pfWin
    put "Every coin on every level collected" & cr after tMsg
    put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
    if gGemsAllTotal > 0 then put "Gems  " & gGemsBank & " / " & gGemsAllTotal & " collected" & cr & cr after tMsg
+   if gStarsAllTotal > 0 then put "Stars  " & gStarsBank & " / " & gStarsAllTotal & " found" & cr & cr after tMsg
+   if gScoreAllTotal > 0 then put "Coin score  " & gScoreBank & " / " & gScoreAllTotal & cr & cr after tMsg
    if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
    put "Press Play again for a fresh run from level 1." after tMsg
    set the text of field "pfWinText" to tMsg
