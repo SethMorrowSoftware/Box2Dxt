@@ -479,7 +479,7 @@ local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
-constant kPfUIVersion = "8"
+constant kPfUIVersion = "9"
 -- The playable box hugs the level CONTENT, not the raw world width. The hero
 -- spawns at x 120 and each goal flag sits near the right end, so the side
 -- walls sit just past the spawn (kPfEdgeL) and just past the flag
@@ -537,12 +537,20 @@ end closeCard
 -- Chrome (version-tagged; rebuilds when a newer example is pasted in)
 -- =====================================================================
 command buildPfUI
-   if there is a field "pfTitle" then delete field "pfTitle"
-   if there is a field "pfHelp" then delete field "pfHelp"
-   if there is a field "pfHud" then delete field "pfHud"
-   if there is a button "pfbtn_pause" then delete button "pfbtn_pause"
-   if there is a button "pfbtn_reset" then delete button "pfbtn_reset"
-   if there is a button "pfbtn_level" then delete button "pfbtn_level"
+   local tC
+   -- clear EVERY chrome control this handler creates before rebuilding, so a
+   -- kPfUIVersion bump never leaves a duplicate behind (the splash/win/pause
+   -- overlays were previously omitted here, which would have duplicated them).
+   set the itemDelimiter to comma
+   repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText,pfPauseText"
+      if there is a field tC then delete field tC
+   end repeat
+   repeat for each item tC in "pfWinShade,pfPauseShade"
+      if there is a graphic tC then delete graphic tC
+   end repeat
+   repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_level,pfbtn_again"
+      if there is a button tC then delete button tC
+   end repeat
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -618,6 +626,26 @@ command buildPfUI
    set the rect of it to 452, 374, 572, 406
    set the label of it to "Play again"
    set the traversalOn of it to false
+   set the visible of it to false
+   -- the PAUSE overlay (Phase F): the controls reference, now that the top help
+   -- bar is retired. Shown by pfTogglePause on ESC / the pause button.
+   create graphic "pfPauseShade"
+   set the style of it to "roundrect"
+   set the rect of it to 152, 150, 872, 500
+   set the filled of it to true
+   set the backgroundColor of it to "24,28,40"
+   set the blendLevel of it to 16
+   set the visible of it to false
+   create field "pfPauseText"
+   set the rect of it to 172, 176, 852, 484
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textAlign of it to "center"
+   set the textSize of it to 17
+   set the textColor of it to "248,249,240"
+   set the opaque of it to false
+   set the showBorder of it to false
+   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  ·  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
    set the visible of it to false
    set the uPfUIVersionTag of this stack to kPfUIVersion
 end buildPfUI
@@ -878,10 +906,12 @@ command pfBuildHud
       if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
    end if
    put true into gHudOK
-   -- the art HUD owns the screen chrome now: retire the demo TITLE field, and turn
-   -- the bottom text readout into the DEBUG overlay (hidden unless toggled with `).
-   -- pfHelp + its diagnostics stay for now (retired with the controls pass).
+   -- the art HUD + the splash/pause overlay own the screen chrome now: retire the
+   -- demo TITLE and the top CONTROLS bar, and turn the bottom readout into the
+   -- DEBUG overlay (hidden unless toggled with `). pfHelp is RE-SHOWN below only if
+   -- the camera is unavailable, where it carries the diagnostic.
    if there is a field "pfTitle" then set the visible of field "pfTitle" to false
+   if there is a field "pfHelp" then set the visible of field "pfHelp" to false
    if there is a field "pfHud" then set the visible of field "pfHud" to (gShowDebug is true)
 end pfBuildHud
 
@@ -1060,6 +1090,10 @@ command pfStartGame
    if there is a graphic "pfWinShade" then set the visible of graphic "pfWinShade" to false
    if there is a field "pfWinText" then set the visible of field "pfWinText" to false
    if there is a button "pfbtn_again" then set the visible of button "pfbtn_again" to false
+   -- a fresh build is never paused: clear the pause overlay + reset the button
+   if there is a graphic "pfPauseShade" then set the visible of graphic "pfPauseShade" to false
+   if there is a field "pfPauseText" then set the visible of field "pfPauseText" to false
+   if there is a button "pfbtn_pause" then set the label of button "pfbtn_pause" to "Pause"
    if there is a field "pfSplash" then set the visible of field "pfSplash" to true
    put 0 into gPlateHoldMS
    put empty into gPlateLook
@@ -1407,7 +1441,9 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName
+      -- the level title + a one-line controls reminder (the full reference now
+      -- lives in the ESC pause overlay, since the top help bar is retired)
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName & cr & "Arrows/WASD · SPACE jump · ESC = controls"
       -- the dark-backdrop levels (the cavern + the stone keep) need LIGHT splash
       -- text so the title - and the centre notices, which reuse this field - read
       -- against the dark scene; the bright biomes keep dark text.
@@ -1442,6 +1478,8 @@ command pfStartGame
          b2kAddSensor tRef, "box"
       end if
       set the text of field "pfHelp" to "CAMERA UNAVAILABLE on this engine (" & b2kCamStatus() & ") - the level is clamped" & cr & "to this screen and the flag moved here so it stays completable. Everything else works." & cr & "Please report the quoted reason."
+      -- this diagnostic matters, so override the art-HUD retirement of pfHelp
+      if there is a field "pfHelp" then set the visible of field "pfHelp" to true
    end if
    -- diagnostics: prove world membership at a glance (line 3 of the help)
    if gCamOK is true and gHeroSpr is not empty then
@@ -6233,12 +6271,25 @@ on pfPopDone pSprite, pAnim
 end pfPopDone
 
 command pfTogglePause
+   local tTop
    if b2kIsRunning() then
       b2kPause
       set the label of button "pfbtn_pause" to "Resume"
+      -- show the controls overlay, raised to the very top (above the HUD + world)
+      if there is a graphic "pfPauseShade" then
+         put the number of controls of this card into tTop
+         set the layer of graphic "pfPauseShade" to tTop
+         set the layer of field "pfPauseText" to tTop
+         set the visible of graphic "pfPauseShade" to true
+         set the visible of field "pfPauseText" to true
+      end if
    else
       b2kResume
       set the label of button "pfbtn_pause" to "Pause"
+      if there is a graphic "pfPauseShade" then
+         set the visible of graphic "pfPauseShade" to false
+         set the visible of field "pfPauseText" to false
+      end if
    end if
 end pfTogglePause
 
