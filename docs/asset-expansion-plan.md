@@ -259,10 +259,16 @@ needs an OXT eye.
 ### Phase F — Collectibles & a health model  (M)
 - **Assets:** `coin_bronze/silver(_side)`, `star`, `heart`, `hud_heart(_half/
   _empty)`, `hud_coin`, `hud_character_0-9/multiply`.
-- **Coin tiers:** bronze/silver/gold worth 1/2/3 toward a *score* (the flag still
-  gates on a coin *count*, or migrate the gate to a tier total — design call).
-- **A hidden `star` per level** (a hard-to-reach challenge collectible, like the
-  gems but rarer; banked to the win screen).
+- **Coin tiers (SHIPPED).** Coins are bronze/silver/gold worth **1/2/3** toward a
+  bonus `gScore`, auto-tiered by height (higher = worth more; `pfMakeCoin` takes an
+  optional explicit tier). The flag still gates on the coin **count** (the
+  collect-all clarity is preserved); the weighted score is banked and shown on the
+  win screen.
+- **A hidden `star` per level (SHIPPED).** One `pfMakeStar` challenge pickup per
+  level, banked to the win screen with its own dim->lit HUD slot; it never gates
+  the flag. Every star is placed **ON a proven-reachable standing surface** (a high
+  cloud/ledge/stepping-stone), audit-checked for reachability + clearance, never a
+  bare mid-air apex.
 - **Health — a forgiving FIVE-heart buffer (SHIPPED).** The hero starts each level
   with 5 hearts (`hud_heart`/`hud_heart_empty`, a bottom-left row; `kHearts`). A
   contact hit (`pfOuch`) spends one pip *atop* the existing knockback + mercy window
@@ -387,7 +393,7 @@ Track usage per sheet; "done" = used or a one-line documented reason it isn't.
 
 - [ ] `backgrounds` — biome scenes used (Phase A partial); solids/clouds for new biomes (B/H).
 - [ ] `tiles` terrain — dirt (B) + stone (C) biomes; corner/edge/ramp/overhang pieces across biomes.
-- [ ] `tiles` items — coin tiers + star (F); **heart (F, SHIPPED — `hud_heart*` HUD row)**; torches + conveyor + planks (B/C); multi-colour locks/switches (C); `flag_green`.
+- [ ] `tiles` items — **coin tiers + star (F, SHIPPED)**; **heart (F, SHIPPED — `hud_heart*` HUD row)**; torches + conveyor + planks (B/C); multi-colour locks/switches (C); `flag_green`.
 - [ ] `tiles` HUD strip — art HUD (F), **removing the LiveCode top/bottom fields**.
 - [ ] `foes` — block slime, worm ring, rest poses (B/D).
 - [ ] `spooks` — snakes (E), spinners (C), squash/dead states everywhere (D), alt fish.
@@ -424,8 +430,10 @@ Track usage per sheet; "done" = used or a one-line documented reason it isn't.
    still knocks back with mercy; the buffer only gates the *fifth* hit into a
    checkpoint respawn (which refills), so existing per-level difficulty is
    preserved and merely softened. Shipped at 5, not the spec's 3.
-2. **Coin gate vs score:** if coin tiers (F) feed a score, does the flag still gate
-   on *count*, or on a tier *total*? Keep the "collect all to gild the flag" clarity.
+2. **Coin gate vs score: DECIDED — the flag still gates on the coin COUNT** (collect
+   all coins to gild the flag, unchanged), and the bronze/silver/gold tiers feed a
+   separate bonus `gScore` banked to the win screen. The collect-all clarity is
+   preserved; the score is a pure skill-reward overlay.
 3. **City/alien atlases (H/I):** different grids/styles — confirm they read at the
    64px world scale (`b2kSheetScale`) and that mixing styles per level looks
    intentional, not clashy.

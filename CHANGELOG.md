@@ -10,6 +10,30 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: COLLECTIBLES - coin tiers + a hidden star per level (asset-expansion
+  Phase F, completing it).**
+  - **Coin tiers.** Coins are now bronze/silver/gold worth **1/2/3** toward a bonus
+    SCORE (`gScore`/`gScoreTotal`), auto-assigned by height (higher = harder to
+    reach = worth more; `pfMakeCoin` takes an optional explicit tier). The tier
+    sets the art (`coin_bronze/silver/gold`), its own spin anim, and the fallback
+    colour. The flag still gates on the coin **COUNT** (unchanged - "collect all to
+    gild the flag"); the weighted score is a pure bonus, banked across the run and
+    shown on the win screen.
+  - **A hidden STAR per level.** One `star` challenge pickup per level
+    (`pfMakeStar`), a distinct rarer collectible banked to the win screen with its
+    own dim->lit HUD slot (top-right). It NEVER gates the flag, so it sits on the
+    level's hardest route without locking progress. **Every star is placed ON a
+    proven-reachable standing surface** - the highest cloud-hop peak (L1), a
+    ladder-reached bonus ledge (L2), a snow/sand/dirt bonus cloud (L3/L5/L6), the
+    mid-lava stepping-stone you cross on (L4, grabbed between serpent rises), and a
+    mid-climb keep ledge (L7) - never a bare mid-air apex. The audit gained a star
+    check (in-bounds, ON a surface ~56px below it, clear of coins/gems/goal) and
+    **fixed a latent cloud-parser bug** (the `2` in `b2kSmoothGround` was read as a
+    coordinate, corrupting every parsed cloud span - harmless until the star
+    surface check relied on it).
+  - Example-side only; static gates clean, audit 0 findings across 7 levels. Needs
+    an OXT pass to confirm each star reads as reachable and the coin tier colours
+    look right.
 - **Platformer: HEALTH - a forgiving five-heart buffer (asset-expansion Phase F).**
   The hero starts each level with **5 full hearts** (`kHearts`), drawn as a heart
   row (`hud_heart`/`hud_heart_empty`) low along the bottom-left of the art HUD. A
