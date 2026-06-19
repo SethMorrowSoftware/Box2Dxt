@@ -277,6 +277,17 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Fixed
 
+- **Platformer: flying movers (bee/fly/fish/ladybug) no longer face backwards.**
+  The bodiless sine-path movers (`pfAddMover`/`pfTickMovers`) flipped to face
+  travel with `cos(t/P) < 0` (flip when moving LEFT), which is only correct for
+  right-facing art. But the foes-sheet flyer frames are drawn facing LEFT (like
+  the snail - gotcha 26, facing polarity is statically unverifiable), so every
+  bee, fly, fish and flying ladybug pointed the wrong way along its path. Flipped
+  the test to `cos(t/P) > 0` (mirror when moving RIGHT) - the same polarity
+  correction the snail row already carries via `gSlimeFlip`. Symmetric movers
+  (saw/spinner, `gMovFlip` false) are untouched. Example-side only; static gates
+  clean, audit 0 findings. Needs an OXT pass to confirm the facing.
+
 - **Platformer: spike pits now align FLUSH with the pit edges (all levels).**
   Found over two OXT rounds:
   - *Horizontal (the real misalignment).* `pfTile` treats its `(x,y)` as the
