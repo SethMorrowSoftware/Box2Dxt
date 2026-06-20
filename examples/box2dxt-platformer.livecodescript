@@ -401,6 +401,12 @@ local gHearts, gHudHeart, gHudHeartLast
 -- Phase F: with the art HUD on, the old bottom text readout becomes a DEBUG
 -- overlay (the dev stats) toggled with the ` key. gShowDebug is its on/off state.
 local gShowDebug
+-- Polish pass: the boot title screen + the full-screen transition card that
+-- COVERS each level teardown/rebuild (no visible construction). gAtTitle is
+-- true while the title is up (SPACE starts); gCardFade is the fade-out ramp
+-- (0 = opaque ... 100 = clear); gCardGen invalidates a stale fade send when a
+-- newer cover supersedes it; gTitleHeroSpr is the title's live hero preview.
+local gAtTitle, gCardFade, gCardGen, gTitleHeroSpr
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -497,7 +503,7 @@ local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
-constant kPfUIVersion = "10"   -- Phase G: pause overlay gained the hero-select line
+constant kPfUIVersion = "11"   -- Polish: transition card + boot title screen + recomposed win card
 -- Phase F health: the forgiving five-heart buffer. A contact hit (pfOuch) costs
 -- ONE pip with a mercy window between hits; emptying the row routes to the
 -- respawn (pfHurt), which REFILLS it - so the hero never hard-fails on contact,
@@ -541,18 +547,11 @@ on openCard
    b2kSheetPersist true
    if the uPfUIVersionTag of this stack is not kPfUIVersion then buildPfUI
    if gStarted is true then
-      b2kStart
+      b2kStart                 -- a run already in progress (e.g. a reopened stack): resume it
    else
       put 1 into gLevel
-      put 0 into gTotalFalls
-      put 0 into gSecsBank
-      put 0 into gGemsBank
-      put 0 into gGemsAllTotal
-      put 0 into gScoreBank
-      put 0 into gScoreAllTotal
-      put 0 into gStarsBank
-      put 0 into gStarsAllTotal
-      pfStartGame
+      pfResetRun
+      pfShowTitle              -- a fresh open boots to the title screen; SPACE starts level 1
    end if
    pass openCard
 end openCard
@@ -571,10 +570,10 @@ command buildPfUI
    -- kPfUIVersion bump never leaves a duplicate behind (the splash/win/pause
    -- overlays were previously omitted here, which would have duplicated them).
    set the itemDelimiter to comma
-   repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText,pfPauseText"
+   repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText,pfPauseText,pfCardText"
       if there is a field tC then delete field tC
    end repeat
-   repeat for each item tC in "pfWinShade,pfPauseShade"
+   repeat for each item tC in "pfWinShade,pfPauseShade,pfCardShade"
       if there is a graphic tC then delete graphic tC
    end repeat
    repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_level,pfbtn_again"
@@ -633,16 +632,18 @@ command buildPfUI
    set the showBorder of it to false
    set the text of it to "B O X 2 D X T" & cr & "a physics platformer demo  -  arrows/WASD run, SPACE jumps"
    set the visible of it to false
-   -- the win dialogue (hidden until all coins + the flag)
+   -- the win card (hidden until all coins + the flag): the final-run summary,
+   -- composed in the level-card visual language - a centred panel, deeper and
+   -- more opaque than before so the stats read as a finished payoff screen
    create graphic "pfWinShade"
    set the style of it to "roundrect"
-   set the rect of it to 262, 170, 762, 430
+   set the rect of it to 212, 116, 812, 512
    set the filled of it to true
-   set the backgroundColor of it to "26,30,44"
-   set the blendLevel of it to 18
+   set the backgroundColor of it to "22,28,48"
+   set the blendLevel of it to 10
    set the visible of it to false
    create field "pfWinText"
-   set the rect of it to 282, 190, 742, 360
+   set the rect of it to 236, 146, 788, 452
    set the lockText of it to true
    set the traversalOn of it to false
    set the textAlign of it to "center"
@@ -652,7 +653,7 @@ command buildPfUI
    set the showBorder of it to false
    set the visible of it to false
    create button "pfbtn_again"
-   set the rect of it to 452, 374, 572, 406
+   set the rect of it to 452, 468, 572, 500
    set the label of it to "Play again"
    set the traversalOn of it to false
    set the visible of it to false
@@ -674,10 +675,277 @@ command buildPfUI
    set the textColor of it to "248,249,240"
    set the opaque of it to false
    set the showBorder of it to false
-   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  ·  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & "1 - 5  -  pick your hero  (Beige / Green / Pink / Purple / Yellow)" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
+   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  ·  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & "Pick your hero on the TITLE screen  (1 - 5 there)" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
+   set the visible of it to false
+   -- ===== the TRANSITION CARD: a full-screen opaque overlay that COVERS each
+   -- level teardown + rebuild (no visible construction), and doubles as the boot
+   -- title screen and the biome-tinted "LEVEL n" cards. Card-level chrome - NOT
+   -- named pf_* (so pfWipeStage leaves it) and NOT in the camera group (so it
+   -- never scrolls); raised above everything while covering, then faded out to
+   -- reveal the positioned level. Built ONCE here; shown by pfCardShow, hidden by
+   -- the pfCardReveal fade ramp. =====
+   create graphic "pfCardShade"
+   set the style of it to "rectangle"
+   set the rect of it to 0, 0, 1024, 640
+   set the filled of it to true
+   set the backgroundColor of it to "26,30,44"
+   set the blendLevel of it to 0
+   set the visible of it to false
+   create field "pfCardText"
+   set the rect of it to 32, 40, 992, 600
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textAlign of it to "center"
+   set the textSize of it to 22
+   set the textStyle of it to "bold"
+   set the textColor of it to "245,246,236"
+   set the opaque of it to false
+   set the showBorder of it to false
    set the visible of it to false
    set the uPfUIVersionTag of this stack to kPfUIVersion
 end buildPfUI
+
+-- =====================================================================
+-- Transition card + boot title screen (the polish pass)
+--
+-- ONE full-screen opaque overlay (pfCardShade + pfCardText, built once in
+-- buildPfUI) does three jobs: it COVERS every level teardown/rebuild so the
+-- player never sees construction, it is the biome-tinted "LEVEL n" card held
+-- briefly then faded out, and it is the boot TITLE screen (with a live hero
+-- preview + the 1-5 chooser). The card is card-level chrome raised above the
+-- camera viewport, exactly like the pause overlay, so it never scrolls.
+-- =====================================================================
+
+-- Zero the whole-run banks (everything the win screen sums). gLevel is set by
+-- the caller. Centralised so a fresh run from anywhere - the title, Play again,
+-- the dev picker - can never leave a stale coin-score / star bank behind (the
+-- picker + Play again previously zeroed only some of them).
+command pfResetRun
+   put 0 into gTotalFalls
+   put 0 into gSecsBank
+   put 0 into gGemsBank
+   put 0 into gGemsAllTotal
+   put 0 into gScoreBank
+   put 0 into gScoreAllTotal
+   put 0 into gStarsBank
+   put 0 into gStarsAllTotal
+end pfResetRun
+
+-- The biome NAME for a level, independent of the build (the card is composed
+-- before the scene builder sets gLevelName).
+function pfLevelTitle pN
+   local tNm
+   set the itemDelimiter to comma
+   put item pN of "Green Hills,The Works,Frozen Citadel,Haunted Hollow,Scorched Dunes,Cavern Depths,Stone Keep" into tNm
+   if tNm is empty then put "Level" into tNm
+   return tNm
+end pfLevelTitle
+
+-- A one-line flavour per biome for the level card.
+function pfLevelFlavour pN
+   switch pN
+      case 1
+         return "Sun on the green hills - find your feet."
+      case 2
+         return "Gears, lifts and locked doors in the works."
+      case 3
+         return "Mind the ice in the frozen citadel."
+      case 4
+         return "Something stirs in the haunted hollow."
+      case 5
+         return "Heat shimmers over the scorched dunes."
+      case 6
+         return "Deep dark in the cavern depths."
+      case 7
+         return "Climb the stone keep to the very top."
+      default
+         return ""
+   end switch
+end pfLevelFlavour
+
+-- The card tint per biome (deeper than the parallax backdrop so the card reads
+-- as a composed panel). One line each - tune in OXT.
+function pfLevelTint pN
+   switch pN
+      case 1
+         return "120,186,104"
+      case 2
+         return "150,168,128"
+      case 3
+         return "176,206,232"
+      case 4
+         return "168,138,196"
+      case 5
+         return "226,196,138"
+      case 6
+         return "34,38,50"
+      case 7
+         return "48,52,66"
+      default
+         return "120,186,104"
+   end switch
+end pfLevelTint
+
+-- The dark biomes (cavern, stone keep) need LIGHT card text; the bright ones
+-- keep dark text. Mirrors the existing splash/notice rule, carried to the cards.
+function pfLevelLight pN
+   return (pN is 6 or pN is 7)
+end pfLevelLight
+
+-- A hero skin word ("green") as a display name ("Green").
+function pfHeroName pSkin
+   if pSkin is empty then return "Beige"
+   return toUpper(char 1 of pSkin) & (char 2 to -1 of pSkin)
+end pfHeroName
+
+-- The composed text for a LEVEL card (shown while that level builds behind it).
+function pfLevelCardText
+   local tMsg
+   put "LEVEL  " & gLevel & "   /   7" & cr & cr & cr & pfLevelTitle(gLevel) & cr & cr & pfLevelFlavour(gLevel) & cr & cr & cr & cr & cr & "Arrows / WASD  ·  SPACE jump  ·  ESC controls" into tMsg
+   return tMsg
+end pfLevelCardText
+
+-- The composed text for the boot TITLE card. The hero chooser highlights the
+-- current pick; the live hero sprite (pfTitleHero) floats over the blank band
+-- between the title and the chooser.
+function pfTitleCardText
+   local tMsg, tWord, tNames, tOne
+   set the itemDelimiter to comma
+   put empty into tNames
+   repeat for each item tWord in "beige,green,pink,purple,yellow"
+      put pfHeroName(tWord) into tOne
+      if tWord is gHeroSkin then put "[" & toUpper(tOne) & "]" into tOne
+      if tNames is empty then
+         put tOne into tNames
+      else
+         put tNames & "     " & tOne into tNames
+      end if
+   end repeat
+   put "B O X 2 D X T" & cr & "a Box2D physics platformer demo" & cr & cr & cr & cr & cr & cr & cr & "Choose your hero    ( 1 - 5 )" & cr & tNames & cr & cr & cr & "Press   SPACE   to start" & cr & cr & "Arrows / WASD  move      ESC  controls      M  mute" into tMsg
+   return tMsg
+end pfTitleCardText
+
+-- COVER the screen with the card NOW: compose its colour + text, raise it (and
+-- its text) above every other control, make it opaque, and force ONE repaint so
+-- it is on screen BEFORE the teardown/build that follows paints underneath it.
+-- pLight true = light text (for the dark tints).
+command pfCardShow pText, pTint, pLight
+   local tTop
+   add 1 to gCardGen                       -- invalidate any in-flight fade ramp
+   if there is no graphic "pfCardShade" then exit pfCardShow
+   set the backgroundColor of graphic "pfCardShade" to pTint
+   set the blendLevel of graphic "pfCardShade" to 0
+   if there is a field "pfCardText" then
+      set the text of field "pfCardText" to pText
+      set the blendLevel of field "pfCardText" to 0
+      if pLight is true then
+         set the textColor of field "pfCardText" to "245,246,236"
+      else
+         set the textColor of field "pfCardText" to "28,30,42"
+      end if
+   end if
+   put the number of controls of this card into tTop
+   set the layer of graphic "pfCardShade" to tTop
+   if there is a field "pfCardText" then set the layer of field "pfCardText" to tTop
+   lock screen
+   set the visible of graphic "pfCardShade" to true
+   if there is a field "pfCardText" then set the visible of field "pfCardText" to true
+   unlock screen                           -- flush: the cover is on screen now
+end pfCardShow
+
+-- Cover for the CURRENT level (called at the very top of pfStartGame, before the
+-- teardown) - the biome card for gLevel.
+command pfCardCover
+   pfCardShow pfLevelCardText(), pfLevelTint(gLevel), pfLevelLight(gLevel)
+end pfCardCover
+
+-- REVEAL the built level: hold the opaque card briefly (a "ready" beat), then
+-- fade it out. Decoupled from the frame loop via a self-send so it cannot trip
+-- the frame-loop intro code (which a past pan rework broke - gotcha 11).
+command pfCardReveal
+   add 1 to gCardGen
+   put 0 into gCardFade
+   send ("pfCardFadeStep" && gCardGen) to me in 620 milliseconds
+end pfCardReveal
+
+-- One step of the fade-out ramp (0 = opaque ... 100 = clear). pGen guards
+-- against a stale ramp left over when a newer cover superseded this one.
+command pfCardFadeStep pGen
+   if pGen is not gCardGen then exit pfCardFadeStep
+   if there is no graphic "pfCardShade" then exit pfCardFadeStep
+   add 12 to gCardFade
+   if gCardFade >= 100 then
+      set the visible of graphic "pfCardShade" to false
+      if there is a field "pfCardText" then set the visible of field "pfCardText" to false
+      set the blendLevel of graphic "pfCardShade" to 0   -- reset for the next cover
+      exit pfCardFadeStep
+   end if
+   set the blendLevel of graphic "pfCardShade" to gCardFade
+   if there is a field "pfCardText" then set the blendLevel of field "pfCardText" to gCardFade
+   send ("pfCardFadeStep" && gCardGen) to me in 45 milliseconds
+end pfCardFadeStep
+
+-- The boot TITLE screen: load the art once (so the hero preview can show),
+-- compose the title card, cover with it (held until SPACE), and place the live
+-- hero preview on top. Re-callable (a hero pick recomposes it).
+command pfShowTitle
+   put true into gAtTitle
+   put false into gStarted
+   b2kStop                                  -- no game loop while the title is up
+   if there is no graphic "pfCardShade" then buildPfUI
+   if gHeroSkin is empty then put "beige" into gHeroSkin
+   -- load the atlases ONCE (prompts for the folder the first time, then cached +
+   -- persisted into the game); skip the reload once the chars sheet is present
+   if not b2kSheetHasFrame("chars", "character_beige_idle") then put pfLoadSheets() into gAssetsOK
+   pfCardShow pfTitleCardText(), "26,30,44", true
+   pfTitleHero                              -- the live hero preview, above the card
+end pfShowTitle
+
+-- The title's live hero preview: a single idle frame of the chosen skin, floating
+-- over the card. A Kit sprite created with the camera OFF is a plain card control
+-- (screen-fixed); b2kTeardown sweeps it when the level builds. Degrades silently
+-- to text-only when the art is missing.
+command pfTitleHero
+   local tFrame
+   if gTitleHeroSpr is not empty then
+      b2kSpriteRemove gTitleHeroSpr
+      put empty into gTitleHeroSpr
+   end if
+   if gAssetsOK is not true then exit pfTitleHero
+   put "character_" & gHeroSkin & "_idle" into tFrame
+   if not b2kSheetHasFrame("chars", tFrame) then exit pfTitleHero
+   b2kSheetScale "chars", 0.9               -- pfStartGame resets this to 0.75 for play
+   b2kSpriteNew "chars", tFrame, 512, 214
+   put the result into gTitleHeroSpr
+   if gTitleHeroSpr is empty then exit pfTitleHero
+   lock screen
+   set the layer of gTitleHeroSpr to the number of controls of this card
+   unlock screen
+end pfTitleHero
+
+-- 1-5 at the title: re-skin and recompose the title (no level to rebuild yet).
+command pfTitlePickHero pN
+   local tSkin
+   set the itemDelimiter to comma
+   put item pN of "beige,green,pink,purple,yellow" into tSkin
+   if tSkin is empty or tSkin is gHeroSkin then exit pfTitlePickHero
+   put tSkin into gHeroSkin
+   pfShowTitle                              -- recompose with the new hero highlighted
+end pfTitlePickHero
+
+-- SPACE at the title: drop the preview, start a fresh run at level 1. The card
+-- stays covering (pfStartGame recomposes it to the LEVEL 1 card, then fades).
+command pfStartFromTitle
+   put false into gAtTitle
+   if gTitleHeroSpr is not empty then
+      b2kSpriteRemove gTitleHeroSpr
+      put empty into gTitleHeroSpr
+   end if
+   put 1 into gLevel
+   pfResetRun
+   put true into gStarted
+   pfStartGame
+end pfStartFromTitle
 
 -- =====================================================================
 -- Assets: the Kenney atlases, or the embedded placeholder when missing
@@ -948,7 +1216,7 @@ command pfBuildHud
    end if
    -- Phase G: the HERO PORTRAIT (avatar) anchors the bottom-left status corner -
    -- the chosen skin's hud_player_<skin> face, with the heart row to its right.
-   -- Rebuilt each level, so it always shows the current gHeroSkin (1-5 to change).
+   -- Rebuilt each level, so it always shows the current gHeroSkin (chosen at the title).
    if b2kSheetHasFrame("hud", "hud_player_" & gHeroSkin) then
       b2kSpriteNew "hud", "hud_player_" & gHeroSkin, 44, 620
       put the result into gHudPortrait
@@ -1165,6 +1433,10 @@ command pfStartGame
    local tRef, tW, tH, tDY, tX, tS
    if gBuilding is true then exit pfStartGame   -- ignore R-mash mid-rebuild
    put true into gBuilding
+   -- COVER FIRST: raise the opaque biome card over everything BEFORE the teardown,
+   -- so the player never sees the old level clear or the new one assemble. The
+   -- whole build below paints behind it; pfCardReveal fades it out at the end.
+   pfCardCover
    if the shiftKey is down then
       set the uSpriteSheetFolderPath of this stack to empty
       b2kSheetsWipe   -- drop the cached sheets so a re-picked folder loads fresh
@@ -1205,7 +1477,9 @@ command pfStartGame
    if there is a graphic "pfPauseShade" then set the visible of graphic "pfPauseShade" to false
    if there is a field "pfPauseText" then set the visible of field "pfPauseText" to false
    if there is a button "pfbtn_pause" then set the label of button "pfbtn_pause" to "Pause"
-   if there is a field "pfSplash" then set the visible of field "pfSplash" to true
+   -- (the intro splash is retired: the transition card now shows the level title
+   -- while the world builds behind it. The pfSplash field stays, reused by
+   -- pfNotice for the centre banners; it is just no longer shown at level start.)
    put 0 into gPlateHoldMS
    put empty into gPlateLook
    -- per-level machine refs: a rebuilt level must never tick a deleted
@@ -1553,12 +1827,10 @@ command pfStartGame
       end if
    end if
    if there is a field "pfSplash" then
-      -- the level title + a one-line controls reminder (the full reference now
-      -- lives in the ESC pause overlay, since the top help bar is retired)
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName & cr & "Arrows/WASD · SPACE jump · ESC = controls · 1-5 hero"
-      -- the dark-backdrop levels (the cavern + the stone keep) need LIGHT splash
-      -- text so the title - and the centre notices, which reuse this field - read
-      -- against the dark scene; the bright biomes keep dark text.
+      -- the pfSplash field is now only the CENTRE-BANNER surface (pfNotice sets
+      -- its text just before showing it - the level title moved to the transition
+      -- card). Prime its colour per biome so those banners read against the scene:
+      -- the cavern + stone keep need LIGHT text; the bright biomes keep dark.
       if gLevel is 6 or gLevel is 7 then
          set the textColor of field "pfSplash" to "245,246,236"
       else
@@ -1613,6 +1885,9 @@ command pfStartGame
    put false into gBuilding
    if there is a button "pfbtn_level" then set the menuHistory of button "pfbtn_level" to gLevel
    b2kStart
+   -- the level is built and framed behind the opaque card: hold it a beat, then
+   -- fade the card out to reveal it (control engages as the gIntroPan beat ends)
+   pfCardReveal
 end pfStartGame
 
 -- An invisible static physics slab (shown grey only in fallback mode).
@@ -4853,6 +5128,13 @@ command pfChromeFront
    repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_again,pfbtn_level"
       if there is a button tC then set the layer of button tC to tN
    end repeat
+   -- the transition card sits ABOVE all other chrome while it is covering: the
+   -- build created controls over it, so re-raise it here (last) to keep it on top
+   -- until the reveal fade hides it. Skipped when hidden (e.g. on the win screen).
+   if there is a graphic "pfCardShade" and the visible of graphic "pfCardShade" is true then
+      set the layer of graphic "pfCardShade" to tN
+      if there is a field "pfCardText" then set the layer of field "pfCardText" to tN
+   end if
 end pfChromeFront
 
 command pfWipeStage
@@ -6491,14 +6773,17 @@ command pfWin
       put the result into tC
       if tC is not empty then b2kPush tC, random(361) - 180, 0 - (180 + random(220))
    end repeat
-   put "ALL SEVEN LEVELS CLEAR!" & cr & cr into tMsg
-   put "Every coin on every level collected" & cr after tMsg
-   put "Total time " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "      Falls " & gTotalFalls & cr & cr after tMsg
-   if gGemsAllTotal > 0 then put "Gems  " & gGemsBank & " / " & gGemsAllTotal & " collected" & cr & cr after tMsg
-   if gStarsAllTotal > 0 then put "Stars  " & gStarsBank & " / " & gStarsAllTotal & " found" & cr & cr after tMsg
-   if gScoreAllTotal > 0 then put "Coin score  " & gScoreBank & " / " & gScoreAllTotal & cr & cr after tMsg
-   if gTotalFalls is 0 then put "A flawless run - not a single tumble." & cr after tMsg
-   put "Press Play again for a fresh run from level 1." after tMsg
+   -- the final-run payoff, composed like a level card: a title header, the chosen
+   -- hero, then every banked stat, the flawless callout, and the replay prompt
+   put "Y O U   W I N" & cr & "all seven levels clear" & cr & cr & cr into tMsg
+   put "Hero   -   " & pfHeroName(gHeroSkin) & cr & cr after tMsg
+   put "Time  " & format("%d:%02d", tSecs div 60, tSecs mod 60) & "          Falls  " & gTotalFalls & cr & cr after tMsg
+   if gGemsAllTotal > 0 then put "Gems   " & gGemsBank & " / " & gGemsAllTotal & cr after tMsg
+   if gStarsAllTotal > 0 then put "Stars   " & gStarsBank & " / " & gStarsAllTotal & cr after tMsg
+   if gScoreAllTotal > 0 then put "Coin score   " & gScoreBank & " / " & gScoreAllTotal & cr after tMsg
+   put cr after tMsg
+   if gTotalFalls is 0 then put "A FLAWLESS RUN - not a single tumble." & cr & cr after tMsg
+   put "Press  Play again  for a fresh run from level 1." after tMsg
    set the text of field "pfWinText" to tMsg
    set the visible of graphic "pfWinShade" to true
    set the visible of field "pfWinText" to true
@@ -6550,6 +6835,7 @@ end pfHurtDone
 -- =====================================================================
 on mouseDown
    local tName, tHit
+   if gAtTitle is true then exit mouseDown   -- the title card owns the screen; no world to grab
    put the short name of the target into tName
    if char 1 to 6 of tName is "pfbtn_" then exit mouseDown
    -- chained weights are not draggable (resting they are static, which
@@ -6571,12 +6857,9 @@ on mouseUp
          pfTogglePause
          break
       case "pfbtn_again"
-         -- a fresh run: back to level 1, the banked totals cleared
+         -- a fresh run: back to level 1, every banked total cleared
          put 1 into gLevel
-         put 0 into gTotalFalls
-         put 0 into gSecsBank
-         put 0 into gGemsBank
-         put 0 into gGemsAllTotal
+         pfResetRun
          pfStartGame
          break
       default
@@ -6602,10 +6885,7 @@ end menuPick
 command pfJumpToLevel pLevel
    if gBuilding is true then exit pfJumpToLevel
    put pLevel into gLevel
-   put 0 into gTotalFalls
-   put 0 into gSecsBank
-   put 0 into gGemsBank
-   put 0 into gGemsAllTotal
+   pfResetRun
    put true into gStarted
    pfStartGame
 end pfJumpToLevel
@@ -6618,6 +6898,19 @@ end mouseRelease
 -- (not the Kit's polled input) so they also work WHILE PAUSED, when the
 -- sampler is not running.
 on rawKeyDown pKeyCode
+   -- the boot TITLE screen owns the keyboard: SPACE / RETURN start a fresh run,
+   -- 1-5 pick the hero (preview only - no level to rebuild yet), M still mutes;
+   -- every other key is swallowed (there is no game running behind the card).
+   if gAtTitle is true then
+      if pKeyCode is 32 or pKeyCode is 65293 then
+         pfStartFromTitle
+      else if pKeyCode >= 49 and pKeyCode <= 53 then
+         pfTitlePickHero (pKeyCode - 48)
+      else if pKeyCode is 109 or pKeyCode is 77 then
+         b2kSoundMute (not b2kSoundMuted())
+      end if
+      exit rawKeyDown
+   end if
    if pKeyCode is 65307 then
       pfTogglePause
       exit rawKeyDown
@@ -6634,26 +6927,14 @@ on rawKeyDown pKeyCode
       pfToggleDebug
       exit rawKeyDown
    end if
-   if pKeyCode >= 49 and pKeyCode <= 53 then   -- Phase G: 1-5 pick the hero skin
-      pfPickHero (pKeyCode - 48)
-      exit rawKeyDown
-   end if
+   -- (hero select moved to the title screen, so an in-level number press can no
+   -- longer accidentally restart the level - see pfShowTitle / pfTitlePickHero)
    pass rawKeyDown
 end rawKeyDown
 
--- Phase G character select: pick the hero skin 1..5 (beige/green/pink/purple/
--- yellow). A no-op if it's already that skin; otherwise re-skin and REBUILD the
--- current level (the controller suppresses redundant anim replays, so a clean
--- rebuild - pfLoadSheets re-skins every anim - is the reliable swap). gLevel is
--- unchanged, so you stay on the same level wearing the new skin.
-command pfPickHero pN
-   local tSkin
-   set the itemDelimiter to comma
-   put item pN of "beige,green,pink,purple,yellow" into tSkin
-   if tSkin is empty or tSkin is gHeroSkin then exit pfPickHero
-   put tSkin into gHeroSkin
-   pfStartGame   -- the rebuilt hero + the HUD portrait + the splash show the choice
-end pfPickHero
+-- (Phase G's in-level pfPickHero was retired in the polish pass: hero select
+-- moved to the boot title screen - pfTitlePickHero - so a stray number press
+-- can no longer restart the level you are on.)
 
 -- =====================================================================
 -- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py -

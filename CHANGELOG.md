@@ -10,6 +10,39 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: TRANSITION CARD + boot TITLE screen + recomposed WIN card (the
+  polish pass's headline - `docs/platformer-polish-plan.md` §2 / §2.4).** The single
+  biggest "demo-not-game" tell is gone: a full-screen opaque overlay now COVERS
+  every level teardown + rebuild, so the player never sees the old level clear or the
+  new one assemble. One card-level control (`pfCardShade` + `pfCardText`, built once
+  in `buildPfUI`, `kPfUIVersion` 10 -> 11, raised above the camera viewport like the
+  pause overlay so it never scrolls) does three jobs:
+  - **Cover -> reveal.** `pfStartGame` raises the opaque biome card (`pfCardCover`)
+    BEFORE the teardown trio (`b2kClear` / `b2kTeardown` / `pfWipeStage`), so the
+    whole build paints behind it; after `b2kStart` it holds a beat then FADES out
+    (`pfCardReveal` -> a `send`-driven `blendLevel` ramp, generation-guarded so a
+    fresh cover invalidates a stale fade). The fade is decoupled from the frame loop
+    on purpose - it never touches the intro code a past pan rework broke (gotcha 11).
+    Every caller gets it for free: level start, level -> level advance, R-restart, the
+    dev picker, and the title's SPACE-start. Death / respawn keeps its light
+    camera-shake (no full card, by design).
+  - **A boot TITLE screen.** The demo no longer drops straight into L1: it opens on a
+    "B O X 2 D X T" card with a **live hero preview** (the chosen skin's idle frame -
+    a camera-off Kit sprite is a plain card control) and the **1-5 hero chooser** moved
+    HERE, where picking can't accidentally restart a level. SPACE / RETURN starts a
+    fresh run. The in-level 1-5 binding (and `pfPickHero`) is retired accordingly; the
+    pause overlay's hero line now points at the title.
+  - **A recomposed WIN card.** The final-run summary is restyled in the level-card
+    visual language (a deeper, more central panel) and now names the **chosen hero**
+    alongside time / falls / gems / stars / coin-score / the flawless callout.
+  - **Bug fix carried along.** A single `pfResetRun` now zeroes EVERY whole-run bank;
+    the dev picker and "Play again" previously left the coin-score + star banks stale,
+    inflating a second run's win screen.
+  Biome card tints / flavours + the hold-and-fade timings are first-pass and tunable
+  in OXT. Example-side only - no Kit touch, so no harness bump and the embedded Kit
+  stays in sync. Static gates clean, audit 0 findings. **Needs an OXT pass** to
+  confirm the cover fully masks the build, the fade feel, the title hero preview, and
+  the card composition.
 - **Platformer: CHARACTER SELECT + a hero portrait (asset-expansion Phase G).** The
   hero is no longer locked to the beige skin: press **1-5** to pick
   **beige / green / pink / purple / yellow** (`gHeroSkin`). The skin is one word the
