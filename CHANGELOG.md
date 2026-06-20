@@ -10,6 +10,19 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: CHARACTER SELECT + a hero portrait (asset-expansion Phase G).** The
+  hero is no longer locked to the beige skin: press **1-5** to pick
+  **beige / green / pink / purple / yellow** (`gHeroSkin`). The skin is one word the
+  hero anim defs and the creation frame interpolate, so picking re-skins the whole
+  character - idle/walk/jump/duck/climb/hurt/win - on a clean rebuild (the
+  controller suppresses redundant anim replays, so a rebuild is the reliable swap;
+  `pfLoadSheets` already runs per build). The choice **persists across levels and
+  restarts**. A **hero PORTRAIT** (`hud_player_<skin>`) anchors the bottom-left
+  status corner with the heart row shifted to its right, rebuilt each level so it
+  always shows the current hero. The splash and the ESC pause overlay gained the
+  1-5 hint (`kPfUIVersion` bumped). All 4 alternate skins + the beige original carry
+  the full 8-frame anim set. Example-side only; static gates clean, audit 0 findings.
+  Needs an OXT pass to confirm each skin animates cleanly.
 - **Platformer: COLLECTIBLES - coin tiers + a hidden star per level (asset-expansion
   Phase F, completing it).**
   - **Coin tiers.** Coins are now bronze/silver/gold worth **1/2/3** toward a bonus

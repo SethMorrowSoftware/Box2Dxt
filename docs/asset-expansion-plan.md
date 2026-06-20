@@ -306,11 +306,16 @@ needs an OXT eye.
   - **Buttons:** the `pfbtn_pause`/`pfbtn_reset` bottom buttons can stay functional
     or move into the Pause overlay; keyboard (ESC/R) already covers both.
 
-### Phase G — Player identity: character select + portraits  (S–M)
-- **Assets:** `character_{green,pink,purple,yellow}_*`, `character_beige_front`,
-  `hud_player_*` / `hud_player_helmet_*`.
-- **Character-select** splash (one-word skin swap per the load comment) + a **HUD
-  portrait** of the chosen hero. Pure cosmetic; low risk; high "feel" payoff.
+### Phase G — Player identity: character select + portraits  (S–M)  — SHIPPED
+- **Assets:** `character_{green,pink,purple,yellow}_*` (all carry the full 8-frame
+  hero anim set), `hud_player_*` portraits.
+- **Shipped:** press **1-5** to pick beige/green/pink/purple/yellow (`gHeroSkin`,
+  the one-word swap the hero anim defs + creation frame interpolate; a rebuild
+  re-skins cleanly). The choice persists across levels/restarts. A **HUD portrait**
+  (`hud_player_<skin>`) anchors the bottom-left status corner beside the heart row;
+  the splash + pause overlay carry the 1-5 hint. `hud_player_helmet_*` left unused
+  (the plain portraits read cleaner at HUD scale). *OXT to confirm:* each skin
+  animates cleanly across idle/walk/jump/duck/climb.
 
 ### Phase H — The Village biome → **Level 8 "CLOCKTOWN"**  (L)
 - **Assets:** the whole **`spritesheet.xml`** city set (house walls/roofs in 3
@@ -397,7 +402,7 @@ Track usage per sheet; "done" = used or a one-line documented reason it isn't.
 - [ ] `tiles` HUD strip — art HUD (F), **removing the LiveCode top/bottom fields**.
 - [ ] `foes` — block slime, worm ring, rest poses (B/D).
 - [ ] `spooks` — snakes (E), spinners (C), squash/dead states everywhere (D), alt fish.
-- [ ] `characters` — 4 skins + portraits via character select (G).
+- [ ] `characters` — **4 skins + portraits via character select (G, SHIPPED — 1-5 to pick; `hud_player_*` avatar)**.
 - [ ] `spritesheet.xml` city — Clocktown (H).
 - [ ] `aliens.xml` — swim hero / Tidal Caves (I).
 - [ ] `items_sheet` — particles, springboardUp/Down, weightChained (J).

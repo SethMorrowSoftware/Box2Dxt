@@ -362,6 +362,11 @@
 -- =====================================================================
 
 local gStarted, gHero, gHeroSpr, gHudLast, gHurtLock
+-- Phase G: the chosen hero SKIN (beige/green/pink/purple/yellow). One word; the
+-- hero anim defs and the creation frame interpolate it, so a rebuild re-skins the
+-- whole character (pfLoadSheets runs in pfStartGame). gHudPortrait = the bottom-
+-- left avatar (hud_player_<skin>) showing the choice. Persists across the run.
+local gHeroSkin, gHudPortrait
 local gCoins, gCoinsTotal, gAssetsOK, gLoadNote, gWon
 -- GEM bonus pickups (separate from the coin/flag gate): collect them for a
 -- bonus tally shown in the HUD + the win screen; the flag never depends on them.
@@ -492,7 +497,7 @@ local gSpiderMinX, gSpiderMaxX, gSpiderDir, gSpiderState
 
 constant kMoveSpeed = 280
 constant kJumpSpeed = 430
-constant kPfUIVersion = "9"
+constant kPfUIVersion = "10"   -- Phase G: pause overlay gained the hero-select line
 -- Phase F health: the forgiving five-heart buffer. A contact hit (pfOuch) costs
 -- ONE pip with a mercy window between hits; emptying the row routes to the
 -- respawn (pfHurt), which REFILLS it - so the hero never hard-fails on contact,
@@ -669,7 +674,7 @@ command buildPfUI
    set the textColor of it to "248,249,240"
    set the opaque of it to false
    set the showBorder of it to false
-   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  ·  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
+   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  ·  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & "1 - 5  -  pick your hero  (Beige / Green / Pink / Purple / Yellow)" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
    set the visible of it to false
    set the uPfUIVersionTag of this stack to kPfUIVersion
 end buildPfUI
@@ -678,7 +683,7 @@ end buildPfUI
 -- Assets: the Kenney atlases, or the embedded placeholder when missing
 -- =====================================================================
 function pfLoadSheets
-   local tFolder, tN
+   local tFolder, tN, tHero
    put empty into gLoadNote
    put the uSpriteSheetFolderPath of this stack into tFolder
    if tFolder is empty or there is no file (tFolder & "/spritesheet-characters-default.png") then
@@ -734,19 +739,23 @@ function pfLoadSheets
       b2kAnimDef "spooks", "snakelava", "snakeLava.png,snakeLava_ani.png", 5, true
       b2kAnimDef "spooks", "snakeslime", "snakeSlime.png,snakeSlime_ani.png", 5, true
    end if
-   -- the hero (beige; swap the colour word to re-skin)
-   b2kAnimDef "chars", "idle", "character_beige_idle", 2, true
-   b2kAnimDef "chars", "walk", "character_beige_walk_a,character_beige_walk_b", 6, true
-   b2kAnimDef "chars", "jump", "character_beige_jump", 1, true
-   b2kAnimDef "chars", "hit", "character_beige_hit", 2, false
+   -- the HERO (Phase G: gHeroSkin picks the colour word - beige/green/pink/purple/
+   -- yellow - so the whole character re-skins on a rebuild). tHero = the frame
+   -- prefix; the numeric placeholder defs below (no atlas) stay skin-agnostic.
+   if gHeroSkin is empty then put "beige" into gHeroSkin
+   put "character_" & gHeroSkin & "_" into tHero
+   b2kAnimDef "chars", "idle", (tHero & "idle"), 2, true
+   b2kAnimDef "chars", "walk", (tHero & "walk_a," & tHero & "walk_b"), 6, true
+   b2kAnimDef "chars", "jump", (tHero & "jump"), 1, true
+   b2kAnimDef "chars", "hit", (tHero & "hit"), 2, false
    -- Wave 2 poses: the default characters sheet HAS duck and climb
-   -- frames for the beige hero (the design doc guessed it did not).
+   -- frames for the hero (the design doc guessed it did not).
    -- "hurtpose" LOOPS on purpose: the Kit's knockback drives it, and a
    -- non-looping anim would fire b2kSpriteOnFinish -> pfHurtDone (the
    -- RESPAWN) mid-knockback. The respawn path keeps the one-shot "hit".
-   b2kAnimDef "chars", "duck", "character_beige_duck", 1, true
-   b2kAnimDef "chars", "climb", "character_beige_climb_a,character_beige_climb_b", 6, true
-   b2kAnimDef "chars", "hurtpose", "character_beige_hit", 2, true
+   b2kAnimDef "chars", "duck", (tHero & "duck"), 1, true
+   b2kAnimDef "chars", "climb", (tHero & "climb_a," & tHero & "climb_b"), 6, true
+   b2kAnimDef "chars", "hurtpose", (tHero & "hit"), 2, true
    b2kAnimDef "foes", "buzz", "bee_a,bee_b", 8, true
    b2kAnimDef "foes", "sawspin", "saw_a,saw_b", 10, true
    b2kAnimDef "foes", "slimewalk", "slime_normal_walk_a,slime_normal_walk_b", 4, true
@@ -776,7 +785,7 @@ function pfLoadSheets
    b2kAnimDef "tiles", "checkwave", "flag_red_a,flag_red_b", 4, true
    b2kAnimDef "tiles", "torch", "torch_on_a,torch_on_b", 5, true   -- flickering wall torch (cavern ambiance, L6)
    b2kAnimDef "foes", "flit", "fly_a,fly_b", 10, true
-   b2kAnimDef "chars", "win", "character_beige_duck,character_beige_idle", 3, true
+   b2kAnimDef "chars", "win", (tHero & "duck," & tHero & "idle"), 3, true
    return true
 end pfLoadSheets
 
@@ -899,6 +908,7 @@ command pfBuildHud
    put empty into gHudGemTotLast
    put empty into gHudHeartLast
    put empty into gHudStarLast
+   put empty into gHudPortrait   -- Phase G avatar; teardown cleared last build's sprite
    if gAssetsOK is not true or not b2kSheetHasFrame("hud", "hud_coin") then exit pfBuildHud
    b2kSpriteNew "hud", "hud_coin", 40, 20
    put the result into gHudCoinIcon
@@ -936,16 +946,24 @@ command pfBuildHud
       if gHudGemD[1] is not empty then set the visible of gHudGemD[1] to false
       if gHudGemD[2] is not empty then set the visible of gHudGemD[2] to false
    end if
+   -- Phase G: the HERO PORTRAIT (avatar) anchors the bottom-left status corner -
+   -- the chosen skin's hud_player_<skin> face, with the heart row to its right.
+   -- Rebuilt each level, so it always shows the current gHeroSkin (1-5 to change).
+   if b2kSheetHasFrame("hud", "hud_player_" & gHeroSkin) then
+      b2kSpriteNew "hud", "hud_player_" & gHeroSkin, 44, 620
+      put the result into gHudPortrait
+   end if
    -- the HEARTS (health): five hud_heart icons in the DIRT band at the very
    -- bottom-left, BELOW the grass line (per the OXT pass - at y560 they sat up in
    -- the play area among the world props; y620 drops them into the dirt strip,
    -- clear of the scene). They build FULL; pfUpdateHearts swaps a slot to
    -- hud_heart_empty as contact damage drains the buffer, and a respawn refills
    -- it. Like the coin/gem digits these are card sprites (built before b2kCamOn)
-   -- so they never scroll; pfChromeFront raises them above the viewport.
+   -- so they never scroll; pfChromeFront raises them above the viewport. Shifted
+   -- right of the portrait (Phase G).
    if b2kSheetHasFrame("hud", "hud_heart") then
       repeat with tI = 1 to kHearts
-         b2kSpriteNew "hud", "hud_heart", 40 + (tI - 1) * 36, 620
+         b2kSpriteNew "hud", "hud_heart", 96 + (tI - 1) * 36, 620
          put the result into gHudHeart[tI]
       end repeat
    end if
@@ -1358,6 +1376,7 @@ command pfStartGame
    b2kSetup
    b2kSetScale 60
    pfMakeSounds
+   if gHeroSkin is empty then put "beige" into gHeroSkin   -- Phase G: the chosen skin persists; default once
    put pfLoadSheets() into gAssetsOK
    if gAssetsOK is not true then pfEmbedPlaceholder
    -- Wave 1 toys need the tiles atlas (spring/box/brick/lever/key/door
@@ -1445,7 +1464,7 @@ command pfStartGame
    set the visible of it to false
    put the long id of graphic "pf_heroBody" into gHero
    if gAssetsOK is true then
-      b2kSpriteNew "chars", "character_beige_idle", gRespawnX, gRespawnY
+      b2kSpriteNew "chars", ("character_" & gHeroSkin & "_idle"), gRespawnX, gRespawnY
    else
       b2kSpriteNew "chars", 1, gRespawnX, gRespawnY
    end if
@@ -1461,7 +1480,7 @@ command pfStartGame
    -- neither: empty slots fall back to idle/jump inside the Kit). The
    -- knockback pose is the LOOPING "hurtpose" -- never the one-shot
    -- "hit", whose finish message means RESPAWN in this game
-   if gAssetsOK is true and b2kSheetHasFrame("chars", "character_beige_duck") then
+   if gAssetsOK is true and b2kSheetHasFrame("chars", ("character_" & gHeroSkin & "_duck")) then
       b2kPlayerAnims "idle", "walk", "jump", "jump", "", "duck", "climb", "hurtpose"
    else
       b2kPlayerAnims "idle", "walk", "jump", "jump", "", "", "", "hurtpose"
@@ -1536,7 +1555,7 @@ command pfStartGame
    if there is a field "pfSplash" then
       -- the level title + a one-line controls reminder (the full reference now
       -- lives in the ESC pause overlay, since the top help bar is retired)
-      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName & cr & "Arrows/WASD · SPACE jump · ESC = controls"
+      set the text of field "pfSplash" to "LEVEL " & gLevel & " / 7" & cr & gLevelName & cr & "Arrows/WASD · SPACE jump · ESC = controls · 1-5 hero"
       -- the dark-backdrop levels (the cavern + the stone keep) need LIGHT splash
       -- text so the title - and the centre notices, which reuse this field - read
       -- against the dark scene; the bright biomes keep dark text.
@@ -4825,6 +4844,7 @@ command pfChromeFront
          if gHudHeart[tI] is not empty then set the layer of gHudHeart[tI] to tN
       end repeat
       if gHudStar is not empty then set the layer of gHudStar to tN
+      if gHudPortrait is not empty then set the layer of gHudPortrait to tN
    end if
    repeat for each item tC in "pfTitle,pfHelp,pfHud,pfSplash,pfWinText"
       if there is a field tC then set the layer of field tC to tN
@@ -6614,8 +6634,26 @@ on rawKeyDown pKeyCode
       pfToggleDebug
       exit rawKeyDown
    end if
+   if pKeyCode >= 49 and pKeyCode <= 53 then   -- Phase G: 1-5 pick the hero skin
+      pfPickHero (pKeyCode - 48)
+      exit rawKeyDown
+   end if
    pass rawKeyDown
 end rawKeyDown
+
+-- Phase G character select: pick the hero skin 1..5 (beige/green/pink/purple/
+-- yellow). A no-op if it's already that skin; otherwise re-skin and REBUILD the
+-- current level (the controller suppresses redundant anim replays, so a clean
+-- rebuild - pfLoadSheets re-skins every anim - is the reliable swap). gLevel is
+-- unchanged, so you stay on the same level wearing the new skin.
+command pfPickHero pN
+   local tSkin
+   set the itemDelimiter to comma
+   put item pN of "beige,green,pink,purple,yellow" into tSkin
+   if tSkin is empty or tSkin is gHeroSkin then exit pfPickHero
+   put tSkin into gHeroSkin
+   pfStartGame   -- the rebuilt hero + the HUD portrait + the splash show the choice
+end pfPickHero
 
 -- =====================================================================
 -- The Kit (embedded verbatim; regenerated by tools/sync-embedded-kit.py -
