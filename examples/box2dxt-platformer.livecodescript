@@ -955,32 +955,36 @@ end pfCardCastMember
 -- blendLevel so the fade ramp can add progress on top without flattening the
 -- scrim/ground translucency.
 command pfCardArtBuildLevel
-   local tBg, tGY
+   local tBg, tGY, tBW, tBH, tBgH
    if gAssetsOK is not true then exit pfCardArtBuildLevel   -- placeholder mode: tint card only
    put 480 into tGY                                         -- the ground line the cast stands on
-   -- the biome backdrop (L1-L5), as two overlapping panels filling the 1024 width
+   -- the biome backdrop (L1-L5): ONE panel scaled to COVER the 1024 card width with
+   -- its aspect KEPT (the overflow below the 640 card height is simply cropped by
+   -- the window). A single image has no join, so there is no seam to misalign - the
+   -- earlier two-panel stretch mismatched in its overlap. The card's ground band
+   -- hides the cropped-off foreground.
    put pfLevelBgFrame(gLevel) into tBg
    if tBg is not empty and b2kSheetHasFrame("bg", tBg) then
       if pfCardArtImage("bg", tBg, "pfCardBgA") is not empty then
-         set the rect of image "pfCardBgA" to 0, 0, 592, 640
+         put the width of image "pfCardBgA" into tBW    -- natural sliced size (~640x640 at bg scale 2.5)
+         put the height of image "pfCardBgA" into tBH
+         if tBW < 1 then put 640 into tBW
+         if tBH < 1 then put 640 into tBH
+         put max(640, round(1024 * tBH / tBW)) into tBgH   -- aspect-scaled to fill the width (>= card height)
+         set the rect of image "pfCardBgA" to 0, 0, 1024, tBgH
          set the uCardBaseBlend of image "pfCardBgA" to 0
          pfCardAddArt the long id of image "pfCardBgA"
+         -- a dark scrim so the title text reads over the busy backdrop (rests at 42)
+         create graphic "pfCardScrim"
+         set the style of graphic "pfCardScrim" to "rectangle"
+         set the rect of graphic "pfCardScrim" to 0, 0, 1024, 640
+         set the filled of graphic "pfCardScrim" to true
+         set the backgroundColor of graphic "pfCardScrim" to "14,16,26"
+         set the blendLevel of graphic "pfCardScrim" to 42
+         set the uCardBaseBlend of graphic "pfCardScrim" to 42
+         set the visible of graphic "pfCardScrim" to false   -- hidden until pfCardShow reveals the whole cover at once
+         pfCardAddArt the long id of graphic "pfCardScrim"
       end if
-      if pfCardArtImage("bg", tBg, "pfCardBgB") is not empty then
-         set the rect of image "pfCardBgB" to 432, 0, 1024, 640
-         set the uCardBaseBlend of image "pfCardBgB" to 0
-         pfCardAddArt the long id of image "pfCardBgB"
-      end if
-      -- a dark scrim so the title text reads over the busy backdrop (rests at 42)
-      create graphic "pfCardScrim"
-      set the style of graphic "pfCardScrim" to "rectangle"
-      set the rect of graphic "pfCardScrim" to 0, 0, 1024, 640
-      set the filled of graphic "pfCardScrim" to true
-      set the backgroundColor of graphic "pfCardScrim" to "14,16,26"
-      set the blendLevel of graphic "pfCardScrim" to 42
-      set the uCardBaseBlend of graphic "pfCardScrim" to 42
-      set the visible of graphic "pfCardScrim" to false   -- hidden until pfCardShow reveals the whole cover at once
-      pfCardAddArt the long id of graphic "pfCardScrim"
    end if
    -- a ground band the cast stands on (a darker shade of the biome tint)
    create graphic "pfCardGround"
