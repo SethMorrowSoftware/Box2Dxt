@@ -63,6 +63,13 @@ well, not adding more.
 > off the in-level binding), and the win screen is recomposed in the card language.
 > Static gates + audit clean; example-side only (no Kit touch). Tints/flavours/timings
 > are first-pass tunables. See the CHANGELOG entry for the full landing notes.
+>
+> **Follow-up (same branch):** the level cards are now **illustrated** rather than a
+> solid tint — each shows the level's real biome backdrop (L1-L5) under a scrim plus a
+> cast row of real sprites (hero + foe + coin + flag) on a ground band, all cloned from
+> the loaded atlases (no new assets), every piece degrading to the tint base if a slice
+> fails. (Real per-level screenshots were rejected: the levels are ~6,400px scrolling
+> worlds, so a flat grab is unrepresentative and would mean shipping/maintaining PNGs.)
 
 **The problem.** `pfStartGame` (the per-level world build) runs its **teardown
 before the `lock screen`** (it deletes the previous level's controls at

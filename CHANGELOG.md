@@ -10,6 +10,28 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Platformer: ILLUSTRATED biome cards (real game art on the transition card).** The
+  level cards are no longer a solid tint + sparse text: each is now a little composed
+  scene built from the already-loaded atlases (zero new asset files). Behind the title
+  text sits the level's **real Kenney biome backdrop** (L1-L5; the dark cavern/keep
+  keep their tint) under a dimming scrim, and a **cast row of real sprites** - the
+  chosen hero + a biome-representative foe + a coin + the goal flag - stands on a
+  ground band, previewing what's in that world. Implementation notes:
+  - Art is cloned onto the CARD via the proven `pfTextureSlab` throwaway-sprite path
+    (`pfCardArtImage`), so it is camera-free chrome regardless of the live camera; the
+    clones are resized directly (no `b2kSheetScale` juggling, so the game's sheet
+    scales are never touched).
+  - Every piece is **independently optional** - a missing sheet or a failed slice just
+    drops that layer, and the always-present opaque `pfCardShade` tint base still
+    guarantees the cover hides the build. Worst case is "needs tuning", never a broken
+    cover.
+  - The whole stack (tint base + art layers + title text, tracked in `gCardArt`) fades
+    out together; each layer carries its resting blend in `uCardBaseBlend` so the
+    scrim's dimming holds through the ramp instead of flashing opaque.
+  Biome backdrops/foes, the cast layout, scrim/ground tints, and the ground line are
+  first-pass and tunable in OXT. Example-side only (no Kit touch). Static gates +
+  audit clean. **Needs an OXT pass** to confirm the slice-clone art renders/positions
+  on the engine and to tune the composition.
 - **Platformer: TRANSITION CARD + boot TITLE screen + recomposed WIN card (the
   polish pass's headline - `docs/platformer-polish-plan.md` §2 / §2.4).** The single
   biggest "demo-not-game" tell is gone: a full-screen opaque overlay now COVERS

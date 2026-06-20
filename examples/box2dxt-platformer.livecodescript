@@ -405,8 +405,10 @@ local gShowDebug
 -- COVERS each level teardown/rebuild (no visible construction). gAtTitle is
 -- true while the title is up (SPACE starts); gCardFade is the fade-out ramp
 -- (0 = opaque ... 100 = clear); gCardGen invalidates a stale fade send when a
--- newer cover supersedes it; gTitleHeroSpr is the title's live hero preview.
-local gAtTitle, gCardFade, gCardGen, gTitleHeroSpr
+-- newer cover supersedes it; gTitleHeroSpr is the title's live hero preview;
+-- gCardArt is the CR-list of per-level illustrated-card art controls (long ids)
+-- that fade/raise/hide as a set alongside the tint base + title text.
+local gAtTitle, gCardFade, gCardGen, gTitleHeroSpr, gCardArt
 local gGate, gGateSprA, gGateSprB, gPlateHoldMS, gPlateLook, gCamOK
 local gIntroPan, gRunStart, gFalls, gWinLock, gFlagHint, gWinSecs
 local gOuches   -- Wave 2: contact hits (knockbacks) - falls stay falls
@@ -798,12 +800,62 @@ function pfHeroName pSkin
    return toUpper(char 1 of pSkin) & (char 2 to -1 of pSkin)
 end pfHeroName
 
--- The composed text for a LEVEL card (shown while that level builds behind it).
+-- The composed text for a LEVEL card (shown in the upper band while that level
+-- builds behind it; the illustrated cast row sits below it - see pfCardArtBuildLevel).
 function pfLevelCardText
    local tMsg
-   put "LEVEL  " & gLevel & "   /   7" & cr & cr & cr & pfLevelTitle(gLevel) & cr & cr & pfLevelFlavour(gLevel) & cr & cr & cr & cr & cr & "Arrows / WASD  ·  SPACE jump  ·  ESC controls" into tMsg
+   put "LEVEL  " & gLevel & "   of   7" & cr & cr & pfLevelTitle(gLevel) & cr & cr & pfLevelFlavour(gLevel) & cr & cr & "Collect every coin, then reach the flag" into tMsg
    return tMsg
 end pfLevelCardText
+
+-- The biome BACKDROP frame for a level's card (the same Kenney bg art the level
+-- itself uses). L6/L7 build their backdrops procedurally - no frame - so the
+-- card falls back to its solid biome tint there.
+function pfLevelBgFrame pN
+   switch pN
+      case 1
+      case 2
+         return "background_color_hills"
+      case 3
+         return "background_fade_hills"
+      case 4
+         return "background_color_mushrooms"
+      case 5
+         return "background_color_desert"
+      default
+         return ""
+   end switch
+end pfLevelBgFrame
+
+-- A representative FOE frame per biome for the card's cast row (all on the
+-- always-loaded "foes" sheet - no optional-sheet dependency). A missing frame
+-- just drops that one cast slot (pfCardCastMember no-ops).
+function pfLevelFoeFrame pN
+   switch pN
+      case 2
+         return "bee_a"
+      case 3
+         return "snail_walk_a"
+      case 5
+         return "ladybug_walk_a"
+      case 6
+         return "mouse_walk_a"
+      case 7
+         return "saw_a"
+      default
+         return "slime_normal_walk_a"
+   end switch
+end pfLevelFoeFrame
+
+-- Darken an "r,g,b" toward black by pFactor (0..1) - for the card's ground band.
+function pfShade pRGB, pFactor
+   local tR, tG, tB
+   set the itemDelimiter to comma
+   put round((item 1 of pRGB) * pFactor) into tR
+   put round((item 2 of pRGB) * pFactor) into tG
+   put round((item 3 of pRGB) * pFactor) into tB
+   return tR & comma & tG & comma & tB
+end pfShade
 
 -- The composed text for the boot TITLE card. The hero chooser highlights the
 -- current pick; the live hero sprite (pfTitleHero) floats over the blank band
@@ -825,12 +877,148 @@ function pfTitleCardText
    return tMsg
 end pfTitleCardText
 
--- COVER the screen with the card NOW: compose its colour + text, raise it (and
--- its text) above every other control, make it opaque, and force ONE repaint so
--- it is on screen BEFORE the teardown/build that follows paints underneath it.
--- pLight true = light text (for the dark tints).
+-- ===== ILLUSTRATED-CARD ART (the per-level scene behind the title text) =====
+-- The biome backdrop, a dimming scrim, a ground band, and a CAST ROW of real
+-- game sprites (hero + a biome foe + a coin + the goal flag). All card-level
+-- controls named pfCard* (so pfWipeStage leaves them) and tracked in gCardArt so
+-- they fade/raise/hide as a set. EVERY piece is optional - on a missing sheet or
+-- a failed slice it is simply skipped, and the always-present opaque pfCardShade
+-- tint base guarantees the cover still hides the build. =====
+
+-- Remember an art control so the fade/raise/hide handlers see it.
+command pfCardAddArt pCtrl
+   if pCtrl is empty then exit pfCardAddArt
+   put pCtrl & cr after gCardArt
+end pfCardAddArt
+
+-- Drop every per-level art control and reset the list. Called before each cover,
+-- and at the title. Deletes BY NAME (a proper type-checked existence test); the
+-- names are fixed, so this clears every art control whether or not gCardArt is in
+-- sync, and avoids referencing a possibly-stale long id.
+command pfCardArtClear
+   local tC
+   set the itemDelimiter to comma
+   repeat for each item tC in "pfCardBgA,pfCardBgB,pfCardScrim,pfCardGround,pfCardCastHero,pfCardCastFoe,pfCardCastCoin,pfCardCastFlag"
+      if there is an image tC then delete image tC
+      if there is a graphic tC then delete graphic tC
+   end repeat
+   put empty into gCardArt
+end pfCardArtClear
+
+-- Clone a sliced atlas frame onto the CARD as a plain (camera-free) image named
+-- pName, hidden and at native sliced size. Uses the proven throwaway-sprite path
+-- (pfTextureSlab): the sprite carries the frame as its icon, which we clone. The
+-- throwaway is created in whatever camera group is live, then removed; the clone
+-- is a card control. Returns pName, or empty on any failure.
+function pfCardArtImage pSheet, pFrame, pName
+   local tSpr, tImg
+   if gAssetsOK is not true then return empty
+   if not b2kSheetHasFrame(pSheet, pFrame) then return empty
+   b2kSpriteNew pSheet, pFrame, -4000, -4000
+   put the result into tSpr
+   if tSpr is empty then return empty
+   put the icon of tSpr into tImg
+   if tImg is empty or there is no image id tImg then
+      b2kSpriteRemove tSpr
+      return empty
+   end if
+   if there is an image pName then delete image pName
+   clone image id tImg
+   set the name of the last image to pName
+   set the lockLoc of the last image to true
+   set the visible of the last image to false
+   b2kSpriteRemove tSpr
+   return pName
+end pfCardArtImage
+
+-- One cast-row figure: clone pFrame, scale the clone to target height pH (aspect
+-- kept), stand it centred at x pCX with its feet on pFeetY, and track it. No
+-- b2kSheetScale juggling - the clone is resized directly, so the game's sheet
+-- scales are never touched.
+command pfCardCastMember pSheet, pFrame, pName, pCX, pFeetY, pH
+   local tNW, tNH, tW
+   if pfCardArtImage(pSheet, pFrame, pName) is empty then exit pfCardCastMember
+   put the width of image pName into tNW
+   put the height of image pName into tNH
+   if tNH < 1 then
+      delete image pName
+      exit pfCardCastMember
+   end if
+   put max(1, round(tNW * pH / tNH)) into tW
+   set the rect of image pName to pCX - (tW div 2), pFeetY - pH, pCX + (tW div 2), pFeetY
+   set the uCardBaseBlend of image pName to 0
+   pfCardAddArt the long id of image pName
+end pfCardCastMember
+
+-- Build the illustrated scene for gLevel into gCardArt (hidden; pfCardShow shows
+-- it under the cover lock). The uCardBaseBlend property holds each layer's RESTING
+-- blendLevel so the fade ramp can add progress on top without flattening the
+-- scrim/ground translucency.
+command pfCardArtBuildLevel
+   local tBg, tGY
+   if gAssetsOK is not true then exit pfCardArtBuildLevel   -- placeholder mode: tint card only
+   put 480 into tGY                                         -- the ground line the cast stands on
+   -- the biome backdrop (L1-L5), as two overlapping panels filling the 1024 width
+   put pfLevelBgFrame(gLevel) into tBg
+   if tBg is not empty and b2kSheetHasFrame("bg", tBg) then
+      if pfCardArtImage("bg", tBg, "pfCardBgA") is not empty then
+         set the rect of image "pfCardBgA" to 0, 0, 592, 640
+         set the uCardBaseBlend of image "pfCardBgA" to 0
+         pfCardAddArt the long id of image "pfCardBgA"
+      end if
+      if pfCardArtImage("bg", tBg, "pfCardBgB") is not empty then
+         set the rect of image "pfCardBgB" to 432, 0, 1024, 640
+         set the uCardBaseBlend of image "pfCardBgB" to 0
+         pfCardAddArt the long id of image "pfCardBgB"
+      end if
+      -- a dark scrim so the title text reads over the busy backdrop (rests at 42)
+      create graphic "pfCardScrim"
+      set the style of graphic "pfCardScrim" to "rectangle"
+      set the rect of graphic "pfCardScrim" to 0, 0, 1024, 640
+      set the filled of graphic "pfCardScrim" to true
+      set the backgroundColor of graphic "pfCardScrim" to "14,16,26"
+      set the blendLevel of graphic "pfCardScrim" to 42
+      set the uCardBaseBlend of graphic "pfCardScrim" to 42
+      set the visible of graphic "pfCardScrim" to false   -- hidden until pfCardShow reveals the whole cover at once
+      pfCardAddArt the long id of graphic "pfCardScrim"
+   end if
+   -- a ground band the cast stands on (a darker shade of the biome tint)
+   create graphic "pfCardGround"
+   set the style of graphic "pfCardGround" to "rectangle"
+   set the rect of graphic "pfCardGround" to 0, tGY, 1024, 640
+   set the filled of graphic "pfCardGround" to true
+   set the backgroundColor of graphic "pfCardGround" to pfShade(pfLevelTint(gLevel), 0.45)
+   set the blendLevel of graphic "pfCardGround" to 6
+   set the uCardBaseBlend of graphic "pfCardGround" to 6
+   set the visible of graphic "pfCardGround" to false   -- hidden until pfCardShow reveals the whole cover at once
+   pfCardAddArt the long id of graphic "pfCardGround"
+   -- THE CAST: real game art previewing this world (each figure optional)
+   pfCardCastMember "chars", ("character_" & gHeroSkin & "_idle"), "pfCardCastHero", 336, tGY + 8, 96
+   pfCardCastMember "foes", pfLevelFoeFrame(gLevel), "pfCardCastFoe", 492, tGY + 8, 64
+   pfCardCastMember "tiles", "coin_gold", "pfCardCastCoin", 606, tGY + 4, 40
+   pfCardCastMember "tiles", "flag_yellow_a", "pfCardCastFlag", 706, tGY + 8, 96
+end pfCardArtBuildLevel
+
+-- Raise the whole card stack to the very top, in z-order: tint base, then the
+-- art (in build order: backdrop, scrim, ground, cast), then the title text on
+-- top. Each "set the layer ... to tTop" lands at the top, pushing the previous
+-- one down, so the LAST raised (the text) ends up frontmost.
+command pfCardRaise
+   local tTop, tC
+   put the number of controls of this card into tTop
+   if there is a graphic "pfCardShade" then set the layer of graphic "pfCardShade" to tTop
+   repeat for each line tC in gCardArt
+      if tC is not empty then set the layer of tC to tTop
+   end repeat
+   if there is a field "pfCardText" then set the layer of field "pfCardText" to tTop
+end pfCardRaise
+
+-- COVER the screen with the card NOW: compose its colour + text, raise the whole
+-- stack above every other control, make it opaque, and force ONE repaint so it is
+-- on screen BEFORE the teardown/build that follows paints underneath it. pLight
+-- true = light text (for the dark tints).
 command pfCardShow pText, pTint, pLight
-   local tTop
+   local tC
    add 1 to gCardGen                       -- invalidate any in-flight fade ramp
    if there is no graphic "pfCardShade" then exit pfCardShow
    set the backgroundColor of graphic "pfCardShade" to pTint
@@ -844,18 +1032,23 @@ command pfCardShow pText, pTint, pLight
          set the textColor of field "pfCardText" to "28,30,42"
       end if
    end if
-   put the number of controls of this card into tTop
-   set the layer of graphic "pfCardShade" to tTop
-   if there is a field "pfCardText" then set the layer of field "pfCardText" to tTop
+   pfCardRaise
    lock screen
    set the visible of graphic "pfCardShade" to true
+   repeat for each line tC in gCardArt
+      if tC is not empty then set the visible of tC to true
+   end repeat
    if there is a field "pfCardText" then set the visible of field "pfCardText" to true
    unlock screen                           -- flush: the cover is on screen now
 end pfCardShow
 
 -- Cover for the CURRENT level (called at the very top of pfStartGame, before the
--- teardown) - the biome card for gLevel.
+-- teardown): build the illustrated biome scene, then cover with it. The title
+-- text sits in the upper band, the cast row below it.
 command pfCardCover
+   pfCardArtClear
+   pfCardArtBuildLevel
+   if there is a field "pfCardText" then set the rect of field "pfCardText" to 40, 70, 984, 410
    pfCardShow pfLevelCardText(), pfLevelTint(gLevel), pfLevelLight(gLevel)
 end pfCardCover
 
@@ -868,20 +1061,30 @@ command pfCardReveal
    send ("pfCardFadeStep" && gCardGen) to me in 620 milliseconds
 end pfCardReveal
 
--- One step of the fade-out ramp (0 = opaque ... 100 = clear). pGen guards
--- against a stale ramp left over when a newer cover superseded this one.
+-- One step of the fade-out ramp (0 = opaque ... 100 = clear), across the tint
+-- base, the title text, and every illustrated-art layer. Each layer fades from
+-- its RESTING blend (uCardBaseBlend: 0 for opaque pieces, 42/6 for scrim/ground) up to
+-- 100, so the scrim's dimming holds through the fade instead of flashing opaque.
+-- pGen guards against a stale ramp left when a newer cover superseded this one.
 command pfCardFadeStep pGen
+   local tC
    if pGen is not gCardGen then exit pfCardFadeStep
    if there is no graphic "pfCardShade" then exit pfCardFadeStep
    add 12 to gCardFade
    if gCardFade >= 100 then
       set the visible of graphic "pfCardShade" to false
       if there is a field "pfCardText" then set the visible of field "pfCardText" to false
+      repeat for each line tC in gCardArt
+         if tC is not empty then set the visible of tC to false
+      end repeat
       set the blendLevel of graphic "pfCardShade" to 0   -- reset for the next cover
       exit pfCardFadeStep
    end if
    set the blendLevel of graphic "pfCardShade" to gCardFade
    if there is a field "pfCardText" then set the blendLevel of field "pfCardText" to gCardFade
+   repeat for each line tC in gCardArt
+      if tC is not empty then set the blendLevel of tC to min(100, (the uCardBaseBlend of tC) + gCardFade)
+   end repeat
    send ("pfCardFadeStep" && gCardGen) to me in 45 milliseconds
 end pfCardFadeStep
 
@@ -897,6 +1100,8 @@ command pfShowTitle
    -- load the atlases ONCE (prompts for the folder the first time, then cached +
    -- persisted into the game); skip the reload once the chars sheet is present
    if not b2kSheetHasFrame("chars", "character_beige_idle") then put pfLoadSheets() into gAssetsOK
+   pfCardArtClear                           -- the title has no level scene (just the hero preview)
+   if there is a field "pfCardText" then set the rect of field "pfCardText" to 32, 40, 992, 600
    pfCardShow pfTitleCardText(), "26,30,44", true
    pfTitleHero                              -- the live hero preview, above the card
 end pfShowTitle
@@ -5128,13 +5333,11 @@ command pfChromeFront
    repeat for each item tC in "pfbtn_pause,pfbtn_reset,pfbtn_again,pfbtn_level"
       if there is a button tC then set the layer of button tC to tN
    end repeat
-   -- the transition card sits ABOVE all other chrome while it is covering: the
-   -- build created controls over it, so re-raise it here (last) to keep it on top
-   -- until the reveal fade hides it. Skipped when hidden (e.g. on the win screen).
-   if there is a graphic "pfCardShade" and the visible of graphic "pfCardShade" is true then
-      set the layer of graphic "pfCardShade" to tN
-      if there is a field "pfCardText" then set the layer of field "pfCardText" to tN
-   end if
+   -- the transition card (tint base + illustrated art + title text) sits ABOVE all
+   -- other chrome while it is covering: the build created controls over it, so
+   -- re-raise the whole stack here to keep it on top until the reveal fade hides
+   -- it. Skipped when hidden (e.g. on the win screen).
+   if there is a graphic "pfCardShade" and the visible of graphic "pfCardShade" is true then pfCardRaise
 end pfChromeFront
 
 command pfWipeStage
