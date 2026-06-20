@@ -40,7 +40,9 @@ Box2D v3.1.0 (fetched by CMake)
   loop. This is what the examples and most users actually call.
 
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
-`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`, `asset-expansion-plan.md`). Prebuilt per-platform
+`kit-guide.md`, `kit-reference.md`, `asset-expansion-plan.md`, and `platformer-polish-plan.md` — the
+forward-looking plan now that feature dev is frozen; the superseded pre-implementation
+`game-engine-spec.md` + `expansion-prep.md` are under `docs/archive/`). Prebuilt per-platform
 binaries are in `prebuilt/` — the SOURCE `tools/package-extension.py` lays into the extension's
 `src/code/<arch>-<platform>/` tree; the install is the packaged extension, not a loose drop-in (a
 loose `box2dxt.{so,dll,dylib}` beside a saved stack is only the dev/fallback path, mapped at runtime
@@ -48,8 +50,10 @@ by the Kit's `b2kEnsureNativeLib`). The **Game Kit** (input/sprites/player/camer
 implemented and user-verified; content **Waves 0-7 are built** (Wave 8, builder cross-pollination, is
 the only remaining roadmap item); `plan.md`'s decision log is the as-built record. Six examples: demo,
 contraption builder, **spike-gamekit** (the Phase-0 Game Kit harness), **platformer** (the flagship
-game showcase — the Game Kit pushed hard across 5 levels, with bestiary I + variety walkers + bestiary
-II frog/barnacle/spider — the focus of this repo's game work), **slingshot** (angry-birds-style tower
+game showcase — the Game Kit pushed hard across 7 levels, with bestiary I + variety walkers + bestiary
+II frog/barnacle/spider, coin tiers + a hidden star, a forgiving 5-heart health model, and character
+select — the focus of this repo's game work; forward feature dev is now FROZEN for a polish pass, see
+`docs/platformer-polish-plan.md`), **slingshot** (angry-birds-style tower
 knockdown over 3 levels — the physics core carrying a whole game with zero events and zero assets), and
 the **self-test harness** (below). (The single-screen micro-game was retired in Wave 5; its "whole game
 from the physics core" pattern survives only as `kit-guide` section 20 prose.)

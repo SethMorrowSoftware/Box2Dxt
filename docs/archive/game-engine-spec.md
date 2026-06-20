@@ -1,5 +1,12 @@
 # Box2Dxt Game Kit — Specification
 
+> **ARCHIVED / HISTORICAL.** This is the pre-implementation *design spec* for the
+> Game Kit modules (input · sprites · player · camera · audio). They are all
+> implemented and user-verified — the living docs are
+> [`../kit-guide.md`](../kit-guide.md) (teaching) and
+> [`../kit-reference.md`](../kit-reference.md) (API), with the as-built decisions
+> in [`../../plan.md`](../../plan.md). Kept for design-intent history only.
+
 **Player objects, spritesheet animation, and keyboard control for Box2Dxt**
 
 | | |

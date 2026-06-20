@@ -1,16 +1,22 @@
 # Asset Expansion Plan — using the WHOLE spritesheet library
 
-The platformer demo ships **five polished levels** but taps only about a
-**quarter of the art it already loads** (an audit of every `<SubTexture>` vs
-every frame-name the example references). This document is the roadmap to grow
-the demo until **every spritesheet asset earns its place** — new biomes, new
-levels, new enemies, new mechanics, new collectibles, and new heroes — without
-losing the reliability the engine and the layout audits give us.
+> **STATUS (frozen): Phases A–G shipped — the demo grew from 5 to SEVEN polished
+> levels.** Forward feature development is now **stopped** for a polish pass (see
+> [`platformer-polish-plan.md`](platformer-polish-plan.md)). The remaining phases
+> below (**H** Clocktown — *attempted and rolled back*, **I** alien-swim, **J**
+> stretch) are **not being pursued**; they're kept as an as-built record and a
+> "if we ever resume" appendix. The canonical history is
+> [`../CHANGELOG.md`](../CHANGELOG.md) + [`../plan.md`](../plan.md).
 
-It is the **content** companion to [`expansion-prep.md`](expansion-prep.md)
-(the Kit/Wave 0–8 intake) and [`../plan.md`](../plan.md) (the as-built log).
-Where `expansion-prep.md` planned the *Kit features*, this plans the *content
-that consumes the art*.
+The platformer demo now ships **seven polished levels** (it shipped five when this
+roadmap was written). This document was the roadmap that grew it — an audit of
+every `<SubTexture>` vs every frame-name the example references, then a plan to use
+**more of the art** through new biomes, levels, enemies, mechanics, collectibles,
+and heroes, without losing the reliability the engine and the layout audits give.
+
+It is the **content** companion to
+[`archive/expansion-prep.md`](archive/expansion-prep.md) (the Kit/Wave 0–8 intake,
+now archived) and [`../plan.md`](../plan.md) (the as-built log).
 
 | | |
 |---|---|
