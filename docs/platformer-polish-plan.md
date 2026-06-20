@@ -55,6 +55,15 @@ well, not adding more.
 
 ## 2. THE HEADLINE: interstitial / transition screens
 
+> **Status (branch `claude/zealous-hypatia-v52yu7`):** IMPLEMENTED — needs an OXT
+> pass. A card-level `pfCardShade`/`pfCardText` overlay (built once in `buildPfUI`,
+> `kPfUIVersion` → 11) covers every `pfStartGame` teardown+build (`pfCardCover`
+> before the teardown, `pfCardReveal` send-driven `blendLevel` fade after `b2kStart`),
+> the demo boots to a title screen with a live hero preview + the 1-5 chooser (moved
+> off the in-level binding), and the win screen is recomposed in the card language.
+> Static gates + audit clean; example-side only (no Kit touch). Tints/flavours/timings
+> are first-pass tunables. See the CHANGELOG entry for the full landing notes.
+
 **The problem.** `pfStartGame` (the per-level world build) runs its **teardown
 before the `lock screen`** (it deletes the previous level's controls at
 ~`pfStartGame`:`b2kTeardown`/`pfWipeStage`, then locks the screen only at the
@@ -231,9 +240,13 @@ adjust on an OXT pass, level by level:
 
 ## 9. Definition of done (the final checklist)
 
-- [ ] **No visible build.** Every level start / advance / restart / hero-pick is
+- [~] **No visible build.** Every level start / advance / restart / hero-pick is
   masked by the transition card; the player never sees teardown or construction.
-- [ ] **Bookends.** A title screen (with hero select) and a composed win screen.
+  *(Implemented — `pfCardCover`/`pfCardReveal`; needs OXT confirmation that the
+  cover fully masks the build on the engine.)*
+- [~] **Bookends.** A title screen (with hero select) and a composed win screen.
+  *(Implemented — boot title with live hero preview + recomposed win card; needs
+  an OXT pass.)*
 - [ ] **Facing & scale clean** on every sprite, all 7 levels (OXT-confirmed).
 - [ ] **Feel locked** — jump/dash/swim/spring numbers deliberate, every beat
   fairly clearable, the difficulty ramp intentional.
