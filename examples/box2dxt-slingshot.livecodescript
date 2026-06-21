@@ -74,8 +74,15 @@ local gBlkN, gBlk, gBlkX, gBlkY, gBlkScored   -- blocks + build spots
 local gRingUntil         -- pop-ring pool timers (0 = ring free)
 local gDotsOn            -- aim dots currently shown (skip redundant sets)
 local gHudLast, gHudNextMS, gBuilding
+-- the TRANSITION COVER: an opaque card (sgCard) + a title (sgCardText) that hides
+-- each level teardown/rebuild so the player never watches a tower dismantle, then
+-- fades out. The platformer's pfCardShade/pfCardText pattern, minus the illustrated
+-- art - a plain tinted cover is enough here. gSgCardActive gates the reveal so the
+-- initial openCard build (which the menu covers) is left alone; gSgCardGen
+-- invalidates a stale fade send; gSgCardFade is the ramp (0 opaque .. 100 clear).
+local gSgCardActive, gSgCardGen, gSgCardFade
 
-constant kSgUIVersion = "1"
+constant kSgUIVersion = "2"   -- added the transition cover (sgCard / sgCardText)
 constant kPocketX = 170      -- the sling pocket (screen px)
 constant kPocketY = 444
 constant kPullMax = 96       -- tether radius: full pull = full power
@@ -111,6 +118,8 @@ command buildSgUI
    if there is a field "sgHud" then delete field "sgHud"
    if there is a graphic "sgShade" then delete graphic "sgShade"
    if there is a field "sgBigText" then delete field "sgBigText"
+   if there is a graphic "sgCard" then delete graphic "sgCard"
+   if there is a field "sgCardText" then delete field "sgCardText"
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -152,6 +161,27 @@ command buildSgUI
    set the opaque of it to false
    set the showBorder of it to false
    set the textColor of it to "245,245,250"
+   -- the transition COVER (opaque) + its title - hidden; shown by sgCardShow before
+   -- each rebuild, faded out by sgCardReveal. Distinct from the translucent sgShade
+   -- banner so neither has to juggle the other's blendLevel.
+   create graphic "sgCard"
+   set the style of it to "rectangle"
+   set the rect of it to 0, 0, 1024, 640
+   set the filled of it to true
+   set the backgroundColor of it to "20,24,36"
+   set the blendLevel of it to 0
+   set the visible of it to false
+   create field "sgCardText"
+   set the rect of it to 112, 250, 912, 392
+   set the lockText of it to true
+   set the traversalOn of it to false
+   set the textAlign of it to "center"
+   set the textSize of it to 30
+   set the textStyle of it to "bold"
+   set the opaque of it to false
+   set the showBorder of it to false
+   set the textColor of it to "245,245,250"
+   set the visible of it to false
    set the uSgUIVersionTag of this stack to kSgUIVersion
 end buildSgUI
 
@@ -163,7 +193,68 @@ command sgChromeFront
    if there is a field "sgTitle" then set the layer of field "sgTitle" to tN
    if there is a field "sgHelp" then set the layer of field "sgHelp" to tN
    if there is a field "sgHud" then set the layer of field "sgHud" to tN
+   -- the transition cover sits ABOVE all other chrome while it is covering: the
+   -- build just created controls over it, so re-raise it here (last) to keep it on
+   -- top until the reveal fade hides it. Skipped when it is hidden.
+   if there is a graphic "sgCard" and the visible of graphic "sgCard" is true then
+      set the layer of graphic "sgCard" to tN
+      if there is a field "sgCardText" then set the layer of field "sgCardText" to tN
+   end if
 end sgChromeFront
+
+-- ===== the TRANSITION COVER (the platformer's transition-card lesson) =====
+-- A level title for the cover.
+function sgLevelTitle pLevel
+   return "L E V E L   " & pLevel & "   /   3"
+end sgLevelTitle
+
+-- COVER the screen NOW, before a rebuild: hide the translucent banner, raise the
+-- opaque card + title above everything, show it, and force one repaint so it is on
+-- screen before the teardown/build that follows paints underneath it.
+command sgCardShow pTitle
+   local tTop
+   add 1 to gSgCardGen                  -- invalidate any in-flight fade ramp
+   put true into gSgCardActive
+   if there is a graphic "sgShade" then set the visible of graphic "sgShade" to false
+   if there is a field "sgBigText" then set the visible of field "sgBigText" to false
+   if there is no graphic "sgCard" then exit sgCardShow
+   set the blendLevel of graphic "sgCard" to 0
+   if there is a field "sgCardText" then
+      set the text of field "sgCardText" to pTitle
+      set the blendLevel of field "sgCardText" to 0
+   end if
+   put the number of controls of this card into tTop
+   set the layer of graphic "sgCard" to tTop
+   if there is a field "sgCardText" then set the layer of field "sgCardText" to tTop
+   lock screen
+   set the visible of graphic "sgCard" to true
+   if there is a field "sgCardText" then set the visible of field "sgCardText" to true
+   unlock screen
+end sgCardShow
+
+-- REVEAL the built level: hold the opaque card a beat, then fade it out via a
+-- generation-guarded self-send (so a fresh cover invalidates a stale ramp).
+command sgCardReveal
+   add 1 to gSgCardGen
+   put 0 into gSgCardFade
+   send ("sgCardFadeStep" && gSgCardGen) to me in 600 milliseconds
+end sgCardReveal
+
+command sgCardFadeStep pGen
+   if pGen is not gSgCardGen then exit sgCardFadeStep
+   if there is no graphic "sgCard" then exit sgCardFadeStep
+   add 12 to gSgCardFade
+   if gSgCardFade >= 100 then
+      set the visible of graphic "sgCard" to false
+      if there is a field "sgCardText" then set the visible of field "sgCardText" to false
+      set the blendLevel of graphic "sgCard" to 0   -- reset for the next cover
+      put false into gSgCardActive
+      exit sgCardFadeStep
+   end if
+   set the blendLevel of graphic "sgCard" to gSgCardFade
+   if there is a field "sgCardText" then set the blendLevel of field "sgCardText" to gSgCardFade
+   send ("sgCardFadeStep" && gSgCardGen) to me in 45 milliseconds
+end sgCardFadeStep
 
 -- =====================================================================
 -- The state machine: menu -> play -> (clear ->) ... -> won -> (again)
@@ -452,6 +543,9 @@ command sgBuildLevel pLevel
       b2kStart
    end if
    put false into gBuilding
+   -- fade the cover off the freshly-built level (only when a transition raised it;
+   -- the initial openCard build has no cover - the menu takes over there)
+   if gSgCardActive is true then sgCardReveal
 end sgBuildLevel
 
 -- Remove every level control (all are "sg_" prefixed; chrome is "sgX").
@@ -548,8 +642,7 @@ end sgShotDone
 
 command sgRetry
    put gScoreAt into gScore   -- the level never happened
-   set the visible of graphic "sgShade" to false
-   set the visible of field "sgBigText" to false
+   sgCardShow sgLevelTitle(gLevel)
    sgBuildLevel gLevel
    put "play" into gMode
 end sgRetry
@@ -607,8 +700,7 @@ command sgNextLevel
       sgShowWin
       exit sgNextLevel
    end if
-   set the visible of graphic "sgShade" to false
-   set the visible of field "sgBigText" to false
+   sgCardShow sgLevelTitle(gLevel + 1)
    sgBuildLevel gLevel + 1
    put "play" into gMode
 end sgNextLevel
@@ -734,8 +826,7 @@ on mouseUp
    end if
    if gMode is "won" then
       put 0 into gScore
-      set the visible of graphic "sgShade" to false
-      set the visible of field "sgBigText" to false
+      sgCardShow sgLevelTitle(1)
       sgBuildLevel 1
       put "play" into gMode
       exit mouseUp
@@ -755,8 +846,7 @@ on rawKeyDown pKeyCode
       exit rawKeyDown
    end if
    if pKeyCode >= 49 and pKeyCode <= 51 and gMode is not "menu" then
-      set the visible of graphic "sgShade" to false
-      set the visible of field "sgBigText" to false
+      sgCardShow sgLevelTitle(pKeyCode - 48)
       sgBuildLevel pKeyCode - 48
       put "play" into gMode
       exit rawKeyDown

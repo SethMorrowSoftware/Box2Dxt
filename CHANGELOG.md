@@ -10,6 +10,27 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ### Added
 
+- **Slingshot: a transition COVER between levels (carrying the platformer's
+  transition-card lesson across).** A review of the other demo stacks found the
+  slingshot had the same "visible build seam" the platformer just fixed - and worse:
+  every level change ran `b2kClear`/`b2kTeardown`/`sgWipeStage` *on screen* before
+  `lock screen`, and each transition path *hid* its translucent banner overlay right
+  before tearing down, so the player watched the old tower dismantle against a bare
+  card. Added a dedicated **opaque cover** (`sgCard` + `sgCardText`, built once in
+  `buildSgUI`, `kSgUIVersion` 1 -> 2) raised above everything: `sgCardShow` covers
+  with a "LEVEL n / 3" title *before* the teardown (in all four transition callers -
+  retry, next-level, win-replay, the 1-3 level jumps), the rebuild paints behind it,
+  and `sgCardReveal` holds a beat then fades it out via a generation-guarded
+  `send`-driven `blendLevel` ramp - the slingshot twin of the platformer's
+  `pfCardShow`/`pfCardReveal`, minus the illustrated art (a plain tinted cover is
+  enough). Kept separate from the translucent `sgShade` banner so neither juggles the
+  other's blendLevel; the initial `openCard` build is left to the menu (a
+  `gSgCardActive` gate). Example-side only; gates clean. **Needs an OXT pass** to
+  confirm the cover masks the rebuild and to tune the hold/fade timing. The same
+  review also **removed the dead `newStaticBar` factory** from the demo (defined,
+  never called) and confirmed the other stacks need no change: the contraption builder
+  is already playbook-clean, and spike-gamekit is intentional throwaway scaffolding.
+
 - **Platformer: ILLUSTRATED biome cards (real game art on the transition card).** The
   level cards are no longer a solid tint + sparse text: each is now a little composed
   scene built from the already-loaded atlases (zero new asset files). Behind the title
