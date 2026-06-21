@@ -6336,23 +6336,6 @@ function newPoly pX, pY, pR, pColor
    return tRef
 end newPoly
 
-function newStaticBar pX, pY, pW, pH, pColor
-   local tName, tRef
-   put "demo_static_" & the milliseconds & "_" & random(99999) into tName
-   create graphic tName
-   put the long id of graphic tName into tRef
-   set the style of tRef to "rectangle"
-   set the filled of tRef to true
-   set the backgroundColor of tRef to pColor
-   set the foregroundColor of tRef to "20,20,24"
-   set the lineSize of tRef to 1
-   set the width of tRef to pW
-   set the height of tRef to pH
-   set the loc of tRef to round(pX) & "," & round(pY)
-   b2kAddStatic tRef
-   return tRef
-end newStaticBar
-
 -- =====================================================================
 -- UI
 -- =====================================================================
