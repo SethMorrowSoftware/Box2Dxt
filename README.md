@@ -58,7 +58,8 @@ Box2D v3.1.0 (fetched by CMake)
    a bestiary (bats, a mimic, piranhas, a ghost, a kickable snail shell, rising
    lava/goo serpents, crushers, spinners, and more), joints (rope bridge, boulder,
    exploding barrel), collectibles (coin tiers, gems, a hidden star), a forgiving
-   five-heart health model, character select, an art HUD,
+   five-heart health model, a boot title screen with character select, biome-illustrated
+   transition cards that mask every level load, an art HUD,
    spritesheets, and synthesized audio — and the
    [slingshot](examples/box2dxt-slingshot.livecodescript) is pure physics
    joy: catapult cannonballs into toppling towers, angry-birds style
