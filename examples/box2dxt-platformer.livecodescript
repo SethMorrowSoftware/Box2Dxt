@@ -925,8 +925,11 @@ function pfCardArtImage pSheet, pFrame, pName
    if there is an image pName then delete image pName
    clone image id tImg
    set the name of the last image to pName
-   set the lockLoc of the last image to true
    set the visible of the last image to false
+   -- NB: lockLoc is set by the CALLER, AFTER it sets the rect - an image only
+   -- scales its content to a custom rect when the rect is set while lockLoc is
+   -- still false, then locked (the order pfTextureSlab uses). Locking first here
+   -- left the backdrop stuck at its natural ~640px instead of filling the card.
    b2kSpriteRemove tSpr
    return pName
 end pfCardArtImage
@@ -946,6 +949,7 @@ command pfCardCastMember pSheet, pFrame, pName, pCX, pFeetY, pH
    end if
    put max(1, round(tNW * pH / tNH)) into tW
    set the rect of image pName to pCX - (tW div 2), pFeetY - pH, pCX + (tW div 2), pFeetY
+   set the lockLoc of image pName to true   -- freeze the scaled size (rect set first, see pfCardArtImage)
    set the uCardBaseBlend of image pName to 0
    pfCardAddArt the long id of image pName
 end pfCardCastMember
@@ -955,7 +959,7 @@ end pfCardCastMember
 -- blendLevel so the fade ramp can add progress on top without flattening the
 -- scrim/ground translucency.
 command pfCardArtBuildLevel
-   local tBg, tGY, tBW, tBH, tBgH
+   local tBg, tGY, tBW, tBH, tBgH, tBgTop
    if gAssetsOK is not true then exit pfCardArtBuildLevel   -- placeholder mode: tint card only
    put 480 into tGY                                         -- the ground line the cast stands on
    -- the biome backdrop (L1-L5): ONE panel scaled to COVER the 1024 card width with
@@ -970,8 +974,10 @@ command pfCardArtBuildLevel
          put the height of image "pfCardBgA" into tBH
          if tBW < 1 then put 640 into tBW
          if tBH < 1 then put 640 into tBH
-         put max(640, round(1024 * tBH / tBW)) into tBgH   -- aspect-scaled to fill the width (>= card height)
-         set the rect of image "pfCardBgA" to 0, 0, 1024, tBgH
+         put max(640, round(1024 * tBH / tBW)) into tBgH   -- aspect-scaled to fill the 1024 width (>= card height)
+         put (640 - tBgH) div 2 into tBgTop                -- centre the vertical crop (show the focal middle, not just the sky)
+         set the rect of image "pfCardBgA" to 0, tBgTop, 1024, tBgTop + tBgH
+         set the lockLoc of image "pfCardBgA" to true      -- freeze the scaled size (rect set first, see pfCardArtImage)
          set the uCardBaseBlend of image "pfCardBgA" to 0
          pfCardAddArt the long id of image "pfCardBgA"
          -- a dark scrim so the title text reads over the busy backdrop (rests at 42)
