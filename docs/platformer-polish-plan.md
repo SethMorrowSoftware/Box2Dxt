@@ -1,10 +1,11 @@
 # Platformer Polish Plan — bringing the demo to its final form
 
 Forward feature development on the platformer is **frozen**. The demo is a
-**7-level** scrolling showcase (asset-expansion Phases A–G shipped; the 8th level
-"Clocktown" was attempted and rolled back — recoverable at commit `fbc93b2`).
-This document is the plan to take it from "feature-complete" to **polished and
-final**: the things to refine, not to add.
+**7-level** scrolling showcase (asset-expansion Phases A–G shipped; an 8th level
+"Clocktown" was attempted and rolled back — it left no trace in the canonical
+history, so the as-built record is `plan.md` + `CHANGELOG.md`, not a recoverable
+commit). This document is the plan to take it from "feature-complete" to
+**polished and final**: the things to refine, not to add.
 
 The discipline that built it still governs: **OXT is the truth for runtime/feel**
 (claim "verified statically; needs an OXT pass", never assert what we can't
@@ -55,21 +56,20 @@ well, not adding more.
 
 ## 2. THE HEADLINE: interstitial / transition screens
 
-> **Status (branch `claude/zealous-hypatia-v52yu7`):** IMPLEMENTED — needs an OXT
-> pass. A card-level `pfCardShade`/`pfCardText` overlay (built once in `buildPfUI`,
-> `kPfUIVersion` → 11) covers every `pfStartGame` teardown+build (`pfCardCover`
-> before the teardown, `pfCardReveal` send-driven `blendLevel` fade after `b2kStart`),
-> the demo boots to a title screen with a live hero preview + the 1-5 chooser (moved
-> off the in-level binding), and the win screen is recomposed in the card language.
-> Static gates + audit clean; example-side only (no Kit touch). Tints/flavours/timings
-> are first-pass tunables. See the CHANGELOG entry for the full landing notes.
->
-> **Follow-up (same branch):** the level cards are now **illustrated** rather than a
-> solid tint — each shows the level's real biome backdrop (L1-L5) under a scrim plus a
-> cast row of real sprites (hero + foe + coin + flag) on a ground band, all cloned from
-> the loaded atlases (no new assets), every piece degrading to the tint base if a slice
-> fails. (Real per-level screenshots were rejected: the levels are ~6,400px scrolling
-> worlds, so a flat grab is unrepresentative and would mean shipping/maintaining PNGs.)
+> **Status: SHIPPED & MERGED (PR #70 + #71), OXT-confirmed.** A card-level
+> `pfCardShade`/`pfCardText` overlay (built once in `buildPfUI`, `kPfUIVersion` → 11)
+> covers every `pfStartGame` teardown+build (`pfCardCover` before the teardown,
+> `pfCardReveal` send-driven `blendLevel` fade after `b2kStart`), the demo boots to a
+> title screen with a live hero preview + the 1-5 chooser (moved off the in-level
+> binding), and the win screen is recomposed in the card language. The level cards are
+> **illustrated**: each shows the level's real biome backdrop (L1-L5, scaled to cover
+> the card under a dimming scrim) plus a cast row of real sprites (hero + foe + coin +
+> flag) on a ground band, all cloned from the loaded atlases (no new assets), every
+> piece degrading to the tint base if a slice fails. Example-side only (no Kit touch).
+> (Real per-level screenshots were rejected: the levels are ~6,400px scrolling worlds,
+> so a flat grab is unrepresentative and would mean shipping/maintaining PNGs.)
+> Remaining card work is cosmetic OXT tuning (cast spacing, scrim strength, crop
+> framing); see the CHANGELOG entries for the full landing notes.
 
 **The problem.** `pfStartGame` (the per-level world build) runs its **teardown
 before the `lock screen`** (it deletes the previous level's controls at
@@ -247,13 +247,13 @@ adjust on an OXT pass, level by level:
 
 ## 9. Definition of done (the final checklist)
 
-- [~] **No visible build.** Every level start / advance / restart / hero-pick is
+- [x] **No visible build.** Every level start / advance / restart / hero-pick is
   masked by the transition card; the player never sees teardown or construction.
-  *(Implemented — `pfCardCover`/`pfCardReveal`; needs OXT confirmation that the
-  cover fully masks the build on the engine.)*
-- [~] **Bookends.** A title screen (with hero select) and a composed win screen.
-  *(Implemented — boot title with live hero preview + recomposed win card; needs
-  an OXT pass.)*
+  *(Shipped — `pfCardCover`/`pfCardReveal`, PR #70; OXT-confirmed "working as
+  expected".)*
+- [x] **Bookends.** A title screen (with hero select) and a composed win screen.
+  *(Shipped — boot title with live hero preview + recomposed win card, PR #70; the
+  level cards are biome-illustrated, PR #71.)*
 - [ ] **Facing & scale clean** on every sprite, all 7 levels (OXT-confirmed).
 - [ ] **Feel locked** — jump/dash/swim/spring numbers deliberate, every beat
   fairly clearable, the difficulty ramp intentional.
@@ -264,8 +264,10 @@ adjust on an OXT pass, level by level:
   debug; the debug overlay stays on `` ` ``.
 - [ ] **Gates green** — `check-livecodescript.py`, `audit-platformer.py`, the
   self-test harness, embedded-Kit sync, all clean.
-- [ ] **Docs current** — README/getting-started/CLAUDE describe the 7-level final
-  demo; this plan's items all checked.
+- [~] **Docs current** — README/getting-started/CLAUDE describe the 7-level final
+  demo; this plan's items all checked. *(README + CLAUDE now describe the boot title +
+  transition cards; the stale `fbc93b2` Clocktown recovery ref was corrected — that
+  commit never existed. Remaining: tick the rest of this list as those passes land.)*
 - [ ] **Packages clean** — a fresh install runs the demo end to end.
 
 ---

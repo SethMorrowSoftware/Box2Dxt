@@ -51,9 +51,10 @@ implemented and user-verified; content **Waves 0-7 are built** (Wave 8, builder 
 the only remaining roadmap item); `plan.md`'s decision log is the as-built record. Six examples: demo,
 contraption builder, **spike-gamekit** (the Phase-0 Game Kit harness), **platformer** (the flagship
 game showcase — the Game Kit pushed hard across 7 levels, with bestiary I + variety walkers + bestiary
-II frog/barnacle/spider, coin tiers + a hidden star, a forgiving 5-heart health model, and character
-select — the focus of this repo's game work; forward feature dev is now FROZEN for a polish pass, see
-`docs/platformer-polish-plan.md`), **slingshot** (angry-birds-style tower
+II frog/barnacle/spider, coin tiers + a hidden star, a forgiving 5-heart health model, character
+select, and a polish-pass front-end — a boot title screen + biome-illustrated transition cards that mask
+every level load (the §2 headline + bookends, shipped) — the focus of this repo's game work; forward
+feature dev is FROZEN, polish underway, see `docs/platformer-polish-plan.md`), **slingshot** (angry-birds-style tower
 knockdown over 3 levels — the physics core carrying a whole game with zero events and zero assets), and
 the **self-test harness** (below). (The single-screen micro-game was retired in Wave 5; its "whole game
 from the physics core" pattern survives only as `kit-guide` section 20 prose.)
