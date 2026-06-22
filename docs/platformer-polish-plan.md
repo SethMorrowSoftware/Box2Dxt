@@ -225,8 +225,8 @@ adjust on an OXT pass, level by level:
 - **Audit/gates green** after every edit; keep `tools/audit-platformer.py` clean
   (extend it for any new maker — e.g. the transition overlay needs no geometry, so
   no audit change).
-- **Packaging.** Confirm `tools/package-extension.py` still produces a clean
-  installable extension and the dist stack runs from a fresh machine.
+- **Packaging.** Confirm `tools/package-extension.py --check` reports a complete
+  `src/code/` tree and the dist stack runs from a fresh machine.
 
 ---
 

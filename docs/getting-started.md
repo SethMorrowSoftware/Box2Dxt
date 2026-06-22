@@ -36,9 +36,10 @@ Windows, macOS, and Linux:
 The engine then loads the correct library for your platform automatically —
 **no `/usr/lib`, no `sudo`, no `LD_LIBRARY_PATH`, no renaming.**
 
-> The committed `prebuilt/` binaries are the *source* of those bundled libraries;
-> `python3 tools/package-extension.py` lays them into `src/code/` (already done in
-> the repo). Prefer building the library yourself? See [building.md](building.md).
+> The per-platform libraries under `src/code/<arch>-<platform>/` are committed
+> (built and tested by CI, and attached to each [Release](../../releases)), so
+> this is already done in the repo. Prefer building the library yourself? See
+> [building.md](building.md).
 
 ## 2. Load it while developing
 

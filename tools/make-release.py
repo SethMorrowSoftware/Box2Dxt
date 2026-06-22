@@ -13,8 +13,8 @@ The zip is self-contained and matches dist/INSTALL.md:
 The native library ships INSIDE the extension (the code/ tree), so the recipient
 installs one extension and the engine loads the right per-platform library
 automatically -- no loose .so/.dll/.dylib, no rename, no sudo, no /usr/lib. The
-extension/ folder comes straight from src/ (src/box2dxt.lcb + src/code/, which
-tools/package-extension.py populates from prebuilt/). If you have already built
+extension/ folder comes straight from src/ (src/box2dxt.lcb + src/code/, which is
+committed; tools/package-extension.py refreshes it from a newer build). If you have already built
 a .lce in OXT's Extension Builder, pass it with --lce to drop it in too, so
 testers can install in one click instead of Packaging it themselves.
 
