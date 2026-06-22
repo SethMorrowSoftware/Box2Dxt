@@ -29,15 +29,9 @@ DOCS = [
 ]
 TITLES = {k: (t, d) for k, t, d in DOCS}
 
-# Shown on the manual overview as "going deeper" — these live on GitHub.
-EXTERNAL = [
-    ("API reference",    "The raw b2… extension surface.",        "api-reference.md"),
-    ("Architecture",     "How the three layers fit together.",    "architecture.md"),
-    ("Game engine spec", "The Game Kit design, in depth.",        "game-engine-spec.md"),
-    ("Building",         "Compile the native library yourself.",  "building.md"),
-    ("Expansion prep",   "The internal roadmap & intake plan.",   "expansion-prep.md"),
-    ("Asset expansion plan", "Using the whole spritesheet library.", "asset-expansion-plan.md"),
-]
+# This is a user-facing site: only the three guides above are hosted. Everything
+# else (full source, low-level API, internals) is a single link out to GitHub —
+# no developer docs are surfaced here.
 
 
 # --------------------------------------------------------------------------- #
@@ -361,10 +355,6 @@ def index_page():
         f'<a class="doc" href="{k}.html"><h4>{nums[i]} {t}</h4><p>{html.escape(d)}</p></a>'
         for i, (k, t, d) in enumerate(DOCS)
     )
-    deeper = "\n".join(
-        f'<li><a href="{GH}/blob/main/docs/{path}" target="_blank" rel="noopener">{t}</a> — {html.escape(d)}</li>'
-        for t, d, path in EXTERNAL
-    )
     main = f"""<main class="doc-wrap">
 {sidebar("index")}
 <article class="win doc-win">
@@ -373,9 +363,7 @@ def index_page():
     <h1>The Box2Dxt manual</h1>
     <p>New here? You only need two things: <a href="getting-started.html">Getting started</a> to install Box2Dxt and drop your first body, then the <a href="kit-guide.html">Kit guide</a> to learn the rest. Keep the <a href="kit-reference.html">Kit reference</a> open while you build.</p>
     <div class="docs-grid docs-grid-3" style="margin-top:22px">{cards}</div>
-    <h2>Going deeper</h2>
-    <p>The low-level <code>b2…</code> API, the engine internals, and build-from-source notes are for the curious — they live on GitHub:</p>
-    <ul>{deeper}</ul>
+    <p style="margin-top:24px;color:var(--ink-faint)">That's the whole manual — everything you need to build with the Kit. The full source lives on <a href="{GH}" target="_blank" rel="noopener">GitHub →</a></p>
   </div>
 </article>
 </main>"""

@@ -178,12 +178,12 @@
             <article class="feature">
               <div class="badge b-red"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z"/><path d="M9 12l2 2 4-4"/></svg></div>
               <h3>Safe by design</h3>
-              <p>Every handle is <b>generation-tagged and validated</b> in the C shim. A stale or invalid handle is a harmless no-op — never a crash.</p>
+              <p>Every handle is <b>validated and generation-tagged</b>, so a stale or invalid one is a harmless no-op — getters return zero, actions do nothing. Never a crash.</p>
             </article>
             <article class="feature">
               <div class="badge b-ink"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
-              <h3>Cross-platform, prebuilt</h3>
-              <p>Drop-in libraries for <b>Windows</b> (x64/x86), <b>macOS</b> (universal), and <b>Linux</b> (x86-64/i686). Or build it yourself with two CMake commands.</p>
+              <h3>Cross-platform, built in</h3>
+              <p>The native library for <b>Windows</b> (x64/x86), <b>macOS</b> (universal), and <b>Linux</b> (x86-64/i686) is <b>bundled in the extension</b> and loads automatically — nothing to download, rename, or place by hand.</p>
             </article>
             <article class="feature">
               <div class="badge"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h5M8 11h8M8 15h8"/></svg></div>
@@ -196,27 +196,22 @@
         <!-- CARD 5 · HOW IT WORKS -->
         <section class="card" id="card-how" data-card="how" data-title="How it works" aria-label="How it works">
           <span class="cardnum">CARD 05 · HOW IT WORKS</span>
-          <h2 class="card-h">Three clean layers. One native library.</h2>
-          <p class="card-lead">Call the friendly layer and ignore the rest — or drop down a level whenever you need to. It's a stack, naturally.</p>
+          <h2 class="card-h">You call it. The Kit runs it.<br>Box2D powers it.</h2>
+          <p class="card-lead">One simple idea: you write friendly commands, the Kit does the bookkeeping, and a real physics engine does the maths — and you never leave plain xTalk.</p>
           <div class="stackdiag">
             <div class="win layer">
               <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">your stack</span><span class="win-box"></span></div>
-              <div class="win-body"><span class="layer-tag">your code</span><h4>Your xTalk script</h4><p>Plain handlers — <code>on openCard</code>, <code>on mouseDown</code>, your game logic.</p></div>
+              <div class="win-body"><span class="layer-tag">you write</span><h4>Friendly commands</h4><p>Plain xTalk in <b>pixels and degrees</b> — <code>b2kSpawnBall</code>, <code>b2kPush</code>, react to a hit. That's all you ever touch.</p></div>
             </div>
-            <div class="flow"><span class="pin">b2k…</span> pixels · degrees · screen coords <span class="arr">↓</span></div>
+            <div class="flow"><span class="pin">b2k…</span> pixels · degrees <span class="arr">↓</span></div>
             <div class="win layer">
-              <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">box2dxt-kit.livecodescript</span><span class="win-box"></span></div>
-              <div class="win-body"><span class="layer-tag">the Kit</span><h4>The Kit</h4><p>Pure xTalk sugar. Owns the world and the loop, binds bodies to controls, converts units. <b>This is what most users call.</b></p></div>
+              <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">the Kit</span><span class="win-box"></span></div>
+              <div class="win-body"><span class="layer-tag">the Kit</span><h4>The Kit does the work</h4><p>It owns the world, runs the loop, <b>moves your controls every frame</b>, and converts the units for you — so you don't have to.</p></div>
             </div>
-            <div class="flow"><span class="pin">b2…</span> metres · radians · handles <span class="arr">↓</span></div>
+            <div class="flow"><span class="pin">▶</span> real physics <span class="arr">↓</span></div>
             <div class="win layer">
-              <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">box2dxt.lcb</span><span class="win-box"></span></div>
-              <div class="win-body"><span class="layer-tag">the extension</span><h4>The extension</h4><p>The xTalk Builder binding — foreign handlers plus a public <code>b2…</code> wrapper for the whole Box2D v3.1 surface.</p></div>
-            </div>
-            <div class="flow"><span class="pin">FFI</span> ints &amp; doubles · opaque handles <span class="arr">↓</span></div>
-            <div class="win layer">
-              <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">box2d_lc.c + Box2D v3.1.0</span><span class="win-box"></span></div>
-              <div class="win-body"><span class="layer-tag">native</span><h4>The C shim &amp; the engine</h4><p>Compiled into one shared library. Handles are stored in a table, validated, and generation-tagged for safety.</p></div>
+              <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">Box2D v3.1.0</span><span class="win-box"></span></div>
+              <div class="win-body"><span class="layer-tag">under the hood</span><h4>Real Box2D, running native</h4><p>The same battle-tested engine behind countless games — gravity, collisions, joints, the lot — bundled right into the extension.</p></div>
             </div>
           </div>
         </section>
@@ -239,7 +234,7 @@
             <a class="win ex" href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-platformer.livecodescript" target="_blank" rel="noopener">
               <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">platformer</span><span class="win-box"></span></div>
               <div class="ex-art art-platformer"></div>
-              <div class="win-body"><h3>Platformer Showcase</h3><p>Six scrolling biome levels — grass, stone, ice, haunted, desert, cavern — with a full player controller, a bestiary (bats, a mimic, piranhas, a ghost, a kickable shell, crushers), joints, spritesheets, and synthesized audio.</p><span class="go">READ THE SCRIPT →</span></div>
+              <div class="win-body"><h3>Platformer Showcase</h3><p>Seven scrolling biome levels with a full player controller (run, double-jump, wall-jump, dash, climb, swim), a bestiary (bats, a mimic, piranhas, a ghost, rising lava/goo serpents, crushers), health hearts, character select, collectibles, an art HUD, spritesheets, and synthesized audio.</p><span class="go">READ THE SCRIPT →</span></div>
             </a>
             <a class="win ex" href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-slingshot.livecodescript" target="_blank" rel="noopener">
               <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">slingshot</span><span class="win-box"></span></div>
@@ -269,7 +264,7 @@
             <a class="doc" href="docs/kit-guide.html"><h4>② Kit guide</h4><p>The friendly <code>b2k…</code> layer, taught step by step: bodies, joints, events, terrain.</p></a>
             <a class="doc" href="docs/kit-reference.html"><h4>③ Kit reference</h4><p>Every <code>b2k…</code> call, one line each — keep it open while you build.</p></a>
           </div>
-          <p class="docs-more">Going deeper — the raw <code>b2…</code> API, the engine internals, and build-from-source notes — lives on <a href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/docs" target="_blank" rel="noopener">GitHub →</a></p>
+          <p class="docs-more">That's the whole manual — everything you need to build with the Kit. The full source lives on <a href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub →</a></p>
         </section>
 
         <!-- CARD 8 · GET STARTED -->
