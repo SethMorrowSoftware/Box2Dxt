@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Box2Dxt — Real 2D physics for OpenXTalk &amp; the xTalk family</title>
+<meta name="description" content="Box2Dxt drops the battle-tested Box2D v3.1.0 physics engine into OpenXTalk and LiveCode. Write plain xTalk; your controls fall, roll, bounce, hinge, and collide — try it live in the browser.">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f1ece1">
+<link rel="canonical" href="https://sethmorrowsoftware.github.io/Box2Dxt/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Box2Dxt">
+<meta property="og:url" content="https://sethmorrowsoftware.github.io/Box2Dxt/">
+<meta property="og:title" content="Box2Dxt — physics for the card &amp; stack people">
+<meta property="og:description" content="The battle-tested Box2D engine, dropped into OpenXTalk and LiveCode. Write xTalk handlers and run them live, right on the page.">
+<meta property="og:image" content="https://sethmorrowsoftware.github.io/Box2Dxt/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Box2Dxt — real 2D physics for OpenXTalk &amp; LiveCode">
+<meta name="twitter:description" content="Write plain xTalk; your controls fall, roll, bounce, hinge, and collide. Try it live. MIT-licensed, cross-platform, bundled in.">
+<meta name="twitter:image" content="https://sethmorrowsoftware.github.io/Box2Dxt/og-image.png">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Box2Dxt","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux","description":"Box2Dxt packages the Box2D v3.1.0 physics engine for OpenXTalk and LiveCode 9.6.3+. Write plain xTalk; your controls fall, roll, bounce, hinge, and collide.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"license":"https://opensource.org/licenses/MIT","url":"https://sethmorrowsoftware.github.io/Box2Dxt/","codeRepository":"https://github.com/SethMorrowSoftware/Box2Dxt","softwareVersion":"0.3.0"}
+</script>
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+<a class="skip" href="#playground">Skip to content</a>
+<p id="liveRegion" class="sr-only" aria-live="polite"></p>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="crate" viewBox="0 0 32 32">
+    <rect x="3" y="3" width="26" height="26" rx="5" fill="#e8702a" stroke="#17140d" stroke-width="2.5"/>
+    <path d="M3 3l26 26M29 3L3 29" stroke="#17140d" stroke-width="2"/>
+  </symbol>
+</svg>
+
+<!-- ===================== MENU BAR ===================== -->
+<header class="menubar" id="top">
+  <div class="wrap menubar-inner">
+    <a class="brand" href="#top" aria-label="Box2Dxt — top">
+      <svg width="24" height="24" aria-hidden="true"><use href="#crate"/></svg>
+      Box2D<b>xt</b>
+    </a>
+    <nav class="menu-links" id="menuLinks" aria-label="Sections">
+      <a href="#playground">Playground</a>
+      <a href="#features">Features</a>
+      <a href="#how">How&nbsp;it&nbsp;works</a>
+      <a href="#examples">Examples</a>
+      <a href="#faq">FAQ</a>
+      <a href="docs/index.html">Docs</a>
+    </nav>
+    <div class="menu-right">
+      <a class="menu-ghost" href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <button class="menu-toggle" id="menuToggle" aria-label="Menu" aria-expanded="false">MENU</button>
+  </div>
+</header>
+
+<main class="desk">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="bay hero-bay" id="home">
+    <div class="wrap hero-grid">
+      <div class="hero-copy reveal">
+        <span class="eyebrow"><span class="blip"></span> Box2D v3.1.0 · OpenXTalk &amp; LiveCode 9.6.3+</span>
+        <h1>Real 2D physics<br>for the card <span class="amp">&amp;</span> stack people.</h1>
+        <p class="lede">The battle-tested <strong>Box2D</strong> engine, dropped into <strong>OpenXTalk</strong> and <strong>LiveCode</strong>. Your controls <mark>fall, roll, bounce, hinge, and collide</mark> — in plain xTalk.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#playground">Try it live ▸</a>
+          <a class="btn" href="#start">Get started</a>
+          <a class="btn btn-ghosty" href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub</a>
+        </div>
+        <a class="verpill" href="#whatsnew">★ New in v0.3.0 — see what's new</a>
+      </div>
+
+      <div class="hero-demo reveal">
+        <div class="win demo-frame">
+          <div class="win-bar">
+            <span class="win-box"></span><span class="win-stripes"></span>
+            <span class="win-title">PHYSICS — DRAG THE CRATES</span><span class="win-box"></span>
+          </div>
+          <canvas id="physics" aria-label="Interactive physics demo: drag, fling, and stack the falling crates"></canvas>
+          <div class="demo-controls">
+            <button id="demoReset" class="chip" type="button">RESET</button>
+            <button id="demoGravity" class="chip" type="button">GRAVITY: ON</button>
+            <span class="demo-hint" id="demoHint">click empty space to drop a crate</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PLAYGROUND ===================== -->
+  <section class="bay" id="playground">
+    <div class="wrap">
+      <div class="win pg-win reveal">
+        <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">playground — run a handler</span><span class="win-box"></span></div>
+        <div class="win-body pg">
+          <div class="pg-head">
+            <span class="cardnum">TRY IT LIVE</span>
+            <h2 class="card-h">Run xTalk, right here.</h2>
+            <p class="card-lead">No install, no OXT — this runs a friendly subset of the Kit's <code>b2k…</code> commands in your browser, the same calls you'd write in a real stack. Edit the handler and hit <b>Run</b>, or pick a preset.</p>
+          </div>
+          <div class="pg-grid">
+            <div class="pg-left">
+              <label class="sr-only" for="pgCode">xTalk script</label>
+              <textarea id="pgCode" class="pg-code" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="pgOut">-- Edit me, then press Run (or Cmd/Ctrl+Enter).
+on mouseUp
+  b2kClear
+  repeat with i = 1 to 5
+    b2kSpawnBox 210, 300 - i * 46, 84, 42, "orange"
+  end repeat
+  b2kSpawnBall 246, 20, 44, "blue"
+end mouseUp</textarea>
+              <div class="pg-toolbar">
+                <button id="pgRun" class="btn btn-primary" type="button">▸ Run <kbd>⌘⏎</kbd></button>
+                <button id="pgClear" class="chip" type="button">Clear world</button>
+                <span class="pg-out" id="pgOut" role="status" aria-live="polite">ready.</span>
+              </div>
+              <div class="pg-presets">
+                <span class="label">TRY:</span>
+                <button class="lchip" type="button" data-preset="tower">Build a tower</button>
+                <button class="lchip" type="button" data-preset="rain">Make it rain</button>
+                <button class="lchip" type="button" data-preset="zerog">Zero-G</button>
+                <button class="lchip" type="button" data-preset="kick">Kick it</button>
+                <button class="lchip" type="button" data-preset="pyramid">Pyramid</button>
+                <button class="lchip" type="button" data-preset="func">Functions</button>
+                <button class="lchip" type="button" data-preset="words">Chunks</button>
+              </div>
+              <p class="pg-note">A real xTalk subset: <code>put/get/set</code>, <code>if/else</code>, every <code>repeat</code> form, your own <code>on</code> handlers &amp; <code>function</code>s, chunk expressions (<code>item/word/line/char … of</code>), <code>the number of</code>, operators (<code>&amp; mod is contains</code>…), and a big function library — alongside the <code>b2k…</code> physics calls. Drag bodies with the mouse.</p>
+            </div>
+            <div class="pg-right">
+              <div class="win pg-cardwin">
+                <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">world</span><span class="win-box"></span></div>
+                <canvas id="pgCanvas" aria-label="The physics world your script draws into"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WHAT IT IS ===================== -->
+  <section class="bay band-alt" id="about">
+    <div class="wrap">
+      <div class="win reveal"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">what it is</span><span class="win-box"></span></div>
+        <div class="win-body">
+          <span class="cardnum">WHAT IT IS</span>
+          <h2 class="card-h">A real physics engine, wearing xTalk's clothes.</h2>
+          <p class="card-lead">Box2D powers countless games. Box2Dxt packages <strong>Box2D v3.1.0</strong> as a drop-in module for OpenXTalk and LiveCode 9.6.3+, so you get true rigid-body simulation — gravity, friction, restitution, joints, sensors — while writing the plain, English-like xTalk you already know.</p>
+          <div class="stats-grid">
+            <div class="stat"><span class="stat-num">370<span class="u">+</span></span><span class="stat-label">engine handlers</span></div>
+            <div class="stat"><span class="stat-num">300<span class="u">+</span></span><span class="stat-label">friendly kit calls</span></div>
+            <div class="stat"><span class="stat-num">6</span><span class="stat-label">paste-and-run examples</span></div>
+            <div class="stat"><span class="stat-num">~180</span><span class="stat-label">self-tests, one click</span></div>
+          </div>
+          <ul class="ticklist about-ticks">
+            <li>Works in <b>pixels &amp; degrees</b> — the units you already think in.</li>
+            <li>Bodies ride on ordinary LiveCode controls; the Kit moves them each frame.</li>
+            <li>The native library is <b>bundled in the extension</b> and auto-loads on Windows, macOS &amp; Linux — no download, rename, or <code>sudo</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FEATURES ===================== -->
+  <section class="bay" id="features">
+    <div class="wrap">
+      <div class="sechead reveal">
+        <span class="cardnum">WHAT YOU GET</span>
+        <h2 class="card-h">Friendly on top. Serious underneath.</h2>
+      </div>
+      <div class="feature-grid">
+        <article class="feature reveal"><div class="badge"><svg viewBox="0 0 24 24" width="24" height="24" fill="#fff" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 10-13h-7z"/></svg></div><h3>Friendly by default</h3><p>The Kit speaks <b>pixels and degrees</b>, binds bodies to your controls, and runs the loop. <code>b2kQuickStart</code> gives a live, draggable world in one line.</p></article>
+        <article class="feature reveal"><div class="badge b-blue"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5M3 18l9 5 9-5"/></svg></div><h3>The full Box2D surface</h3><p>370+ handlers: bodies, shapes, <b>joints, chains, sensors, ray casts, queries, contact events</b>, and world tuning — in metres and radians when you want the metal.</p></article>
+        <article class="feature reveal"><div class="badge b-green"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="9" rx="4.5"/><path d="M7.5 12.5h3M9 11v3"/><circle cx="16" cy="11.5" r=".6" fill="#fff"/><circle cx="18" cy="13.5" r=".6" fill="#fff"/></svg></div><h3>A built-in Game Kit</h3><p>A player controller (run, <b>double-jump, wall-jump, dash, duck, climb, swim</b>), a scrolling camera, spritesheets, input, and sound — all wired and verified.</p></article>
+        <article class="feature reveal"><div class="badge b-red"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>Safe by design</h3><p>Every handle is <b>validated and generation-tagged</b>, so a stale or invalid one is a harmless no-op — getters return zero, actions do nothing. Never a crash.</p></article>
+        <article class="feature reveal"><div class="badge b-ink"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><h3>Cross-platform, built in</h3><p>The native library for <b>Windows</b> (x64/x86), <b>macOS</b> (universal), and <b>Linux</b> (x86-64/i686) is <b>bundled in the extension</b> and loads automatically — nothing to download, rename, or place by hand.</p></article>
+        <article class="feature reveal"><div class="badge"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h5M8 11h8M8 15h8"/></svg></div><h3>Paste-and-run examples</h3><p>Every example is a single self-contained script — <b>no setup, no external assets</b>. Read one as a worked tutorial.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ONE PASTE ===================== -->
+  <section class="bay band-alt" id="paste">
+    <div class="wrap">
+      <div class="win reveal"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">openCard — stack script</span><span class="win-box"></span></div>
+        <div class="win-body paste-grid">
+          <div class="paste-copy">
+            <span class="cardnum">ONE PASTE</span>
+            <h2 class="card-h">A whole scene, in a single paste.</h2>
+            <p><code>b2kQuickStart</code> stands up a world with gravity and card-edge walls; every <code>b2kSpawn…</code> makes a control <em>and</em> its body at once. Grab and fling with the mouse in three lines.</p>
+            <ul class="ticklist"><li>Paste it into a stack script and open the card.</li><li>No setup, no assets, no build step.</li><li>Every call reads like a sentence.</li></ul>
+          </div>
+<pre class="code"><code><span class="tok-kw">on</span> openCard
+   <span class="tok-fn">b2kQuickStart</span>                          <span class="tok-com">-- world + gravity + walls + go</span>
+   <span class="tok-fn">b2kSpawnBall</span> <span class="tok-num">200</span>, <span class="tok-num">80</span>, <span class="tok-num">50</span>               <span class="tok-com">-- create &amp; drop a ball</span>
+   <span class="tok-fn">b2kSpawnBox</span> <span class="tok-num">260</span>, <span class="tok-num">80</span>, <span class="tok-num">60</span>, <span class="tok-num">40</span>, <span class="tok-str">"orange"</span>  <span class="tok-com">-- read the result for the ref</span>
+<span class="tok-kw">end</span> openCard
+
+<span class="tok-kw">on</span> mouseDown
+   <span class="tok-kw">get</span> <span class="tok-fn">b2kGrab</span>(<span class="tok-kw">the</span> mouseH, <span class="tok-kw">the</span> mouseV)
+<span class="tok-kw">end</span> mouseDown</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== HOW IT WORKS ===================== -->
+  <section class="bay" id="how">
+    <div class="wrap">
+      <div class="sechead reveal">
+        <span class="cardnum">HOW IT WORKS</span>
+        <h2 class="card-h">You call it. The Kit runs it. Box2D powers it.</h2>
+        <p class="card-lead">One simple idea: you write friendly commands, the Kit does the bookkeeping, and a real physics engine does the maths — and you never leave plain xTalk.</p>
+      </div>
+      <div class="stackdiag">
+        <div class="win layer reveal"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">your stack</span><span class="win-box"></span></div><div class="win-body"><span class="layer-tag">you write</span><h4>Friendly commands</h4><p>Plain xTalk in <b>pixels and degrees</b> — <code>b2kSpawnBall</code>, <code>b2kImpulse</code>, react to a hit. That's all you ever touch.</p></div></div>
+        <div class="flow"><span class="pin">b2k…</span> pixels · degrees <span class="arr">↓</span></div>
+        <div class="win layer reveal"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">the Kit</span><span class="win-box"></span></div><div class="win-body"><span class="layer-tag">the Kit</span><h4>The Kit does the work</h4><p>It owns the world, runs the loop, <b>moves your controls every frame</b>, and converts the units for you — so you don't have to.</p></div></div>
+        <div class="flow"><span class="pin">▶</span> real physics <span class="arr">↓</span></div>
+        <div class="win layer reveal"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">Box2D v3.1.0</span><span class="win-box"></span></div><div class="win-body"><span class="layer-tag">under the hood</span><h4>Real Box2D, running native</h4><p>The same battle-tested engine behind countless games — gravity, collisions, joints, the lot — bundled right into the extension.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== EXAMPLES ===================== -->
+  <section class="bay band-alt" id="examples">
+    <div class="wrap">
+      <div class="sechead reveal">
+        <span class="cardnum">SEE IT RUN</span>
+        <h2 class="card-h">Six examples, each a single paste.</h2>
+      </div>
+      <div class="ex-grid">
+        <a class="win ex reveal" href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-demo.livecodescript" target="_blank" rel="noopener"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">demo</span><span class="win-box"></span></div><div class="ex-art art-demo"></div><div class="win-body"><h3>The Demo</h3><p>Six scenes: a playground, a pyramid you bomb, a Newton's cradle, a plank bridge, a drivable car, and a live ray-cast lidar.</p><span class="go">READ THE SCRIPT →</span></div></a>
+        <a class="win ex reveal" href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-contraption-builder.livecodescript" target="_blank" rel="noopener"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">contraption</span><span class="win-box"></span></div><div class="ex-art art-contraption"><span class="art-glyph" style="font-size:1.6rem">⚙ ⚙</span></div><div class="win-body"><h3>Contraption Builder</h3><p>A build-and-run sandbox: fans, magnets, lasers, bombs, motors, joints — with inspector, palette, and save/load.</p><span class="go">READ THE SCRIPT →</span></div></a>
+        <a class="win ex reveal" href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-platformer.livecodescript" target="_blank" rel="noopener"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">platformer</span><span class="win-box"></span></div><div class="ex-art art-platformer"></div><div class="win-body"><h3>Platformer Showcase</h3><p>Seven scrolling biome levels with a full player controller, a bestiary (serpents, crushers, ghosts), health hearts, character select, an art HUD, and synthesized audio.</p><span class="go">READ THE SCRIPT →</span></div></a>
+        <a class="win ex reveal" href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-slingshot.livecodescript" target="_blank" rel="noopener"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">slingshot</span><span class="win-box"></span></div><div class="ex-art art-slingshot"></div><div class="win-body"><h3>Slingshot</h3><p>Angry-birds-style tower knockdown — catapult cannonballs into toppling towers across three levels. Zero assets.</p><span class="go">READ THE SCRIPT →</span></div></a>
+        <a class="win ex reveal" href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-selftest.livecodescript" target="_blank" rel="noopener"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">self-test</span><span class="win-box"></span></div><div class="ex-art art-selftest"><span class="art-glyph" style="font-size:1.3rem;color:var(--green)">[x] [x] [x]</span></div><div class="win-body"><h3>Self-Test Harness</h3><p>~180 deterministic assertions driving the real Kit — proving everything from physics events to player feel in one click.</p><span class="go">READ THE SCRIPT →</span></div></a>
+        <a class="win ex reveal" href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/examples" target="_blank" rel="noopener"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">examples/</span><span class="win-box"></span></div><div class="ex-art art-more"><span class="art-glyph" style="font-size:2.4rem;color:var(--orange)">+</span></div><div class="win-body"><h3>…and the spike harness</h3><p>The Phase-0 Game Kit test bed, plus everything else. Browse all six scripts in the examples folder.</p><span class="go">BROWSE EXAMPLES →</span></div></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FAQ ===================== -->
+  <section class="bay" id="faq">
+    <div class="wrap">
+      <div class="sechead reveal"><span class="cardnum">FAQ</span><h2 class="card-h">Questions, answered.</h2></div>
+      <div class="faq-list reveal">
+        <details class="faq"><summary>Is it free? Can I use it in commercial apps?</summary><p>Yes. Box2Dxt is <b>MIT-licensed</b> — free for personal <em>and</em> commercial use. Box2D itself is MIT too (© Erin Catto).</p></details>
+        <details class="faq"><summary>Do I need to know C, or compile anything?</summary><p>No. The native library is <b>bundled inside the extension</b> and loads automatically. Package the extension once, then write plain xTalk — no toolchain, no terminal.</p></details>
+        <details class="faq"><summary>Which platforms does it run on?</summary><p><b>Windows</b> (x64/x86), <b>macOS</b> (universal), and <b>Linux</b> (x86-64/i686) — the right library is chosen for you.</p></details>
+        <details class="faq"><summary>OpenXTalk only, or LiveCode too?</summary><p>Both. It targets <b>OpenXTalk</b> and is compatible with <b>LiveCode 9.6.3+</b>.</p></details>
+        <details class="faq"><summary>Do I need to know physics or maths?</summary><p>No. The Kit speaks <b>pixels and degrees</b> and runs the simulation loop for you. Spawn a ball, push a body, react to a hit — the maths is handled.</p></details>
+        <details class="faq"><summary>Is it fast enough for real games?</summary><p>Yes — it's the real, native Box2D engine. The bundled platformer runs seven scrolling levels with a full cast at 60fps.</p></details>
+        <details class="faq"><summary>Can I add physics to controls I already drew?</summary><p>Absolutely. Point the Kit at any graphic, image, or button and it gains a body, gravity, and collisions — graphics and images even rotate with it.</p></details>
+        <details class="faq"><summary>Where do I get help?</summary><p>The <a href="docs/index.html">guides</a> cover everything; the source, issues, and discussions live on <a href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub</a>.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WHAT'S NEW ===================== -->
+  <section class="bay band-alt" id="whatsnew">
+    <div class="wrap">
+      <div class="win reveal"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">what's new</span><span class="win-box"></span></div>
+        <div class="win-body">
+          <span class="cardnum">WHAT'S NEW</span>
+          <h2 class="card-h">What's new <span class="ver">v0.3.0</span></h2>
+          <p class="card-lead">Box2Dxt keeps growing — recent highlights, all user-facing:</p>
+          <ul class="news">
+            <li><b>Even simpler install.</b> The native library is bundled inside the extension and loads itself — no download, rename, or <code>sudo</code>.</li>
+            <li><b>The platformer is now seven biome levels</b> — grass, stone, ice, haunted, desert, cavern, and a vertical Stone Keep — with a boot title screen and character select.</li>
+            <li><b>A bigger bestiary:</b> rising lava &amp; goo serpents, snakes, spinning blades, hopping block-slimes, fish, frogs, and more.</li>
+            <li><b>Health &amp; collectibles:</b> a forgiving five-heart buffer, coin tiers, gems, and a hidden star to find on every level.</li>
+            <li><b>More to play with:</b> conveyor belts, collapsing bridges, switch puzzles, multi-key doors, and parallax biome backdrops.</li>
+            <li><b>New example — the Slingshot:</b> angry-birds-style tower knockdown, pure physics, zero assets.</li>
+          </ul>
+          <p class="card-next">The full history lives in the <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/CHANGELOG.md" target="_blank" rel="noopener">changelog →</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== GET STARTED ===================== -->
+  <section class="bay" id="start">
+    <div class="wrap">
+      <div class="win reveal"><div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">get started</span><span class="win-box"></span></div>
+        <div class="win-body">
+          <div class="sechead" style="text-align:center;align-items:center">
+            <span class="cardnum">GET STARTED</span>
+            <h2 class="card-h">Up and running in four steps.</h2>
+          </div>
+          <ol class="steps">
+            <li class="step"><span class="step-n">1</span><div><h4>Package the extension</h4><p>Open <code>box2dxt.lcb</code> in OXT's <b>Extension Builder</b> and click <b>Package</b> — it rolls in the per-platform native libraries for you.</p></div></li>
+            <li class="step"><span class="step-n">2</span><div><h4>Install the <code>.lce</code></h4><p>Add the packaged <code>box2dxt.lce</code> in the <b>Extension Manager</b>. The right native library is <b>bundled inside</b> and loads itself — no download, rename, <code>sudo</code>, or <code>/usr/lib</code>.</p></div></li>
+            <li class="step"><span class="step-n">3</span><div><h4>Sanity check</h4><p>In the Message Box, run <code>put b2Version()</code>. You should see <code>4</code> — the engine is wired up.</p></div></li>
+            <li class="step"><span class="step-n">4</span><div><h4>Paste an example &amp; reopen the card</h4><p>Drop any example script into a stack script and reopen the card. You're simulating real physics.</p></div></li>
+          </ol>
+          <div class="start-cta">
+            <a class="btn btn-primary" href="docs/getting-started.html">Read the full guide</a>
+            <a class="btn" href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">Star it on GitHub ★</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand">
+        <span class="brand"><svg width="22" height="22" aria-hidden="true"><use href="#crate"/></svg> Box2D<b>xt</b></span>
+        <p>Real 2D physics for OpenXTalk and the xTalk family. Built on <a href="https://box2d.org" target="_blank" rel="noopener">Box2D</a> v3.1.0 by Erin Catto.</p>
+      </div>
+      <div class="footer-cols">
+        <div><h5>Explore</h5><a href="#playground">Playground</a><a href="#features">Features</a><a href="#examples">Examples</a></div>
+        <div><h5>Docs</h5><a href="docs/getting-started.html">Getting started</a><a href="docs/kit-guide.html">Kit guide</a><a href="docs/kit-reference.html">Kit reference</a></div>
+        <div><h5>Project</h5><a href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/SethMorrowSoftware/Box2Dxt/releases" target="_blank" rel="noopener">Releases</a><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a></div>
+      </div>
+    </div>
+    <div class="wrap footer-bottom"><span>MIT licensed · Box2D © Erin Catto, also MIT</span><a href="#top">BACK TO TOP ↑</a></div>
+  </footer>
+</main>
+
+<!-- floating HyperTalk message box -->
+<button id="msgFab" class="msg-fab" type="button" aria-expanded="false">⌨ Message</button>
+<form class="msgbox" id="msgbox" hidden autocomplete="off">
+  <span class="label">MSG</span>
+  <input id="msgInput" type="text" spellcheck="false" placeholder='try:  go to examples   ·   b2kSpawnBall 200,40,40   ·   help'>
+  <span class="msg-out" id="msgOut"></span>
+</form>
+
+<script src="app.js"></script>
+</body>
+</html>

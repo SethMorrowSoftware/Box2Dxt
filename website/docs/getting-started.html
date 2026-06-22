@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Getting started — Box2Dxt docs</title>
+<meta name="description" content="Install the library and build your first draggable scene.">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f1ece1">
+<link rel="canonical" href="https://sethmorrowsoftware.github.io/Box2Dxt/docs/getting-started.html">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<a class="skip" href="#docmain">Skip to content</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crate" viewBox="0 0 32 32"><rect x="3" y="3" width="26" height="26" rx="5" fill="#e8702a" stroke="#17140d" stroke-width="2.5"/><path d="M3 3l26 26M29 3L3 29" stroke="#17140d" stroke-width="2"/></symbol></svg>
+<header class="menubar" id="top"><div class="wrap menubar-inner">
+  <a class="brand" href="../index.html#top"><svg width="24" height="24" aria-hidden="true"><use href="#crate"/></svg> Box2D<b>xt</b></a>
+  <nav class="menu-links" id="menuLinks" aria-label="Primary">
+    <a href="../index.html#paste">One&nbsp;paste</a>
+    <a href="../index.html#features">What&nbsp;you&nbsp;get</a>
+    <a href="../index.html#how">How&nbsp;it&nbsp;works</a>
+    <a href="../index.html#examples">Examples</a>
+    <a href="index.html">Docs</a>
+  </nav>
+  <div class="menu-right"><a class="menu-ghost" href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub</a></div>
+  <button class="menu-toggle" id="menuToggle" aria-label="Menu" aria-expanded="false">MENU</button>
+</div></header>
+<main class="doc-wrap" id="docmain">
+<aside class="doc-side"><div class="doc-side-inner"><span class="label">THE MANUAL</span><a href="index.html">Overview</a>
+<a href="getting-started.html" class="active">Getting started</a>
+<a href="kit-guide.html">Kit guide</a>
+<a href="kit-reference.html">Kit reference</a>
+<a class="doc-side-gh" href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/docs" target="_blank" rel="noopener">Full docs on GitHub →</a></div></aside>
+<article class="win doc-win">
+  <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">getting-started.md</span><span class="win-box"></span></div>
+  <div class="win-body prose"><h1 id="getting-started-with-box2dxt">Getting Started with Box2Dxt</h1>
+<p>This guide takes you from nothing to a running, draggable physics scene in <strong>OpenXTalk (OXT)</strong> — or any compatible <strong>LiveCode 9.6.3+</strong> IDE. It assumes no C toolchain: you install a prebuilt extension (the native library is bundled in).</p>
+<blockquote><p><strong>Just want to <em>play</em>, not code?</strong> If you were handed the prebuilt <strong>platformer package</strong> (a zip with the extension — native library bundled in — and a saved stack), open its <code>INSTALL.md</code> and follow two steps — no scripting. This guide is for building your <em>own</em> scenes from scratch.</p></blockquote>
+<ul>
+<li><a href="#1-install-the-extension">1. Install the extension</a></li>
+<li><a href="#2-load-it-while-developing">2. Load it while developing</a></li>
+<li><a href="#3-sanity-check">3. Sanity check</a></li>
+<li><a href="#4-your-first-scene-the-kit">4. Your first scene (the Kit)</a></li>
+<li><a href="#5-attach-controls-you-designed-in-the-ide">5. Attach controls you designed in the IDE</a></li>
+<li><a href="#6-run-the-full-demo">6. Run the full demo</a></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+<li><a href="#where-to-go-next">Where to go next</a></li>
+</ul>
+<hr>
+<h2 id="1-install-the-extension">1. Install the extension</h2>
+<p>Box2Dxt is a real physics engine compiled to a native library — and that library ships <strong>inside the extension</strong>, so there's nothing to download, rename, or place by hand. Installing the extension is the only setup step, and it's identical on Windows, macOS, and Linux:</p>
+<ol>
+<li>In OXT, open <strong>Tools → Extension Builder</strong> and open <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/src/box2dxt.lcb"><code>src/box2dxt.lcb</code></a>.</li>
+<li>Click <strong>Package</strong> — this rolls the per-platform libraries (committed under <code>src/code/&lt;arch&gt;-&lt;platform&gt;/</code>) into a <code>box2dxt.lce</code> — then install that <code>.lce</code> via <strong>Tools → Extension Manager</strong>.</li>
+</ol>
+<p>The engine then loads the correct library for your platform automatically — <strong>no <code>/usr/lib</code>, no <code>sudo</code>, no <code>LD_LIBRARY_PATH</code>, no renaming.</strong></p>
+<blockquote><p>The per-platform libraries under <code>src/code/&lt;arch&gt;-&lt;platform&gt;/</code> are committed (built and tested by CI, and attached to each <a href="https://github.com/SethMorrowSoftware/Box2Dxt/releases">Release</a>), so this is already done in the repo. Prefer building the library yourself? See <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md">building.md</a>.</p></blockquote>
+<h2 id="2-load-it-while-developing">2. Load it while developing</h2>
+<p>You don't have to repackage on every edit:</p>
+<ul>
+<li><strong>Extension Builder → Test</strong> compiles and loads <code>src/box2dxt.lcb</code> in place — it reads the <code>code/</code> folder beside the <code>.lcb</code>, so the native library loads too.</li>
+<li><strong>From script:</strong> <code>load extension from file (the defaultFolder &amp; &quot;/box2dxt.lcb&quot;)</code></li>
+<li><strong>No-packaging fallback:</strong> drop <code>box2dxt.{so,dll,dylib}</code> (bare name) next to your <strong>saved</strong> stack; the Kit points the engine at it on <code>b2kSetup</code>, so even Linux needs no system path.</li>
+</ul>
+<p>Foreign bindings resolve on <strong>first use</strong>, so the library only has to be in place by the time a <code>b2…</code> handler first runs — not when the extension loads.</p>
+<h2 id="3-sanity-check">3. Sanity check</h2>
+<p>Open the Message Box and run:</p>
+<pre><code>put b2Version()</code></pre>
+<p>You should see <code>4</code> (the shim ABI version). If you get an error instead, the extension didn't load or the native library can't be found — jump to <a href="#troubleshooting">Troubleshooting</a>.</p>
+<h2 id="4-your-first-scene-the-kit">4. Your first scene (the Kit)</h2>
+<p>The <strong>Kit</strong> (<code>box2dxt-kit.livecodescript</code>) is the friendly layer: you work in <strong>pixels, screen coordinates and degrees</strong>, and it owns the world, the fixed-timestep loop, and per-frame control updates.</p>
+<ol>
+<li>Open your stack's script (<em>Object → Stack Script</em>) and paste in the entire contents of <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/src/box2dxt-kit.livecodescript"><code>src/box2dxt-kit.livecodescript</code></a>. (For reuse across stacks, save it as a library stack and <code>start using</code> it.)</li>
+<li>Add these handlers to the <strong>card</strong> script:</li>
+</ol>
+<pre><code>on openCard
+   b2kQuickStart                          -- world + gravity + card-edge walls + go
+   b2kSpawnBall 200, 80, 50               -- create &amp; drop a 50px ball
+   b2kSpawnBox 260, 80, 60, 40, &quot;orange&quot;  -- (read `the result` for the ref)
+end openCard
+
+on mouseDown
+   get b2kGrab(the mouseH, the mouseV)    -- grab a body under the pointer
+end mouseDown
+
+on mouseUp
+   b2kRelease
+end mouseUp
+
+on closeCard
+   b2kStop                                -- stop the loop, free the world
+end closeCard</code></pre>
+<p>Open the card. A ball and a box fall, settle on the bottom edge of the card, and you can <strong>drag</strong> them with the mouse. That's it — a live physics scene.</p>
+<p><code>b2kQuickStart</code> is the one-call setup: it creates the world, applies gravity, builds static walls around the card edges, and starts the loop. From there, <code>b2kSpawnBall</code>/<code>b2kSpawnBox</code> create controls <em>and</em> their bodies in one go.</p>
+<p><strong>Try a few more things</strong> in the Message Box while the card is open:</p>
+<pre><code>b2kSpawnCapsule 220, 60, 70, 28, &quot;teal&quot;   -- a pill-shaped body
+put the result into tPill                  -- every b2kSpawn… reports its ref
+b2kImpulse tPill, 0, -12                    -- a sharp upward kick (mass-aware)
+b2kSpawnBox 320, 40, 50, 50, &quot;purple&quot;      -- drop another box in</code></pre>
+<p>Negative <code>y</code> is <em>up</em> here (screen coordinates). The <a href="kit-reference.html">Kit Reference</a> lists the full spawn / force / query surface.</p>
+<h2 id="5-attach-controls-you-designed-in-the-ide">5. Attach controls you designed in the IDE</h2>
+<p>Prefer to draw your objects in the IDE? Attach physics to <strong>any</strong> control — graphics, images, buttons, fields. Graphics and <strong>dynamic images rotate</strong> with their body; buttons/fields and other controls follow position only (upright).</p>
+<pre><code>b2kSetup                                     -- world + gravity, auto origin
+b2kAddStatic the long id of graphic &quot;Floor&quot;  -- immovable
+b2kAddBox    the long id of graphic &quot;Crate&quot;  -- dynamic box
+b2kAddBall   the long id of graphic &quot;Ball&quot;   -- dynamic circle
+b2kContactTarget the long id of me           -- receive `on b2kContact pA, pB`
+b2kStart                                      -- begin the loop</code></pre>
+<p>Now <code>Crate</code> and <code>Ball</code> fall and collide with <code>Floor</code>, and your card gets a <code>b2kContact</code> message whenever two attached controls begin touching.</p>
+<p>See the <a href="kit-reference.html">Kit Reference</a> for the full <code>b2k…</code> surface (materials, joints, forces, queries, events).</p>
+<h2 id="6-run-the-full-demo">6. Run the full demo</h2>
+<p><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-demo.livecodescript"><code>examples/box2dxt-demo.livecodescript</code></a> is a self-building, multi-scene <strong>testbed</strong> — it creates its own buttons, HUD and scenes at runtime, so there's nothing to lay out.</p>
+<p>The demo is <strong>self-contained</strong>: it bundles a copy of the Kit, so it runs from a single paste — no separate setup.</p>
+<ol>
+<li>Make sure the extension is loaded and <code>put b2Version()</code> returns <code>4</code>.</li>
+<li>Paste the whole of <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/examples/box2dxt-demo.livecodescript"><code>examples/box2dxt-demo.livecodescript</code></a> into a stack's script (<em>Object → Stack Script</em>). If you previously pasted a demo or the Kit into the <strong>card</strong> script, clear that first.</li>
+<li>Reopen the card, or run <code>startBox2DDemo</code> in the Message Box (<code>stopBox2DDemo</code> stops it).</li>
+</ol>
+<blockquote><p>The demo embeds a verbatim copy of the Kit purely for one-paste convenience. For your own projects, use the standalone Kit (<a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/src/box2dxt-kit.livecodescript"><code>src/box2dxt-kit.livecodescript</code></a>) as shown in steps 4–5 above.</p></blockquote>
+<p>Click the tabs up top to switch scenes:</p>
+<div class="md-tablewrap"><table><thead><tr><th>Scene</th><th>Shows off</th></tr></thead><tbody><tr><td><strong>Playground</strong></td><td>boxes, a ball, a capsule, polygons, a hinged <strong>pendulum</strong>, a powered <strong>windmill</strong> (hinge motor), and a <strong>see-saw</strong></td></tr><tr><td><strong>Pyramid</strong></td><td>a tall stack; pick the <strong>Bomb</strong> tool and click beside it for a blast</td></tr><tr><td><strong>Cradle</strong></td><td>a Newton's cradle — hinge joints + restitution</td></tr><tr><td><strong>Bridge</strong></td><td>a plank bridge of hinge joints you can load up</td></tr><tr><td><strong>Vehicle</strong></td><td>a car (wheel joints + motor + spring suspension) you <strong>drive with ←/→</strong> over bumps</td></tr><tr><td><strong>Lidar</strong></td><td>a live <strong>ray-cast</strong> scanner that follows your mouse and stops each ray at the nearest shape</td></tr></tbody></table></div>
+<p>Across every scene you can <strong>drag</strong> any dynamic body, <strong>click empty space</strong> to drop the selected shape (Box/Ball/Capsule/Poly/Bomb), and bodies <strong>flash white</strong> the instant they begin touching (contact events). A HUD shows live FPS and body count. The whole demo is written with <code>b2k…</code> calls — read it as a worked example of the <a href="kit-reference.html">Kit</a>.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<div class="md-tablewrap"><table><thead><tr><th>Symptom</th><th>Likely cause &amp; fix</th></tr></thead><tbody><tr><td><code>b2Version()</code> throws / "handler not found"</td><td>The extension isn't loaded. Re-add and <strong>Load</strong> <code>box2dxt.lcb</code> in the Extension Manager.</td></tr><tr><td>First <code>b2…</code> call (or <code>b2Version()</code>) errors <strong>"unable to load foreign library"</strong></td><td>The extension loaded without its bundled library. Install the <strong>packaged</strong> extension (Extension Builder → <strong>Package</strong> <code>src/box2dxt.lcb</code> → install the <code>.lce</code>), or <strong>Test</strong> it with the <code>code/</code> folder beside the <code>.lcb</code>. Quick fallback: drop <code>box2dxt.{dll,dylib,so}</code> (bare name) next to your <strong>saved</strong> stack. (Tip: launch OXT from a terminal — it prints <code>dlopen failed &lt;name&gt;</code> showing the filename it wants.)</td></tr><tr><td><code>b2Version()</code> returns a different number</td><td>Your <code>box2dxt.lcb</code> and native library are from different versions. Rebuild/redownload both from the same tag.</td></tr><tr><td>Library won't load on an older PC (Linux/Windows)</td><td>The CPU may lack AVX2. Build with <code>-DBOX2D_DISABLE_SIMD=ON</code> (see <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md#platform--cpu-notes">building.md</a>), or grab a Release binary built for older CPUs.</td></tr><tr><td>Bodies jitter or behave non-deterministically</td><td>You're stepping with a variable timestep. Let the Kit drive the loop, or step in fixed 1/60 s chunks (see <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md#notes-and-gotchas">API Reference → Notes</a>).</td></tr><tr><td>Objects fly off instantly / explode</td><td>Sizes are wrong for Box2D's MKS units. Keep moving objects roughly 4–400 px at the default 40 px/m scale.</td></tr></tbody></table></div>
+<h2 id="where-to-go-next">Where to go next</h2>
+<ul>
+<li><a href="kit-guide.html"><strong>Kit Guide</strong></a> — the complete, teach-you-everything walkthrough of the <code>b2k…</code> toolkit, with runnable examples.</li>
+<li><a href="kit-reference.html">Kit Reference</a> — the same <code>b2k…</code> API as quick-lookup tables.</li>
+<li><strong>Example games</strong> — beyond the demo, <a href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/examples"><code>examples/</code></a> ships a full <strong>platformer</strong>, an angry-birds-style <strong>slingshot</strong>, and a <strong>contraption builder</strong>, each a single self-contained paste. Hand one to someone else as a zero-setup zip with <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md#packaging-a-distribution-zip"><code>tools/make-release.py</code></a>.</li>
+<li><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md">API Reference</a> — the low-level <code>b2…</code> API and units/gotchas.</li>
+<li><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/architecture.md">Architecture</a> — how it all works under the hood.</li>
+<li><a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/building.md">Building</a> — compile the native library yourself.</li>
+</ul></div>
+</article>
+</main>
+<footer class="footer"><div class="wrap footer-bottom" style="border-top:none;margin-top:0">
+  <span>MIT licensed · Box2D © Erin Catto, also MIT</span>
+  <a href="../index.html#top">BACK TO THE SITE ↑</a>
+</div></footer>
+<script src="../app.js"></script>
+</body>
+</html>
