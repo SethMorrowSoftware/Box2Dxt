@@ -1,9 +1,10 @@
 # Plan — Box2Dxt Game Kit
 
 The phased implementation plan for
-[docs/game-engine-spec.md](docs/game-engine-spec.md): keyboard input,
-spritesheet animation, a player controller, and a camera — turning Box2Dxt +
-xTalk into a working 2D game engine.
+[docs/archive/game-engine-spec.md](docs/archive/game-engine-spec.md) (now
+archived — implemented; see `docs/kit-guide.md` + `docs/kit-reference.md`):
+keyboard input, spritesheet animation, a player controller, and a camera —
+turning Box2Dxt + xTalk into a working 2D game engine.
 
 Read the spec first; this file is the *sequence*, the spec is the *what and
 why*. Effort scale: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day.

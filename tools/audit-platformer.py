@@ -49,6 +49,7 @@ class Level:
         self.water = []      # (L,T,R,B) swim basins -- coins inside are underwater pickups
         self.coins = []      # (x,y)
         self.gems = []       # (x,y) bonus pickups
+        self.stars = []      # (x,y) the hidden star (one per level, a distinct collectible)
         self.enemies = []    # (kind,idx,x,minx,maxx,topy,halfw)
         self.thwomps = []    # (idx,x)
         self.barnacles = []  # (idx,x,y)
@@ -57,9 +58,10 @@ class Level:
         self.checkpoint = None
         self.goal = None
         self.bridge = None
-        self.collapse = None
+        self.conveyors = []  # (pL,pR,dir)
         self.edgeL = 64
         self.edgeR = None
+        self.vertical = False  # a VERTICAL climbing level (pfBoundsV): the y=576 ground model doesn't apply
 
 def parse():
     levels = {}
@@ -71,6 +73,9 @@ def parse():
                 continue
             mk = re.match(r"(pf\w+|b2kSmoothGround|b2kPlayerAddLadder)\b", s)
             if not s or not (mk or "pfBounds" in s):
+                continue
+            if s.startswith("pfBoundsV"):   # MUST precede the pfBounds test (startswith overlap)
+                L.vertical = True
                 continue
             if s.startswith("pfBounds"):
                 v = nums(s)
@@ -88,7 +93,12 @@ def parse():
                     L.slabs.append((nm, v[0], v[1], v[2], v[3]))
                 continue
             if s.startswith("b2kSmoothGround"):
-                xs = [float(x) for x in re.findall(NUM, s)]
+                # drop the handler name FIRST: the "2" in "b2kSmoothGround" is a
+                # digit the NUM regex would otherwise capture as a coordinate,
+                # shifting every x,y pair by one (a latent bug exposed by the star
+                # surface check -- nothing read cloud spans before it).
+                body = s[len("b2kSmoothGround"):]
+                xs = [float(x) for x in re.findall(NUM, body)]
                 # points are "x,y" pairs; solid span = inner xs (ghost rule)
                 pts = list(zip(xs[0::2], xs[1::2]))
                 xsv = sorted(p[0] for p in pts)
@@ -99,12 +109,16 @@ def parse():
                 v = nums(s); L.spikes.append((v[0], v[1])); continue
             if s.startswith("pfMakeLava"):
                 v = nums(s); L.lava.append((v[0], v[1])); continue
+            if s.startswith("pfMakeSlimePool"):   # Phase E goo pool = a lava-like surface hazard
+                v = nums(s); L.lava.append((v[0], v[1])); continue
             if s.startswith("pfMakeWater"):
                 v = nums(s); L.water.append((v[0], v[1], v[2], v[3])); continue
             if s.startswith("pfMakeCoin"):
                 v = nums(s); L.coins.append((v[0], v[1])); continue
             if s.startswith("pfMakeGem"):
                 v = nums(s); L.gems.append((v[0], v[1])); continue
+            if s.startswith("pfMakeStar"):
+                v = nums(s); L.stars.append((v[0], v[1])); continue
             mt = re.match(r'pfTile "([^"]+)",\s*' + NUM + r',\s*' + NUM, s)
             if mt and mt.group(1) in ("cactus","rock","bush","fence","fence_broken",
                     "mushroom_brown","mushroom_red","sign","grass_purple"):
@@ -122,6 +136,12 @@ def parse():
             if s.startswith("pfMakeFrog"):
                 v = nums(s)  # idx,x,minx,maxx,topy
                 L.enemies.append(("frog", v[0], v[1], v[2], v[3], v[4], 22)); continue
+            if s.startswith("pfMakeBlockSlime"):
+                v = nums(s)  # idx,x,minx,maxx,topy  (a hopping cube; patrols its band)
+                L.enemies.append(("block", v[0], v[1], v[2], v[3], v[4], 24)); continue
+            if s.startswith("pfMakeConveyor"):
+                v = nums(s)  # pL,pR,dir
+                L.conveyors.append((v[0], v[1], v[2])); continue
             if s.startswith("pfMakeThwomp"):
                 body = s.split("--", 1)[0]
                 # chained = the weight+chain look: no tile-face string, not a faced block
@@ -137,13 +157,11 @@ def parse():
                 v = nums(s); L.goal = (v[0], v[1]); continue
             if s.startswith("pfMakeBridge"):
                 v = nums(s); L.bridge = (v[0], v[1], v[2]); continue
-            if s.startswith("pfMakeCollapseBridge"):
-                v = nums(s); L.collapse = (v[0], v[1], v[2]); continue
         levels[n] = L
     return levels
 
 # ---- terrain helpers -------------------------------------------------------
-GROUND_NAMES = ("pf_ground", "pf_plat", "pf_pond", "pf_liftped", "pf_dune")
+GROUND_NAMES = ("pf_ground", "pf_plat", "pf_pond", "pf_liftped", "pf_dune", "pf_lavastep")
 
 def solid_top_at(L, x, y_tol_top=8):
     """Return the highest solid TOP surface at column x (slabs + clouds), or None."""
@@ -156,8 +174,6 @@ def solid_top_at(L, x, y_tol_top=8):
             tops.append(cy)
     if L.bridge and L.bridge[0] <= x <= L.bridge[1]:
         tops.append(L.bridge[2])
-    if L.collapse and L.collapse[0] <= x <= L.collapse[1]:
-        tops.append(L.collapse[2])
     return min(tops) if tops else None   # min y = highest surface
 
 def inside_solid(L, x, y, pad=6):
@@ -180,6 +196,14 @@ def audit(L):
     out = []
     def flag(sev, msg):
         out.append((sev, msg))
+
+    # A VERTICAL climbing level (pfBoundsV) uses the full height as play space and
+    # the camera scrolls; the horizontal y=576 ground model (coins-near-a-surface,
+    # walkers-on-ground, pit widths) does not apply, so skip the geometry checks
+    # here and lean on the OXT pass + check-livecodescript for it.
+    if L.vertical:
+        flag("INFO", "vertical climbing level - geometry audit skipped (the y=576 ground model does not apply; verify in OXT)")
+        return out
 
     # bounds
     lo, hi = L.edgeL, L.edgeR
@@ -217,6 +241,30 @@ def audit(L):
         if L.goal and math.hypot(x - L.goal[0], y - (L.goal[1] + 16)) < 48:
             flag("ERR", f"gem {x:.0f},{y:.0f} overlaps the goal flag")
 
+    # stars: the hidden challenge pickup -- the user's hard rule is REACHABILITY,
+    # so each star must sit ON a surface the player provably stands on (a cloud /
+    # slab / stepping-stone top ~56px below it, the pickup convention), be in
+    # bounds, not buried, and clear of coins/gems/goal (a distinct collectible).
+    # A star with no surface ~24-110px below it is flagged: it would be a bare
+    # mid-air grab (the reachability risk).
+    for (x, y) in L.stars:
+        if x < lo or x > hi:
+            flag("ERR", f"star {x:.0f},{y:.0f} OUTSIDE play bounds [{lo:.0f}..{hi:.0f}]")
+        nm = inside_solid(L, x, y)
+        if nm:
+            flag("ERR", f"star {x:.0f},{y:.0f} BURIED inside slab '{nm}'")
+        gt = solid_top_at(L, x)
+        if gt is None or not (y + 20 <= gt <= y + 110):
+            flag("ERR", f"star {x:.0f},{y:.0f} has NO surface to stand on ~56px below it (nearest top {gt}) -- a bare mid-air grab, may be unreachable")
+        for (cx, cy) in L.coins:
+            if math.hypot(x - cx, y - cy) < 48:
+                flag("WARN", f"star {x:.0f},{y:.0f} overlaps coin ({cx:.0f},{cy:.0f})")
+        for (cx, cy) in L.gems:
+            if math.hypot(x - cx, y - cy) < 48:
+                flag("WARN", f"star {x:.0f},{y:.0f} overlaps gem ({cx:.0f},{cy:.0f})")
+        if L.goal and math.hypot(x - L.goal[0], y - (L.goal[1] + 16)) < 48:
+            flag("ERR", f"star {x:.0f},{y:.0f} overlaps the goal flag")
+
     # enemies: patrol must stay on a continuous ground top at ~topy
     walkers = [e for e in L.enemies if e[0] in ("slime", "critter", "snail", "frog")]
     for kind, idx, x, mn, mx, topy, hw in walkers:
@@ -242,6 +290,8 @@ def audit(L):
         for b in range(a+1, len(spans)):
             xa, la, ra, ka, ia = spans[a]
             xb, lb, rb, kb, ib = spans[b]
+            if ia == ib:
+                continue   # same index = a conditional reskin (if gSpooksOK ... else ...), one foe, not two
             if la <= rb and lb <= ra:
                 flag("WARN", f"{ka}#{ia:.0f} ({la:.0f}..{ra:.0f}) and {kb}#{ib:.0f} ({lb:.0f}..{rb:.0f}) patrol RANGES overlap (collision/jitter risk)")
 
@@ -279,11 +329,26 @@ def audit(L):
         mid = (hl + hr) / 2
         if ground_top_at(L, mid) is not None:
             flag("WARN", f"spikes {hl:.0f}..{hr:.0f} overlap solid ground (mid x{mid:.0f}) -- expected an open pit")
-        # pfMakeSpikes centres tiles at pL+32..pR-32 step 64, so the row only
-        # fills the pit FLUSH when the width is a 64px multiple; otherwise a bare
-        # strip is left at the right edge (the pit "doesn't fit its spikes").
+        # pfMakeSpikes tiles the row pL..pR-64 (top-lefts), so it fills the pit
+        # FLUSH only when the width is a 64px multiple; otherwise a partial tile
+        # is left (the pit "doesn't fit its spikes").
         if (hr - hl) % 64 != 0:
             flag("WARN", f"spike pit {hl:.0f}..{hr:.0f} width {hr-hl:.0f} is not a 64px multiple -- the spike row won't fill it flush")
+
+    # CONVEYOR: a belt carries the GROUNDED hero, so every column must be solid
+    # ground (a belt over a pit would convey him into thin air), and its width
+    # must be a 64px multiple to tile flush.
+    for (cl, cr, cdir) in L.conveyors:
+        gap = None
+        x = cl
+        while x <= cr:
+            if ground_top_at(L, x) is None:
+                gap = x; break
+            x += 32
+        if gap is not None:
+            flag("ERR", f"conveyor {cl:.0f}..{cr:.0f} runs over a pit (no ground at x{gap:.0f})")
+        if (cr - cl) % 64 != 0:
+            flag("WARN", f"conveyor {cl:.0f}..{cr:.0f} width {cr-cl:.0f} is not a 64px multiple -- the belt tiles won't fill it flush")
 
     # WALKER vs THWOMP: a walker asserts its velocity every frame; if its swept
     # range gets within a few px of a crusher's body (x +/- 30) the two fight the
@@ -355,13 +420,17 @@ def main():
     for n in sorted(levels):
         L = levels[n]
         res = audit(L)
-        head = f"===== LEVEL {n}  (bounds {L.edgeL:.0f}..{L.edgeR:.0f}, {len(L.coins)} coins, {len(L.enemies)} walkers) ====="
+        if L.vertical:
+            head = f"===== LEVEL {n}  (VERTICAL climb, {len(L.coins)} coins) ====="
+        else:
+            head = f"===== LEVEL {n}  (bounds {L.edgeL:.0f}..{L.edgeR:.0f}, {len(L.coins)} coins, {len(L.enemies)} walkers) ====="
         print(head)
         if not res:
             print("   (clean)")
         for sev, msg in sorted(res, key=lambda r: (r[0] != "ERR", r[1])):
             print(f"   {sev:4} {msg}")
-            total += 1
+            if sev != "INFO":
+                total += 1
         print()
     print(f"{total} finding(s) across {len(levels)} levels.")
 

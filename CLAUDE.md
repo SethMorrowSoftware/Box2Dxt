@@ -27,29 +27,36 @@ Box2D v3.1.0 (fetched by CMake)
   The shim compiles into one shared library (`libbox2dxt.{so,dylib,dll}`) that **ships bundled
   INSIDE the extension** under `src/code/<arch>-<platform>/box2dxt.{so,dll,dylib}` (bare token,
   no `lib` prefix; platform-ids `x86_64-linux` / `x86-linux` / `x86_64-win32` / `x86-win32` /
-  `universal-mac`, architecture FIRST, Windows `-win32` for both bitnesses). `tools/package-extension.py`
-  lays the `prebuilt/` binaries into that tree; installing the packaged extension makes the engine
+  `universal-mac`, architecture FIRST, Windows `-win32` for both bitnesses). Those libraries are
+  **committed** (built and tested by CI, attached to each Release); `tools/package-extension.py`
+  refreshes that tree from a newer build. Installing the packaged extension makes the engine
   resolve the `c:box2dxt>` bindings via `the revLibraryMapping` automatically — **no loose library,
   no rename, no sudo/`/usr/lib`/`LD_LIBRARY_PATH`** (see `docs/building.md`).
 - **LCB binding** (`src/box2dxt.lcb`, `library org.openxtalk.box2dxt`): declares `foreign handler`
   bindings to the shared library and public `b2PascalCase` handlers callable from xTalk. This API
   speaks **metres and radians**; body type codes are `0=static, 1=kinematic, 2=dynamic`.
-- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (312 `b2k*`
+- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (313 `b2k*`
   handlers incl. the game modules: input, sprites, player controller, camera) that speaks
   **screen pixels and degrees**, binds bodies to LiveCode controls, and runs the animation
   loop. This is what the examples and most users actually call.
 
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
-`kit-guide.md`, `kit-reference.md`, `game-engine-spec.md`, `expansion-prep.md`, `asset-expansion-plan.md`). Prebuilt per-platform
-binaries are in `prebuilt/` — the SOURCE `tools/package-extension.py` lays into the extension's
-`src/code/<arch>-<platform>/` tree; the install is the packaged extension, not a loose drop-in (a
-loose `box2dxt.{so,dll,dylib}` beside a saved stack is only the dev/fallback path, mapped at runtime
-by the Kit's `b2kEnsureNativeLib`). The **Game Kit** (input/sprites/player/camera/sound modules) is
+`kit-guide.md`, `kit-reference.md`, `asset-expansion-plan.md`, and `platformer-polish-plan.md` — the
+forward-looking plan now that feature dev is frozen; the superseded pre-implementation
+`game-engine-spec.md` + `expansion-prep.md` are under `docs/archive/`). The per-platform native
+binaries are **committed inside the extension** at `src/code/<arch>-<platform>/` (built and tested by
+CI, attached to each Release); `tools/package-extension.py` refreshes that tree from a newer build.
+The install is the packaged extension, not a loose drop-in (a loose `box2dxt.{so,dll,dylib}` beside a
+saved stack — copied from `src/code/<arch>-<platform>/` — is only the dev/fallback path, mapped at
+runtime by the Kit's `b2kEnsureNativeLib`). The **Game Kit** (input/sprites/player/camera/sound modules) is
 implemented and user-verified; content **Waves 0-7 are built** (Wave 8, builder cross-pollination, is
 the only remaining roadmap item); `plan.md`'s decision log is the as-built record. Six examples: demo,
 contraption builder, **spike-gamekit** (the Phase-0 Game Kit harness), **platformer** (the flagship
-game showcase — the Game Kit pushed hard across 5 levels, with bestiary I + variety walkers + bestiary
-II frog/barnacle/spider — the focus of this repo's game work), **slingshot** (angry-birds-style tower
+game showcase — the Game Kit pushed hard across 7 levels, with bestiary I + variety walkers + bestiary
+II frog/barnacle/spider, coin tiers + a hidden star, a forgiving 5-heart health model, character
+select, and a polish-pass front-end — a boot title screen + biome-illustrated transition cards that mask
+every level load (the §2 headline + bookends, shipped) — the focus of this repo's game work; forward
+feature dev is FROZEN, polish underway, see `docs/platformer-polish-plan.md`), **slingshot** (angry-birds-style tower
 knockdown over 3 levels — the physics core carrying a whole game with zero events and zero assets), and
 the **self-test harness** (below). (The single-screen micro-game was retired in Wave 5; its "whole game
 from the physics core" pattern survives only as `kit-guide` section 20 prose.)
@@ -250,6 +257,16 @@ OXT's compiler is **stricter than LiveCode's**. These are the recurring footguns
    real half-height (a build-time global), never a hardcoded constant. The
    platformer's brick-smash gap (round 7) was exactly this: an 88px capsule
    over a ~76px visible character.
+29. **A `constant` must be declared BEFORE its first use, lexically.** OXT resolves
+   `constant` names by their position in the file, so a handler that references a
+   constant declared *later* gets an UNRESOLVED name: it compiles with no error,
+   then evaluates to nothing at runtime, silently zeroing the expression. The L4
+   lava serpent shipped broken this way — `pfTickLavaSerpent` used `sin(kPI * tP)`
+   while `kPI` was declared ~900 lines below, so the term collapsed to 0 every
+   frame and the serpent never rose (it stayed in its "submerged, hidden" branch
+   forever). Fix: declare the constant above its first use, or inline the literal
+   value. Distinct from gotcha 6 (constant *values* must be literals) — this is
+   about the *order* of declaration vs use. (Confirmed in OXT.)
 
 ## The single-threaded performance playbook
 

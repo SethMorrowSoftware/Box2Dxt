@@ -52,11 +52,14 @@ Box2D v3.1.0 (fetched by CMake)
    a full build-and-run physics sandbox with fans, magnets, lasers, bombs,
    motors, and save/load. Game-minded? The
    [platformer showcase](examples/box2dxt-platformer.livecodescript) is the
-   Game Kit pushed hard — five scrolling levels (grass, stone, ice, haunted,
-   desert) with a full player controller (run, double-jump, wall-jump, dash,
-   duck, climb, swim, drop-through, platform-carry), a bestiary (bats, a
-   mimic, piranhas, a ghost, a kickable snail shell, crushers, and more),
-   joints (rope bridge, boulder, exploding barrel, collapsing bridge),
+   Game Kit pushed hard — seven scrolling levels (grass, ice, haunted, desert,
+   cavern, and a vertical stone keep) with a full player controller (run,
+   double-jump, wall-jump, dash, duck, climb, swim, drop-through, platform-carry),
+   a bestiary (bats, a mimic, piranhas, a ghost, a kickable snail shell, rising
+   lava/goo serpents, crushers, spinners, and more), joints (rope bridge, boulder,
+   exploding barrel), collectibles (coin tiers, gems, a hidden star), a forgiving
+   five-heart health model, a boot title screen with character select, biome-illustrated
+   transition cards that mask every level load, an art HUD,
    spritesheets, and synthesized audio — and the
    [slingshot](examples/box2dxt-slingshot.livecodescript) is pure physics
    joy: catapult cannonballs into toppling towers, angry-birds style
@@ -77,9 +80,12 @@ The step-by-step version (with troubleshooting) is in
 | [Kit reference](docs/kit-reference.md) | Every `b2k…` handler, one line each. |
 | [API reference](docs/api-reference.md) | The raw `b2…` extension surface. |
 | [Architecture](docs/architecture.md) | The three layers, handles, units, the ABI. |
-| [Game engine spec](docs/game-engine-spec.md) | The Game Kit design (input/sprites/player/camera/sound) — implemented. |
-| [Expansion prep](docs/expansion-prep.md) | The intake plan for the asset pack and the enemy/player-action waves. |
 | [Building](docs/building.md) | Compile the native library yourself with CMake. |
+| [Platformer polish plan](docs/platformer-polish-plan.md) | The plan to take the 7-level demo to its final form (transitions, feel, scenes). |
+| [Asset expansion plan](docs/asset-expansion-plan.md) | The as-built record of how the demo grew to seven levels (Phases A–G). |
+
+(Pre-implementation planning docs — the Game Kit design spec and the asset-intake
+plan — are archived under [`docs/archive/`](docs/archive/) for history.)
 
 ## Building from source
 

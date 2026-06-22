@@ -1,5 +1,12 @@
 # Expansion Prep — the asset dump & the content phase
 
+> **ARCHIVED / HISTORICAL.** This was the pre-implementation *intake plan* for the
+> asset pack and the Wave 0–8 content phases. Those waves shipped (the demo grew
+> to seven levels); the as-built record is
+> [`../../CHANGELOG.md`](../../CHANGELOG.md) + [`../../plan.md`](../../plan.md), and
+> the content roadmap is [`../asset-expansion-plan.md`](../asset-expansion-plan.md).
+> Kept for history only.
+
 The Game Kit is **done and verified** (plan.md Phases 0–5, Win32). This
 document is the intake plan for what comes next: a large Kenney spritesheet
 pack, new **enemy types**, and new **player actions** — and the working rules
@@ -19,7 +26,7 @@ that keep the expansion as reliable as the engine underneath it.
 | Wave 7 | **COMPLETE — statically verified, merged** (the desert biome: **L5 SCORCHED DUNES** — the platformer's fifth level, sand/desert). |
 | Wave 8 | **NOT STARTED** — builder cross-pollination (animated sprite parts + the player-as-a-part in the Contraption Builder); the only remaining roadmap item. |
 | Next | Wave 8: the builder cross-pollination. |
-| Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
+| Companions | [plan.md](../../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
 

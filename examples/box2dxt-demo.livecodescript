@@ -5618,7 +5618,7 @@ end raiseUI
 on clearState
    put the milliseconds into gFpsTime   -- seed the FPS window so the first reading is sane
    put 0 into gFrames
-   put empty into gFps
+   put "--" into gFps   -- seed so the first HUD frame reads cleanly, not blank
    put empty into gDrops
    put empty into gBombs
    put empty into gFlash
@@ -5907,13 +5907,13 @@ on buildLidar
    prepArena
    b2kSetGravity 0, 0
    repeat with tI = 1 to 8
-      put newBall(rnd(170, 810), rnd(170, 560), rnd(30, 72), "96,150,210") into tBody
+      put newBall(rnd(gArenaL + 90, gArenaR - 90), rnd(170, 560), rnd(30, 72), "96,150,210") into tBody
       b2kSetBounce tBody, 1
       b2kSetFriction tBody, 0
       b2kSetVelocity tBody, rnd(-170, 170), rnd(-170, 170)
    end repeat
    repeat with tI = 1 to 3
-      put newPoly(rnd(220, 760), rnd(180, 540), rnd(28, 48), "200,160,120") into tBody
+      put newPoly(rnd(gArenaL + 110, gArenaR - 110), rnd(180, 540), rnd(28, 48), "200,160,120") into tBody
       b2kSetBounce tBody, 1
       b2kSetFriction tBody, 0
       b2kSetVelocity tBody, rnd(-130, 130), rnd(-130, 130)
@@ -6286,9 +6286,9 @@ end sceneClick
 
 -- Keep the count of click-dropped bodies bounded so spamming stays smooth.
 on registerDrop pCtrl
+   local tOldest
    put pCtrl & cr after gDrops
    if the number of lines of gDrops > kMaxDrops then
-      local tOldest
       put line 1 of gDrops into tOldest
       delete line 1 of gDrops
       try
@@ -6335,23 +6335,6 @@ function newPoly pX, pY, pR, pColor
    b2kAddPolygon tRef
    return tRef
 end newPoly
-
-function newStaticBar pX, pY, pW, pH, pColor
-   local tName, tRef
-   put "demo_static_" & the milliseconds & "_" & random(99999) into tName
-   create graphic tName
-   put the long id of graphic tName into tRef
-   set the style of tRef to "rectangle"
-   set the filled of tRef to true
-   set the backgroundColor of tRef to pColor
-   set the foregroundColor of tRef to "20,20,24"
-   set the lineSize of tRef to 1
-   set the width of tRef to pW
-   set the height of tRef to pH
-   set the loc of tRef to round(pX) & "," & round(pY)
-   b2kAddStatic tRef
-   return tRef
-end newStaticBar
 
 -- =====================================================================
 -- UI

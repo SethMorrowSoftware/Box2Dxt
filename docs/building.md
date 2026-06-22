@@ -1,8 +1,9 @@
 # Building Box2Dxt from source
 
 You only need to build if you want a fresh native library (or are porting to a
-new platform/architecture). Most users can skip this and grab a
-[prebuilt library](../prebuilt/) instead.
+new platform/architecture). Most users can skip this entirely — the per-platform
+libraries are committed inside the extension (`src/code/<arch>-<platform>/`) and
+attached to each [Release](../../releases).
 
 - [Prerequisites](#prerequisites)
 - [Build](#build)
@@ -72,12 +73,14 @@ The build produces a single shared library:
 
 You don't deploy this file by hand. Box2Dxt ships as a LiveCode/OpenXTalk
 **extension with the native library bundled inside it**, under
-`src/code/<arch>-<platform>/`. `tools/package-extension.py` copies the built
-library (or the committed `prebuilt/` one) to its bare name in that tree:
+`src/code/<arch>-<platform>/`. Those libraries are **committed** (built and tested
+by CI, and attached to each Release), so a fresh clone is already a ready-to-build
+extension. `tools/package-extension.py` refreshes that tree when you have a newer
+build — point each flag at the matching library:
 
 ```sh
-python3 tools/package-extension.py            # populate src/code/<id>/
-python3 tools/package-extension.py --check    # validate inputs only
+python3 tools/package-extension.py --check                       # list/validate the committed tree
+python3 tools/package-extension.py --linux64 build/libbox2dxt.so  # refresh one target
 ```
 
 | Platform-id (`<arch>-<platform>`) | Bundled file |
@@ -102,16 +105,16 @@ and OpenXTalk (incl. OXT Lite) — **no library download, no renaming, no sudo, 
 
 When you build a **standalone**, the Standalone Builder bundles the matching
 `code/` library automatically. For quick dev without packaging, you can instead
-drop a single `box2dxt.{so,dll,dylib}` (bare name) next to your **saved** stack;
-the Kit's `b2kEnsureNativeLib` (called from `b2kSetup`) points the engine at it
-via `the revLibraryMapping` — see [prebuilt/README.md](../prebuilt/README.md).
+copy the matching `src/code/<arch>-<platform>/box2dxt.{so,dll,dylib}` (already the
+bare name) next to your **saved** stack; the Kit's `b2kEnsureNativeLib` (called
+from `b2kSetup`) points the engine at it via `the revLibraryMapping`, so even on
+Linux no `/usr/lib`, `sudo`, or `LD_LIBRARY_PATH` is needed.
 
 ## Packaging a distribution zip
 
-The supported install is the packaged extension: run
-`python3 tools/package-extension.py` to populate `src/code/<arch>-<platform>/`
-(above), then **Package** `src/box2dxt.lcb` into `box2dxt.lce` in OXT's Extension
-Builder. Shipping the `.lce` (or the source tree with its `code/` folder) gives
+The supported install is the packaged extension: the `src/code/<arch>-<platform>/`
+libraries are already committed (above), so just **Package** `src/box2dxt.lcb` into
+`box2dxt.lce` in OXT's Extension Builder. Shipping the `.lce` (or the source tree with its `code/` folder) gives
 the recipient a one-step install with the right native library bundled in — no
 loose libraries to place.
 
@@ -130,7 +133,7 @@ python3 tools/make-release.py --stack /path/to/NewPlateformerDemo.oxtstack
 ```
 
 It copies `src/box2dxt.lcb` together with its whole `src/code/` tree into
-`extension/` (run `tools/package-extension.py` first to populate it), copies
+`extension/` (committed in the repo; `tools/package-extension.py --check` validates it), copies
 `box2d_lc.c` / `box2dxt-kit.livecodescript` into `source/` for reference, copies
 the platformer's `Spritesheets/` art into `spritesheets/`, adds `dist/INSTALL.md`,
 and drops your saved stack at the root — producing:
@@ -158,7 +161,7 @@ first-run prompt at `spritesheets/`.
 
 - **AVX2 / SIMD.** Box2D assumes **AVX2** on x64 by default. If your binary must
   run on older CPUs, configure Box2D with `-DBOX2D_DISABLE_SIMD=ON` (slower) or
-  an SSE2 build. The committed `prebuilt/libbox2dxt-linux-x86_64.so` binary is
+  an SSE2 build. The committed `src/code/x86_64-linux/box2dxt.so` binary is
   built with SIMD disabled so it runs anywhere.
 
   ```sh

@@ -23,7 +23,17 @@ stack and `start using` it). It requires the `box2dxt` extension loaded
 - [Act on bodies](#act-on-bodies)
 - [Read state](#read-state)
 - [Joints](#joints)
+- [Input (keyboard)](#input-keyboard)
+- [Sprites & animation](#sprites--animation)
+- [Player (the platformer controller)](#player-the-platformer-controller)
+- [Camera (scrolling levels)](#camera-scrolling-levels)
+- [Sound (SFX)](#sound-sfx--with-or-without-asset-files)
 - [Drag & events](#drag--events)
+- [Sensors (trigger zones)](#sensors-trigger-zones)
+- [Collision filtering (named layers)](#collision-filtering-named-layers)
+- [Chains & terrain](#chains--terrain)
+- [Region & ray queries](#region--ray-queries)
+- [Motors & tuning](#motors--tuning)
 - [Tips](#tips)
 
 ---
@@ -558,6 +568,7 @@ is in the other's mask (and no shared negative group forbids it).
 | Handler | Purpose |
 |---------|---------|
 | `b2kDefineLayer name` → bit | Define/fetch a named layer. |
+| `b2kLayerBits(list)` → bits | Turn a comma/space layer-name list into a raw category/mask bitmask. |
 | `b2kSetCategory ctrl, layers` | Set which layer(s) a control *is* (comma/space list of names or numbers). |
 | `b2kSetMask ctrl, layers` | Set which layer(s) it collides *with*. The reserved `oneway` bit is **included automatically** — a custom-masked body still stands on `b2kChain` terrain (object rules shouldn't silently mean "fall through the ground"). To genuinely pass through chains, use the raw `b2SetShapeFilter`. |
 | `b2kSetCollisionGroup ctrl, n` | Negative = never collide with same group; positive = always. |

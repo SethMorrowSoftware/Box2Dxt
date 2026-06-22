@@ -1,13 +1,20 @@
 # Box2Dxt Game Kit — Specification
 
+> **ARCHIVED / HISTORICAL.** This is the pre-implementation *design spec* for the
+> Game Kit modules (input · sprites · player · camera · audio). They are all
+> implemented and user-verified — the living docs are
+> [`../kit-guide.md`](../kit-guide.md) (teaching) and
+> [`../kit-reference.md`](../kit-reference.md) (API), with the as-built decisions
+> in [`../../plan.md`](../../plan.md). Kept for design-intent history only.
+
 **Player objects, spritesheet animation, and keyboard control for Box2Dxt**
 
 | | |
 |---|---|
-| Status | **Implemented and user-verified on Win32 (2026-06-11)** — all four modules + audio shipped; as-built deltas live in [plan.md](../plan.md)'s decision log; runtime behaviour is asserted by `examples/box2dxt-selftest.livecodescript` (harness v22, ~180 checks across 37 test handlers, having grown with the content waves). macOS/Linux passes still open (risk R1). |
+| Status | **Implemented and user-verified on Win32 (2026-06-11)** — all four modules + audio shipped; as-built deltas live in [plan.md](../../plan.md)'s decision log; runtime behaviour is asserted by `examples/box2dxt-selftest.livecodescript` (harness v22, ~180 checks across 37 test handlers, having grown with the content waves). macOS/Linux passes still open (risk R1). |
 | Scope | New `b2k…` modules in the Kit: **Input**, **Sprites**, **Player**, **Camera** |
 | Native impact | **None.** No C-shim or LCB changes; ABI stays at 4 |
-| Companion | [plan.md](../plan.md) — the phased implementation plan |
+| Companion | [plan.md](../../plan.md) — the phased implementation plan |
 
 The end goal: make Box2Dxt + xTalk a credible **2D game engine** — you should be
 able to build a small platformer (an animated character running and jumping
@@ -498,7 +505,7 @@ not the card, when the camera is on).
 
 ## 11. Out of scope (for now)
 
-Deliberately not in this spec, sketched as later phases in [plan.md](../plan.md):
+Deliberately not in this spec, sketched as later phases in [plan.md](../../plan.md):
 
 - **Tilemaps / level editor** — `b2kChain` terrain + IDE-placed controls +
   `b2kCamAdopt` cover small levels; a tile pipeline is its own design.

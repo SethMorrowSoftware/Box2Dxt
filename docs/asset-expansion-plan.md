@@ -1,16 +1,22 @@
 # Asset Expansion Plan — using the WHOLE spritesheet library
 
-The platformer demo ships **five polished levels** but taps only about a
-**quarter of the art it already loads** (an audit of every `<SubTexture>` vs
-every frame-name the example references). This document is the roadmap to grow
-the demo until **every spritesheet asset earns its place** — new biomes, new
-levels, new enemies, new mechanics, new collectibles, and new heroes — without
-losing the reliability the engine and the layout audits give us.
+> **STATUS (frozen): Phases A–G shipped — the demo grew from 5 to SEVEN polished
+> levels.** Forward feature development is now **stopped** for a polish pass (see
+> [`platformer-polish-plan.md`](platformer-polish-plan.md)). The once-planned
+> Phases **H** (Clocktown — *attempted and rolled back*), **I** (alien-swim) and
+> **J** (stretch) are **not being pursued** and have been dropped from this plan;
+> the assets they would have used are still catalogued in §1. The canonical
+> history is [`../CHANGELOG.md`](../CHANGELOG.md) + [`../plan.md`](../plan.md).
 
-It is the **content** companion to [`expansion-prep.md`](expansion-prep.md)
-(the Kit/Wave 0–8 intake) and [`../plan.md`](../plan.md) (the as-built log).
-Where `expansion-prep.md` planned the *Kit features*, this plans the *content
-that consumes the art*.
+The platformer demo now ships **seven polished levels** (it shipped five when this
+roadmap was written). This document was the roadmap that grew it — an audit of
+every `<SubTexture>` vs every frame-name the example references, then a plan to use
+**more of the art** through new biomes, levels, enemies, mechanics, collectibles,
+and heroes, without losing the reliability the engine and the layout audits give.
+
+It is the **content** companion to
+[`archive/expansion-prep.md`](archive/expansion-prep.md) (the Kit/Wave 0–8 intake,
+now archived) and [`../plan.md`](../plan.md) (the as-built log).
 
 | | |
 |---|---|
@@ -148,8 +154,11 @@ needs an OXT eye.
   floating dirt columns, a spike gap, a dirt-ramp mound, a one-way-cloud bonus
   route, reused slimes + a snail, a bonus gem, dirt goal steps. Win moved to
   `gLevel >= 6`. Example-side; `audit-platformer.py` auto-discovers + clears L6.
-- **Slices 2–3 — TODO:** the block slime (slice 2), then the conveyor + torches
-  (slice 3).
+- **Slice 2 — DONE (statically verified; needs OXT):** the **block slime**, a
+  hopping cube (`slime_block_*`), a new slime-family kind `block` debuting in L6.
+- **Slice 3 — DONE (statically verified; needs OXT):** the **conveyor belt**
+  (`pfMakeConveyor`, a polled vx zone) in L6. Torches were pulled forward into
+  slice 1's polish. **Phase B is complete** (pending the OXT pass).
 - **Assets:** `terrain_dirt_*` (whole biome, slice 1), `background_solid_dirt`
   (slice 1), `torch_off/on_a/on_b` (slice 3), `conveyor` (slice 3),
   `slime_block_*` (block slime, slice 2).
@@ -169,6 +178,31 @@ needs an OXT eye.
   a polled example-side version first.
 
 ### Phase C — Castle/dungeon biome → **Level 7 "STONE KEEP"**  (M–L)
+- **Slice 1 — DONE (statically verified; needs OXT):** Level 7 as a **VERTICAL
+  climbing tower** on the `terrain_stone_*` set over the dark stone backdrop
+  (`pfBuildStoneBackdrop`). A new **gated vertical-camera mode** (`pfBoundsV` +
+  `gCamTopY/gCamBotY/gKillPlaneY`, spawn at `gRespawnX/Y`) scrolls the camera UP
+  as the hero jumps one-way `pfMakeLedge` stone ledges to the flag atop the keep;
+  8 coins + a summit gem. L1-L6 byte-for-byte unchanged. Win moved to
+  `gLevel >= 7`. The audit skips the vertical level. **The vertical camera scroll
+  is the OXT unknown.** (Earlier horizontal passes were redesigned after the user
+  asked for a true vertical level.)
+- **Slice 2 — DONE (pending OXT):** the **spinner** hazard. `pfMakeSpinner` (a
+  bodiless `spooks`-sheet sprite spinning via animation + sweeping a sine path,
+  proximity knockback like the saw — the saw-rule, you time it). L7 gets two
+  sweeping blades across the L1->L2 and L4->L5 climb gaps, standing-safe on the
+  adjacent ledges. `pHalf` provides the wall-mounted `spinnerHalf` for slice 3.
+  Gated on `gSpooksOK` (no `enemies.png` = safe). **Blade timing is the OXT feel-pass.**
+- **Slice 3 — DONE (pending OXT):** the **multi-key / switch puzzles**, woven into
+  L2 "The Works" (L7 went vertical, so the puzzle wing lives in the machinery
+  level - switches/gates/keys fit a factory). *Part 1:* `pfMakeKeyDoor` generalised
+  to N coloured doors (a per-door table; the hero holds a `gKeysHeld` set, each key
+  `uPfKeyWord`-tagged and consumed at its door) - deployed as a **two-key lockgate**
+  (yellow + blue) ending L2, which also tops L2 to ~24 coins. *Part 2:*
+  `pfMakeSwitchGate` - a **latching** floor switch (`switch_<colour>`) that opens
+  its coloured kinematic gate (`block_<colour>`) for good - deployed as a **green
+  switch-gate** barring the crusher alley until you find + press the switch on the
+  third-bay cloud. Both gated on `gToysOK` (a missing tiles sheet = an open run).
 - **Assets:** `terrain_stone_*` (full), `switch_{blue,green,red}(_pressed)`,
   `key_{blue,green}`, `lock_{blue,green}`, `spinner*`/`spinnerHalf*`,
   `block_strong_*`.
@@ -181,32 +215,75 @@ needs an OXT eye.
 - **Level:** a fortress interior — strong `block_strong_*` ?-blocks, a key/switch
   puzzle wing, spinner gauntlets, stone cliffs/overhangs.
 
-### Phase D — The defeat-animation & bestiary fill-in  (S–M)
+### Phase D — The defeat-animation & bestiary fill-in  (S–M)  — IN PROGRESS
 - **Assets:** `*_squashed/_hit/_dead` across `spooks` and `foes` `_rest` poses;
   `worm_ring_*` (second worm skin); `slimeBlue*`/`slimeGreen*` skins.
 - **Polish, every level:** play the proper **squash/dead** frame on a stomp (slimes,
   snail, snake, etc.) instead of just dropping the art; **rest/idle** poses for
   sleeping/telegraphing foes. Adds juice without new mechanics.
 - *Pure example-side; no new levels.* Good "between big phases" polish.
+- **Done (pending OXT):** the stomped foe now **fades out** over its linger
+  (`blendLevel` ramp) instead of blinking off; the bat + mimic show a proper
+  `_dead` pose (was a `_hit` flash); and a **dust-POOF** (four pooled `b2kSpawnBall`
+  motes, the debris pattern) bursts from the squash. Slimes/snail/block already
+  had `_flat`/`_shell`/`_rest` squash poses; telegraphing foes already idle on rest.
+- **Done (round 2):** a defeat **POP** (the squashed art arcs up ~50px as it
+  fades) and the **second skins** - a green + blue slime (`slimeGreen/Blue`,
+  `spooks`, via `pfMakeCritter`'s new optional sheet param, `gSpooksOK`-gated) and
+  the **ring worm** (`worm_ring`, native foes). Phase D essentially complete.
 
-### Phase E — Snakes & the slither biome beat  (M)
+### Phase E — Snakes & the slither biome beat  (M)  — DONE (pending OXT)
 - **Assets:** `snake(.png)/_walk/_hit/_dead`, `snakeLava*`, `snakeSlime*`.
 - **New movement type:** **slither** — a ground crawler that hugs the floor and
-  reverses at edges/walls (slime-family kind `snake`, animated `_walk`). `snakeLava`
-  belongs by the L4 lava / Phase-B cavern; `snakeSlime` by slime pools.
-- Woven into L4 and the new biomes (no dedicated level needed, but could anchor a
-  "serpent pit" beat).
+  reverses at edges/walls (slime-family kind `snake`, animated `_walk`). The LOW
+  `snake.png` is the crawler; the TALL rearing `snakeLava`/`snakeSlime` art is the
+  rising **serpent** (a separate bodiless mover, not a floor crawler).
+- Woven into L4 (lava), L6 (goo), and across the biomes (no dedicated level needed).
+- **Done (pending OXT):**
+  - The `snake` kind + slither tick (floor-probe edge/wall reversal) +
+    `pfMakeSnake pIdx,pX,pMinX,pMaxX,pTopY` — the plain low crawler, `gSpooksOK`-
+    gated, via `pfMakeCritter`'s sheet param. Deployed: L1 meadow, L3 ice, L4
+    lava-approach, L5 desert — the slither type across four biomes.
+  - **The serpent (`pfMakeSerpent`/`pfTickSerpent`, generic):** a rearing snake
+    that rises out of a hazard pool, arcs across on a sine path and sinks back in,
+    peaking high so it contests the crossing (a proximity-poll knockback, the saw
+    rule). Created under the pool surface so its submerged body is occluded.
+    Single-instance (one per level). Two homes:
+    - **L4 lava** (`snakeLava`): the old collapsing bridge is gone; the pit is a
+      512px chasm crossed in two hops over a middle stepping-stone the serpent
+      peaks at.
+    - **L6 goo** (`snakeSlime`): PIT2's spike chasm becomes a toxic **goo pool**
+      (`pfMakeSlimePool`, the slime-biome twin of `pfMakeLava`); the serpent peaks
+      at jump-arc height, so you time the double-jump for when it has sunk.
+  - **Sprite grounding fix:** the spook skins fill their frames edge-to-edge (no
+    transparent padding, measured), so their bind offset is the plain geometric
+    `pFullH/2 - frameH*0.9/2`, not the FOES soft-bottom sink that floated them ~9px.
+- **TODO (optional):** more snake placements if wanted; `audit-platformer.py` now
+  tracks `pfMakeSlimePool` as a hazard but still ignores `pfMakeSnake`/`pfMakeSerpent`
+  (harmless — the pools aren't gap-checked and the snakes self-reverse).
 
 ### Phase F — Collectibles & a health model  (M)
 - **Assets:** `coin_bronze/silver(_side)`, `star`, `heart`, `hud_heart(_half/
   _empty)`, `hud_coin`, `hud_character_0-9/multiply`.
-- **Coin tiers:** bronze/silver/gold worth 1/2/3 toward a *score* (the flag still
-  gates on a coin *count*, or migrate the gate to a tier total — design call).
-- **A hidden `star` per level** (a hard-to-reach challenge collectible, like the
-  gems but rarer; banked to the win screen).
-- **Optional 3-heart health** (`hud_heart*`): replace/augment the knockback-mercy
-  model with hearts; losing all → the respawn flow. *This is the one design-heavy
-  item — prototype carefully, it changes the difficulty contract.*
+- **Coin tiers (SHIPPED).** Coins are bronze/silver/gold worth **1/2/3** toward a
+  bonus `gScore`, auto-tiered by height (higher = worth more; `pfMakeCoin` takes an
+  optional explicit tier). The flag still gates on the coin **count** (the
+  collect-all clarity is preserved); the weighted score is banked and shown on the
+  win screen.
+- **A hidden `star` per level (SHIPPED).** One `pfMakeStar` challenge pickup per
+  level, banked to the win screen with its own dim->lit HUD slot; it never gates
+  the flag. Every star is placed **ON a proven-reachable standing surface** (a high
+  cloud/ledge/stepping-stone), audit-checked for reachability + clearance, never a
+  bare mid-air apex.
+- **Health — a forgiving FIVE-heart buffer (SHIPPED).** The hero starts each level
+  with 5 hearts (`hud_heart`/`hud_heart_empty`, a bottom-left row; `kHearts`). A
+  contact hit (`pfOuch`) spends one pip *atop* the existing knockback + mercy window
+  (so at most one pip per hit — the buffer can't drain in a frame of overlap);
+  emptying the row makes that hit lethal and routes to the respawn (`pfHurt`), which
+  REFILLS it. Falls / the kill-plane refill too, so the meter never hard-fails on
+  contact — it *augments* the knockback model with a visible "you've been pushing
+  your luck" gauge rather than replacing it. Shipped at **5** (forgiving), not the
+  spec's 3.
 - **Art HUD — retire the LiveCode text chrome (`hud_*`).** Today the demo frames
   the play area with LiveCode **fields**: `pfTitle` + `pfHelp` across the **top**
   and the live `pfHud` readout across the **bottom**. **Remove those persistent
@@ -219,7 +296,9 @@ needs an OXT eye.
     replaces — see the 4 Hz / write-on-change rule).
   - **Keys:** light a `hud_key_{blue,green,red,yellow}` icon as each key is taken
     (pairs with the Phase-C multi-key puzzles).
-  - **Hearts** (if Phase F's health model ships): `hud_heart(_half/_empty)`.
+  - **Hearts (SHIPPED):** a `hud_heart`/`hud_heart_empty` row low at the bottom-left
+    (`pfBuildHud` builds five, `pfUpdateHearts` redraws on change). The `_half` frame
+    is unused — pips are integer.
   - **Hero portrait:** `hud_player_*` / `hud_player_helmet_*` (pairs with the
     Phase-G character select).
   - **Placement:** the `hud_*` sprites are screen chrome, not world objects — fixed
@@ -233,35 +312,25 @@ needs an OXT eye.
   - **Buttons:** the `pfbtn_pause`/`pfbtn_reset` bottom buttons can stay functional
     or move into the Pause overlay; keyboard (ESC/R) already covers both.
 
-### Phase G — Player identity: character select + portraits  (S–M)
-- **Assets:** `character_{green,pink,purple,yellow}_*`, `character_beige_front`,
-  `hud_player_*` / `hud_player_helmet_*`.
-- **Character-select** splash (one-word skin swap per the load comment) + a **HUD
-  portrait** of the chosen hero. Pure cosmetic; low risk; high "feel" payoff.
+### Phase G — Player identity: character select + portraits  (S–M)  — SHIPPED
+- **Assets:** `character_{green,pink,purple,yellow}_*` (all carry the full 8-frame
+  hero anim set), `hud_player_*` portraits.
+- **Shipped:** press **1-5** to pick beige/green/pink/purple/yellow (`gHeroSkin`,
+  the one-word swap the hero anim defs + creation frame interpolate; a rebuild
+  re-skins cleanly). The choice persists across levels/restarts. A **HUD portrait**
+  (`hud_player_<skin>`) anchors the bottom-left status corner beside the heart row;
+  the splash + pause overlay carry the 1-5 hint. `hud_player_helmet_*` left unused
+  (the plain portraits read cleaner at HUD scale). *OXT to confirm:* each skin
+  animates cleanly across idle/walk/jump/duck/climb.
 
-### Phase H — The Village biome → **Level 8 "CLOCKTOWN"**  (L)
-- **Assets:** the whole **`spritesheet.xml`** city set (house walls/roofs in 3
-  palettes, awnings, chimneys, `clock`, fences, doors, shop signs, windows).
-- A **town** level — rooftops, awnings to bounce/clamber, a clocktower set-piece.
-  A distinct art style (needs its own atlas load + a `gCityOK` capability gate).
-- *Heaviest art-integration phase; its own backdrop (`background_solid_sky`/clouds).*
+### Phases H–J — not pursued
 
-### Phase I — The Alien world & a swim hero  (M–L)
-- **Assets:** `aliens.xml` / `alien*.xml` (alien heroes **with swim frames**),
-  `items_sheet` water props.
-- The Kenney `character_*` hero has **no swim frames** (the Kit falls back to
-  idle/jump in water). An **alien hero** has `_swim1/2` — ideal for a **water-world**
-  level (extended swim, currents via Phase-B conveyors underwater, the new fish).
-  Pairs naturally with the Phase-G character select (pick an alien for the water world).
-
-### Phase J — Stretch / quality  (varies)
-- **True multi-layer parallax:** needs *transparent* overlay art (cloud/fog bands).
-  Source or author a transparent layer; then layer it over the Phase-A biome scene
-  at a different drift rate. (`items_sheet` `cloud1/2/3` may serve.)
-- **Hi-DPI pass:** the `-double` 2× sheets for crisp art on high-density displays.
-- **Effects:** `items_sheet` `particle*` (brick debris), `springboardUp/Down`
-  (animated springboard), `weightChained` (alt thwomp art).
-- **`enemies_sheet` blocker/poker** as a distinct foe set if a theme wants them.
+The Village/**Clocktown** biome (H, the `spritesheet.xml` city set — *attempted and
+rolled back*), the **alien swim-world** (I, the `aliens.xml` heroes with swim
+frames), and the **stretch/quality** items (J — true multi-layer parallax, the
+`-double` hi-DPI sheets, `items_sheet` particles/springboards) were scoped but are
+**not being pursued** now that feature development is frozen. The assets each would
+have used remain catalogued in §1 if work ever resumes.
 
 ---
 
@@ -276,10 +345,9 @@ needs an OXT eye.
 | 5 | Scorched Dunes | sand / desert | (built) + gem | dune, thorn pit, bestiary II |
 | **6** | **Cavern Depths** | **dirt / dirt** | dirt biome, conveyor, torches, block slime | conveyor descent + dark shaft |
 | **7** | **Stone Keep** | **stone / cave** | stone biome, multi-key/switch, spinners | lock-and-key puzzle wing |
-| **8** | **Clocktown** | **city / sky** | the buildings set | rooftop run + clocktower |
-| **9** | **Tidal Caves** | **stone+water** | alien swim hero, fish, currents | extended swim world |
 
-(6–9 are the new content; ordering/naming is a starting point.)
+(6–7 are the shipped new content; the once-planned 8 "Clocktown" / 9 "Tidal Caves"
+were not pursued — see Phases H–J above.)
 
 ---
 
@@ -314,22 +382,13 @@ needs an OXT eye.
 
 ---
 
-## 6. Asset-coverage checklist (definition of done)
+## 6. Asset-coverage (as-built)
 
-Track usage per sheet; "done" = used or a one-line documented reason it isn't.
-
-- [ ] `backgrounds` — biome scenes used (Phase A partial); solids/clouds for new biomes (B/H).
-- [ ] `tiles` terrain — dirt (B) + stone (C) biomes; corner/edge/ramp/overhang pieces across biomes.
-- [ ] `tiles` items — coin tiers + star + heart (F); torches + conveyor + planks (B/C); multi-colour locks/switches (C); `flag_green`.
-- [ ] `tiles` HUD strip — art HUD (F), **removing the LiveCode top/bottom fields**.
-- [ ] `foes` — block slime, worm ring, rest poses (B/D).
-- [ ] `spooks` — snakes (E), spinners (C), squash/dead states everywhere (D), alt fish.
-- [ ] `characters` — 4 skins + portraits via character select (G).
-- [ ] `spritesheet.xml` city — Clocktown (H).
-- [ ] `aliens.xml` — swim hero / Tidal Caves (I).
-- [ ] `items_sheet` — particles, springboardUp/Down, weightChained (J).
-- [ ] `enemies_sheet` blocker/poker — themed foe set (J, optional).
-- [ ] `-double` sheets — hi-DPI pass (J, optional).
+Phases A–G shipped; the per-phase notes above and [`../CHANGELOG.md`](../CHANGELOG.md)
+are the as-built coverage record. The original aspirational per-sheet checklist has
+been dropped now that feature development is frozen — much of it shipped (coin tiers,
+star, the heart HUD, character select, the dirt/stone biomes, snakes, spinners,
+switch puzzles), and the remainder was tied to the unpursued Phases H–J.
 
 ---
 
@@ -352,10 +411,15 @@ Track usage per sheet; "done" = used or a one-line documented reason it isn't.
 
 ## 8. Open questions / risks
 
-1. **Health model (F):** add hearts, or keep the knockback-mercy contract? It
-   reshapes difficulty across all levels — needs a deliberate decision.
-2. **Coin gate vs score:** if coin tiers (F) feed a score, does the flag still gate
-   on *count*, or on a tier *total*? Keep the "collect all to gild the flag" clarity.
+1. **Health model (F): DECIDED — a forgiving five-heart buffer LAYERED ON the
+   knockback-mercy contract** (not a replacement). A contact hit costs one pip but
+   still knocks back with mercy; the buffer only gates the *fifth* hit into a
+   checkpoint respawn (which refills), so existing per-level difficulty is
+   preserved and merely softened. Shipped at 5, not the spec's 3.
+2. **Coin gate vs score: DECIDED — the flag still gates on the coin COUNT** (collect
+   all coins to gild the flag, unchanged), and the bronze/silver/gold tiers feed a
+   separate bonus `gScore` banked to the win screen. The collect-all clarity is
+   preserved; the score is a pure skill-reward overlay.
 3. **City/alien atlases (H/I):** different grids/styles — confirm they read at the
    64px world scale (`b2kSheetScale`) and that mixing styles per level looks
    intentional, not clashy.

@@ -8884,17 +8884,19 @@ function fmtMass pN
 end fmtMass
 
 on tickHud
+   local tNow
+   put the milliseconds into tNow   -- one clock read per pass (perf playbook)
    add 1 to gFrames
-   if gFpsTime is empty then put the milliseconds into gFpsTime
-   if the milliseconds - gFpsTime >= kFpsWindowMs then
-      put round(gFrames * 1000 / (the milliseconds - gFpsTime)) into gFps
+   if gFpsTime is empty then put tNow into gFpsTime
+   if tNow - gFpsTime >= kFpsWindowMs then
+      put round(gFrames * 1000 / (tNow - gFpsTime)) into gFps
       put 0 into gFrames
-      put the milliseconds into gFpsTime
+      put tNow into gFpsTime
    end if
    -- Refresh the HUD ~10x/sec while running so the live telemetry reads smoothly,
    -- without rebuilding the whole status string every single frame.
-   if gHudTime is empty or (the milliseconds - gHudTime) >= 100 then
-      put the milliseconds into gHudTime
+   if gHudTime is empty or (tNow - gHudTime) >= 100 then
+      put tNow into gHudTime
       updateHud
       if gPlaying and not gGameWon and there is a field "ui_playbannerlbl" then
          put "▶ PLAY — " & playElapsed() & "s    get a movable part into the goal" into field "ui_playbannerlbl"
@@ -11348,38 +11350,6 @@ function propGroup pKey
    if pKey is among the items of "layer,sensor,filter,active,sleep" then return "collide"
    return "special"   -- launchspeed,launchdir,spinrate, laserdir, and the fan/magnet/bomb keys
 end propGroup
-
--- The tabs that actually have settings for this kind (so empty tabs stay hidden).
-function partTabs pKind
-   local tKey, tHasShape, tHasPhys, tHasCollide, tHasSpec, tOut
-   put false into tHasShape
-   put false into tHasPhys
-   put false into tHasCollide
-   put false into tHasSpec
-   set the itemDelimiter to comma
-   repeat for each item tKey in partProps(pKind)
-      switch propGroup(tKey)
-         case "shape"
-            put true into tHasShape
-            break
-         case "physics"
-            put true into tHasPhys
-            break
-         case "collide"
-            put true into tHasCollide
-            break
-         case "special"
-            put true into tHasSpec
-            break
-      end switch
-   end repeat
-   put empty into tOut
-   if tHasShape then put "shape" into tOut
-   if tHasPhys then put addItem(tOut, "physics") into tOut
-   if tHasCollide then put addItem(tOut, "collide") into tOut
-   if tHasSpec then put addItem(tOut, "special") into tOut
-   return tOut
-end partTabs
 
 -- Append an item to a comma list (small sibling of addKV for ; lists).
 function addItem pList, pItem
