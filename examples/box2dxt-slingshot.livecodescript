@@ -82,7 +82,7 @@ local gHudLast, gHudNextMS, gBuilding
 -- invalidates a stale fade send; gSgCardFade is the ramp (0 opaque .. 100 clear).
 local gSgCardActive, gSgCardGen, gSgCardFade
 
-constant kSgUIVersion = "2"   -- added the transition cover (sgCard / sgCardText)
+constant kSgUIVersion = "3"   -- added the built-once sky backdrop (sgSky/sgSkyLow/sgSun/sgHillA/sgHillB)
 constant kPocketX = 170      -- the sling pocket (screen px)
 constant kPocketY = 444
 constant kPullMax = 96       -- tether radius: full pull = full power
@@ -120,6 +120,11 @@ command buildSgUI
    if there is a field "sgBigText" then delete field "sgBigText"
    if there is a graphic "sgCard" then delete graphic "sgCard"
    if there is a field "sgCardText" then delete field "sgCardText"
+   if there is a graphic "sgSky" then delete graphic "sgSky"
+   if there is a graphic "sgSkyLow" then delete graphic "sgSkyLow"
+   if there is a graphic "sgSun" then delete graphic "sgSun"
+   if there is a graphic "sgHillA" then delete graphic "sgHillA"
+   if there is a graphic "sgHillB" then delete graphic "sgHillB"
    set the width of this stack to 1024
    set the height of this stack to 640
    set the loc of this stack to the screenLoc
@@ -127,6 +132,40 @@ command buildSgUI
       set the title of this stack to "Box2Dxt - Slingshot"
    catch tErr
    end try
+   -- ===== a built-once SKY BACKDROP behind every level. Created here (before the
+   -- rest of the chrome) so it sits at the very back; it is NOT "sg_" prefixed, so
+   -- sgWipeStage leaves it across level rebuilds. Pure decor (no body). foreground =
+   -- background on each so no outline shows. (Placement is tunable on an OXT pass.)
+   create graphic "sgSky"
+   set the style of it to "rectangle"
+   set the rect of it to 0, 44, 1024, 580
+   set the filled of it to true
+   set the backgroundColor of it to "148,196,232"
+   set the foregroundColor of it to "148,196,232"
+   create graphic "sgSkyLow"
+   set the style of it to "rectangle"
+   set the rect of it to 0, 466, 1024, 580
+   set the filled of it to true
+   set the backgroundColor of it to "200,222,236"
+   set the foregroundColor of it to "200,222,236"
+   create graphic "sgSun"
+   set the style of it to "oval"
+   set the rect of it to 838, 96, 946, 204
+   set the filled of it to true
+   set the backgroundColor of it to "250,236,178"
+   set the foregroundColor of it to "250,236,178"
+   create graphic "sgHillA"
+   set the style of it to "oval"
+   set the rect of it to -80, 502, 520, 812
+   set the filled of it to true
+   set the backgroundColor of it to "150,184,132"
+   set the foregroundColor of it to "150,184,132"
+   create graphic "sgHillB"
+   set the style of it to "oval"
+   set the rect of it to 528, 520, 1100, 820
+   set the filled of it to true
+   set the backgroundColor of it to "132,168,118"
+   set the foregroundColor of it to "132,168,118"
    create field "sgTitle"
    set the rect of it to 20, 6, 1004, 26
    set the lockText of it to true
@@ -284,7 +323,7 @@ end sgBanner
 command sgShowWin
    local tMsg
    put "won" into gMode
-   put "A L L   T O W E R S   D O W N !" & cr & cr into tMsg
+   put "★   A L L   T O W E R S   D O W N !   ★" & cr & cr into tMsg
    put "final score  " & gScore & cr & cr after tMsg
    put "C L I C K   T O   P L A Y   A G A I N" after tMsg
    sgBanner tMsg
@@ -680,15 +719,25 @@ end sgPopPig
 -- "retry" qualifies too: a slow-toppling column that pops the last pig
 -- AFTER the out-of-ammo banner is a buzzer-beater, not a loss.
 command sgLevelClear
-   local tBonus
+   local tBonus, tStars
    if gMode is not "play" and gMode is not "retry" then exit sgLevelClear
    put "clear" into gMode
    put gShots * 1000 into tBonus
    add tBonus to gScore
-   if tBonus > 0 then
-      sgBanner "T O W E R   D O W N !" & cr & cr & "+" & tBonus & " ammo bonus"
+   -- a star rating from the ammo left over (skill: the fewer shots used, the more stars)
+   if gShots >= 3 then
+      put "★ ★ ★" into tStars
    else
-      sgBanner "T O W E R   D O W N !"
+      if gShots >= 1 then
+         put "★ ★ ☆" into tStars
+      else
+         put "★ ☆ ☆" into tStars
+      end if
+   end if
+   if tBonus > 0 then
+      sgBanner tStars & cr & cr & "T O W E R   D O W N !" & cr & cr & "+" & tBonus & " ammo bonus"
+   else
+      sgBanner tStars & cr & cr & "T O W E R   D O W N !"
    end if
    b2kSound "clear"
    send "sgNextLevel" to me in 1700 milliseconds
@@ -733,6 +782,7 @@ on b2kFrame
          put i * 0.11 into tT
          put round(gAimX + (kPocketX - gAimX) * kLaunchK * tT) into tMX
          put round(gAimY + (kPocketY - gAimY) * kLaunchK * tT + 300 * tT * tT) into tMY
+         if tMY > 576 then put 576 into tMY   -- rest on the turf, never bury into the ground
          set the loc of graphic ("sg_dot" & i) to tMX & comma & tMY
       end repeat
       if gDotsOn is not true then
