@@ -23,6 +23,22 @@
     });
   }
 
+  /* ---------- Copy buttons on every code block (home + docs) ---------- */
+  [].forEach.call(document.querySelectorAll("pre"), function (pre) {
+    if (pre.querySelector(".copy-btn")) return;
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "copy-btn"; btn.textContent = "copy";
+    btn.setAttribute("aria-label", "Copy code to clipboard");
+    btn.addEventListener("click", function () {
+      var code = pre.querySelector("code");
+      var text = code ? code.innerText : pre.innerText;
+      var done = function () { btn.textContent = "copied!"; setTimeout(function () { btn.textContent = "copy"; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, done);
+      else { try { var r = document.createRange(); r.selectNodeContents(code || pre); var s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand("copy"); s.removeAllRanges(); done(); } catch (e) { /* no-op */ } }
+    });
+    pre.appendChild(btn);
+  });
+
   /* =========================================================
      Physics toy
      ========================================================= */
@@ -237,7 +253,7 @@
      ========================================================= */
   var stackBody = document.getElementById("stackBody");
   if (stackBody) {
-    var order = ["home", "about", "paste", "features", "how", "examples", "docs", "start"];
+    var order = ["home", "about", "paste", "features", "how", "examples", "docs", "faq", "start", "whatsnew"];
     var cards = {}, titles = {};
     [].forEach.call(document.querySelectorAll(".card"), function (c) {
       cards[c.dataset.card] = c; titles[c.dataset.card] = c.dataset.title || c.dataset.card;
@@ -254,8 +270,12 @@
       if (stackTitle) stackTitle.textContent = "Box2Dxt — " + titles[name];
       if (cardName) cardName.textContent = titles[name];
       if (cardIdx) cardIdx.textContent = idx + 1;
+      var live = document.getElementById("liveRegion");
+      if (live) live.textContent = titles[name] + ", card " + (idx + 1) + " of " + order.length;
       if (links) [].forEach.call(links.querySelectorAll("a[data-go]"), function (a) {
-        a.classList.toggle("active", a.dataset.go === name);
+        var on = a.dataset.go === name;
+        a.classList.toggle("active", on);
+        if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
       });
     }
 
@@ -288,6 +308,7 @@
       }
       current = name;
       setChrome(name);
+      for (var ah in cards) cards[ah].setAttribute("aria-hidden", ah === name ? "false" : "true");
       if (demo) { if (name === "home") demo.start(); else demo.stop(); }
 
       if (hist === "replace") history.replaceState({ card: name }, "", "#" + name);
@@ -335,7 +356,8 @@
     }
     function say(s) { if (msgOut) msgOut.textContent = s; }
     var ALIAS = { start: "start", "get started": "start", "getting started": "start", learn: "docs",
-      documentation: "docs", example: "examples", feature: "features", "what it is": "about", overview: "home" };
+      documentation: "docs", example: "examples", feature: "features", "what it is": "about", overview: "home",
+      questions: "faq", news: "whatsnew", changelog: "whatsnew", "whats new": "whatsnew", "new": "whatsnew" };
     function resolveCard(t) {
       t = t.trim();
       if (cards[t]) return t;
@@ -372,10 +394,12 @@
       else if (e.key === "ArrowLeft") { go(-1); e.preventDefault(); }
       else if (e.key === "Home" || e.key === "h" || e.key === "H") show("home");
       else if (e.key === "m" || e.key === "M") toggleMsg();
+      else if (e.key === "?") show("faq");
     });
 
     /* ---------- Boot ---------- */
     setChrome("home");
+    for (var bk in cards) cards[bk].setAttribute("aria-hidden", bk === "home" ? "false" : "true");
     if (demo) demo.start();
     var initial = (location.hash || "").replace("#", "");
     if (initial && cards[initial] && initial !== "home") show(initial, "replace");

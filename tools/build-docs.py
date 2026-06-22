@@ -311,6 +311,7 @@ FOOTER = f"""<footer class="footer"><div class="wrap footer-bottom" style="borde
 
 
 def shell(title, desc, active, main_html):
+    canon = "https://sethmorrowsoftware.github.io/Box2Dxt/docs/%s.html" % ("index" if active == "index" else active)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -319,6 +320,8 @@ def shell(title, desc, active, main_html):
 <title>{html.escape(title)} — Box2Dxt docs</title>
 <meta name="description" content="{html.escape(desc)}">
 <meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f1ece1">
+<link rel="canonical" href="{canon}">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -326,6 +329,7 @@ def shell(title, desc, active, main_html):
 <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
+<a class="skip" href="#docmain">Skip to content</a>
 {CRATE}
 {menubar()}
 {main_html}
@@ -339,7 +343,7 @@ def shell(title, desc, active, main_html):
 def doc_page(key):
     title, desc = TITLES[key]
     body = convert((SRC / f"{key}.md").read_text(encoding="utf-8"))
-    main = f"""<main class="doc-wrap">
+    main = f"""<main class="doc-wrap" id="docmain">
 {sidebar(key)}
 <article class="win doc-win">
   <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">{key}.md</span><span class="win-box"></span></div>
@@ -355,7 +359,7 @@ def index_page():
         f'<a class="doc" href="{k}.html"><h4>{nums[i]} {t}</h4><p>{html.escape(d)}</p></a>'
         for i, (k, t, d) in enumerate(DOCS)
     )
-    main = f"""<main class="doc-wrap">
+    main = f"""<main class="doc-wrap" id="docmain">
 {sidebar("index")}
 <article class="win doc-win">
   <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">the manual</span><span class="win-box"></span></div>

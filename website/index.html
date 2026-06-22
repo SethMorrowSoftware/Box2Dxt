@@ -6,9 +6,20 @@
 <title>Box2Dxt — Real 2D physics for OpenXTalk &amp; the xTalk family</title>
 <meta name="description" content="Box2Dxt drops the battle-tested Box2D v3.1.0 physics engine into OpenXTalk and LiveCode. You think in cards and stacks; your controls fall, roll, bounce, hinge, and collide — in plain xTalk.">
 <meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f1ece1">
+<link rel="canonical" href="https://sethmorrowsoftware.github.io/Box2Dxt/">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Box2Dxt">
+<meta property="og:url" content="https://sethmorrowsoftware.github.io/Box2Dxt/">
 <meta property="og:title" content="Box2Dxt — physics for the card &amp; stack people">
 <meta property="og:description" content="The battle-tested Box2D engine, dropped into OpenXTalk and LiveCode. A whole physics engine you can flip through like a HyperCard stack.">
+<meta property="og:image" content="https://sethmorrowsoftware.github.io/Box2Dxt/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Box2Dxt — real 2D physics for OpenXTalk &amp; LiveCode">
+<meta name="twitter:description" content="Write plain xTalk; your controls fall, roll, bounce, hinge, and collide. MIT-licensed, cross-platform, bundled in.">
+<meta name="twitter:image" content="https://sethmorrowsoftware.github.io/Box2Dxt/og-image.png">
 
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
 
@@ -17,9 +28,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="styles.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Box2Dxt","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux","description":"Box2Dxt packages the Box2D v3.1.0 physics engine for OpenXTalk and LiveCode 9.6.3+. Write plain xTalk; your controls fall, roll, bounce, hinge, and collide.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"license":"https://opensource.org/licenses/MIT","url":"https://sethmorrowsoftware.github.io/Box2Dxt/","codeRepository":"https://github.com/SethMorrowSoftware/Box2Dxt","softwareVersion":"0.3.0"}
+</script>
 <script>document.documentElement.classList.add('js');</script>
 </head>
 <body>
+<a class="skip" href="#stackBody">Skip to content</a>
+<p id="liveRegion" class="sr-only" aria-live="polite"></p>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="crate" viewBox="0 0 32 32">
@@ -40,6 +56,7 @@
       <a href="#features" data-go="features">What&nbsp;you&nbsp;get</a>
       <a href="#how" data-go="how">How&nbsp;it&nbsp;works</a>
       <a href="#examples" data-go="examples">Examples</a>
+      <a href="#faq" data-go="faq">FAQ</a>
       <a href="docs/index.html">Docs</a>
     </nav>
     <div class="menu-right">
@@ -73,6 +90,7 @@
                 <a class="btn btn-primary" href="#start" data-go="start">Get started →</a>
                 <a class="btn" href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">View on GitHub</a>
               </div>
+              <a class="verpill" href="#whatsnew" data-go="whatsnew">★ New in v0.3.0 — see what's new</a>
               <p class="flip-hint">Flip the stack with <kbd>←</kbd> <kbd>→</kbd>, the arrows below, or the menu. Press <kbd>M</kbd> for the message box.</p>
             </div>
 
@@ -100,7 +118,9 @@
             <button class="lbtn" data-go="how">How it works</button>
             <button class="lbtn" data-go="examples">Examples</button>
             <button class="lbtn" data-go="docs">Docs</button>
+            <button class="lbtn" data-go="faq">FAQ</button>
             <button class="lbtn" data-go="start">Get started</button>
+            <button class="lbtn" data-go="whatsnew">What's new</button>
           </div>
         </section>
 
@@ -267,9 +287,25 @@
           <p class="docs-more">That's the whole manual — everything you need to build with the Kit. The full source lives on <a href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub →</a></p>
         </section>
 
-        <!-- CARD 8 · GET STARTED -->
+        <!-- CARD 8 · FAQ -->
+        <section class="card" id="card-faq" data-card="faq" data-title="FAQ" aria-label="FAQ">
+          <span class="cardnum">CARD 08 · FAQ</span>
+          <h2 class="card-h">Questions, answered.</h2>
+          <div class="faq-list">
+            <details class="faq"><summary>Is it free? Can I use it in commercial apps?</summary><p>Yes. Box2Dxt is <b>MIT-licensed</b> — free for personal <em>and</em> commercial use. Box2D itself is MIT too (© Erin Catto).</p></details>
+            <details class="faq"><summary>Do I need to know C, or compile anything?</summary><p>No. The native library is <b>bundled inside the extension</b> and loads automatically. Package the extension once, then write plain xTalk — no toolchain, no terminal.</p></details>
+            <details class="faq"><summary>Which platforms does it run on?</summary><p><b>Windows</b> (x64/x86), <b>macOS</b> (universal), and <b>Linux</b> (x86-64/i686) — the right library is chosen for you.</p></details>
+            <details class="faq"><summary>OpenXTalk only, or LiveCode too?</summary><p>Both. It targets <b>OpenXTalk</b> and is compatible with <b>LiveCode 9.6.3+</b>.</p></details>
+            <details class="faq"><summary>Do I need to know physics or maths?</summary><p>No. The Kit speaks <b>pixels and degrees</b> and runs the simulation loop for you. Spawn a ball, push a body, react to a hit — the maths is handled.</p></details>
+            <details class="faq"><summary>Is it fast enough for real games?</summary><p>Yes — it's the real, native Box2D engine. The bundled platformer runs seven scrolling levels with a full cast at 60fps.</p></details>
+            <details class="faq"><summary>Can I add physics to controls I already drew?</summary><p>Absolutely. Point the Kit at any graphic, image, or button and it gains a body, gravity, and collisions — graphics and images even rotate with it.</p></details>
+            <details class="faq"><summary>Where do I get help?</summary><p>The <button class="link-go" data-go="docs">guides</button> cover everything; the source, issues, and discussions live on <a href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub</a>.</p></details>
+          </div>
+        </section>
+
+        <!-- CARD 9 · GET STARTED -->
         <section class="card" id="card-start" data-card="start" data-title="Get started" aria-label="Get started">
-          <span class="cardnum">CARD 08 · GET STARTED</span>
+          <span class="cardnum">CARD 09 · GET STARTED</span>
           <h2 class="card-h">Up and running in four steps.</h2>
           <ol class="steps">
             <li class="step"><span class="step-n">1</span><div><h4>Package the extension</h4><p>Open <code>box2dxt.lcb</code> in OXT's <b>Extension Builder</b> and click <b>Package</b> — it rolls in the per-platform native libraries for you.</p></div></li>
@@ -281,6 +317,23 @@
             <a class="btn btn-primary" href="docs/getting-started.html">Read the full guide</a>
             <a class="btn" href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">Star it on GitHub ★</a>
           </div>
+        </section>
+
+        <!-- CARD 10 · WHAT'S NEW -->
+        <section class="card" id="card-whatsnew" data-card="whatsnew" data-title="What's new" aria-label="What's new">
+          <span class="cardnum">CARD 10 · WHAT'S NEW</span>
+          <h2 class="card-h">What's new <span class="ver">v0.3.0</span></h2>
+          <p class="card-lead">Box2Dxt keeps growing — recent highlights, all user-facing:</p>
+          <ul class="news">
+            <li><b>Even simpler install.</b> The native library is bundled inside the extension and loads itself — no download, rename, or <code>sudo</code>.</li>
+            <li><b>The platformer is now seven biome levels</b> — grass, stone, ice, haunted, desert, cavern, and a vertical Stone Keep — with a boot title screen and character select.</li>
+            <li><b>A bigger bestiary:</b> rising lava &amp; goo serpents, snakes, spinning blades, hopping block-slimes, fish, frogs, and more.</li>
+            <li><b>Health &amp; collectibles:</b> a forgiving five-heart buffer, coin tiers, gems, and a hidden star to find on every level.</li>
+            <li><b>More to play with:</b> conveyor belts, collapsing bridges, switch puzzles, multi-key doors, and parallax biome backdrops.</li>
+            <li><b>New example — the Slingshot:</b> angry-birds-style tower knockdown, pure physics, zero assets.</li>
+            <li><b>Smoother &amp; faster:</b> a persistent spritesheet cache, illustrated transition cards, and an art HUD.</li>
+          </ul>
+          <p class="card-next">The full history lives in the <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/CHANGELOG.md" target="_blank" rel="noopener">changelog →</a></p>
         </section>
 
       </div><!-- /stack-body -->

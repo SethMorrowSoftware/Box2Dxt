@@ -26,15 +26,29 @@ home page is a stack of cards you flip through, one at a time:
 - **Graceful fallback**: an inline `<html class="js">` flag gates single-card
   mode, so with JavaScript off the cards simply stack into a normal scroll page.
 
+**Ten cards:** Home · What it is · One paste · What you get · How it works ·
+Examples · Docs · FAQ · Get started · What's new.
+
+**Professional touches:** full SEO/social meta with a generated `og-image.png`
+and JSON-LD `SoftwareApplication`; an accessibility pass (skip link, ARIA
+live-region card announcements, `aria-current`/`aria-hidden`, visible focus
+rings); copy-to-clipboard on every code block (home + docs); a styled `404.html`
+("card not found"); and a subtle "deal-in" intro that honours reduced-motion.
+
 ```
 website/
-├── index.html   # the landing page (menu bar + window-framed "cards")
-├── styles.css   # the paper/ink/orange design system + Mac window chrome + .prose
-├── app.js       # crate-physics toy + the card-stack navigation + Message Box
-└── docs/        # the user-facing guides, rendered from docs/*.md (generated)
+├── index.html     # the landing page (menu bar + window-framed "cards")
+├── styles.css     # the paper/ink/orange design system + Mac window chrome + .prose
+├── app.js         # crate-physics toy + the card-stack navigation + Message Box
+├── 404.html       # styled "card not found"
+├── og-image.png   # generated 1200×630 social card
+└── docs/          # the user-facing guides, rendered from docs/*.md (generated)
     ├── index.html          # the manual overview
     └── <doc>.html          # getting-started, kit-guide, kit-reference
 ```
+
+> Regenerate the social card after a brand change with the snippet in
+> `tools/`-adjacent notes, or re-screenshot `/tmp/og.html` at 1200×630.
 
 ## The docs are rendered from Markdown
 
