@@ -240,91 +240,287 @@
     function setOut(s) { if (pgOut) pgOut.textContent = s; }
 
     pgRunner = (function (world) {
-      var BUD = 0, outbox = [];
-      function budget() { if (--BUD < 0) throw { pg: "script too long — stopped" }; }
+      "use strict";
+      var BUD, outbox, ITEMDELIM, RESULT, handlers, funcs;
 
-      function tokenize(s) {
-        var t = [], i = 0, n = s.length;
+      /* ---------- value helpers ---------- */
+      function isNumStr(v) { if (typeof v === "number") return isFinite(v); if (typeof v !== "string") return false; var s = v.trim(); return s !== "" && !isNaN(Number(s)); }
+      function toNum(v) { if (typeof v === "number") return v; if (typeof v === "boolean") return v ? 1 : 0; var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+      function toBool(v) { if (typeof v === "boolean") return v; if (typeof v === "number") return v !== 0; return ("" + v).toLowerCase().trim() === "true"; }
+      function fmt(n) { if (!isFinite(n)) return "" + n; if (Math.round(n) === n && Math.abs(n) < 1e15) return "" + n; var s = n.toFixed(6); return s.replace(/0+$/, "").replace(/\.$/, ""); }
+      function toStr(v) { if (typeof v === "boolean") return v ? "true" : "false"; if (typeof v === "number") return fmt(v); return v == null ? "" : "" + v; }
+      function budget() { if (--BUD < 0) throw { pg: "script too long — stopped" }; }
+      function out(s) { outbox.push(toStr(s)); }
+      function getVar(name, vars) { return vars[name] !== undefined ? vars[name] : 0; }
+
+      var CONSTS = { empty: "", space: " ", tab: "\t", "return": "\n", cr: "\n", crlf: "\r\n", linefeed: "\n", lf: "\n", comma: ",", colon: ":", quote: '"', slash: "/", "null": "", nullchar: "", pi: Math.PI, "true": true, "false": false, up: "up", down: "down" };
+      var ORD = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10, last: -1, middle: 0, any: -2 };
+      var CHUNKW = { char: "char", chars: "char", character: "char", characters: "char", word: "word", words: "word", item: "item", items: "item", line: "line", lines: "line", token: "word", tokens: "word" };
+      var CHUNKKEYS = Object.keys(CHUNKW), ORDKEYS = Object.keys(ORD);
+
+      /* ---------- lexer ---------- */
+      function lex(s) {
+        var t = [], i = 0, n = s.length, two = { ">=": 1, "<=": 1, "<>": 1, "&&": 1 };
         while (i < n) {
           var c = s[i];
           if (c === " " || c === "\t") { i++; continue; }
-          if (c === '"') { var j = i + 1, v = ""; while (j < n && s[j] !== '"') v += s[j++]; i = j + 1; t.push({ t: "str", v: v }); continue; }
-          if (/[0-9]/.test(c) || (c === "." && /[0-9]/.test(s[i + 1] || ""))) { var num0 = ""; while (i < n && /[0-9.]/.test(s[i])) num0 += s[i++]; t.push({ t: "num", v: parseFloat(num0) }); continue; }
-          if (/[A-Za-z_]/.test(c)) { var id = ""; while (i < n && /[A-Za-z0-9_]/.test(s[i])) id += s[i++]; t.push({ t: "id", v: id }); continue; }
-          if ("+-*/&(),".indexOf(c) >= 0) { t.push({ t: "op", v: c }); i++; continue; }
+          if (c === '"') { var j = i + 1, v = ""; while (j < n && s[j] !== '"') v += s[j++]; i = j + 1; t.push({ k: "str", v: v }); continue; }
+          if (/[0-9]/.test(c) || (c === "." && /[0-9]/.test(s[i + 1] || ""))) { var num = ""; while (i < n && /[0-9.]/.test(s[i])) num += s[i++]; t.push({ k: "num", v: parseFloat(num) }); continue; }
+          if (/[A-Za-z_]/.test(c)) { var id = ""; while (i < n && /[A-Za-z0-9_]/.test(s[i])) id += s[i++]; t.push({ k: "id", v: id }); continue; }
+          if (c === "≠") { t.push({ k: "op", v: "<>" }); i++; continue; }
+          var pr = s.substr(i, 2); if (two[pr]) { t.push({ k: "op", v: pr }); i += 2; continue; }
+          if ("+-*/^&=<>(),".indexOf(c) >= 0) { t.push({ k: "op", v: c }); i++; continue; }
           i++;
         }
         return t;
       }
-      function str(x) { return x == null ? "" : "" + x; }
-      function callFn(name, a) {
+
+      /* ---------- chunk + compare helpers ---------- */
+      function parts(type, src) {
+        var s = toStr(src);
+        if (type === "char") return s.split("");
+        if (type === "item") return s.split(ITEMDELIM);
+        if (type === "line") return s.split("\n");
+        var w = s.trim(); return w === "" ? [] : w.split(/\s+/);
+      }
+      function joinParts(type, arr) { return arr.join(type === "item" ? ITEMDELIM : type === "line" ? "\n" : type === "word" ? " " : ""); }
+      function resolveIdx(i, len) { i = Math.round(i); if (i < 0) i = len + i + 1; return i; }
+      function chunk(type, a, b, src) { var arr = parts(type, src), len = arr.length, x = resolveIdx(a, len), y = resolveIdx(b, len); if (x < 1) x = 1; if (y > len) y = len; if (x > y) return ""; return joinParts(type, arr.slice(x - 1, y)); }
+      function countChunks(type, src) { return type === "char" ? toStr(src).length : parts(type, src).length; }
+      function ordChunk(type, ord, src) { var arr = parts(type, src), len = arr.length, i; if (ord === -1) i = len; else if (ord === 0) i = Math.ceil(len / 2); else if (ord === -2) i = 1 + Math.floor(Math.random() * len); else i = ord; return (i < 1 || i > len) ? "" : arr[i - 1]; }
+      function isType(v, t) { if (t === "number") return isNumStr(v); if (t === "integer") return isNumStr(v) && Number.isInteger(Number(v)); if (t === "point") return /^-?\d+,-?\d+$/.test(toStr(v).trim()); if (t === "boolean" || t === "logical") return ["true", "false"].indexOf(toStr(v).toLowerCase()) >= 0; return false; }
+      function looseEq(a, b) { if (isNumStr(a) && isNumStr(b)) return toNum(a) === toNum(b); return toStr(a).toLowerCase() === toStr(b).toLowerCase(); }
+      function cmp(o, a, b) { var na = isNumStr(a) && isNumStr(b), x = na ? toNum(a) : toStr(a).toLowerCase(), y = na ? toNum(b) : toStr(b).toLowerCase(); return o === ">" ? x > y : o === "<" ? x < y : o === ">=" ? x >= y : x <= y; }
+      function listNums(a) { if (a.length === 1 && typeof a[0] === "string" && a[0].indexOf(ITEMDELIM) >= 0) return a[0].split(ITEMDELIM).map(toNum); return a.map(toNum); }
+
+      /* ---------- builtin functions + properties ---------- */
+      function applyFn(name, a, vars) {
         switch (name) {
-          case "random": return Math.floor(Math.random() * Math.max(1, num(a[0])));
-          case "abs": return Math.abs(num(a[0]));
-          case "round": return Math.round(num(a[0]));
-          case "min": return Math.min(num(a[0]), num(a[1]));
-          case "max": return Math.max(num(a[0]), num(a[1]));
-          case "sqrt": return Math.sqrt(num(a[0]));
-          case "sin": return Math.sin(num(a[0]));
-          case "cos": return Math.cos(num(a[0]));
-          default: return 0;
+          case "random": return 1 + Math.floor(Math.random() * Math.max(1, Math.round(toNum(a[0]))));
+          case "abs": return Math.abs(toNum(a[0]));
+          case "round": return a.length > 1 ? Math.round(toNum(a[0]) * Math.pow(10, toNum(a[1]))) / Math.pow(10, toNum(a[1])) : Math.round(toNum(a[0]));
+          case "trunc": return Math.trunc(toNum(a[0]));
+          case "sqrt": return Math.sqrt(toNum(a[0]));
+          case "sin": return Math.sin(toNum(a[0])); case "cos": return Math.cos(toNum(a[0])); case "tan": return Math.tan(toNum(a[0]));
+          case "atan": return Math.atan(toNum(a[0])); case "exp": return Math.exp(toNum(a[0])); case "ln": return Math.log(toNum(a[0])); case "log2": return Math.log(toNum(a[0])) / Math.LN2;
+          case "min": return Math.min.apply(null, listNums(a)); case "max": return Math.max.apply(null, listNums(a));
+          case "sum": { var ns = listNums(a), s = 0, i; for (i = 0; i < ns.length; i++) s += ns[i]; return s; }
+          case "average": case "avg": { var n2 = listNums(a), s2 = 0, j; if (!n2.length) return 0; for (j = 0; j < n2.length; j++) s2 += n2[j]; return s2 / n2.length; }
+          case "length": return toStr(a[0]).length;
+          case "toupper": case "upper": return toStr(a[0]).toUpperCase();
+          case "tolower": case "lower": return toStr(a[0]).toLowerCase();
+          case "numtochar": return String.fromCharCode(toNum(a[0]));
+          case "chartonum": return toStr(a[0]).charCodeAt(0) || 0;
+          case "offset": return toStr(a[1]).toLowerCase().indexOf(toStr(a[0]).toLowerCase()) + 1;
+          case "value": return evalExpr(toStr(a[0]), vars || {});
+          case "milliseconds": case "millisecs": return Date.now();
+          case "seconds": case "secs": return Math.floor(Date.now() / 1000);
+          case "ticks": return Math.floor(Date.now() / 1000 * 60);
+          case "date": return new Date().toLocaleDateString();
+          case "time": return new Date().toLocaleTimeString();
+          default: if (funcs[name]) return callUser(funcs[name], a); return "";
         }
       }
+      function propVal(name) {
+        switch (name) {
+          case "milliseconds": case "millisecs": return Date.now();
+          case "seconds": case "secs": return Math.floor(Date.now() / 1000);
+          case "ticks": return Math.floor(Date.now() / 1000 * 60);
+          case "date": case "short date": return new Date().toLocaleDateString();
+          case "long date": return new Date().toDateString();
+          case "time": case "short time": case "long time": return new Date().toLocaleTimeString();
+          case "result": return RESULT;
+          case "itemdelimiter": case "itemdel": return ITEMDELIM;
+          case "pi": return Math.PI;
+          default: return undefined;
+        }
+      }
+
+      /* ---------- expression evaluator ---------- */
       function evalExpr(src, vars) {
-        var tk = tokenize(src), p = 0;
-        function peek() { return tk[p]; }
-        function nextT() { return tk[p++]; }
-        function expect(v) { var x = nextT(); if (!x || x.v !== v) throw { pg: "expected '" + v + "'" }; }
-        function pExpr() { return pConcat(); }
-        function pConcat() { var l = pAdd(); while (peek() && peek().v === "&") { nextT(); l = str(l) + str(pAdd()); } return l; }
-        function pAdd() { var l = pMul(); while (peek() && (peek().v === "+" || peek().v === "-")) { var o = nextT().v; var r = pMul(); l = o === "+" ? num(l) + num(r) : num(l) - num(r); } return l; }
-        function pMul() { var l = pUn(); while (peek() && (peek().v === "*" || peek().v === "/")) { var o = nextT().v; var r = pUn(); l = o === "*" ? num(l) * num(r) : num(l) / num(r); } return l; }
-        function pUn() { if (peek() && peek().v === "-") { nextT(); return -num(pUn()); } return pAtom(); }
+        var T = lex(src), p = 0;
+        function pkOp(v) { var x = T[p]; return x && x.k === "op" && x.v === v; }
+        function w(v) { var x = T[p]; return x && x.k === "id" && ("" + x.v).toLowerCase() === v; }
+        function win(a) { var x = T[p]; return x && x.k === "id" && a.indexOf(("" + x.v).toLowerCase()) >= 0; }
+        function eat() { return T[p++]; }
+        function expectOp(v) { if (!pkOp(v)) throw { pg: "expected '" + v + "'" }; p++; }
+        function pOr() { var l = pAnd(); while (w("or")) { eat(); l = toBool(l) | toBool(pAnd()) ? true : false; } return l; }
+        function pAnd() { var l = pComp(); while (w("and")) { eat(); var r = pComp(); l = toBool(l) && toBool(r); } return l; }
+        function pComp() {
+          if (w("not")) { eat(); return !toBool(pComp()); }
+          var l = pConcat();
+          while (true) {
+            if (pkOp("=")) { eat(); l = looseEq(l, pConcat()); }
+            else if (pkOp("<>")) { eat(); l = !looseEq(l, pConcat()); }
+            else if (pkOp(">")) { eat(); l = cmp(">", l, pConcat()); }
+            else if (pkOp("<")) { eat(); l = cmp("<", l, pConcat()); }
+            else if (pkOp(">=")) { eat(); l = cmp(">=", l, pConcat()); }
+            else if (pkOp("<=")) { eat(); l = cmp("<=", l, pConcat()); }
+            else if (w("is")) { eat(); var neg = false; if (w("not")) { eat(); neg = true; }
+              if (w("in")) { eat(); var r = pConcat(); var res = toStr(r).toLowerCase().indexOf(toStr(l).toLowerCase()) >= 0; l = neg ? !res : res; }
+              else if (win(["a", "an"])) { eat(); var ty = eat(); var r2 = isType(l, ("" + ty.v).toLowerCase()); l = neg ? !r2 : r2; }
+              else { var eq = looseEq(l, pConcat()); l = neg ? !eq : eq; } }
+            else if (w("contains")) { eat(); l = toStr(l).toLowerCase().indexOf(toStr(pConcat()).toLowerCase()) >= 0; }
+            else if (w("in")) { eat(); var ri = pConcat(); l = toStr(ri).toLowerCase().indexOf(toStr(l).toLowerCase()) >= 0; }
+            else break;
+          }
+          return l;
+        }
+        function pConcat() { var l = pAdd(); while (pkOp("&") || pkOp("&&")) { var o = eat().v; l = toStr(l) + (o === "&&" ? " " : "") + toStr(pAdd()); } return l; }
+        function pAdd() { var l = pMul(); while (pkOp("+") || pkOp("-")) { var o = eat().v; var r = pMul(); l = o === "+" ? toNum(l) + toNum(r) : toNum(l) - toNum(r); } return l; }
+        function pMul() { var l = pExp(); while (pkOp("*") || pkOp("/") || w("mod") || w("div")) { var o = eat().v.toLowerCase(); var r = pExp(); l = o === "*" ? toNum(l) * toNum(r) : o === "/" ? toNum(l) / toNum(r) : o === "mod" ? toNum(l) % toNum(r) : Math.floor(toNum(l) / toNum(r)); } return l; }
+        function pExp() { var l = pUn(); if (pkOp("^")) { eat(); return Math.pow(toNum(l), toNum(pExp())); } return l; }
+        function pUn() { if (pkOp("-")) { eat(); return -toNum(pUn()); } if (pkOp("+")) { eat(); return pUn(); } return pChunk(); }
+        function pChunk() {
+          if (win(CHUNKKEYS)) {
+            var type = CHUNKW[("" + eat().v).toLowerCase()], a = pAdd(), b = a;
+            if (w("to")) { eat(); b = pAdd(); }
+            if (!w("of")) throw { pg: "expected 'of'" }; eat();
+            return chunk(type, toNum(a), toNum(b), pChunk());
+          }
+          if (win(ORDKEYS) && T[p + 1] && T[p + 1].k === "id" && CHUNKW[("" + T[p + 1].v).toLowerCase()]) {
+            var ord = ORD[("" + eat().v).toLowerCase()], ct0 = CHUNKW[("" + eat().v).toLowerCase()];
+            if (w("of")) eat(); return ordChunk(ct0, ord, pChunk());
+          }
+          if (w("the")) { eat(); return pThe(); }
+          return pAtom();
+        }
+        function pThe() {
+          if (w("number")) { eat(); if (w("of") || w("in")) eat(); if (win(CHUNKKEYS)) { var ct = CHUNKW[("" + eat().v).toLowerCase()]; if (w("in") || w("of")) eat(); return countChunks(ct, pChunk()); } return countChunks("item", pChunk()); }
+          if (win(ORDKEYS)) { var ord = ORD[("" + eat().v).toLowerCase()]; if (win(CHUNKKEYS)) { var ct2 = CHUNKW[("" + eat().v).toLowerCase()]; if (w("of")) eat(); return ordChunk(ct2, ord, pChunk()); } return ""; }
+          var nm = ("" + eat().v).toLowerCase();
+          if (["long", "short", "abbreviated", "abbrev", "english", "internet", "system"].indexOf(nm) >= 0 && T[p] && T[p].k === "id") nm = nm + " " + ("" + eat().v).toLowerCase();
+          if (w("of") || w("in")) { eat(); return applyFn(nm, [pChunk()], vars); }
+          var pv = propVal(nm); if (pv !== undefined) return pv;
+          return applyFn(nm, [], vars);
+        }
         function pAtom() {
-          var x = nextT(); if (!x) throw { pg: "unexpected end" };
-          if (x.t === "num") return x.v;
-          if (x.t === "str") return x.v;
-          if (x.v === "(") { var e = pExpr(); expect(")"); return e; }
-          if (x.t === "id") {
-            var nm = x.v.toLowerCase();
-            if (peek() && peek().v === "(") { nextT(); var args = []; if (!(peek() && peek().v === ")")) { args.push(pExpr()); while (peek() && peek().v === ",") { nextT(); args.push(pExpr()); } } expect(")"); return callFn(nm, args); }
-            if (nm === "true") return 1; if (nm === "false") return 0; if (nm === "pi") return Math.PI;
-            return vars[nm] !== undefined ? vars[nm] : 0;
+          var x = eat(); if (!x) throw { pg: "unexpected end of expression" };
+          if (x.k === "num") return x.v;
+          if (x.k === "str") return x.v;
+          if (x.k === "op" && x.v === "(") { var e = pOr(); expectOp(")"); return e; }
+          if (x.k === "id") {
+            var nm = ("" + x.v).toLowerCase();
+            if (pkOp("(")) { eat(); var args = []; if (!pkOp(")")) { args.push(pOr()); while (pkOp(",")) { eat(); args.push(pOr()); } } expectOp(")"); return applyFn(nm, args, vars); }
+            if (nm in CONSTS) return CONSTS[nm];
+            if (nm === "it") return vars.it !== undefined ? vars.it : "";
+            if (vars[nm] !== undefined) return vars[nm];
+            return x.v; /* unquoted literal -> its own name (HyperTalk) */
           }
           throw { pg: "bad expression" };
         }
-        return pExpr();
+        return pOr();
       }
-      function stripComment(s) { var q = false, i = 0; for (; i < s.length - 1; i++) { if (s[i] === '"') q = !q; else if (!q && s[i] === "-" && s[i + 1] === "-") return s.slice(0, i); } return s; }
-      function splitArgs(s) { var out = [], d = 0, cur = "", q = false; for (var i = 0; i < s.length; i++) { var c = s[i]; if (c === '"') q = !q; if (!q && c === "(") d++; else if (!q && c === ")") d--; if (!q && c === "," && d === 0) { out.push(cur); cur = ""; } else cur += c; } if (cur.trim() !== "") out.push(cur); return out; }
-      function evalArgs(rest, vars) { return splitArgs(rest).map(function (a) { return evalExpr(a, vars); }); }
+
+      /* ---------- statements ---------- */
+      function stripComment(s) { var q = false, i; for (i = 0; i < s.length - 1; i++) { if (s[i] === '"') q = !q; else if (!q && s[i] === "-" && s[i + 1] === "-") return s.slice(0, i); } return s; }
+      function splitArgs(s) { var out2 = [], d = 0, cur = "", q = false, i; for (i = 0; i < s.length; i++) { var c = s[i]; if (c === '"') q = !q; if (!q && c === "(") d++; else if (!q && c === ")") d--; if (!q && c === "," && d === 0) { out2.push(cur); cur = ""; } else cur += c; } if (cur.trim() !== "") out2.push(cur); return out2; }
+      function evalArgs(rest, vars) { return rest.trim() === "" ? [] : splitArgs(rest).map(function (a) { return evalExpr(a, vars); }); }
 
       function execStmt(line, vars) {
         budget();
         var s = stripComment(line).trim(); if (s === "") return;
-        var sp = s.indexOf(" "), cmd = (sp < 0 ? s : s.slice(0, sp)).toLowerCase(), rest = (sp < 0 ? "" : s.slice(sp + 1)).trim();
-        var a;
+        var m = s.match(/^([A-Za-z_]\w*)\b([\s\S]*)$/);
+        if (!m) { out(toStr(evalExpr(s, vars))); return; }
+        var cmd = m[1].toLowerCase(), rest = m[2].trim(), a, mm;
         switch (cmd) {
-          case "put": { var m = rest.match(/^(.*)\s+into\s+([A-Za-z_]\w*)\s*$/i); if (m) vars[m[2].toLowerCase()] = evalExpr(m[1], vars); else outbox.push(str(evalExpr(rest, vars))); break; }
-          case "answer": outbox.push(str(evalExpr(rest, vars))); break;
-          case "b2kspawnbox": case "b2kspawncapsule": a = evalArgs(rest, vars); world.spawnBox(a[0], a[1], a[2], a[3], a[4]); break;
-          case "b2kspawnball": a = evalArgs(rest, vars); world.spawnBall(a[0], a[1], a[2], a[3]); break;
-          case "b2kgravity": world.gravity(!/^(off|false|0|no)\b/i.test(rest.trim())); break;
-          case "b2kclear": world.clear(); break;
-          case "b2kimpulse": a = evalArgs(rest, vars); world.impulseAll(a[0] || 0, a[1] || 0); break;
-          case "b2krain": { var nn = rest ? num(evalExpr(rest, vars)) : 10; nn = clamp(nn, 0, 40); for (var k = 0; k < nn; k++) world.spawnBall(20 + Math.random() * (world.w() - 40), 10, 18 + Math.random() * 22); break; }
-          case "set": { var mg = rest.match(/^gravity\s+to\s+(.+)$/i); if (mg) world.gravity(num(evalExpr(mg[1], vars)) !== 0); break; }
-          case "if": { var mi = rest.match(/^(.*?)\s+then\s+(.+)$/i); if (mi && evalCond(mi[1], vars)) execStmt(mi[2], vars); break; }
-          case "wait": case "get": break;
-          default: if (cmd.indexOf("b2k") !== 0) outbox.push('Don\'t understand "' + cmd + '"');
+          case "put": doPut(rest, vars); return;
+          case "get": vars.it = evalExpr(rest, vars); return;
+          case "set": doSet(rest, vars); return;
+          case "add": mm = rest.match(/^([\s\S]*)\s+to\s+([A-Za-z_]\w*)$/i); if (mm) { var d1 = mm[2].toLowerCase(); vars[d1] = toNum(getVar(d1, vars)) + toNum(evalExpr(mm[1], vars)); } return;
+          case "subtract": mm = rest.match(/^([\s\S]*)\s+from\s+([A-Za-z_]\w*)$/i); if (mm) { var d2 = mm[2].toLowerCase(); vars[d2] = toNum(getVar(d2, vars)) - toNum(evalExpr(mm[1], vars)); } return;
+          case "multiply": mm = rest.match(/^([A-Za-z_]\w*)\s+by\s+([\s\S]+)$/i); if (mm) { var d3 = mm[1].toLowerCase(); vars[d3] = toNum(getVar(d3, vars)) * toNum(evalExpr(mm[2], vars)); } return;
+          case "divide": mm = rest.match(/^([A-Za-z_]\w*)\s+by\s+([\s\S]+)$/i); if (mm) { var d4 = mm[1].toLowerCase(); vars[d4] = toNum(getVar(d4, vars)) / toNum(evalExpr(mm[2], vars)); } return;
+          case "answer": out(toStr(evalExpr(rest.replace(/\s+with\s+[\s\S]+$/i, ""), vars))); return;
+          case "ask": { var promptText = toStr(evalExpr(rest.replace(/\s+with\s+[\s\S]+$/i, ""), vars)); var dflt = rest.match(/\s+with\s+([\s\S]+)$/i); var pre = dflt ? toStr(evalExpr(dflt[1], vars)) : ""; var ans = (typeof window !== "undefined" && window.prompt) ? window.prompt(promptText || "?", pre) : null; vars.it = ans == null ? "" : ans; RESULT = ans == null ? "cancel" : ""; return; }
+          case "return": throw { ret: rest ? evalExpr(rest, vars) : "" };
+          case "exit": if (/^repeat\b/i.test(rest)) throw { exitRepeat: 1 }; throw { exitHandler: 1 };
+          case "next": if (/^repeat\b/i.test(rest)) throw { nextRepeat: 1 }; return;
+          case "pass": case "global": case "local": return;
+          case "wait": return;
+          case "b2kspawnbox": case "b2kspawncapsule": a = evalArgs(rest, vars); world.spawnBox(a[0], a[1], a[2], a[3], a[4]); return;
+          case "b2kspawnball": a = evalArgs(rest, vars); world.spawnBall(a[0], a[1], a[2], a[3]); return;
+          case "b2kgravity": world.gravity(!/^(off|false|0|no)\b/i.test(rest.trim())); return;
+          case "b2kclear": world.clear(); return;
+          case "b2kimpulse": a = evalArgs(rest, vars); world.impulseAll(a[0] || 0, a[1] || 0); return;
+          case "b2krain": { var nn = rest ? toNum(evalExpr(rest, vars)) : 10; nn = clamp(nn, 0, 40); for (var k = 0; k < nn; k++) world.spawnBall(20 + Math.random() * (world.w() - 40), 10, 18 + Math.random() * 22); return; }
+          default:
+            if (handlers[cmd]) { callUser(handlers[cmd], evalArgs(rest, vars)); return; }
+            if (cmd.indexOf("b2k") === 0) return;
+            out('Don\'t understand "' + cmd + '"');
         }
       }
-      function evalCond(c, vars) {
-        var m = c.match(/(.*?)(>=|<=|<>|=|>|<|\bis\b)(.*)/i); if (!m) return num(evalExpr(c, vars)) !== 0;
-        var l = evalExpr(m[1], vars), r = evalExpr(m[3], vars), op = m[2].toLowerCase();
-        if (op === ">=") return num(l) >= num(r); if (op === "<=") return num(l) <= num(r);
-        if (op === ">") return num(l) > num(r); if (op === "<") return num(l) < num(r);
-        if (op === "<>") return str(l) !== str(r); return str(l) === str(r);
+      function doPut(rest, vars) {
+        var m = rest.match(/^([\s\S]*?)\s+(into|before|after)\s+([\s\S]+)$/i);
+        if (!m) { out(toStr(evalExpr(rest, vars))); return; }
+        var val = evalExpr(m[1], vars), mode = m[2].toLowerCase(), dest = m[3].trim().replace(/^the\s+/i, "");
+        var mc = dest.match(/^(char|character|word|item|line)s?\s+([\s\S]+?)\s+of\s+([A-Za-z_]\w*)$/i);
+        if (mc) {
+          var type = CHUNKW[mc[1].toLowerCase()], idx = Math.round(toNum(evalExpr(mc[2], vars))), vn = mc[3].toLowerCase();
+          var arr = parts(type, toStr(getVar(vn, vars) || "")), i = resolveIdx(idx, arr.length); if (i < 1) i = 1; while (arr.length < i) arr.push("");
+          var ex0 = arr[i - 1] || ""; arr[i - 1] = mode === "before" ? toStr(val) + ex0 : mode === "after" ? ex0 + toStr(val) : toStr(val); vars[vn] = joinParts(type, arr); return;
+        }
+        var name = dest.toLowerCase(); if (!/^[a-z_]\w*$/.test(name)) return;
+        if (mode === "into") vars[name] = val;
+        else { var ex = vars[name] !== undefined ? toStr(vars[name]) : ""; vars[name] = mode === "before" ? toStr(val) + ex : ex + toStr(val); }
+      }
+      function doSet(rest, vars) {
+        var m = rest.match(/^(?:the\s+)?([A-Za-z]\w*)\s+to\s+([\s\S]+)$/i); if (!m) return;
+        var prop = m[1].toLowerCase(), val = evalExpr(m[2], vars);
+        if (prop === "itemdelimiter" || prop === "itemdel") { ITEMDELIM = toStr(val) || ","; return; }
+        if (prop === "gravity") { world.gravity(toNum(val) !== 0); return; }
+        if (prop === "numberformat") return;
+        vars[prop] = val;
+      }
+
+      /* ---------- blocks: if / repeat ---------- */
+      function collectBlock(lines, start, openRe, closeRe) {
+        var depth = 1, j = start + 1, inner = [];
+        for (; j < lines.length; j++) { var t = stripComment(lines[j]).trim().toLowerCase(); if (openRe.test(t)) depth++; else if (closeRe.test(t)) { depth--; if (depth === 0) break; } inner.push(lines[j]); }
+        return { inner: inner, end: j };
+      }
+      var IF_OPEN = /^if\b[\s\S]*\bthen$/, IF_CLOSE = /^end\s+if$/, REP_OPEN = /^repeat\b/, REP_CLOSE = /^end\s+repeat$/;
+      function splitClauses(inner, firstCond) {
+        var clauses = [{ cond: firstCond, body: [] }], cur = clauses[0], depth = 0, i;
+        for (i = 0; i < inner.length; i++) {
+          var t = stripComment(inner[i]).trim(), low = t.toLowerCase();
+          if (depth === 0) {
+            var me = low.match(/^else\s+if\s+([\s\S]*?)\s+then$/);
+            if (me) { cur = { cond: me[1], body: [] }; clauses.push(cur); continue; }
+            if (/^else\b/.test(low)) { cur = { cond: true, body: [] }; clauses.push(cur); var tail = t.replace(/^else\b\s*/i, ""); if (tail.trim() !== "") cur.body.push(tail); continue; }
+          }
+          if (IF_OPEN.test(low) || REP_OPEN.test(low)) depth++;
+          else if (/^end\s+(if|repeat)$/.test(low)) depth--;
+          cur.body.push(inner[i]);
+        }
+        return clauses;
+      }
+      function doIf(lines, i, vars) {
+        var s = stripComment(lines[i]).trim();
+        var m = s.match(/^if\s+([\s\S]*?)\s+then\b([\s\S]*)$/i); if (!m) return i + 1;
+        var firstCond = m[1], thenTail = m[2].trim();
+        if (thenTail !== "") { var two = thenTail.split(/\s+else\s+/i); if (toBool(evalExpr(firstCond, vars))) execStmt(two[0], vars); else if (two[1] !== undefined) execStmt(two[1], vars); return i + 1; }
+        var blk = collectBlock(lines, i, IF_OPEN, IF_CLOSE), clauses = splitClauses(blk.inner, firstCond), c;
+        for (c = 0; c < clauses.length; c++) { if (clauses[c].cond === true || toBool(evalExpr(clauses[c].cond, vars))) { execBlock(clauses[c].body, vars); break; } }
+        return blk.end + 1;
+      }
+      function doRepeat(lines, i, vars) {
+        var s = stripComment(lines[i]).trim(), spec = s.replace(/^repeat\b\s*/i, "").trim();
+        var blk = collectBlock(lines, i, REP_OPEN, REP_CLOSE), inner = blk.inner;
+        function once() { try { execBlock(inner, vars); } catch (e) { if (e && e.nextRepeat) return; throw e; } }
+        try {
+          var mw = spec.match(/^with\s+([A-Za-z_]\w*)\s*=\s*([\s\S]+?)\s+(down\s+to|to)\s+([\s\S]+)$/i);
+          if (mw) {
+            var name = mw[1].toLowerCase(), a = Math.round(toNum(evalExpr(mw[2], vars))), down = /down/i.test(mw[3]), b = Math.round(toNum(evalExpr(mw[4], vars))), cnt = 0, v;
+            if (down) { for (v = a; v >= b; v--) { if (++cnt > 2000) break; budget(); vars[name] = v; once(); } }
+            else { for (v = a; v <= b; v++) { if (++cnt > 2000) break; budget(); vars[name] = v; once(); } }
+          } else if (spec === "" || /^forever$/i.test(spec)) { for (var k = 0; k < 2000; k++) { budget(); once(); } }
+          else if (/^while\b/i.test(spec)) { var cw = spec.replace(/^while\b/i, ""), g = 0; while (toBool(evalExpr(cw, vars))) { if (++g > 2000) break; budget(); once(); } }
+          else if (/^until\b/i.test(spec)) { var cu = spec.replace(/^until\b/i, ""), g2 = 0; while (!toBool(evalExpr(cu, vars))) { if (++g2 > 2000) break; budget(); once(); } }
+          else if (/^for\s+each\b/i.test(spec)) { var mf = spec.match(/^for\s+each\s+(char|character|word|item|line)\s+([A-Za-z_]\w*)\s+in\s+([\s\S]+)$/i); if (mf) { var type = CHUNKW[mf[1].toLowerCase()], vn = mf[2].toLowerCase(), arr = parts(type, evalExpr(mf[3], vars)), fi; for (fi = 0; fi < arr.length; fi++) { if (fi > 2000) break; budget(); vars[vn] = arr[fi]; once(); } } }
+          else { var times = clamp(Math.round(toNum(evalExpr(spec.replace(/\s+times$/i, ""), vars))), 0, 4000), t2; for (t2 = 0; t2 < times; t2++) { budget(); once(); } }
+        } catch (e) { if (!(e && e.exitRepeat)) throw e; }
+        return blk.end + 1;
       }
       function execBlock(lines, vars) {
         var i = 0;
@@ -332,43 +528,62 @@
           budget();
           var s = stripComment(lines[i]).trim();
           if (s === "") { i++; continue; }
-          var rep = s.match(/^repeat\b(.*)$/i);
-          if (rep) {
-            var depth = 1, j = i + 1, inner = [];
-            for (; j < lines.length; j++) { var tt = lines[j].trim(); if (/^repeat\b/i.test(tt)) depth++; else if (/^end\s+repeat\b/i.test(tt)) { depth--; if (depth === 0) break; } if (depth > 0) inner.push(lines[j]); }
-            runRepeat(rep[1].trim(), inner, vars); i = j + 1; continue;
-          }
-          if (/^end\s+repeat\b/i.test(s)) { i++; continue; }
+          var low = s.toLowerCase();
+          if (/^if\b/.test(low)) { i = doIf(lines, i, vars); continue; }
+          if (/^repeat\b/.test(low)) { i = doRepeat(lines, i, vars); continue; }
+          if (/^(end|else)\b/.test(low)) { i++; continue; }
           execStmt(s, vars); i++;
         }
       }
-      function runRepeat(spec, inner, vars) {
-        var mw = spec.match(/^with\s+([A-Za-z_]\w*)\s*=\s*(.+?)\s+to\s+(.+)$/i);
-        if (mw) { var name = mw[1].toLowerCase(), a = Math.round(num(evalExpr(mw[2], vars))), b = Math.round(num(evalExpr(mw[3], vars))), c = 0; for (var v = a; v <= b; v++) { if (++c > 200) break; budget(); vars[name] = v; execBlock(inner, vars); } return; }
-        var mn = spec.match(/^(?:for\s+)?(.+?)\s+times$/i) || (spec.trim() ? spec.match(/^(.+)$/) : null);
-        var times = mn ? Math.round(num(evalExpr(mn[1], vars))) : 0;
-        times = clamp(times, 0, 200);
-        for (var k = 0; k < times; k++) { budget(); execBlock(inner, vars); }
+
+      /* ---------- handlers / functions ---------- */
+      function parseParams(s) { s = (s || "").trim(); return s === "" ? [] : s.split(",").map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean); }
+      function callUser(def, args) {
+        budget(); var vars = {}, i; for (i = 0; i < def.params.length; i++) vars[def.params[i]] = args[i] !== undefined ? args[i] : "";
+        var ret = "";
+        try { execBlock(def.body, vars); } catch (e) { if (e && "ret" in e) ret = e.ret; else if (e && e.exitHandler) ret = ""; else throw e; }
+        return ret;
       }
-      function bodyFor(src, prefer) {
-        var lines = src.replace(/\r\n/g, "\n").split("\n"), handlers = {}, order = [], cur = null, buf = [];
-        for (var i = 0; i < lines.length; i++) {
-          var t = lines[i].trim(), mOn = t.match(/^on\s+([A-Za-z_]\w*)/i), mEnd = t.match(/^end\s+([A-Za-z_]\w*)/i);
-          if (cur === null && mOn) { cur = mOn[1].toLowerCase(); buf = []; order.push(cur); continue; }
-          if (cur !== null && mEnd && mEnd[1].toLowerCase() === cur) { handlers[cur] = buf; cur = null; continue; }
-          if (cur !== null) buf.push(lines[i]);
+      function parseSource(src) {
+        var raw = src.replace(/\r\n/g, "\n").split("\n"), lines = [], i;
+        for (i = 0; i < raw.length; i++) { var ln = raw[i]; while (/\\\s*$/.test(ln) && i + 1 < raw.length) ln = ln.replace(/\\\s*$/, " ") + raw[++i]; lines.push(ln); }
+        handlers = {}; funcs = {}; var top = [];
+        for (i = 0; i < lines.length; i++) {
+          var t = lines[i].trim();
+          var mOn = t.match(/^(?:on|command)\s+([A-Za-z_]\w*)([\s\S]*)$/i), mFn = t.match(/^function\s+([A-Za-z_]\w*)([\s\S]*)$/i);
+          if (mOn || mFn) {
+            var name = (mOn ? mOn[1] : mFn[1]).toLowerCase(), params = parseParams(mOn ? mOn[2] : mFn[2]), body = [];
+            i++;
+            for (; i < lines.length; i++) { var et = lines[i].trim().toLowerCase().split(/\s+/); if (et[0] === "end" && et[1] === name) break; body.push(lines[i]); }
+            (mOn ? handlers : funcs)[name] = { params: params, body: body };
+            continue;
+          }
+          top.push(lines[i]);
         }
-        if (prefer && handlers[prefer.toLowerCase()]) return handlers[prefer.toLowerCase()];
-        if (order.length) return handlers[order[0]];
-        return lines.filter(function (l) { return !/^\s*(on|end)\s+\w+/i.test(l); });
+        return top;
       }
-      function finish() {
-        if (outbox.length) setOut(outbox.join("  ·  "));
-        else setOut("ran · " + world.count() + " bodies");
-      }
+      function finish() { setOut(outbox.length ? outbox.join("  ·  ") : "ran · " + world.count() + " bodies"); }
+
       return {
-        run: function (src, prefer) { BUD = 4000; outbox = []; try { execBlock(bodyFor(src, prefer || "mouseUp"), {}); finish(); } catch (e) { setOut("⚠ " + (e && e.pg ? e.pg : "error")); } },
-        exec1: function (line) { BUD = 4000; outbox = []; try { execStmt(line, {}); finish(); } catch (e) { setOut("⚠ " + (e && e.pg ? e.pg : "error")); } }
+        run: function (src, prefer) {
+          BUD = 20000; outbox = []; ITEMDELIM = ","; RESULT = "";
+          try {
+            var top = parseSource(src), keys = Object.keys(handlers), hb = (prefer && handlers[prefer.toLowerCase()]) || (keys.length ? handlers[keys[0]] : null);
+            if (hb) { try { execBlock(hb.body, {}); } catch (e) { if (!(e && e.exitHandler)) throw e; } }
+            else execBlock(top, {});
+            finish();
+          } catch (e) { setOut("⚠ " + (e && e.pg ? e.pg : "error")); }
+        },
+        exec1: function (line) {
+          BUD = 20000; outbox = []; ITEMDELIM = ","; RESULT = ""; parseSource("");
+          try {
+            var s = stripComment(line).trim(), first = (s.match(/^([A-Za-z_]\w*)/) || [])[1], lf = first ? first.toLowerCase() : "";
+            var cmds = ["put", "get", "set", "add", "subtract", "multiply", "divide", "answer", "ask", "return", "exit", "next", "pass", "wait", "if", "repeat", "global", "local"];
+            if (lf && (cmds.indexOf(lf) >= 0 || lf.indexOf("b2k") === 0 || handlers[lf])) execStmt(s, {});
+            else out(toStr(evalExpr(s, {})));
+            finish();
+          } catch (e) { setOut("⚠ " + (e && e.pg ? e.pg : "error")); }
+        }
       };
     })(pgWorld);
 
@@ -377,9 +592,11 @@
       rain: "-- Drop a shower of balls.\non mouseUp\n  repeat 14 times\n    b2kSpawnBall random(360) + 30, 10, random(26) + 18\n  end repeat\nend mouseUp",
       zerog: "-- Turn gravity off and fill the void.\non mouseUp\n  b2kClear\n  b2kGravity off\n  repeat 12 times\n    b2kSpawnBall random(360) + 30, random(280) + 20, 30, \"teal\"\n  end repeat\nend mouseUp",
       kick: "-- Spawn some crates, then kick them up.\non mouseUp\n  b2kClear\n  repeat 5 times\n    b2kSpawnBox random(300) + 60, 300, 50, 50, \"red\"\n  end repeat\n  b2kImpulse 0, -700\nend mouseUp",
-      pyramid: "-- A pyramid, built with nested loops.\non mouseUp\n  b2kClear\n  repeat with row = 1 to 5\n    repeat with c = 1 to (6 - row)\n      put 120 + (row - 1) * 30 + (c - 1) * 60 into x\n      b2kSpawnBox x, 330 - row * 46, 54, 42, \"green\"\n    end repeat\n  end repeat\nend mouseUp"
+      pyramid: "-- A pyramid, built with nested loops.\non mouseUp\n  b2kClear\n  repeat with row = 1 to 5\n    repeat with c = 1 to (6 - row)\n      put 120 + (row - 1) * 30 + (c - 1) * 60 into x\n      b2kSpawnBox x, 330 - row * 46, 54, 42, \"green\"\n    end repeat\n  end repeat\nend mouseUp",
+      func: "-- Define your own function and call it.\nfunction squared n\n  return n * n\nend squared\n\non mouseUp\n  b2kClear\n  repeat with i = 1 to 6\n    b2kSpawnBall 40 + i * 58, 30, 14 + squared(i), \"purple\"\n  end repeat\nend mouseUp",
+      words: "-- Chunk expressions + put (watch the output line).\non mouseUp\n  put \"the quick brown fox jumps\" into s\n  put (the number of words in s) && \"words; last =\" && last word of s\n  put \"item 2 of 10,20,30 is\" && item 2 of \"10,20,30\"\nend mouseUp"
     };
-    function runPg() { if (pgCode) pgRunner.run(pgCode.value); }
+    function runPg() { if (pgCode) pgRunner.run(pgCode.value, "mouseUp"); }
     var pgRun = document.getElementById("pgRun"), pgClear = document.getElementById("pgClear");
     if (pgRun) pgRun.addEventListener("click", runPg);
     if (pgClear) pgClear.addEventListener("click", function () { pgWorld.clear(); setOut("cleared."); });
@@ -434,10 +651,10 @@
       if (low === "help" || low === "?") { say("go to <section> · run · clear · b2kSpawnBall x,y,d · help"); return; }
       if (low === "run") { if (pgRunner) { runPg(); say("ran"); scrollToId("playground"); } return; }
       if (low === "clear") { if (pgWorld) { pgWorld.clear(); say("cleared"); scrollToId("playground"); } return; }
-      var m = low.match(/^(?:go to|go|show|open)\s+(.+)$/);
-      if (m) { var key = m[1].trim(); if (key === "docs" || key === "documentation") { location.href = "docs/index.html"; return; } var id = SECT[key]; if (id) { scrollToId(id); say(""); } else say('No section "' + key + '"'); return; }
-      if (/^(b2k|put |answer |repeat|set )/i.test(s)) { if (pgRunner) { pgRunner.exec1(s); scrollToId("playground"); } return; }
-      say('Can\'t understand "' + raw.trim() + '"');
+      var m = low.match(/^(?:go to|goto|show|open)\s+(.+)$/);
+      if (m) { var key = m[1].trim(); if (key === "docs" || key === "documentation") { location.href = "docs/index.html"; return; } var id = SECT[key]; if (id) { scrollToId(id); say(""); return; } }
+      // anything else: run it as an xTalk line/expression in the playground
+      if (pgRunner) { pgRunner.exec1(s); scrollToId("playground"); }
     }
     msgFab.addEventListener("click", function () { toggleMsg(); });
     msgbox.addEventListener("submit", function (e) { e.preventDefault(); runMsg(msgInput.value); });

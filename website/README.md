@@ -15,12 +15,27 @@ stacking crates. Retro motifs, modern layout discipline.
 freely scrollable desktop of Mac-style windows (no longer a one-card-at-a-time
 carousel), with:
 
-- **A live xTalk Playground** — write `b2k…` handlers and **Run** them against a
-  real physics world right in the browser. A tiny, self-contained interpreter
-  (in `app.js`) supports `b2kSpawnBox`/`b2kSpawnBall`/`b2kGravity`/`b2kImpulse`/
-  `b2kClear`, `repeat` loops (`with i = a to b` and `N times`), `put`, `if`,
-  variables, string concat, and `random()` — with one-click presets. Sandboxed
-  (own parser, no `eval`) and budget-capped so it can't hang.
+- **A live xTalk Playground** — write handlers and **Run** them against a real
+  physics world right in the browser. A self-contained xTalk interpreter (in
+  `app.js`, ~300 lines, own lexer/parser, **no `eval`**, budget-capped) covers a
+  broad common subset:
+  - **control flow:** `if / else if / else` (single-line + block), every
+    `repeat` form (`with i = a to b [down to]`, `N times`, `while`, `until`,
+    `forever`, `for each item/word/line/char … in`), `next/exit repeat`,
+    `exit`, `return`;
+  - **user-defined `on` handlers and `function`s** (params, recursion);
+  - **containers:** `put … into/before/after`, `get`, `set`, `add/subtract/
+    multiply/divide`, `ask`/`answer`, `it`, `the result`, `itemDelimiter`;
+  - **chunks:** `char/word/item/line N [to M] of …`, ordinals (`first/last/
+    middle/any`), `the number of … in …`;
+  - **operators:** `+ - * / ^ mod div`, `& &&`, `= <> > < >= <=`, `is`,
+    `is not`, `is in`, `contains`, `is a <type>`, `and/or/not`;
+  - **functions/constants:** `random round abs trunc min max sum average sqrt
+    sin cos tan ln exp length offset toUpper/toLower numToChar/charToNum value
+    the milliseconds/seconds/ticks/date/time`, `pi empty space tab return comma
+    quote true false` …;
+  - plus the `b2k…` physics calls (`SpawnBox/SpawnBall/Gravity/Impulse/Clear`)
+    and one-click presets (tower, rain, zero-G, kick, pyramid, functions, chunks).
 - **Two physics worlds** (a reusable `createWorld` factory) — the hero toy and
   the playground — both drag/fling, pausing when off-screen.
 - **Scroll-spy navigation** (the menu highlights the section in view), smooth
