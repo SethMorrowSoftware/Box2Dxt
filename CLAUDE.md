@@ -27,14 +27,15 @@ Box2D v3.1.0 (fetched by CMake)
   The shim compiles into one shared library (`libbox2dxt.{so,dylib,dll}`) that **ships bundled
   INSIDE the extension** under `src/code/<arch>-<platform>/box2dxt.{so,dll,dylib}` (bare token,
   no `lib` prefix; platform-ids `x86_64-linux` / `x86-linux` / `x86_64-win32` / `x86-win32` /
-  `universal-mac`, architecture FIRST, Windows `-win32` for both bitnesses). `tools/package-extension.py`
-  lays the `prebuilt/` binaries into that tree; installing the packaged extension makes the engine
+  `universal-mac`, architecture FIRST, Windows `-win32` for both bitnesses). Those libraries are
+  **committed** (built and tested by CI, attached to each Release); `tools/package-extension.py`
+  refreshes that tree from a newer build. Installing the packaged extension makes the engine
   resolve the `c:box2dxt>` bindings via `the revLibraryMapping` automatically — **no loose library,
   no rename, no sudo/`/usr/lib`/`LD_LIBRARY_PATH`** (see `docs/building.md`).
 - **LCB binding** (`src/box2dxt.lcb`, `library org.openxtalk.box2dxt`): declares `foreign handler`
   bindings to the shared library and public `b2PascalCase` handlers callable from xTalk. This API
   speaks **metres and radians**; body type codes are `0=static, 1=kinematic, 2=dynamic`.
-- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (312 `b2k*`
+- **The Kit** (`src/box2dxt-kit.livecodescript`): a pure-xTalk convenience layer (313 `b2k*`
   handlers incl. the game modules: input, sprites, player controller, camera) that speaks
   **screen pixels and degrees**, binds bodies to LiveCode controls, and runs the animation
   loop. This is what the examples and most users actually call.
@@ -42,11 +43,12 @@ Box2D v3.1.0 (fetched by CMake)
 Docs live in `docs/` (`architecture.md`, `building.md`, `getting-started.md`, `api-reference.md`,
 `kit-guide.md`, `kit-reference.md`, `asset-expansion-plan.md`, and `platformer-polish-plan.md` — the
 forward-looking plan now that feature dev is frozen; the superseded pre-implementation
-`game-engine-spec.md` + `expansion-prep.md` are under `docs/archive/`). Prebuilt per-platform
-binaries are in `prebuilt/` — the SOURCE `tools/package-extension.py` lays into the extension's
-`src/code/<arch>-<platform>/` tree; the install is the packaged extension, not a loose drop-in (a
-loose `box2dxt.{so,dll,dylib}` beside a saved stack is only the dev/fallback path, mapped at runtime
-by the Kit's `b2kEnsureNativeLib`). The **Game Kit** (input/sprites/player/camera/sound modules) is
+`game-engine-spec.md` + `expansion-prep.md` are under `docs/archive/`). The per-platform native
+binaries are **committed inside the extension** at `src/code/<arch>-<platform>/` (built and tested by
+CI, attached to each Release); `tools/package-extension.py` refreshes that tree from a newer build.
+The install is the packaged extension, not a loose drop-in (a loose `box2dxt.{so,dll,dylib}` beside a
+saved stack — copied from `src/code/<arch>-<platform>/` — is only the dev/fallback path, mapped at
+runtime by the Kit's `b2kEnsureNativeLib`). The **Game Kit** (input/sprites/player/camera/sound modules) is
 implemented and user-verified; content **Waves 0-7 are built** (Wave 8, builder cross-pollination, is
 the only remaining roadmap item); `plan.md`'s decision log is the as-built record. Six examples: demo,
 contraption builder, **spike-gamekit** (the Phase-0 Game Kit harness), **platformer** (the flagship

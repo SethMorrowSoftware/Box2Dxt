@@ -1,7 +1,7 @@
 -- =====================================================================
 -- box2dxt-spike-gamekit.livecodescript  ·  Game Kit Phase 0 runtime spike
 --
--- PURPOSE: answer the "(verify in OXT)" questions in docs/game-engine-spec.md
+-- PURPOSE: answer the "(verify in OXT)" questions in docs/archive/game-engine-spec.md
 -- on real OXT hardware BEFORE any Game Kit module is built. See plan.md
 -- Phase 0 for the S0-S10 test table this implements.
 --

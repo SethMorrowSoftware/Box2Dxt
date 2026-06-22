@@ -32,8 +32,9 @@ and degrees** the whole way.
 18. [Dropping to the core `b2…` API](#18-dropping-to-the-core-b2-api)
 19. [A complete worked example: a little car](#19-a-complete-worked-example-a-little-car)
 20. [Building a whole game (the micro-game pattern)](#20-building-a-whole-game-the-micro-game-pattern)
-21. [xTalk gotchas worth knowing](#21-xtalk-gotchas-worth-knowing)
-22. [Complete API index](#22-complete-api-index)
+21. [Player actions: duck, drop-through, ladders, knockback, swim](#21-player-actions-duck-drop-through-ladders-knockback-swim)
+22. [xTalk gotchas worth knowing](#22-xtalk-gotchas-worth-knowing)
+23. [Complete API index](#23-complete-api-index)
 
 ---
 
@@ -1328,7 +1329,7 @@ Optional arguments are in `[…]`.
 
 ### Player (the platformer controller)
 `b2kPlayerMake x,y,w,h [,sheet]` · `b2kPlayerAttach ctrl` ·
-`b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim]` ·
+`b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim] [,wall] [,dash]` ·
 `b2kPlayerSet key,value` ·
 `b2kPlayerGet(key)` `[f]` · `b2kPlayerOnGround()` `[f]` · `b2kPlayerState()` `[f]` ·
 `b2kPlayerFacing()` `[f]` · `b2kPlayerJump [speed]` · `b2kPlayerControl flag` ·

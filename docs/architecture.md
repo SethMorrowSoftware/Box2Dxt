@@ -35,7 +35,8 @@ How the pieces fit, why the shim exists, and how to extend the binding.
   in `src/code/<arch>-<platform>/box2dxt.{so,dll,dylib}` (bare token, no `lib`
   prefix; platform-ids `x86_64-linux`, `x86-linux`, `x86_64-win32`, `x86-win32`,
   `universal-mac` — architecture first, Windows `-win32` for both bitnesses).
-  `tools/package-extension.py` populates that tree from `prebuilt/`.
+  Those libraries are committed (built and tested by CI, and attached to each
+  Release); `tools/package-extension.py` refreshes the tree from a newer build.
 - **`src/box2dxt.lcb`** is the xTalk Builder (LCB) extension. It declares
   `private foreign handler` bindings to the `b2lc_*` symbols
   (`binds to "c:box2dxt>b2lc_…!cdecl"`) and wraps each in a friendly public
@@ -125,8 +126,9 @@ Exposing more of Box2D is mechanical. To add a handler:
    handles like the rest).
 3. **Bump `LC_ABI_VERSION`** in the shim if the exported ABI changed.
 4. **Rebuild** the native library (see [building.md](building.md)), re-run
-   `tools/package-extension.py` to refresh the bundled `src/code/<arch>-<platform>/`
-   copy, then re-Package (or **Test**) the extension so the new library loads. (For
+   `tools/package-extension.py --linux64 build/libbox2dxt.so` (or the flag for your
+   platform) to refresh the bundled `src/code/<arch>-<platform>/` copy, then
+   re-Package (or **Test**) the extension so the new library loads. (For
    quick iteration, dropping the rebuilt `box2dxt.{so,dll,dylib}` beside a saved
    stack picks it up via `b2kEnsureNativeLib` without repackaging.)
 

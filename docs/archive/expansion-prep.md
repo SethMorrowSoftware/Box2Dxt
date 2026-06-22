@@ -26,7 +26,7 @@ that keep the expansion as reliable as the engine underneath it.
 | Wave 7 | **COMPLETE — statically verified, merged** (the desert biome: **L5 SCORCHED DUNES** — the platformer's fifth level, sand/desert). |
 | Wave 8 | **NOT STARTED** — builder cross-pollination (animated sprite parts + the player-as-a-part in the Contraption Builder); the only remaining roadmap item. |
 | Next | Wave 8: the builder cross-pollination. |
-| Companions | [plan.md](../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
+| Companions | [plan.md](../../plan.md) (history/decision log) · [game-engine-spec.md](game-engine-spec.md) (module design) |
 
 ---
 

@@ -2,11 +2,11 @@
 
 > **STATUS (frozen): Phases A–G shipped — the demo grew from 5 to SEVEN polished
 > levels.** Forward feature development is now **stopped** for a polish pass (see
-> [`platformer-polish-plan.md`](platformer-polish-plan.md)). The remaining phases
-> below (**H** Clocktown — *attempted and rolled back*, **I** alien-swim, **J**
-> stretch) are **not being pursued**; they're kept as an as-built record and a
-> "if we ever resume" appendix. The canonical history is
-> [`../CHANGELOG.md`](../CHANGELOG.md) + [`../plan.md`](../plan.md).
+> [`platformer-polish-plan.md`](platformer-polish-plan.md)). The once-planned
+> Phases **H** (Clocktown — *attempted and rolled back*), **I** (alien-swim) and
+> **J** (stretch) are **not being pursued** and have been dropped from this plan;
+> the assets they would have used are still catalogued in §1. The canonical
+> history is [`../CHANGELOG.md`](../CHANGELOG.md) + [`../plan.md`](../plan.md).
 
 The platformer demo now ships **seven polished levels** (it shipped five when this
 roadmap was written). This document was the roadmap that grew it — an audit of
@@ -323,29 +323,14 @@ needs an OXT eye.
   (the plain portraits read cleaner at HUD scale). *OXT to confirm:* each skin
   animates cleanly across idle/walk/jump/duck/climb.
 
-### Phase H — The Village biome → **Level 8 "CLOCKTOWN"**  (L)
-- **Assets:** the whole **`spritesheet.xml`** city set (house walls/roofs in 3
-  palettes, awnings, chimneys, `clock`, fences, doors, shop signs, windows).
-- A **town** level — rooftops, awnings to bounce/clamber, a clocktower set-piece.
-  A distinct art style (needs its own atlas load + a `gCityOK` capability gate).
-- *Heaviest art-integration phase; its own backdrop (`background_solid_sky`/clouds).*
+### Phases H–J — not pursued
 
-### Phase I — The Alien world & a swim hero  (M–L)
-- **Assets:** `aliens.xml` / `alien*.xml` (alien heroes **with swim frames**),
-  `items_sheet` water props.
-- The Kenney `character_*` hero has **no swim frames** (the Kit falls back to
-  idle/jump in water). An **alien hero** has `_swim1/2` — ideal for a **water-world**
-  level (extended swim, currents via Phase-B conveyors underwater, the new fish).
-  Pairs naturally with the Phase-G character select (pick an alien for the water world).
-
-### Phase J — Stretch / quality  (varies)
-- **True multi-layer parallax:** needs *transparent* overlay art (cloud/fog bands).
-  Source or author a transparent layer; then layer it over the Phase-A biome scene
-  at a different drift rate. (`items_sheet` `cloud1/2/3` may serve.)
-- **Hi-DPI pass:** the `-double` 2× sheets for crisp art on high-density displays.
-- **Effects:** `items_sheet` `particle*` (brick debris), `springboardUp/Down`
-  (animated springboard), `weightChained` (alt thwomp art).
-- **`enemies_sheet` blocker/poker** as a distinct foe set if a theme wants them.
+The Village/**Clocktown** biome (H, the `spritesheet.xml` city set — *attempted and
+rolled back*), the **alien swim-world** (I, the `aliens.xml` heroes with swim
+frames), and the **stretch/quality** items (J — true multi-layer parallax, the
+`-double` hi-DPI sheets, `items_sheet` particles/springboards) were scoped but are
+**not being pursued** now that feature development is frozen. The assets each would
+have used remain catalogued in §1 if work ever resumes.
 
 ---
 
@@ -360,10 +345,9 @@ needs an OXT eye.
 | 5 | Scorched Dunes | sand / desert | (built) + gem | dune, thorn pit, bestiary II |
 | **6** | **Cavern Depths** | **dirt / dirt** | dirt biome, conveyor, torches, block slime | conveyor descent + dark shaft |
 | **7** | **Stone Keep** | **stone / cave** | stone biome, multi-key/switch, spinners | lock-and-key puzzle wing |
-| **8** | **Clocktown** | **city / sky** | the buildings set | rooftop run + clocktower |
-| **9** | **Tidal Caves** | **stone+water** | alien swim hero, fish, currents | extended swim world |
 
-(6–9 are the new content; ordering/naming is a starting point.)
+(6–7 are the shipped new content; the once-planned 8 "Clocktown" / 9 "Tidal Caves"
+were not pursued — see Phases H–J above.)
 
 ---
 
@@ -398,22 +382,13 @@ needs an OXT eye.
 
 ---
 
-## 6. Asset-coverage checklist (definition of done)
+## 6. Asset-coverage (as-built)
 
-Track usage per sheet; "done" = used or a one-line documented reason it isn't.
-
-- [ ] `backgrounds` — biome scenes used (Phase A partial); solids/clouds for new biomes (B/H).
-- [ ] `tiles` terrain — dirt (B) + stone (C) biomes; corner/edge/ramp/overhang pieces across biomes.
-- [ ] `tiles` items — **coin tiers + star (F, SHIPPED)**; **heart (F, SHIPPED — `hud_heart*` HUD row)**; torches + conveyor + planks (B/C); multi-colour locks/switches (C); `flag_green`.
-- [ ] `tiles` HUD strip — art HUD (F), **removing the LiveCode top/bottom fields**.
-- [ ] `foes` — block slime, worm ring, rest poses (B/D).
-- [ ] `spooks` — snakes (E), spinners (C), squash/dead states everywhere (D), alt fish.
-- [ ] `characters` — **4 skins + portraits via character select (G, SHIPPED — 1-5 to pick; `hud_player_*` avatar)**.
-- [ ] `spritesheet.xml` city — Clocktown (H).
-- [ ] `aliens.xml` — swim hero / Tidal Caves (I).
-- [ ] `items_sheet` — particles, springboardUp/Down, weightChained (J).
-- [ ] `enemies_sheet` blocker/poker — themed foe set (J, optional).
-- [ ] `-double` sheets — hi-DPI pass (J, optional).
+Phases A–G shipped; the per-phase notes above and [`../CHANGELOG.md`](../CHANGELOG.md)
+are the as-built coverage record. The original aspirational per-sheet checklist has
+been dropped now that feature development is frozen — much of it shipped (coin tiers,
+star, the heart HUD, character select, the dirt/stone biomes, snakes, spinners,
+switch puzzles), and the remainder was tied to the unpursued Phases H–J.
 
 ---
 
