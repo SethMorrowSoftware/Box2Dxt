@@ -11,35 +11,31 @@ chrome, and the card/stack metaphor as the actual layout. The one signature
 colour is the Box2D crate-orange, and the hero demo is a pile of tumbling,
 stacking crates. Retro motifs, modern layout discipline.
 
-**The landing page IS a HyperCard stack.** Instead of one long scroll, the
-home page is a stack of cards you flip through, one at a time:
+**A scrollable HyperCard "desktop" with a live playground.** The home page is a
+freely scrollable desktop of Mac-style windows (no longer a one-card-at-a-time
+carousel), with:
 
-- **Navigate** with the menu, the Home-card launcher, the ◄ / ► card-nav bar,
-  the title-bar Home box, or the keyboard (`←` `→` flip, `H` home, `M` message).
-- **Card-flip transitions** (dissolve + directional slide; an iris for Home),
-  honouring `prefers-reduced-motion`.
-- **Deep links + history**: each card has a hash (`#examples`) and Back/Forward
-  work. The doc pages' menu links jump straight to the right card.
-- **The Message Box** — a HyperTalk-ish console (press `M`). Try `go to
-  examples`, `next` / `prev` / `home`, `spawn a crate`, `reset`, `gravity`,
-  `help`.
-- **Graceful fallback**: an inline `<html class="js">` flag gates single-card
-  mode, so with JavaScript off the cards simply stack into a normal scroll page.
-
-**Ten cards:** Home · What it is · One paste · What you get · How it works ·
-Examples · Docs · FAQ · Get started · What's new.
-
-**Professional touches:** full SEO/social meta with a generated `og-image.png`
-and JSON-LD `SoftwareApplication`; an accessibility pass (skip link, ARIA
-live-region card announcements, `aria-current`/`aria-hidden`, visible focus
-rings); copy-to-clipboard on every code block (home + docs); a styled `404.html`
-("card not found"); and a subtle "deal-in" intro that honours reduced-motion.
+- **A live xTalk Playground** — write `b2k…` handlers and **Run** them against a
+  real physics world right in the browser. A tiny, self-contained interpreter
+  (in `app.js`) supports `b2kSpawnBox`/`b2kSpawnBall`/`b2kGravity`/`b2kImpulse`/
+  `b2kClear`, `repeat` loops (`with i = a to b` and `N times`), `put`, `if`,
+  variables, string concat, and `random()` — with one-click presets. Sandboxed
+  (own parser, no `eval`) and budget-capped so it can't hang.
+- **Two physics worlds** (a reusable `createWorld` factory) — the hero toy and
+  the playground — both drag/fling, pausing when off-screen.
+- **Scroll-spy navigation** (the menu highlights the section in view), smooth
+  scrolling, and **scroll-reveal** windows (all honour `prefers-reduced-motion`).
+- **The floating Message Box** — a HyperTalk console (press `M`): `go to
+  <section>`, `run`, `clear`, or any `b2k…` command typed straight in.
+- Prior polish kept: a11y (skip link, ARIA live region, focus rings),
+  copy-to-clipboard on every code block, FAQ accordions, full SEO/social meta +
+  generated `og-image.png`, and a styled `404.html`.
 
 ```
 website/
-├── index.html     # the landing page (menu bar + window-framed "cards")
+├── index.html     # the scrollable desktop of windows + the Playground
 ├── styles.css     # the paper/ink/orange design system + Mac window chrome + .prose
-├── app.js         # crate-physics toy + the card-stack navigation + Message Box
+├── app.js         # physics factory (2 worlds) + the xTalk interpreter + nav + Message Box
 ├── 404.html       # styled "card not found"
 ├── og-image.png   # generated 1200×630 social card
 └── docs/          # the user-facing guides, rendered from docs/*.md (generated)
@@ -47,8 +43,8 @@ website/
     └── <doc>.html          # getting-started, kit-guide, kit-reference
 ```
 
-> Regenerate the social card after a brand change with the snippet in
-> `tools/`-adjacent notes, or re-screenshot `/tmp/og.html` at 1200×630.
+> Regenerate the social card after a brand change by re-screenshotting
+> `/tmp/og.html` (or any 1200×630 mock) into `website/og-image.png`.
 
 ## The docs are rendered from Markdown
 
