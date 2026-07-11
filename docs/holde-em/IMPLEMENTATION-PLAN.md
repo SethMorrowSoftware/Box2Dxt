@@ -15,7 +15,7 @@ M3 = Phase 4 (+ workstream U), M4 = Phase 5.
 
 The seed folder becomes its own repository and gains its safety net.
 
-1. Move `docs/hole-em/` out of Box2Dxt into the new repo root (this folder is laid out
+1. Move `docs/holde-em/` out of Box2Dxt into the new repo root (this folder is laid out
    so the move is a plain copy; nothing references Box2Dxt paths).
 2. `README.md` (done in the seed), license decision (the family is MIT — confirm).
 3. CI (`.github/workflows/ci.yml`): run `tools/check-livecodescript.py` on every
@@ -33,7 +33,7 @@ The seed folder becomes its own repository and gains its safety net.
 
 ## Phase 1 — hotseat game (spec M0)
 
-Everything runs locally, four seats on one machine, zero networking. This phase is
+Everything runs locally, six seats on one machine, zero networking. This phase is
 where all visual iteration happens and where the pure logic gets pinned. Build order
 inside the phase matters:
 

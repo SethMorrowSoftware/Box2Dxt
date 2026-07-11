@@ -432,7 +432,7 @@ This spec makes the *game* value-ready; it does not make a *product* value-ready
 | **TorrentXT** | none — rp1 + BEP44 + phantom swarms suffice as shipped | — |
 | **OnionXT** | none — streams + onion services as shipped (L1 oracle, onion tables) | — |
 | **Box2Dxt** | none — the Kit as shipped covers section 11 | — |
-| **this repo** (`hole-em`, seeded from Box2Dxt `docs/hole-em/`) | the game itself: transcript engine, deal ladder, betting engine + evaluator, table UI; ships as a self-contained stack in the family style (self-building UI, static gates, self-test harness) | the project |
+| **this repo** (`holde-em`, seeded from Box2Dxt `docs/holde-em/`) | the game itself: transcript engine, deal ladder, betting engine + evaluator, table UI; ships as a self-contained stack in the family style (self-building UI, static gates, self-test harness) | the project |
 
 ## 15. Milestones
 

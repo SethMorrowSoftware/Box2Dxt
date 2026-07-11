@@ -1,4 +1,4 @@
-# hole-em
+# holde-em
 
 **Serverless online no-limit Texas Hold'em for OpenXTalk (OXT) and the xTalk family**
 (also LiveCode 9.6.3+). No accounts, no server: players meet over the BitTorrent DHT,
@@ -46,4 +46,4 @@ the full workflow.
 ---
 
 *Seeded from the [Box2Dxt](https://github.com/SethMorrowSoftware/Box2Dxt) repository
-(`docs/hole-em/`), where the spec was first developed.*
+(`docs/holde-em/`), where the spec was first developed.*

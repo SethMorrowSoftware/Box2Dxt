@@ -6,7 +6,7 @@ hard way across the sibling repos so it never has to be re-learned here.
 
 ## What this is
 
-**hole-em** is a serverless online no-limit Texas Hold'em game for **OpenXTalk (OXT)**
+**holde-em** is a serverless online no-limit Texas Hold'em game for **OpenXTalk (OXT)**
 and the wider **xTalk** family (also compatible with **LiveCode 9.6.3+**). It is a
 pure-script project: **no native code lives in this repo**. It composes four sibling
 extensions, each of which wraps its own native library behind a friendly xTalk surface:
@@ -28,7 +28,7 @@ The three documents that govern this repo:
 - **`IMPLEMENTATION-PLAN.md`** — the phased build order with exit criteria per phase.
 - **This file** — how to work here without getting bitten by OXT.
 
-**Status: pre-implementation.** The repo was seeded from Box2Dxt's `docs/hole-em/`
+**Status: pre-implementation.** The repo was seeded from Box2Dxt's `docs/holde-em/`
 folder; Phase 0 of the plan (bootstrap) is the current work.
 
 **Because chips may someday carry real value**, the security posture is not optional
@@ -169,7 +169,7 @@ bug in the family.
    `the uMask` → renamed `uHitChans`/`uOnChans`). Prefer distinctive multi-word stems.
 3. **Prefix conventions:** `u` = custom property, `g` = script-local global, `t` =
    handler local, `p` = parameter, `k` = constant. Public API prefixes in the family:
-   `b2k*`, `bt*`, `sx*`, `ox*`; this repo's public surface will be `he*` (hole-em) —
+   `b2k*`, `bt*`, `sx*`, `ox*`; this repo's public surface will be `he*` (holde-em) —
    pick distinctive names within it.
 4. **Control-structure shape matters.** Block form `if cond then` … `end if`; the
    single-line form `if cond then doSomething` has **no** `end if`. A trailing `\`
