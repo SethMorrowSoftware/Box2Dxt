@@ -3,8 +3,9 @@
 **Status: pre-implementation spec (plan, not as-built).** This is the design brief for a
 serverless online no-limit Texas Hold'em game built on the OpenXTalk extension family:
 Box2Dxt (presentation), TorrentXT (transport + rendezvous), SodiumXT (all cryptography),
-and optionally OnionXT (anonymous transport / oracle hosting). It lives in this repo the
-way `docs/archive/game-engine-spec.md` once did: as the contract to build against. Where
+and optionally OnionXT (anonymous transport / oracle hosting). This spec is the contract
+to build against; its companions are `CLAUDE.md` (the operational guide + every carried
+OXT/LiveCodeScript lesson) and `IMPLEMENTATION-PLAN.md` (the phased build order). Where
 the eventual code differs from this spec, the code wins and this file gets updated.
 
 The one-sentence design goal: **make the deal and the settlement cryptographically
@@ -353,7 +354,8 @@ receipts. **A future value layer must consume receipts and nothing but receipts*
 
 Hotseat-first: the table, cards, chips, and full betting UI run locally with a Level 0
 local deal before any networking lands (milestone M0). House rules from the playbook
-apply throughout; the specific plan:
+apply throughout; gotcha numbers below cite the carried-lessons list in `CLAUDE.md`
+(numbering preserved from Box2Dxt). The specific plan:
 
 - **Art**: Kenney CC0 playing-card + chip sheets (in-family with the platformer's
   assets), loaded via `b2kSheetLoadAtlas`; faces are named frames. `b2kSheetScale` if
@@ -420,7 +422,7 @@ This spec makes the *game* value-ready; it does not make a *product* value-ready
 | **TorrentXT** | none — rp1 + BEP44 + phantom swarms suffice as shipped | — |
 | **OnionXT** | none — streams + onion services as shipped (L1 oracle, onion tables) | — |
 | **Box2Dxt** | none — the Kit as shipped covers section 11 | — |
-| **new repo** (suggested: `HoldemXT`) | the game itself: transcript engine, deal ladder, betting engine + evaluator, table UI; ships as a self-contained stack in the family style (self-building UI, static gates, self-test harness) | the project |
+| **this repo** (`hole-em`, seeded from Box2Dxt `docs/hole-em/`) | the game itself: transcript engine, deal ladder, betting engine + evaluator, table UI; ships as a self-contained stack in the family style (self-building UI, static gates, self-test harness) | the project |
 
 ## 15. Milestones
 
