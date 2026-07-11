@@ -20,7 +20,10 @@ link.** The spec is explicit about what that does and does not buy (section 2, s
 
 - A 2-9 player no-limit hold'em table with **no server**: peers meet over the BitTorrent
   DHT, talk over the `rp1` peer-wire extension, and every game action lives in a
-  hash-chained, ed25519-signed transcript any client can replay and verify.
+  hash-chained, ed25519-signed transcript any client can replay and verify. **6-max is
+  the reference configuration** — every latency budget, pool size, and test-exit
+  criterion is stated for (at least) six seats; anything that only works heads-up is a
+  bug.
 - A **deal protocol ladder** (section 7): the same game runs at three security levels,
   from "friendly table, rotating host" up to a **ristretto255 mental-poker deal** where
   no party — player or host — can see a card they are not entitled to, and every
@@ -261,10 +264,16 @@ attributable). Accepts: T3 (out-of-band collusion — see section 2), and select
 costs a void hand before the cheater is named.
 
 **Cost:** one shuffle round = 52 scalar mults + 1 permutation per player (sub-10 ms
-native; ~52 FFI crossings, deal-time only — nowhere near a per-frame path). A full deal
-at a 6-max table is ~20 chain messages of 32 bytes; over rp1's ~1 s tick a complete
-deal lands in a few seconds, which live tables spend shuffling anyway. A batch handler
-(`sxRistrettoScalarMultBatch`) is an optional later optimization, not a prerequisite.
+native; ~52 FFI crossings, deal-time only — nowhere near a per-frame path), and the
+round is N sequential steps ≈ N rp1 ticks once per hand. **Unmask chains batch per
+tick — normatively:** a player who owes chain steps applies their scalar to EVERY
+pending position and answers with ONE rp1 message, so all in-flight cards advance in
+parallel and the pipeline depth is N hops, not N-per-card. The hole-card deal therefore
+completes in ~N ticks and each street reveal in ~N more — about 6 s each at a 6-max
+table over rp1 (a live dealer's pace; sub-second over the direct-TCP lane). Dealing
+card-by-card (cards x N ticks — over a minute at 6-max) is a spec violation, not an
+implementation choice. A batch FFI handler (`sxRistrettoScalarMultBatch`) is an
+optional later optimization, not a prerequisite.
 
 ### 7.4 The ceiling above Level 2 (documented, not built)
 
@@ -360,8 +369,9 @@ apply throughout; gotcha numbers below cite the carried-lessons list in `CLAUDE.
 - **Art**: Kenney CC0 playing-card + chip sheets (in-family with the platformer's
   assets), loaded via `b2kSheetLoadAtlas`; faces are named frames. `b2kSheetScale` if
   families mix (gotcha 24).
-- **Pool at build** (never create mid-hand): ~12 card sprites (2 hole x up to showdown
-  + 5 board + burn indicator), ~20 chip bodies, parked off-table; `b2kSheetEnsureIcon`
+- **Pool at build** (never create mid-hand): card sprites sized for the table's max
+  seats at showdown — 2 hole cards x max seats + 5 board + burn indicator (6-max: 18;
+  9-max worst case: 24) — plus ~20 chip bodies, parked off-table; `b2kSheetEnsureIcon`
   at build for **every** face that can appear — the ~250 ms lazy-slice hitch landing on
   the river flip is the one unforgivable jank.
 - **Deal**: `b2kSpriteMoveTo` slides from the shoe, staggered ~70 ms by `send ... in`

@@ -61,9 +61,10 @@ inside the phase matters:
   transcript replay determinism (a canned hotseat session folds to identical state
   twice), plus the family rule — bump `kHeHarnessV` on every engine-behavior change.
 
-**Exit:** the user plays a complete 4-seat hotseat session in OXT (blinds through
-showdown through settlement, multiple hands, side pots exercised); harness green;
-CI KATs green. *Playable and demoable by itself.*
+**Exit:** the user plays a complete **6-seat** hotseat session in OXT (blinds through
+showdown through settlement, multiple hands, side pots exercised, all 17 table cards
+on-screen at a full showdown); harness green; CI KATs green. *Playable and demoable by
+itself.*
 
 ## Phase 2 — friendly online play (spec M1, deal Level 0)
 
@@ -87,10 +88,12 @@ The netcode spike. Everything here is turn-rate — rp1's ~1 s tick is the budge
 - **2f. Onion tables** (spec 10): the same envelopes over OnionXT streams — expected
   to fall out nearly free once 2c is honest about its transport seam.
 
-**Exit:** two machines complete a multi-hand session over rp1 (user-verified on real
-home networks, not just localhost); a mid-hand disconnect reconnects and resumes; a
-tampered envelope and a replayed envelope are provably dropped (harness bots); receipts
-match on both ends; KATs green in CI.
+**Exit:** a **6-seat** table completes a multi-hand session over rp1, spread across as
+many real machines as are available (minimum three; multiple stack instances per
+machine fill the remaining seats) and user-verified on real home networks, not just
+localhost; a mid-hand disconnect reconnects and resumes; a tampered envelope and a
+replayed envelope are provably dropped (harness bots); receipts match on every seat;
+KATs green in CI.
 
 ## Phase 3 — deck oracle (spec M2, deal Level 1)
 
@@ -148,9 +151,10 @@ The value-candidate deal. Prerequisite: Workstream U shipped.
   not visibly hitch the table (measure; if it does, pull Workstream U's batch handler
   forward).
 
-**Exit:** full Level 2 sessions across real machines (user-verified); the adversarial
-harness passes attribution on every scripted attack; KATs pin a complete Level 2 hand
-from fixed scalars end to end.
+**Exit:** full Level 2 sessions across real machines at the reference **6-max** size
+(user-verified — including the deal pace: ~6 s per street over rp1 per the spec's
+batched-chain requirement); the adversarial harness passes attribution on every
+scripted attack; KATs pin a complete Level 2 hand from fixed scalars end to end.
 
 ## Phase 5 — hardening (spec M4)
 
