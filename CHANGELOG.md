@@ -8,7 +8,73 @@ The native shim's ABI is tracked separately by `b2Version()` (currently `4`).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Platformer: the L7 UNDERCROFT - the slice-3 puzzle lands in the keep at last (the improvement
+  pass's headline).** The Stone Keep grew DOWN 512px (`pfBoundsV` bottom 2304 → 2816; the
+  ledge/blade/warden geometry above the keep floor is untouched — the climb's coins only gained
+  explicit tiers, and the old floor coin moved up out of the closed lid's rect): the hero now
+  spawns in a torchlit
+  vaulted UNDERCROFT under the tower, the old ground line became the KEEP FLOOR with a 128px
+  trapdoor doorway, and a blue SWITCH in the vault's far-right corner (guarded by a warden slime,
+  lit by a wall torch) slides the blue LID aside above you - climb three vaulted one-way ledges,
+  jump up through the doorway, and a keep-floor CHECKPOINT holds the progress. To make it possible,
+  `pfMakeSwitchGate`/`pfTickSwitchGates` were generalized VERTICALLY AWARE (per-instance pad band
+  derived from the switch's surface - the old tick hardcoded the 448-cloud band and silently
+  ignored `pSwitchY` - plus per-instance gate rect, slide axis x/y and open-shift; the L2 green
+  gate's call is byte-identical), and `pfMakeCheckpoint` banks a per-flag respawn HEIGHT
+  (`uPfCheckY`; the touch handler hardcoded 470, mid-air on a tall world). The lid slides RIGHT
+  deliberately: parking left would sit it 64px under tower ledge 1 (the gotcha-20 one-way straddle
+  trap). Undercroft geometry hand-verified by script (the audit skips vertical levels); statically
+  verified, needs an OXT pass.
+- **Platformer: SECOND CHECKPOINTS on the long single-checkpoint levels (the difficulty-ramp fix).**
+  The review found the effective-difficulty order inverted by punishment: L1 (8,640px), L2, L3 and
+  L4 each ran 3,400-4,700px past their lone checkpoint. New flags at L1 5500 (before the homeward
+  run), L2 5230 (before the two-key vault), L3 5180 (past the blue alley, on ice), L4 4860 (before
+  the red alley, pairing with the way-marker sign). L5/L6 already had three each; L7 gains the
+  keep-floor flag above.
+- **Platformer: a SCENE-DENSITY pass, by eye (polish-plan §3).** A few strong reads per screen from
+  already-loaded frames, every placement checked against the ~100px beat-air law: L1 gets a mound-
+  approach bush, a bridge run-up rock and a dressed pool finale (bank bush/mushroom + runway fence);
+  L2 gets a spawn sign, works greenery and a torch-lit, windowed vault; L3 (the barest level) gets
+  a spawn sign, glacier rocks/fence and a torch-and-windows citadel finale; L4 gets hanging chains
+  from the dark, fungus and two cave torches (one lighting the checkpoint shrine); L5 gets dune
+  cacti and an open-run rock; L6's two torch dark-zones get lit. Three PLACEMENT CONFLICTS fixed
+  along the way: L2's alley sign stood inside the slice-3 gate wall (retired - no legal pocket
+  exists), L2's bush crowded the barnacle's snap zone (→3540), L3's sign sat ON the approach
+  snail's patrol (→4165).
+- **Platformer: L6's orphaned second bat roost gets its BAT.** The Act-3 roost overhang was built
+  with no bat under it; bat #10 now wakes off its left lip and guards the approach - its band
+  deliberately ends short of the G4 cloud's one-way chain (bats swoop to y~450, the chain sits at
+  448: a band over the cloud would grind the velocity assert against the chain, gotchas 17/18).
+- **Platformer: deliberate COIN TIERS on the marquee grabs.** L7 passes explicit tiers everywhere
+  (the auto height rule is ground-line-calibrated: on the tower it paid BRONZE for the hardest
+  mid-shaft gap bonuses and gold for summit gimmes) - gap bonuses + summit gold, ledges silver,
+  vault bronze; and the three marquee grabs the rule under-paid go gold: L4's serpent-contested
+  stepping-stone coin, L5's dune-crest coin (it pairs with the gem beat), L6's star-cloud coin.
+- **Platformer: AUDIO completeness (polish-plan §5).** The hidden STAR gets its own fanfare tone
+  (it shared the gem chime, an admitted "for now"); the FINAL win plays a new five-note "fanfare"
+  (level clears keep the classic "win" arpeggio); and the orphaned "creak" tone - synthesized but
+  never played since the showcase round - now sounds on rope-bridge landings. The newest-cue guard
+  re-keys to "fanfare" (sounds survive teardown; the versioned-chrome law).
+- **Platformer: the WIN payoff sharpens.** Contact hits are banked across the run (`gOuchesBank`)
+  and join the Time/Falls row; the callout ladder gains an UNTOUCHABLE tier (no falls AND no hits)
+  above the flawless line; a part-found star tally earns a replay tease.
+
+### Fixed
+
+- **Platformer: the L7 build-frame camera snap.** The initial `b2kCamGoto` framed `gEdgeL + 512`
+  (=576) while the per-frame follow centres a narrow world at 512 - the follow engaging snapped the
+  view 64px sideways on the tower. The build goto now uses the same centre clamp.
+- **Platformer: the stationary half-blade's per-frame same-loc `b2kSpriteMoveTo`** is skipped (a
+  both-amps-zero mover never moves off its creation loc; the hurt poll still runs) - the
+  write-on-change rule applied to sprites.
+- **Platformer: L3's stale lever-saw binding removed.** The first saw still assigned
+  `gSawMov`/`gSawSpr` though L3 has no lever - any future lever would have silently bound to it.
+- **Platformer: `b2kSensorEnter`'s hazard branch now exits like every other branch** (it fell
+  through to the kill-flag test - harmless while the flags stayed distinct, shape-consistent now).
+- **Platformer: stale comments swept** (the "levels 1-2"/"level 3" era notes on the win flow, L2's
+  retired-snail coin label, and the L7 header's "slice 3 remaining" note - it landed).
 
 ## [0.3.0] - 2026-06-22
 

@@ -155,6 +155,10 @@ adjust on an OXT pass, level by level:
   beats) makes each world feel inhabited rather than functional. **This is the
   lesson from the Clocktown rollback: composition needs a human eye, not a
   procedural fill — place scenery deliberately, a few strong reads per screen.**
+  *(A first density pass landed in the improvement round — L1–L6 each gained a
+  few placed reads, three placement conflicts were fixed, and L6's orphaned
+  second bat roost got its bat. Statically verified; the by-eye confirm is the
+  OXT pass.)*
 - **Particles / juice.** Defeat poofs, confetti, dust, coin-pops — confirm they're
   consistent and not over-firing; the pools are built-once (don't regress that).
 - **Parallax.** Single-layer biome drift is the current ceiling. True multi-layer
@@ -178,7 +182,10 @@ adjust on an OXT pass, level by level:
   the "time it, never a stomp" hazards read fairly (the saw rule).
 - **Difficulty curve.** L1 should onboard gently; L7 is the climax. Confirm the
   ramp across the 7 levels feels intentional (enemy density, pit widths, hazard
-  mix), not random.
+  mix), not random. *(The improvement round fixed the ramp's punishment
+  inversion: L1–L4 were single-checkpoint levels with 3,400–4,700px late-death
+  replays — each gained a second checkpoint, and L7 gained a keep-floor flag
+  past its new undercroft puzzle. Needs the OXT feel confirm.)*
 - **Character-select friction.** Today 1–5 rebuilds the *current* level (an
   accidental number press restarts you). **Move hero selection to the title /
   level-card screen** (§2.4) where a rebuild is free, and drop the always-on
