@@ -203,6 +203,13 @@ needs an OXT eye.
   its coloured kinematic gate (`block_<colour>`) for good - deployed as a **green
   switch-gate** barring the crusher alley until you find + press the switch on the
   third-bay cloud. Both gated on `gToysOK` (a missing tiles sheet = an open run).
+  *Addendum (improvement pass, 2026-07-19):* the slice finally reached L7 too —
+  `pfMakeSwitchGate`/`pfTickSwitchGates` were generalized vertically aware
+  (per-instance pad band, gate rect, slide axis, open-shift; the L2 call is
+  byte-identical) and deployed as the **undercroft trapdoor**: the tower grew
+  down 512px into a vaulted puzzle act under the keep floor, with a corner
+  switch, a sliding blue lid over the only doorway up, and a keep-floor
+  checkpoint (`pfMakeCheckpoint` now banks a per-flag respawn height).
 - **Assets:** `terrain_stone_*` (full), `switch_{blue,green,red}(_pressed)`,
   `key_{blue,green}`, `lock_{blue,green}`, `spinner*`/`spinnerHalf*`,
   `block_strong_*`.
