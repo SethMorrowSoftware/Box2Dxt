@@ -2203,7 +2203,7 @@ end pfTextureSlab
 command pfShowSlabs pFlag
    local tC
    set the itemDelimiter to comma
-   repeat for each item tC in "pf_ground1,pf_ground2,pf_ground3,pf_plat1,pf_plat2,pf_plat3"
+   repeat for each item tC in "pf_ground1,pf_ground2,pf_ground3,pf_plat1,pf_plat2,pf_plat3,pf_keepL,pf_keepR"
       if there is a graphic tC then
          set the visible of graphic tC to pFlag
          if pFlag is true then b2kCamAdopt the long id of graphic tC
@@ -3982,8 +3982,12 @@ command pfL1Cast
    pfMakeCheckpoint 3856
    -- ...and a SECOND one before the homeward run (improvement pass): L1 is
    -- 8,640px - a late death used to replay up to ~4,700px from the bridge
-   -- flag. The pocket sits past the last gauntlet slime's body reach (5444)
-   -- and shy of the homeward mushroom (5560), clear of every beat.
+   -- flag. FRAME-EDGE margins (the honest numbers): the flag's 64px frame
+   -- spans 5468..5532 - 24px past the last gauntlet slime's body reach
+   -- (5444) and 28px shy of the homeward mushroom's tile (5560). The
+   -- tightest flag pocket in the game, but the slime can never reach a
+   -- respawned hero (band turnarounds are centre-read) - if the OXT pass
+   -- reads it cluttered, shift the mushroom right and the flag to ~5540.
    pfMakeCheckpoint 5500
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
    -- Wave 4: the hilltop pool's coins are UNDERWATER, so the gate can only
@@ -4382,8 +4386,8 @@ command pfL3Scene
       -- red door and windows in the step faces (the step coins float above,
       -- elevation-separated)
       pfMakeTorch 5690, 460
-      pfTile "window", 6090, 512
-      pfTile "window", 6180, 490
+      pfTile "window", 6112, 512   -- grid-aligned on the step-face course (6090 left a sliver of window hanging past the 192px plat1's face)
+      pfTile "window", 6176, 490   -- flush to plat2's span end at 6240
       pfShowSlabs false
    else
       pfShowSlabs true
@@ -4581,8 +4585,12 @@ command pfL3Cast
    pfMakeCheckpoint 2048
    -- a SECOND checkpoint past the blue alley (improvement pass): on ICE, a
    -- late death used to replay the boulder run, the alley and the door
-   -- (~4,150px). The flag sits 50px past the last crusher's column (5130)
-   -- with only the hop-cloud coins overhead, elevation-separated.
+   -- (~4,150px). FRAME-EDGE margins: the flag's 64px frame spans 5148..5212,
+   -- 18px past the last crusher's column edge (5130) - visually snug, but the
+   -- crusher only drops inside its column and a respawn is a zero-velocity
+   -- teleport (no ice slide into it); hop-cloud coins overhead are elevation-
+   -- separated. If the OXT pass reads the flag "inside" the drop lane, 5200
+   -- buys 20px more (cloud solid above starts 5260).
    pfMakeCheckpoint 5180
    if gToysOK is true then pfMakeDebrisPool   -- this level has bricks
    pfMakeGoal 6200, 416
@@ -4661,16 +4669,21 @@ command pfL4Scene
       pfTile "grass_purple", 320, 512
       pfTile "grass_purple", 1100, 512
       pfTile "grass_purple", 2240, 512
-      -- density pass: the hollow finally reads HAUNTED - hanging chains from
-      -- the dark above (the L6 cavern's trick, free frames) plus fungus on
-      -- the bare stretches, every read clear of a beat's ~100px air
+      -- density pass: fungus on the bare stretches, every read clear of a
+      -- beat's ~100px air
+      pfTile "mushroom_brown", 620, 512
+      -- (no read between the snail and slime bands 880..1330 - their patrol
+      -- edges leave no 100px pocket; the chains below carry that stretch)
+   end if
+   -- density pass: the hollow finally reads HAUNTED - hanging chains from the
+   -- dark above (the L6 cavern's trick, free frames; own representative-frame
+   -- gate, matching L6's chain block - a sheet with chain but no grass_purple
+   -- must still hang them)
+   if gAssetsOK is true and b2kSheetHasFrame("tiles", "chain") then
       pfTile "chain", 800, 96
       pfTile "chain", 1980, 96
       pfTile "chain", 3650, 96
       pfTile "chain", 5560, 96
-      pfTile "mushroom_brown", 620, 512
-      -- (no read between the snail and slime bands 880..1330 - their patrol
-      -- edges leave no 100px pocket; the chains above carry that stretch)
    end if   -- (the 2920 tuft was removed: it now sat at the widened lava lip; a 3960 tuft went earlier - it hid the 4000 coin)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "sign") then
       pfTile "sign", 2860, 512        -- a way-marker past the piranha row, before the lava pit
@@ -5386,13 +5399,15 @@ command pfL7Scene
       pfShowSlabs true
    end if
    -- THE UNDERCROFT LEDGES: three one-way vaults zig-zag from the floor to
-   -- the doorway. U3 sits EXACTLY inside the doorway column (448..576) so a
-   -- hero standing on it never puts his head under the solid keep floor
-   -- (squeeze law) - the closed lid above leaves 36px of headroom, and the
-   -- 112px rise through the open doorway is single-jumpable.
+   -- the doorway on the tower's own 128px storey rhythm (floor->U1->U2->U3->
+   -- keep floor, every rise 128). U3 sits EXACTLY inside the doorway column
+   -- (448..576) so a hero standing on it never puts his head under the solid
+   -- keep floor (squeeze law) - the closed lid above leaves 52px of headroom
+   -- (a full jump BONKS it, the shut-door tell), and the 128px rise through
+   -- the open doorway is single-jumpable like every other storey.
    pfMakeLedge 256, 448, 2624
    pfMakeLedge 576, 768, 2496
-   pfMakeLedge 448, 576, 2352
+   pfMakeLedge 448, 576, 2368
    -- THE CLIMB: SIXTEEN one-way stone ledges zig-zag up to the keep's top, each
    -- ~128px above the last and staggered side to side. The WIDE ledges (320..704)
    -- are the "fight" landings - a warden or a blade waits there; the side walls
@@ -5443,11 +5458,11 @@ command pfL7Cast
    -- keep): the puzzle act below the tower. Bronze coins seed the vault; the
    -- blue SWITCH in the far-right corner slides the keep-floor trapdoor open;
    -- a checkpoint waits on the keep floor past the hatch.
-   pfMakeCoin 256, 2704, "bronze"    -- the vault run from the spawn
-   pfMakeCoin 848, 2704, "bronze"    -- the switch corner (reward the detour)
+   pfMakeCoin 256, 2688, "bronze"    -- the vault run from the spawn (floor coins ride 64 above their floor, the L7 convention)
+   pfMakeCoin 800, 2688, "bronze"    -- the switch detour's reward - LEFT of the switch at 848, so the coin never hides under the switch art's 64px frame
    pfMakeCoin 352, 2576, "bronze"    -- vault ledge U1
    pfMakeCoin 672, 2448, "bronze"    -- vault ledge U2
-   pfMakeCoin 512, 2320, "bronze"    -- vault ledge U3, inside the doorway column
+   pfMakeCoin 512, 2336, "bronze"    -- vault ledge U3, inside the doorway column
    if gToysOK is true then
       -- the TRAPDOOR: a 128x64 blue lid sitting proud on the keep floor over
       -- the doorway (x448..576), sliding RIGHT +128 when the switch latches.
@@ -5465,7 +5480,7 @@ command pfL7Cast
    -- horizontal levels' ground line - on the tower it paid BRONZE for the
    -- hardest mid-shaft grabs and gold for summit gimmes): ledge coins are
    -- silver, the five gap bonuses + the summit coin gold, the vault bronze.
-   pfMakeCoin 512, 2120, "silver"   -- above the trapdoor (grab it rising through the doorway; was 512,2176 - inside the closed lid's rect)
+   pfMakeCoin 512, 2120, "silver"   -- above the trapdoor (grab it rising through the doorway; was 512,2176 - inside the closed lid's rect. SILVER now, not the floor's bronze: it is a doorway jump-grab, not a floor gimme)
    pfMakeCoin 352, 2064, "silver"   -- ledge 1
    pfMakeCoin 672, 1936, "silver"   -- ledge 2
    pfMakeCoin 512, 1808, "silver"   -- the wide ledge (grab it past the slime)
@@ -5663,11 +5678,15 @@ on b2kFrame
    -- jump transition for the sound cues
    if gHeroState is "land" then
       add 1 to gLands
-      b2kSound "land"
       -- the rope bridge CREAKS underfoot (the tone existed unplayed since the
-      -- showcase round): a landing on L1's plank span adds the creak on top
-      -- of the thud - two compares inside the land edge, zero steady cost
-      if gLevel is 1 and gHeroPX >= 3968 and gHeroPX <= 4288 then b2kSound "creak"
+      -- showcase round): a landing on L1's plank span creaks INSTEAD of the
+      -- thud - the engine plays one clip at a time (a second cue would just
+      -- cut the first). Two compares inside the land edge, zero steady cost.
+      if gLevel is 1 and gHeroPX >= 3968 and gHeroPX <= 4288 then
+         b2kSound "creak"
+      else
+         b2kSound "land"
+      end if
    end if
    if gHeroState is "jump" and gPrevState is not "jump" and gHurtLock is not true then
       b2kSound "jump"   -- also chirps on the slime-stomp bounce: earned
@@ -5811,10 +5830,12 @@ end pfTickGate
 
 -- Every LATCHING switch-gate, polled. A still-closed switch polls its pad each
 -- frame (b2kOverlapMoving - moving bodies only, so the ground slab never reads
--- as "pressed"); once pressed it latches OPEN and the kinematic gate rises to
--- y342 and rests. After it settles, gSwDone short-circuits to one compare/frame.
+-- as "pressed"); once pressed it latches OPEN and the kinematic gate drives its
+-- centre along its per-instance axis to gSwOpenTo and rests (the L2 portal
+-- rises 170px; the L7 trapdoor lid slides 128px right). After it settles,
+-- gSwDone short-circuits to one compare/frame.
 command pfTickSwitchGates
-   local i, tOn, tAt, tTarget, tVel
+   local i, tOn, tAt, tPos, tTarget, tVel
    if gSwN is 0 or gSwN is empty then exit pfTickSwitchGates
    set the itemDelimiter to comma
    repeat with i = 1 to gSwN
@@ -5841,10 +5862,11 @@ command pfTickSwitchGates
       else
          put gSwClosedAt[i] into tTarget
       end if
+      put b2kPosition(gSwGate[i]) into tPos
       if gSwAxis[i] is "x" then
-         put item 1 of b2kPosition(gSwGate[i]) into tAt
+         put item 1 of tPos into tAt
       else
-         put item 2 of b2kPosition(gSwGate[i]) into tAt
+         put item 2 of tPos into tAt
       end if
       if abs(tAt - tTarget) <= 6 then
          put 0 into tVel
@@ -5863,7 +5885,17 @@ command pfTickSwitchGates
             b2kSetVelocity gSwGate[i], 0, tVel
          end if
       end if
-      if gSwOpen[i] is true and tVel is 0 then put true into gSwDone[i]
+      if gSwOpen[i] is true and tVel is 0 then
+         put true into gSwDone[i]
+         -- snap flush to the exact open target as it latches (the +-6 stop
+         -- tolerance parked the L7 lid's edge a few px over the doorway lip;
+         -- one write on the transition, write-on-change compliant)
+         if gSwAxis[i] is "x" then
+            b2kMoveTo gSwGate[i], gSwOpenTo[i], item 2 of tPos
+         else
+            b2kMoveTo gSwGate[i], item 1 of tPos, gSwOpenTo[i]
+         end if
+      end if
    end repeat
 end pfTickSwitchGates
 
