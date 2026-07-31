@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kit guide — Box2Dxt docs</title>
+<meta name="description" content="The friendly b2k… layer, taught step by step.">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f1ece1">
+<link rel="canonical" href="https://sethmorrowsoftware.github.io/Box2Dxt/docs/kit-guide.html">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='6' fill='%23f1ece1' stroke='%2317140d' stroke-width='2'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23e8702a' stroke='%2317140d' stroke-width='2'/%3E%3Cpath d='M7 7l18 18M25 7L7 25' stroke='%2317140d' stroke-width='1.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<a class="skip" href="#docmain">Skip to content</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="crate" viewBox="0 0 32 32"><rect x="3" y="3" width="26" height="26" rx="5" fill="#e8702a" stroke="#17140d" stroke-width="2.5"/><path d="M3 3l26 26M29 3L3 29" stroke="#17140d" stroke-width="2"/></symbol></svg>
+<header class="menubar" id="top"><div class="wrap menubar-inner">
+  <a class="brand" href="../index.html#top"><svg width="24" height="24" aria-hidden="true"><use href="#crate"/></svg> Box2D<b>xt</b></a>
+  <nav class="menu-links" id="menuLinks" aria-label="Primary">
+    <a href="../index.html#paste">One&nbsp;paste</a>
+    <a href="../index.html#features">What&nbsp;you&nbsp;get</a>
+    <a href="../index.html#how">How&nbsp;it&nbsp;works</a>
+    <a href="../index.html#examples">Examples</a>
+    <a href="index.html">Docs</a>
+  </nav>
+  <div class="menu-right"><a class="menu-ghost" href="https://github.com/SethMorrowSoftware/Box2Dxt" target="_blank" rel="noopener">GitHub</a></div>
+  <button class="menu-toggle" id="menuToggle" aria-label="Menu" aria-expanded="false">MENU</button>
+</div></header>
+<main class="doc-wrap" id="docmain">
+<aside class="doc-side"><div class="doc-side-inner"><span class="label">THE MANUAL</span><a href="index.html">Overview</a>
+<a href="getting-started.html">Getting started</a>
+<a href="kit-guide.html" class="active">Kit guide</a>
+<a href="kit-reference.html">Kit reference</a>
+<a class="doc-side-gh" href="https://github.com/SethMorrowSoftware/Box2Dxt/tree/main/docs" target="_blank" rel="noopener">Full docs on GitHub →</a></div></aside>
+<article class="win doc-win">
+  <div class="win-bar"><span class="win-box"></span><span class="win-stripes"></span><span class="win-title">kit-guide.md</span><span class="win-box"></span></div>
+  <div class="win-body prose"><h1 id="box2dxt-kit--the-complete-guide">Box2Dxt Kit — The Complete Guide</h1>
+<p>A friendly, start-to-finish guide to the <strong>Box2Dxt Kit</strong> for xTalk (LiveCode / OpenXTalk) users. By the end you'll know how to drop physics onto any control, build joints and machines, react to collisions, filter what hits what, sculpt terrain, and tune the world — using <strong>pixels, screen coordinates and degrees</strong> the whole way.</p>
+<blockquote><p><strong>Already know your way around?</strong> The terse lookup tables live in <a href="kit-reference.html"><code>kit-reference.md</code></a>. This document is the <em>teaching</em> version — read it top-to-bottom the first time, then keep the reference handy.</p></blockquote>
+<p><strong>Contents</strong></p>
+<ol>
+<li><a href="#1-what-the-kit-is-and-why">What the Kit is (and why)</a></li>
+<li><a href="#2-install-and-your-first-scene">Install and your first scene</a></li>
+<li><a href="#3-the-mental-model-coordinates--the-loop">The mental model: coordinates &amp; the loop</a></li>
+<li><a href="#4-making-bodies-attach-vs-spawn">Making bodies: attach vs. spawn</a></li>
+<li><a href="#5-shapes-and-reshaping">Shapes and reshaping</a></li>
+<li><a href="#6-materials-bounce-friction-weight">Materials: bounce, friction, weight</a></li>
+<li><a href="#7-body-settings">Body settings</a></li>
+<li><a href="#8-making-things-move">Making things move</a></li>
+<li><a href="#9-reading-whats-happening">Reading what's happening</a></li>
+<li><a href="#10-joints-building-machines">Joints: building machines</a></li>
+<li><a href="#11-dragging-with-the-mouse">Dragging with the mouse</a></li>
+<li><a href="#12-reacting-to-events">Reacting to events</a></li>
+<li><a href="#13-sensors-trigger-zones">Sensors (trigger zones)</a></li>
+<li><a href="#14-collision-filtering">Collision filtering</a></li>
+<li><a href="#15-terrain-and-smooth-chains">Terrain and smooth chains</a></li>
+<li><a href="#16-asking-the-world-questions-queries">Asking the world questions (queries)</a></li>
+<li><a href="#17-tuning-and-performance">Tuning and performance</a></li>
+<li><a href="#18-dropping-to-the-core-b2-api">Dropping to the core <code>b2…</code> API</a></li>
+<li><a href="#19-a-complete-worked-example-a-little-car">A complete worked example: a little car</a></li>
+<li><a href="#20-building-a-whole-game-the-micro-game-pattern">Building a whole game (the micro-game pattern)</a></li>
+<li><a href="#21-player-actions-duck-drop-through-ladders-knockback-swim">Player actions: duck, drop-through, ladders, knockback, swim</a></li>
+<li><a href="#22-xtalk-gotchas-worth-knowing">xTalk gotchas worth knowing</a></li>
+<li><a href="#23-complete-api-index">Complete API index</a></li>
+</ol>
+<hr>
+<h2 id="1-what-the-kit-is-and-why">1. What the Kit is (and why)</h2>
+<p><code>box2dxt</code> is a binding of the <strong>Box2D 3.x</strong> physics engine for LiveCode/OpenXTalk. The raw engine speaks <strong>metres, radians, and y-up</strong> — fine for an engine, awkward for an xTalk programmer used to <strong>pixels, screen coordinates, and degrees</strong>.</p>
+<p>The <strong>Kit</strong> (<code>src/box2dxt-kit.livecodescript</code>) is a pure-xTalk layer on top that:</p>
+<ul>
+<li>creates and owns the physics <strong>world</strong>,</li>
+<li>runs a fixed-timestep <strong>loop</strong> and moves your controls each frame,</li>
+<li>converts coordinates and angles for you, and</li>
+<li>gives every handler a tidy <code>b2k…</code> name.</li>
+</ul>
+<p>You give the Kit a control; it gives that control gravity, collisions, and the ability to be dragged. Three layers exist, and you can mix them:</p>
+<div class="md-tablewrap"><table><thead><tr><th>Layer</th><th>Units</th><th>Names</th><th>Use it when…</th></tr></thead><tbody><tr><td><strong>Kit</strong></td><td>pixels / degrees / screen</td><td><code>b2k…</code></td><td>almost always — start here</td></tr><tr><td><strong>Extension</strong> (<code>b2…</code>)</td><td>metres / radians / y-up</td><td><code>b2…</code></td><td>you need something the Kit doesn't wrap</td></tr><tr><td><strong>Native shim</strong></td><td>C ABI</td><td><code>b2lc_…</code></td><td>never, directly</td></tr></tbody></table></div>
+<p>This guide is entirely about the <strong>Kit</strong> layer.</p>
+<hr>
+<h2 id="2-install-and-your-first-scene">2. Install and your first scene</h2>
+<p><strong>Requirements:</strong> the <code>box2dxt</code> extension loaded. Check with <code>put b2Version()</code> — it should return <code>4</code> (the shim ABI version). The Kit runs in OpenXTalk and LiveCode 9.6.3+.</p>
+<p><strong>Install:</strong> paste the contents of <code>src/box2dxt-kit.livecodescript</code> into your card or stack script. (Or save it as a library stack and <code>start using</code> it.)</p>
+<p>Now the famous sixty-second scene — a ball and a box that drop, bounce, and can be flung with the mouse:</p>
+<pre><code>on openCard
+   b2kQuickStart                         -- world + gravity + walls around the card + go
+   b2kSpawnBall 200, 80, 50         -- create and drop a 50px ball
+   b2kSpawnBox 260, 80, 60, 40, &quot;orange&quot;
+   b2kContactTarget the long id of me    -- (optional) collision messages to this card
+end openCard
+
+on mouseDown
+   b2kGrab the mouseH, the mouseV   -- grab whatever body is under the pointer
+end mouseDown
+
+on mouseUp
+   b2kRelease
+end mouseUp
+
+on closeCard
+   b2kStop
+end closeCard</code></pre>
+<p><code>b2kQuickStart</code> is the one-liner that does everything: makes the world, sets gravity, builds static walls around the card edges, and starts the loop. The two <code>b2kSpawn…</code> calls each <strong>create a graphic and give it a body</strong> — we wrap them in <code>get</code> because they <em>return</em> the new control and we don't need the value here.</p>
+<p>That's a complete, playable physics toy. Everything below is about doing more.</p>
+<hr>
+<h2 id="3-the-mental-model-coordinates--the-loop">3. The mental model: coordinates &amp; the loop</h2>
+<h3 id="coordinates-and-angles">Coordinates and angles</h3>
+<p>You always work in <strong>screen pixels</strong> and <strong>degrees</strong>, exactly like the rest of xTalk:</p>
+<ul>
+<li>A position is <code>x,y</code> in card pixels (x right, <strong>y down</strong>).</li>
+<li>An angle is in <strong>degrees</strong>, clockwise-positive (because y is down).</li>
+<li>Sizes (a ball's diameter, a wall's length) are in <strong>pixels</strong>.</li>
+</ul>
+<p>The Kit converts to Box2D's metres/radians internally using a <strong>scale</strong> of <strong>40 pixels per metre</strong> by default. You rarely touch this, but you can:</p>
+<pre><code>b2kSetScale 50          -- 50 px = 1 metre (objects behave a touch &quot;smaller/heavier&quot;)
+b2kSetOrigin 0, 0       -- which screen point maps to the world origin (auto by default)</code></pre>
+<blockquote><p><strong>Keep objects a sensible size.</strong> At the default scale, dynamic objects behave best between roughly <strong>4 px and 400 px</strong>. A 4000-px boulder or a 1-px pebble will feel wrong, just like in real Box2D.</p></blockquote>
+<h3 id="the-loop">The loop</h3>
+<p>Physics advances in a <strong>fixed-timestep loop</strong> the Kit runs for you. You start and stop it; you can pause, resume, and single-step it:</p>
+<pre><code>b2kStart                 -- begin stepping (b2kQuickStart already did this)
+b2kPause                 -- freeze, but keep the world intact
+b2kResume                -- carry on
+b2kStepOnce              -- advance exactly one step (works even while paused) — great for a Step button
+b2kStop                  -- end the loop
+put b2kIsRunning()       -- true while actively stepping (not stopped, not paused)</code></pre>
+<p>Each frame, after the physics steps, the Kit moves every attached control to match its body and (optionally) sends you an <code>on b2kFrame</code> message — your hook for motors, input, scorekeeping, and custom drawing (see <a href="#12-reacting-to-events">§12</a>).</p>
+<p><strong>Tearing down.</strong> <code>b2kStop</code> ends the loop. <code>b2kClear</code> removes every body and Kit-spawned control but keeps the world. <code>b2kTeardown</code> destroys the world and all Kit state — call it before rebuilding a scene from scratch.</p>
+<pre><code>b2kClear                 -- empty the scene, keep the world running
+b2kTeardown              -- nuke everything (world + state); next run starts fresh</code></pre>
+<hr>
+<h2 id="4-making-bodies-attach-vs-spawn">4. Making bodies: attach vs. spawn</h2>
+<p>There are two ways to get a physical object, and you'll use both.</p>
+<h3 id="a-attach-physics-to-a-control-you-already-designed">A. Attach physics to a control you already designed</h3>
+<p>Lay out a graphic, image, button, or field in the IDE, then hand its reference to the Kit. <strong>Pass controls by <code>the long id of …</code></strong> — it's the reference that stays valid even if names or layers change.</p>
+<pre><code>b2kSetup                                        -- world + gravity, auto origin
+b2kAddStatic the long id of graphic &quot;Floor&quot;     -- never moves
+b2kAddBox    the long id of graphic &quot;Crate&quot;     -- a dynamic box (the default)
+b2kAddBall   the long id of graphic &quot;Marble&quot;    -- a dynamic circle
+b2kStart</code></pre>
+<p>The attach handlers, and the shape each gives the control:</p>
+<div class="md-tablewrap"><table><thead><tr><th>Handler</th><th>Shape</th></tr></thead><tbody><tr><td><code>b2kAddBox ctrl [,dyn]</code></td><td>rectangle (from the control's rect)</td></tr><tr><td><code>b2kAddBall ctrl [,dyn]</code></td><td>circle (from the control's width)</td></tr><tr><td><code>b2kAddCapsule ctrl [,dyn]</code></td><td>pill — long side is the axis, short side the diameter</td></tr><tr><td><code>b2kAddPolygon ctrl [,dyn]</code></td><td>convex polygon from a graphic's <code>points</code></td></tr><tr><td><code>b2kAddStatic ctrl</code></td><td>immovable body matching the control</td></tr></tbody></table></div>
+<p>The optional <code>dyn</code> flag forces dynamic (<code>true</code>) or static (<code>false</code>); it defaults to dynamic for the <code>b2kAdd…</code> shape handlers.</p>
+<p><strong>Any control type works</strong> — it falls, collides, and is draggable. What differs is how it's <em>drawn</em> to follow its body:</p>
+<div class="md-tablewrap"><table><thead><tr><th>Control</th><th>Follows position</th><th>Rotates</th></tr></thead><tbody><tr><td><strong>Graphic</strong> (rectangle/oval/polygon)</td><td>yes</td><td>yes</td></tr><tr><td><strong>Image</strong> (dynamic)</td><td>yes</td><td>yes — via <code>the angle</code></td></tr><tr><td><strong>Button / field / other</strong></td><td>yes</td><td>no — rotation is locked so the sim matches the upright render</td></tr></tbody></table></div>
+<h3 id="b-spawn-a-brand-new-control-with-its-body-in-one-call">B. Spawn a brand-new control with its body in one call</h3>
+<p>When you just want objects fast, let the Kit create the graphic too. Each returns the new control's long id.</p>
+<pre><code>local tBall, tBox
+b2kSpawnBall 200, 80, 50              -- x, y, diameter [, color]
+put the result into tBall
+b2kSpawnBox 260, 80, 60, 40, &quot;orange&quot;  -- x, y, w, h     [, color]
+put the result into tBox
+b2kSpawnCapsule 320, 80, 80, 30, &quot;120,200,232&quot;   -- x, y, len, thick [, color]</code></pre>
+<p>The optional colour is a LiveCode colour name (<code>&quot;orange&quot;</code>) or an <code>&quot;r,g,b&quot;</code> triple (<code>&quot;120,200,232&quot;</code>). Keep the returned reference if you want to act on the object later.</p>
+<hr>
+<h2 id="5-shapes-and-reshaping">5. Shapes and reshaping</h2>
+<p>A body's collision shape is set when you attach/spawn it. If you resize the control later (or want to switch shape), rebuild the shape on the <strong>same body</strong> so any joints attached to it survive:</p>
+<pre><code>set the width of graphic &quot;Crate&quot; to 120
+b2kReshape the long id of graphic &quot;Crate&quot;, &quot;box&quot;     -- &quot;box&quot; | &quot;ball&quot; | &quot;capsule&quot; | &quot;poly&quot;</code></pre>
+<p><code>b2kReshape</code> reads the control's <em>current</em> size (or <code>points</code>, for <code>&quot;poly&quot;</code>) and fits a fresh shape to it. It's atomic — the body is never momentarily shapeless, and a sensor stays a sensor across the reshape.</p>
+<blockquote><p>A reshape resets the shape's <strong>material and collision filter</strong> to defaults. If you'd set a custom bounce/friction/density or a collision layer, re-apply them after reshaping.</p></blockquote>
+<hr>
+<h2 id="6-materials-bounce-friction-weight">6. Materials: bounce, friction, weight</h2>
+<p>Three knobs control how a surface behaves. Set them any time after the body exists:</p>
+<pre><code>b2kSetBounce   tBall, 0.8     -- restitution 0..1 (0 = dead, 1 = perfectly elastic)
+b2kSetFriction tBox, 0.3      -- 0 = ice, 1 = grippy
+b2kSetDensity  tBox, 2.0      -- mass per area; heavier bodies shrug off impulses</code></pre>
+<p>Density changes a body's <strong>mass</strong>, which is why a denser box is harder to push and pushes lighter things around more convincingly.</p>
+<hr>
+<h2 id="7-body-settings">7. Body settings</h2>
+<p>Beyond materials, each body has behaviour switches:</p>
+<pre><code>b2kSetBullet         tBall, true    -- continuous collision: a fast small body won&#x27;t tunnel through walls
+b2kSetFixedRotation  tBox,  true    -- never spin (good for characters/markers)
+b2kSetGravityScale   tBalloon, -0.4 -- per-body gravity multiplier (negative floats it up)
+b2kSetDamping        tBox, 0.5, 0.8 -- linear drag, and optional angular drag (air resistance)</code></pre>
+<h3 id="sleeping">Sleeping</h3>
+<p>Resting bodies "sleep" to save CPU and wake on contact. You can nudge this:</p>
+<pre><code>b2kWake  tBox                      -- force-wake a body
+b2kSleep tBox                      -- send it to sleep until something disturbs it
+b2kSetSleepThreshold tBox, 12      -- speed (px/s) below which it&#x27;s allowed to nod off
+b2kEnableSleeping true             -- world-wide on/off (on by default)</code></pre>
+<h3 id="body-type--static-dynamic-kinematic">Body type — static, dynamic, kinematic</h3>
+<ul>
+<li><strong>dynamic</strong> — moved by forces and collisions (the usual).</li>
+<li><strong>static</strong> — never moves; the world flows around it (floors, walls).</li>
+<li><strong>kinematic</strong> — <em>you</em> move it (via velocity); it shoves dynamic bodies but ignores gravity and collisions itself — perfect for <strong>moving platforms</strong>.</li>
+</ul>
+<pre><code>b2kSetStatic    tBox               -- freeze in place
+b2kSetDynamic   tBox               -- unfreeze
+b2kSetKinematic tPlatform          -- a driven platform
+b2kSetType      tBox, &quot;dynamic&quot;    -- ...or set it by name: static | kinematic | dynamic
+
+b2kSetKinematic tPlatform          -- example: a platform that slides right forever
+b2kSetVelocity  tPlatform, 60, 0</code></pre>
+<h3 id="taking-a-body-out-of-the-simulation">Taking a body out of the simulation</h3>
+<pre><code>b2kDisable tBox     -- removed from the sim: no gravity, no collisions, stays put on screen
+b2kEnable  tBox     -- put it back, exactly where it is</code></pre>
+<hr>
+<h2 id="8-making-things-move">8. Making things move</h2>
+<p>There's a verb for every way you might want to push something. The rule of thumb: <strong>impulses are one-shot, forces are continuous</strong> (call them every frame).</p>
+<h3 id="linear">Linear</h3>
+<pre><code>b2kPush         tBox, 0, -300    -- one-shot change in velocity (px/s): an instant shove. Ignores mass.
+b2kImpulse      tBox, 0, -300    -- one-shot impulse, mass-aware: heavy things move less
+b2kForce        tBox, 0, -50     -- continuous force — call each frame for thrust, wind, a tractor beam
+b2kSetVelocity  tBox, 120, 0     -- hard-set the linear velocity (px/s)</code></pre>
+<h3 id="rotational">Rotational</h3>
+<pre><code>b2kSpin            tWheel, 360    -- set angular velocity (deg/sec): a full turn each second
+b2kSpinBy          tWheel, 90     -- add to the current angular velocity
+b2kTorque          tWheel, 500    -- continuous turning force — call each frame; sign sets direction
+b2kAngularImpulse  tWheel, 200    -- one-shot turning impulse, mass-aware (the angular partner of b2kImpulse)</code></pre>
+<h3 id="teleport-and-blast">Teleport and blast</h3>
+<pre><code>b2kMoveTo  tBox, 300, 120, 45    -- teleport to a screen point, optionally to an angle (deg)
+b2kExplode 300, 200              -- radial blast at a point: kicks nearby dynamic bodies outward
+b2kExplode 300, 200, 240, 1200   -- ...with explicit radius (px) and power (defaults 180, 900)</code></pre>
+<p><code>b2kExplode</code> uses Box2D's native, shape-aware blast — a wide plank catches more of it than a small ball, and it affects <strong>every</strong> dynamic body in range. <code>b2kExplodeLegacy</code> reproduces the older, size-blind velocity kick if you want it.</p>
+<h3 id="remove">Remove</h3>
+<pre><code>b2kRemove tBox     -- destroy the body (and the control too, if the Kit spawned it)</code></pre>
+<hr>
+<h2 id="9-reading-whats-happening">9. Reading what's happening</h2>
+<p>Every getter takes a control and returns screen-friendly values.</p>
+<pre><code>put b2kPosition(tBox)       -- &quot;x,y&quot; centre, in screen pixels
+put b2kWorldCenter(tBox)    -- &quot;x,y&quot; centre of mass (the true pivot for spin/torque)
+put b2kVelocity(tBox)       -- &quot;vx,vy&quot; in px/s
+put b2kSpeed(tBox)          -- scalar speed (px/s)
+put b2kAngle(tBox)          -- rotation in degrees
+put b2kSpinRate(tBox)       -- rotation speed in deg/s
+put b2kMass(tBox)           -- mass (sim kg)
+put b2kBodyType(tBox)       -- &quot;static&quot; | &quot;kinematic&quot; | &quot;dynamic&quot;
+put b2kIsAwake(tBox)        -- true if actively simulating
+put b2kIsBullet(tBox)       -- continuous-collision flag
+put b2kIsEnabled(tBox)      -- in the simulation?
+put b2kGravityScale(tBox)   -- getter for b2kSetGravityScale
+put b2kDamping(tBox)        -- &quot;linear,angular&quot; (getter for b2kSetDamping)</code></pre>
+<p>Scene-wide counts:</p>
+<pre><code>put b2kBodyCount()          -- bodies the Kit is tracking
+put b2kAwakeCount()         -- dynamic bodies currently awake</code></pre>
+<p>Find a body by where it is on screen:</p>
+<pre><code>put b2kControlAt(the mouseH, the mouseV)              -- the control whose body covers a point (or empty)
+put b2kControlContains(tBox, the mouseH, the mouseV)  -- is a point inside this body&#x27;s actual (rotated) shape?</code></pre>
+<p>(Ray and region queries are in <a href="#16-asking-the-world-questions-queries">§16</a>.)</p>
+<hr>
+<h2 id="10-joints-building-machines">10. Joints: building machines</h2>
+<p>Joints connect two bodies (or one body to the <strong>world</strong>). Every constructor <strong>returns a joint handle</strong> — keep it, because motors, limits, springs, and read-outs all take that handle. Remove a joint with <code>b2kRemoveJoint joint</code>.</p>
+<p>For the "to the world" variants, pass <strong>empty</strong> as the second control to pin the first body to a fixed point in space.</p>
+<h3 id="hinge-revolute--a-pin-things-rotate-around">Hinge (revolute) — a pin things rotate around</h3>
+<pre><code>local tArm, tPivot
+b2kHinge tArm, empty, 200, 100     -- pin tArm to the world at (200,100): it swings freely
+put the result into tPivot
+-- or join two parts: b2kHinge tArmA, tArmB, x, y
+b2kMotor      tPivot, 180, 1500                     -- drive it: 180 deg/s, max torque 1500 (default 1000)
+b2kHingeLimit tPivot, -45, 45                       -- clamp the angle to a range (degrees)
+put b2kHingeAngle(tPivot)                            -- read the current angle
+b2kMotorOff      tPivot                              -- let it swing free again
+b2kHingeLimitOff tPivot                              -- remove the limits</code></pre>
+<h3 id="weld--glue-two-bodies-rigidly">Weld — glue two bodies rigidly</h3>
+<pre><code>local tJoint
+b2kWeld tA, tB
+put the result into tJoint
+b2kWeldSpring tJoint, 4, 0.7      -- make the weld springy (hertz, damping); 0 hertz = rock-rigid</code></pre>
+<h3 id="rope-distance--a-maximum-length-link">Rope (distance) — a maximum-length link</h3>
+<pre><code>local tRope
+b2kRope tBall, tAnchor        -- length defaults to the current gap between centres
+put the result into tRope
+b2kRope tBall, tAnchor, 150              -- ...or set the length in pixels
+b2kRopeRange     tRope, 40, 200               -- allow the length to vary between min/max (px)
+b2kRopeSetLength tRope, 120                    -- set the exact rest length (px)
+put b2kRopeLength(tRope)                        -- read the current length (px)
+b2kSpring        tRope, 3, 0.6                 -- make it springy (hertz, damping) — a bungee</code></pre>
+<h3 id="slider-prismatic--travel-along-an-axis">Slider (prismatic) — travel along an axis</h3>
+<pre><code>local tSlide
+b2kSlider tDoor, empty, 0     -- slide along a 0° (horizontal) axis vs. the world (90 = vertical)
+put the result into tSlide
+b2kSliderMotor tSlide, 80, 600                 -- drive it: 80 px/s, max force 600
+b2kSliderLimit tSlide, 0, 160                  -- clamp the travel (px)
+put b2kSliderPos(tSlide)                         -- read the current translation (px)
+b2kSliderMotorOff tSlide
+b2kSliderLimitOff tSlide</code></pre>
+<h3 id="wheel--a-sprung-spinning-axle-for-vehicles">Wheel — a sprung, spinning axle (for vehicles)</h3>
+<pre><code>local tAxle
+b2kWheel tChassis, tWheel, the mouseH, the mouseV  -- pivot at a point; axis defaults to vertical
+put the result into tAxle
+b2kWheelMotor  tAxle, 600, 800       -- drive the wheel: 600 deg/s, max torque 800
+b2kWheelSpring tAxle, 5, 0.7         -- suspension stiffness: hertz, damping
+b2kWheelMotorOff tAxle</code></pre>
+<h3 id="motor-to--drive-toward-a-pose-a-soft-self-righting-target">Motor-to — drive toward a pose (a soft, self-righting target)</h3>
+<p><code>b2kMotorTo</code> drives one body toward a position/angle <strong>offset from another body</strong> (or from the world). Unlike a weld, it <em>yields</em> under load and springs back — for return-to-home arms, soft platforms, and self-righting parts.</p>
+<pre><code>-- hold tMover 0px across / 60px below tRef, upright, with limited force/torque:
+local tServo
+b2kMotorTo tMover, tRef, 0, 60, 0, 800, 800   -- ref empty = relative to the world
+put the result into tServo</code></pre>
+<h3 id="stop-two-parts-colliding-without-a-visible-joint">Stop two parts colliding without a visible joint</h3>
+<pre><code>b2kNoCollide tA, tB     -- a filter joint: tA and tB simply pass through each other</code></pre>
+<blockquote><p><strong>Tip:</strong> a motor with no <code>maxTorque</code>/<code>maxForce</code> defaults to a strong value (1000 for hinges). If a motor "can't lift" its load, raise the max; if it's twitchy, lower it.</p></blockquote>
+<hr>
+<h2 id="11-dragging-with-the-mouse">11. Dragging with the mouse</h2>
+<p><code>b2kGrab</code> attaches a temporary mouse joint to whatever body is under a point and returns that control (or empty). <code>b2kRelease</code> lets go. The body then follows the pointer until you release — springy and stable, exactly what you want for a toy.</p>
+<pre><code>on mouseDown
+   if b2kGrab(the mouseH, the mouseV) is not empty then
+      -- optionally remember/highlight the grabbed control
+   end if
+end mouseDown
+
+on mouseUp
+   b2kRelease
+end mouseUp</code></pre>
+<p>The Kit updates the grab target to the current mouse position automatically each frame, so you don't need <code>mouseMove</code>.</p>
+<hr>
+<h2 id="12-reacting-to-events">12. Reacting to events</h2>
+<p>The Kit can <strong>send you messages</strong> as things happen. Point it at a receiver first:</p>
+<pre><code>b2kContactTarget the long id of me    -- gets contact + sensor messages
+b2kFrameTarget   the long id of me    -- gets an on b2kFrame message each frame</code></pre>
+<h3 id="per-frame">Per-frame</h3>
+<p><code>on b2kFrame</code> fires once per simulated frame, <strong>after</strong> bodies have moved — the right place to run motors, read input, update a HUD, or draw:</p>
+<pre><code>on b2kFrame
+   -- e.g. keep a fan blowing while running
+   if the mouse is down then b2kForce tBall, 0, -40
+end b2kFrame</code></pre>
+<h3 id="contacts">Contacts</h3>
+<pre><code>on b2kContact pCtrlA, pCtrlB
+   -- two attached controls just BEGAN touching.
+   -- Either id is empty if that side is a wall, the ground, or an untracked body.
+   beep
+end b2kContact
+
+on b2kEndContact pCtrlA, pCtrlB
+   -- ...and when they STOP touching.
+end b2kEndContact</code></pre>
+<h3 id="polling-instead-of-messages">Polling instead of messages</h3>
+<p>Sometimes a tight <code>on b2kFrame</code> loop is cleaner than message handlers. Read this frame's touch pairs directly (indices are 1-based; an accessor is empty for a wall/ground/untracked body):</p>
+<pre><code>on b2kFrame
+   local i
+   repeat with i = 1 to b2kContactCount()
+      -- b2kContactA(i) and b2kContactB(i) are the two controls that began touching
+   end repeat
+   -- and b2kEndContactCount() with b2kEndContactA(i)/b2kEndContactB(i)
+end b2kFrame</code></pre>
+<h3 id="keyboard-input-b2kinputon">Keyboard input (<code>b2kInputOn</code>)</h3>
+<p>Games need <em>held</em> keys (run while the arrow is down), <em>chords</em> (run + jump), and clean <em>edges</em> (jump on the frame the key goes down) — none of which the classic <code>arrowKey</code>/<code>keyDown</code> messages give you, because they arrive at the OS auto-repeat rate and stop the moment a field steals focus. The Kit's input module polls instead: while armed, it samples <code>the keysDown</code> once per frame and diffs it against the previous frame, so state and edges are exact and nothing depends on focus or the message path.</p>
+<pre><code>on openCard
+   b2kQuickStart
+   b2kSpawnCapsule 200, 100, 64, 30, &quot;gold&quot;
+   put the result into gHero
+   b2kSetFixedRotation gHero, true     -- a character stays upright
+   b2kInputOn                          -- arm the sampler (installs defaults)
+   b2kBindAction &quot;jump&quot;, &quot;space,up,w&quot;  -- any of these counts as &quot;jump&quot;
+   b2kFrameTarget the long id of me
+end openCard
+
+on b2kFrame
+   -- axis: -1 / 0 / +1 from left,a vs right,d (a default binding)
+   b2kSetVelocity gHero, b2kAxis(&quot;moveX&quot;) * 240, item 2 of b2kVelocity(gHero)
+   -- edge: true only on the frame the action went down
+   if b2kActionPressed(&quot;jump&quot;) then b2kPush gHero, 0, -420
+end b2kFrame</code></pre>
+<p>Key names are friendly (<code>&quot;left&quot;</code>, <code>&quot;space&quot;</code>, <code>&quot;a&quot;</code>; raw keycodes also work), and letters match both their shifted and unshifted codes. Read anything per frame: <code>b2kKeyIsDown</code>/<code>Pressed</code>/<code>Released</code> for single keys, <code>b2kActionIsDown</code>/<code>Pressed</code>/<code>Released</code> for named sets, <code>b2kAxis</code> for paired directions (both held = 0), <code>b2kKeysHeld()</code> for a debug HUD, and <code>b2kFrameMS()</code> for the frame's real elapsed milliseconds (drive animations from that, never the step count). The <code>examples/box2dxt-platformer.livecodescript</code> stack is this section turned into a playable scene — grounded checks, variable-height jumps, and a jump-through ledge included.</p>
+<h3 id="sprites-and-spritesheets-b2ksheetloadatlas-b2kspritenew">Sprites and spritesheets (<code>b2kSheetLoadAtlas</code>, <code>b2kSpriteNew</code>)</h3>
+<p>A <em>sheet</em> registers the frames inside one image — either a uniform grid (<code>b2kSheetLoad name, path, frameW, frameH</code>) or a packed <strong>atlas</strong> whose XML names each region (<code>b2kSheetLoadAtlas</code>; the <code>Spritesheets/</code> folder in this repo is that format). A <em>sprite</em> is a transparent button the Kit drives: name animations once, then play them by name — <code>b2kSpritePlay</code> is free to call every frame, so a state machine stays one line per state.</p>
+<pre><code>b2kSheetLoadAtlas &quot;chars&quot;, tFolder &amp; &quot;/spritesheet-characters-default.png&quot;
+b2kAnimDef &quot;chars&quot;, &quot;idle&quot;, &quot;character_beige_idle&quot;, 2, true
+b2kAnimDef &quot;chars&quot;, &quot;walk&quot;, &quot;character_beige_walk_a,character_beige_walk_b&quot;, 6, true
+
+b2kSpriteNew &quot;chars&quot;, &quot;character_beige_idle&quot;, 200, 100
+put the result into gHeroSpr
+
+on b2kFrame
+   -- the body&#x27;s state picks the animation; flipping mirrors the art
+   if b2kAxis(&quot;moveX&quot;) is 0 then
+      b2kSpritePlay gHeroSpr, &quot;idle&quot;
+   else
+      b2kSpritePlay gHeroSpr, &quot;walk&quot;
+      b2kSpriteFlipH gHeroSpr, (b2kAxis(&quot;moveX&quot;) &lt; 0)
+   end if
+end b2kFrame</code></pre>
+<p>A sprite is an ordinary control: give it a body directly (<code>b2kAddCapsule the long id of …</code>), or — the better pattern for characters, whose art is bigger than their collision shape — give an <strong>invisible</strong> control the body and <code>b2kSpriteBind</code> the sprite to it. Non-looping animations can announce themselves: <code>b2kSpriteOnFinish gHeroSpr, &quot;heroHitDone&quot;</code> sends your handler a message when the hit/attack/death pose finishes. The platformer example wires all of it together: an atlas-driven hero, spinning coin pickups, a bee on a flight path, and a saw hazard that triggers the hit-then-respawn chain.</p>
+<p><strong>Not a Kenney sheet? Every layout loads.</strong> Grids with borders or gutters pass them straight in (<code>b2kSheetLoad &quot;run&quot;, tPath, 32, 48, 0, 2, 1</code> — 2px margin, 1px spacing). A packed sheet with no XML at all loads with frame size 0 (no grid) and you name each region yourself:</p>
+<pre><code>b2kSheetLoad &quot;boss&quot;, tPath, 0, 0          -- source only, no grid
+b2kSheetAddFrame &quot;boss&quot;, &quot;idle&quot;, 0, 0, 96, 80
+b2kSheetAddFrame &quot;boss&quot;, &quot;roar&quot;, 96, 0, 128, 80
+b2kAnimDef &quot;boss&quot;, &quot;wake&quot;, &quot;idle,roar&quot;, 4, false</code></pre>
+<p><code>b2kSheetFrameNames(&quot;chars&quot;)</code> lists every frame key of a sheet you didn't make — the quickest way to find what an atlas calls things.</p>
+<p><strong>Persisting sheets across rebuilds.</strong> By default a sheet is torn down with the world, so a single-shot scene reloads its art each run. A game that rebuilds the world per level can keep its sheets cached instead: <code>b2kSheetPersist true</code> makes sheets <strong>survive <code>b2kTeardown</code></strong> (exactly like synthesized sounds) and reuse an identical reload rather than re-slicing it — <code>b2kClear</code>/<code>b2kTeardown</code> then wipe only the sprite <em>instances</em>. It's OFF by default; <code>b2kSheetsWipe</code> forces a clean reload (e.g. after the player picks a new asset folder), and <code>b2kSheetPersists()</code> reads the flag back.</p>
+<h3 id="the-player-controller-b2kplayermake">The player controller (<code>b2kPlayerMake</code>)</h3>
+<p>Everything the input and sprite snippets above hand-roll — and the parts everyone gets wrong the first time — exists as one module. A <em>player</em> is a vertical capsule with fixed rotation, sleep disabled and low friction; every frame the controller reads the axis <code>moveX</code> and the action <code>jump</code>, accelerates vx toward <code>axis × moveSpeed</code>, probes the ground with three short rays (a hit counts only while its surface normal is within <code>maxSlopeDeg</code> of straight up, so slopes walk and walls don't), and picks the matching animation. Jump <em>feel</em> is built in: <strong>coyote time</strong> (a jump still fires ~90 ms after running off a ledge), <strong>jump buffering</strong> (pressed just before touchdown fires on landing), and <strong>jump-cut</strong> (tap = hop, hold = full height).</p>
+<pre><code>on openCard
+   b2kQuickStart
+   b2kSheetLoadAtlas &quot;chars&quot;, tFolder &amp; &quot;/spritesheet-characters-default.png&quot;
+   b2kAnimDef &quot;chars&quot;, &quot;idle&quot;, &quot;character_beige_idle&quot;, 2, true
+   b2kAnimDef &quot;chars&quot;, &quot;walk&quot;, &quot;character_beige_walk_a,character_beige_walk_b&quot;, 6, true
+   b2kAnimDef &quot;chars&quot;, &quot;jump&quot;, &quot;character_beige_jump&quot;, 1, true
+   b2kPlayerMake 200, 100, 32, 48, &quot;chars&quot;   -- body + sprite + controller
+   put the result into gHero
+   b2kPlayerAnims &quot;idle&quot;, &quot;walk&quot;, &quot;jump&quot;, &quot;jump&quot;
+   b2kFrameTarget the long id of me
+end openCard</code></pre>
+<p>That is a complete, well-tuned character — arrows/WASD run, space jumps, DOWN ducks, one-way decks drop through, ladders climb, water swims (§21). Feel lives in <code>b2kPlayerSet</code> knobs (<code>moveSpeed</code>, <code>accel</code>, <code>airAccel</code>, <code>jumpSpeed</code>, <code>jumpCut</code>, <code>coyoteMs</code>, <code>bufferMs</code>, <code>maxFall</code>, <code>maxSlopeDeg</code>, plus Wave 2's <code>dropMs</code>, <code>climbSpeed</code>, <code>hurtPopX/Y</code>, <code>hurtMs</code>, <code>invulnMs</code>, and Wave 4's <code>swimSpeed</code>/<code>swimJump</code>/<code>swimGravity</code>/<code>swimMaxFall</code>); read the character back with <code>b2kPlayerState()</code> (<code>idle</code>/<code>run</code>/<code>jump</code>/<code>fall</code>/<code>duck</code>/<code>climb</code>/<code>hurt</code>/<code>swim</code>, plus <code>land</code> for exactly one frame on touch-down — perfect for dust and sound), <code>b2kPlayerOnGround()</code> and <code>b2kPlayerFacing()</code>. Already have a body or sprite? <code>b2kPlayerAttach</code> adopts it instead of making one. Springs, bounces and powerups call <code>b2kPlayerJump 700</code> — always use it for external boosts: a raw upward <code>b2kSetVelocity</code> on a grounded player is treated as solver rebound and snapped flat. Contact damage calls <code>b2kPlayerHurt</code> (the knockback standard, §21); for cutscenes and scripted deaths, <code>b2kPlayerControl false</code> makes the controller <em>observe only</em> — your code owns velocity and animations until you hand control back. Under the hood the controller guarantees consistent feel (sim-time reaction windows, dead landings, hysteresis against solver blips) — all of it asserted by the self-test harness. The platformer example's whole movement system is the four lines above.</p>
+<h3 id="sound-effects-b2ktonemake-b2ksound">Sound effects (<code>b2kToneMake</code>, <code>b2kSound</code>)</h3>
+<p>Sounds are named <strong>audioClips</strong> — the engine plays one at a time (a new play cuts the previous), which is exactly right for short retro SFX. You can import files (<code>b2kSoundLoad &quot;boom&quot;, tPath</code>), but the fun path needs no files at all: <code>b2kToneMake</code> synthesizes a clip from a list of note frequencies, square (retro) or sine (soft), with a per-note decay.</p>
+<pre><code>b2kToneMake &quot;jump&quot;, &quot;392,587&quot;, 40          -- a quick up-chirp
+b2kToneMake &quot;coin&quot;, &quot;1319,1760&quot;, 36, 45    -- a bright blip
+b2kToneMake &quot;win&quot;, &quot;523,659,784,1047&quot;, 110 -- a four-note fanfare
+
+-- hooks: the player&#x27;s land state, your sensors, your win handler
+on b2kFrame
+   if b2kPlayerState() is &quot;land&quot; then b2kSound &quot;land&quot;
+end b2kFrame</code></pre>
+<p><code>b2kSoundMute true</code> silences everything (a preference — it survives <code>b2kTeardown</code>); <code>b2kSoundVolume</code> drives the engine-global loudness. On an engine with no working audio the Kit degrades to silence rather than errors — check <code>b2kSoundStatus()</code> if you hear nothing. The platformer's cues are all synthesized this way; press M in it to mute.</p>
+<hr>
+<h2 id="13-sensors-trigger-zones">13. Sensors (trigger zones)</h2>
+<p>A <strong>sensor</strong> is a non-solid fixture: bodies pass straight through it, but it <em>reports</em> the overlap. Perfect for tripwires, goals, and pickup zones. The Kit enables sensor events on every body it creates, so sensors detect them automatically.</p>
+<pre><code>b2kAddSensor the long id of graphic &quot;Goal&quot;          -- a static box sensor (shape: &quot;box&quot; | &quot;ball&quot; | &quot;capsule&quot;)
+b2kAddSensor the long id of graphic &quot;Ring&quot;, &quot;ball&quot;</code></pre>
+<p>You can also flip an <strong>existing solid body</strong> into a sensor and back — the Kit rebuilds its shape, keeping the new sensor state:</p>
+<pre><code>b2kSetSensor tBox, true     -- tBox becomes a non-solid trigger
+b2kSetSensor tBox, false    -- ...solid again</code></pre>
+<p>React with messages (sent to your <code>b2kContactTarget</code>):</p>
+<pre><code>on b2kSensorEnter pSensorCtrl, pVisitorCtrl
+   put &quot;Goal!&quot; into field &quot;status&quot;
+end b2kSensorEnter
+
+on b2kSensorExit pSensorCtrl, pVisitorCtrl
+end b2kSensorExit</code></pre>
+<p>…or poll this frame's overlaps (1-based):</p>
+<pre><code>put b2kSensorCount()              -- enters this frame
+put b2kSensorEnterSensor(1)       -- the sensor control of the 1st enter
+put b2kSensorEnterVisitor(1)      -- the body that entered it
+put b2kSensorExitCount()          -- leaves this frame
+put b2kSensorExitSensor(1)        -- ...and b2kSensorExitVisitor(1)</code></pre>
+<blockquote><p><strong>One sensor, many visitors.</strong> Each enter/exit fires per body. If you want "fire once while occupied," count enters minus exits yourself and act on the 0→1 and 1→0 transitions.</p></blockquote>
+<hr>
+<blockquote><p><strong>One-shots vs. presence.</strong> Enter/exit messages are perfect for one-shot triggers — a coin is removed on first fire, a checkpoint sets a flag. But for <em>presence</em> (a pressure plate that must stay pressed while anything sits on it), don't count enters minus exits: counting drifts, and Box2D's sensor begin/end around settling and sleeping bodies is exactly the edge a plate lives on. Poll instead — <code>if b2kOverlap(x1,y1,x2,y2) is not empty</code> each frame is stateless and still sees sleeping bodies — but use <strong><code>b2kOverlapMoving</code></strong>: the pad region sits on its floor, and the broadphase's fattened boxes make a plain <code>b2kOverlap</code> report the floor itself, forever. Add a short release debounce (~200 ms) so a settling crate's micro-bounces don't flap your door.</p></blockquote>
+<h2 id="14-collision-filtering">14. Collision filtering</h2>
+<p>By default everything collides with everything. Three independent tools change that.</p>
+<h3 id="named-layers-categories--masks">Named layers (categories &amp; masks)</h3>
+<p>The flexible system: a body <strong>is</strong> on one or more layers (its <em>category</em>), and it <strong>collides with</strong> a set of layers (its <em>mask</em>). Two bodies touch only when <strong>each</strong> one's category is in the other's mask. Up to 32 layers; name them or use numbers.</p>
+<pre><code>b2kDefineLayer &quot;enemies&quot;     -- define/fetch a named layer (returns its bit) — optional; names auto-define
+b2kSetCategory tGhost, &quot;enemies&quot;             -- tGhost IS an &quot;enemy&quot;
+b2kSetMask     tGhost, &quot;walls,player&quot;        -- ...and only collides with walls and the player</code></pre>
+<p>Pass layers as a comma/space list of <strong>names or numbers</strong>. (<code>b2kLayerBits</code> is the helper that turns such a list into a bitmask if you ever need the raw value.)</p>
+<h3 id="groups--a-quick-these-ignore-each-other">Groups — a quick "these ignore each other"</h3>
+<p>A simpler override: bodies sharing a <strong>negative</strong> group never collide; a <strong>positive</strong> group always collide. <code>0</code> (the default) means "use category/mask."</p>
+<pre><code>b2kSetCollisionGroup tWheelA, -1     -- everything on group -1 passes through everything else on -1
+b2kSetCollisionGroup tWheelB, -1</code></pre>
+<h3 id="just-these-two">Just these two</h3>
+<pre><code>b2kNoCollide tArm, tBody)    -- exempt one specific pair (a filter joint</code></pre>
+<hr>
+<h2 id="15-terrain-and-smooth-chains">15. Terrain and smooth chains</h2>
+<p>Stacked boxes make lumpy ground that fast bodies can catch on. A <strong>chain</strong> is a single smooth surface built from a list of <code>x,y</code> screen points (≥ 4) — no inner corners to snag. Chains are invisible; draw a matching graphic over them.</p>
+<pre><code>local tPts
+-- six points = four segments, of which the OUTER TWO are ghost anchors
+-- (see below): the solid ground here runs from 520,360 back to 80,400
+put &quot;600,380&quot; &amp; cr &amp; &quot;520,360&quot; &amp; cr &amp; &quot;360,420&quot; &amp; cr &amp; &quot;200,360&quot; &amp; cr &amp; &quot;80,400&quot; &amp; cr &amp; &quot;20,400&quot; into tPts
+b2kChain tPts               -- an open smooth ground line
+b2kChain tPts, true         -- pass true to close it into a loop (all solid)
+b2kSmoothGround tPts        -- alias for an open chain</code></pre>
+<p>To make a chain that <strong>tracks a control</strong> (so you can move/draw the terrain as one graphic), give it the control plus the points in the control's own outline:</p>
+<pre><code>b2kAddChain the long id of graphic &quot;Hill&quot;, the points of graphic &quot;Hill&quot;, true</code></pre>
+<blockquote><p><strong>Winding matters.</strong> A chain's <em>solid side is to the right of the direction the points travel.</em> For ground you stand on, list the top surface <strong>right-to-left</strong> so the solid side faces up. (If bodies fall through your terrain <em>everywhere</em>, reverse the point order.)</p></blockquote>
+<blockquote><p><strong>The ghost rule.</strong> An <strong>open</strong> chain's first and last segments are Box2D's <em>ghost anchors</em> — they smooth the junctions but <strong>don't collide</strong> (N points ⇒ N−3 solid segments). Always run the chain <strong>one segment past</strong> the surface you need on each side; over solid ground the tails can just continue flat. If bodies fall through your platform only <em>near its ends</em>, this is why — the chain's endpoints are sitting at the platform's edges. Closed loops (<code>pLoop</code> true) have no ends, so every segment is solid.</p></blockquote>
+<hr>
+<h2 id="16-asking-the-world-questions-queries">16. Asking the world questions (queries)</h2>
+<h3 id="point">Point</h3>
+<pre><code>put b2kControlAt(x, y)                 -- control whose body covers a point (empty if none)
+put b2kControlContains(tBox, x, y)     -- is a point inside tBox&#x27;s actual rotated shape?</code></pre>
+<h3 id="region">Region</h3>
+<pre><code>put b2kOverlap(100, 100, 300, 240)     -- newline list of controls overlapping a screen rect
+put b2kOverlapCircle(200, 170, 60)     -- ...overlapping a screen circle (x, y, radius)</code></pre>
+<h3 id="ray-casts">Ray casts</h3>
+<p>A single closest hit, then read the result functions:</p>
+<pre><code>if b2kRayHit(0, 200, 600, 200) then
+   put b2kRayHitX() &amp; &quot;,&quot; &amp; b2kRayHitY()           -- the hit point (screen px)
+   put b2kRayHitNormalX() &amp; &quot;,&quot; &amp; b2kRayHitNormalY()-- the surface normal at the hit
+   put b2kRayDist()                                  -- distance from the ray start (px)
+end if</code></pre>
+<p>Or every control a ray crosses, nearest-first:</p>
+<pre><code>put b2kRayHitAll(0, 200, 600, 200)     -- newline list, closest first</code></pre>
+<hr>
+<h2 id="17-tuning-and-performance">17. Tuning and performance</h2>
+<p>Most scenes never need these, but they're here when you want a specific feel or a performance HUD.</p>
+<h3 id="solver-feel">Solver feel</h3>
+<pre><code>b2kSetSubsteps 4                 -- solver sub-steps per step (higher = more stable, more CPU)
+b2kSetRestitutionThreshold 30    -- speed (px/s) below which bounces are killed (less jitter)
+b2kSetContactTuning 30, 10, 5    -- contact stiffness: hertz, damping, max push-out (px)
+b2kSetJointTuning   60, 2        -- default joint stiffness: hertz, damping
+b2kSetMaxSpeed 1800              -- clamp how fast any body may move (px/s)
+b2kEnableWarmStarting true       -- reuse last frame&#x27;s solution (on by default; faster + stabler)
+b2kEnableContinuous true         -- world-wide continuous collision (CCD)
+b2kSetGravity 0, 600             -- change gravity any time (px-down is positive)</code></pre>
+<h3 id="measuring">Measuring</h3>
+<pre><code>put b2kProfile()           -- &quot;totalStep,collide,solve&quot; ms for the last step — a perf HUD
+put b2kAwakeBodyCount()    -- awake dynamic bodies (native count)</code></pre>
+<blockquote><p><strong>Performance habits the Kit already follows:</strong> sleeping is on, the renderer syncs from Box2D body-move events instead of scanning every body each frame, angle reads are skipped for non-rotating controls, pixel-identical redraws are skipped, joint markers that haven't moved aren't redrawn, the sprite tick walks only bound/playing sprites (a hundred static tiles cost nothing per frame), input bindings resolve their keycodes at bind time, and the player tick reads pre-baked tuning over raw body handles. Keep sleeping enabled, avoid heavy work every <code>on b2kFrame</code>, and big scenes stay smooth.</p></blockquote>
+<blockquote><p><strong>Performance habits for YOUR game code</strong> (the engine is a single interpreted thread, and every property set risks a redraw):</p>
+<ol>
+<li><strong>Throttle your HUD.</strong> Setting a field's text re-lays-out and redraws it — a readout that changes every frame costs a redraw every frame. Update HUDs at ~4 Hz (<code>if the milliseconds &lt; gHudNextMS then …</code>), and still skip the set when the text is unchanged. The platformer and slingshot both do this.</li>
+<li><strong>Write properties and velocities only on change.</strong> Track the last value you applied (the platformer's gate writes its kinematic velocity only when the target flips).</li>
+<li><strong>Read the clock once per handler</strong>, not once per entity.</li>
+<li><strong>Build heavy things once.</strong> Sounds survive <code>b2kTeardown</code>; tiles are create-at-level-build; sheets slice lazily and share frames.</li>
+</ol></blockquote>
+<hr>
+<h2 id="18-dropping-to-the-core-b2-api">18. Dropping to the core <code>b2…</code> API</h2>
+<p>When you need something the Kit doesn't wrap, reach through to the extension and mix both layers freely:</p>
+<pre><code>put b2kWorld()                 -- the underlying world handle
+put b2kBodyOf(tBox)            -- the underlying b2… body handle for a control
+put b2kToWorldX(the mouseH)    -- screen px -&gt; Box2D metres (and b2kToWorldY)
+put b2kToScreenX(2.5)          -- Box2D metres -&gt; screen px (and b2kToScreenY)</code></pre>
+<p>With the world and a body handle plus the converters, every raw <code>b2…</code> call (see <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md"><code>api-reference.md</code></a>) is available — set an exotic shape property, then let the Kit keep drawing the control each frame.</p>
+<hr>
+<h2 id="19-a-complete-worked-example-a-little-car">19. A complete worked example: a little car</h2>
+<p>Putting it together — a two-wheeled car on smooth ground that you drive with the arrow keys. Paste into a card script with the Kit installed.</p>
+<pre><code>local sCar, sWheelL, sWheelR, sAxleL, sAxleR
+
+on openCard
+   b2kSetup                                  -- world + gravity, auto origin
+   buildGround
+   buildCar
+   b2kFrameTarget the long id of me          -- we&#x27;ll drive the wheels in on b2kFrame
+   b2kStart
+end openCard
+
+on closeCard
+   b2kStop
+end closeCard
+
+on buildGround
+   local tPts
+   -- top surface listed right-to-left so the solid side faces up
+   put &quot;620,360&quot; &amp; cr &amp; &quot;420,330&quot; &amp; cr &amp; &quot;220,370&quot; &amp; cr &amp; &quot;20,340&quot; into tPts
+   b2kChain tPts                         -- invisible smooth ground
+   -- (draw a matching graphic over it if you want it visible)
+end buildGround
+
+on buildCar
+   b2kSpawnBox 200, 120, 90, 30, &quot;70,130,210&quot;
+   put the result into sCar
+   b2kSetDensity sCar, 1.0
+   b2kSpawnBall 168, 150, 36, &quot;30,30,36&quot;
+   put the result into sWheelL
+   b2kSpawnBall 232, 150, 36, &quot;30,30,36&quot;
+   put the result into sWheelR
+   b2kSetFriction sWheelL, 1.0
+   b2kSetFriction sWheelR, 1.0
+   -- sprung axles that can also be driven
+   b2kWheel sCar, sWheelL, 168, 150
+   put the result into sAxleL
+   b2kWheel sCar, sWheelR, 232, 150
+   put the result into sAxleR
+   b2kWheelSpring sAxleL, 6, 0.7
+   b2kWheelSpring sAxleR, 6, 0.7
+end buildCar
+
+on b2kFrame
+   local tDrive
+   put 0 into tDrive
+   if the keysDown contains 124 then put 700 into tDrive    -- right arrow
+   if the keysDown contains 123 then put -700 into tDrive   -- left arrow
+   b2kWheelMotor sAxleL, tDrive, 900
+   b2kWheelMotor sAxleR, tDrive, 900
+end b2kFrame</code></pre>
+<p>That's a complete vehicle: a chassis, two sprung-and-driven wheels on wheel joints, smooth chain terrain, and a per-frame motor driven by the keyboard.</p>
+<hr>
+<h2 id="20-building-a-whole-game-the-micro-game-pattern">20. Building a whole game (the micro-game pattern)</h2>
+<p>The <strong>micro-game pattern</strong> is the recommended skeleton for a green-field game on the Kit: a complete game — start screen, levels, a win screen — in a few hundred lines of card logic, with nothing to install beyond the extension (embed the hero sheet as base64; synthesize every sound with <code>b2kToneMake</code>). A dedicated micro-game example once shipped this verbatim; it has since been retired (the repo now concentrates its game work on the <strong>platformer</strong> and <strong>slingshot</strong> showcases), but the pattern is <strong>preserved here</strong> because it remains exactly the skeleton to copy when you start your own green-field game. Its skeleton is four ideas:</p>
+<p><strong>1. A game-state machine, gated by <code>b2kPlayerControl</code>.</strong> One <code>gMode</code> local (<code>menu</code> / <code>play</code> / <code>won</code>) decides what clicks and keys mean. The world is built and <em>running</em> behind the menu — the hero idles, sweepers patrol — but <code>b2kPlayerControl false</code> means the keys do nothing until <code>mgBegin</code> hands them over. Hit poses and the win screen reuse the same switch.</p>
+<p><strong>2. Levels are data; the interpreter is yours.</strong> Each level is a few lines of text, one verb per line:</p>
+<pre><code>bounds 1024,640
+spawn 110,500
+slab 0,576,1024,640
+ledge 620,860,420
+coin 460,448
+spike 250,330,560
+door 945,478</code></pre>
+<p>…and <code>mgBuild</code> is a ~100-line <code>switch</code> that tears the world down (<code>b2kClear</code> + <code>b2kTeardown</code>), interprets the lines, then makes the player and hands the camera its bounds. Verbs are cheap — when your game needs a new object, add a <code>case</code> and a line format. This is the Kit's intended scene pattern: the <em>format</em> belongs to your game, the heavy lifting (bodies, sprites, camera, controller) is already API. Two details worth stealing: the <code>ledge</code> verb ghost-pads its chain automatically (see §15), and <code>door</code> is just a sensor plus a <code>gDoorOpen</code> flag the frame hook flips when the coin count is full.</p>
+<p><strong>3. One call makes the player.</strong> <code>b2kPlayerMake gSpawnX, gSpawnY, 32, 56, &quot;hero&quot;</code> creates the capsule body host, the bound sprite, the controller, and arms input. After it: map the anims, set two tuning knobs, <code>b2kCamFollow</code>. A whole "character system" in this pattern is six lines.</p>
+<p><strong>4. Game events ride the hooks you already have.</strong> Coins/spikes/door are sensors (<code>on b2kSensorEnter</code>); landing and jump sounds key off <code>b2kPlayerState()</code> in <code>on b2kFrame</code>; respawn is a non-looping <code>hit</code> animation whose <code>b2kSpriteOnFinish</code> message teleports the hero home. No new machinery — a game is the Kit's events plus your rules.</p>
+<p>The pattern's flow: <code>openCard</code> builds level 1 and shows the menu → click → <code>mgBegin</code> → door (all coins) → <code>mgAdvance</code> → level 2 → door → <code>mgShowWin</code> → click → back to level 1, with <code>R</code> to rebuild the current level, <code>ESC</code> to pause, <code>M</code> to mute.</p>
+<hr>
+<h2 id="21-player-actions-duck-drop-through-ladders-knockback-swim">21. Player actions: duck, drop-through, ladders, knockback, swim</h2>
+<p>Wave 2 builds four standard platformer verbs into the controller. They cost nothing until used (each idles at one compare per frame) and they compose — a drop-through can fall into a ladder grab; a knockback ends a climb and restores gravity itself.</p>
+<p><strong>Duck</strong> needs no setup: DOWN while grounded brakes the player to a stop and shows the <code>duck</code> anim slot (<code>b2kPlayerAnims</code>'s sixth argument; it falls back to the idle pose). <strong>The hitbox does not shrink this wave</strong> — you cannot duck <em>under</em> a saw yet; capsule reshaping is scheduled with Wave 5. Say so in your help text if your level dangles something head-high.</p>
+<p><strong>Drop-through</strong> works on every <code>b2kChain</code>/<code>b2kSmoothGround</code> deck automatically — chains carry a reserved collision category, and DOWN+JUMP while standing on one masks that category off the player for <code>dropMs</code> (~260 ms), long enough to fall clear; the deck is solid again on the next landing. On solid ground the same press just ducks (and is eaten — no buffered launch when DOWN releases). Two level-design rules: the deck needs <strong>head-room below</strong> (a solid platform parked less than a player-height under a one-way deck means the drop can't clear it — the mask is restored by a hard deadline and the player may pop back on top), and remember the <strong>ghost rule</strong> (§15) so the deck's ends are solid in the first place.</p>
+<p><strong>Ladders</strong> are <em>zones</em>, not bodies: <code>b2kPlayerAddLadder x1,y1,x2,y2</code> registers a screen-px rect; presence is a pure per-frame poll (the presence doctrine — no sensors, no contacts). In-zone, UP enters the <code>climb</code> state: gravity parks at 0, y runs at <code>climbSpeed</code> off the moveY axis (neither held = hang), x at half <code>moveSpeed</code>. JUMP exits with a normal jump; sliding out of the zone or climbing down onto ground restores gravity. DOWN grabs the ladder only while <strong>airborne</strong> — a grounded DOWN is a duck — so to descend from a platform top, run the zone a little above the platform and walk off its edge holding DOWN. Draw your own rungs (a few lines, or the tiles sheet's <code>ladder_*</code> frames); zones are world state, wiped by <code>b2kClear</code> with everything else.</p>
+<p><strong>Knockback</strong> (<code>b2kPlayerHurt fromX</code>) is the contact-damage standard the games share. It pops the player away from <code>fromX</code> (<code>hurtPopX</code>/<code>hurtPopY</code>, exempt from the ground-snap), holds the <code>hurt</code> state with input suppressed until <code>hurtMs</code> <em>or</em> the first landing after half of it (whichever is later), then opens an <code>invulnMs</code> mercy window during which <code>b2kPlayerHurt</code> no-ops and <code>b2kPlayerHurtIs()</code> answers true — gate your hazard checks on it. The split that makes games feel right: <strong>contact damage knocks back in place; lethal hits (pits, kill planes) keep your respawn flow.</strong> Your respawn's <code>b2kPlayerControl false</code> call also cancels any knockback in flight, so the two paths hand over cleanly when a knockback ends in a pit. One art note: if your game uses <code>b2kSpriteOnFinish</code> on the player's sprite (the respawn-on-finish pattern), map a <strong>looping</strong> animation to the <code>hurt</code> anim slot — a non-looping pose would finish mid-knockback and fire your respawn.</p>
+<p><strong>Swim</strong> (Wave 4) is the buoyant parallel to the climb. <code>b2kPlayerAddWater x1,y1,x2,y2</code> registers a water <em>zone</em> (polled presence, world state, wiped by <code>b2kClear</code> like a ladder). While the player's centre is submerged the <code>swim</code> state owns the controller: gravity scales to <code>swimGravity</code> (the body's own scale is saved and restored, so a game-tuned floatiness survives), the sink caps at <code>swimMaxFall</code>, UP/DOWN swim at <code>swimSpeed</code>, and a JUMP press is a <em>repeatable</em> upward <strong>stroke</strong> of <code>swimJump</code> — no grounded/coyote/buffer gate. Leaving the zone or a hurt restores gravity; swim and climb are mutually exclusive (the tick starts only one). Map a swim frame with <code>b2kPlayerAnims</code>'s ninth argument (it falls back to the <code>fall</code>/<code>jump</code> pose, so a sheet without one still reads).</p>
+<p>Two things the OXT rounds taught: <strong>(1) tuning</strong> — <code>swimGravity</code> sets only how fast you sink <em>between</em> strokes; the single-stroke escape height is <code>swimJump</code> ALONE (the stroke sets velocity directly, then full air-gravity governs the apex once you break the surface), so to make climbing out of a pool harder, lower <code>swimJump</code>, not the gravity. <strong>(2) layout</strong> — a swim pool can't be a pit <em>below</em> the ground, because <code>b2kCamBounds</code> clamps the camera at the world's bottom edge and anything lower is off-screen; build the pool as a RAISED basin between two banks (or raise the whole ground), then hop in, dive for the coins, and stroke up + hold-forward to hop out the far bank.</p>
+<h3 id="wave-5-actions-double-jump-wall-jump-dash-crawl-carry">Wave 5 actions: double-jump, wall-jump, dash, crawl, carry</h3>
+<p>The Wave 5 moves are all <strong>opt-in</strong> through <code>b2kPlayerSet</code> knobs — the defaults leave the controller exactly as the Wave 2/4 chapters describe, and each idle path costs one compare per frame, so you only pay for what you turn on. Turn them on for a modern-feeling platformer:</p>
+<pre><code>b2kPlayerSet &quot;airJumps&quot;, 1            -- a second jump in mid-air (double-jump)
+b2kPlayerSet &quot;wallJumpX&quot;, 240         -- wall-slide + wall-jump (away + up)...
+b2kPlayerSet &quot;wallJumpY&quot;, 430
+b2kPlayerSet &quot;wallSlideMax&quot;, 120      -- ...the slowed slide down a wall
+b2kPlayerSet &quot;dashSpeed&quot;, 560         -- DASH on the &quot;dash&quot; action (SHIFT/X)
+b2kPlayerSet &quot;duckScale&quot;, 0.6         -- DOWN now CRAWLS under a low gap
+b2kPlayerSet &quot;platformCarry&quot;, 1       -- ride a moving kinematic platform</code></pre>
+<ul>
+<li><strong><code>airJumps</code></strong> is the air-jump budget, refilled on every landing — <code>1</code> is a classic double-jump, <code>2</code> a triple. (For a <em>powerup</em> double-jump, grant it with <code>b2kPlayerJump</code> from a sensor instead.)</li>
+<li><strong>Wall moves</strong> arm when <code>wallJumpX &gt; 0</code> (or <code>wallSlideMax &gt; 0</code>). While airborne and pressing INTO a wall you <code>wallslide</code> (the fall caps at <code>wallSlideMax</code>); JUMP launches up and away with a brief steer-lock so the launch carries clear. <code>wallJumpY</code> falls back to <code>jumpSpeed</code>.</li>
+<li><strong>Dash</strong> is a flat horizontal burst (gravity parked) on the <code>dash</code> action — bound to SHIFT/X by default; rebind with <code>b2kBindAction &quot;dash&quot;, …</code>. It runs <code>dashMs</code>, then <code>dashCooldownMs</code> must pass before the next, and it yields to climb/swim.</li>
+<li><strong><code>duckScale &lt; 1</code></strong> turns the Wave 2 brake-duck into a real <strong>crawl</strong>: the capsule reshapes (feet-anchored) to that fraction of its standing height, so you fit under a low overhead, and stands back up only when there's headroom. Read the live half-height with <code>b2kPlayerHalfH()</code> for any head-reach logic, and size crawl gaps against it.</li>
+<li><strong><code>platformCarry 1</code></strong> makes a grounded player inherit the velocity of the moving kinematic body under it — so a moving platform <em>carries</em> you instead of sliding out from under. The platform must move by <strong>velocity</strong> (a kinematic body with <code>b2kSetVelocity</code>), not by position, because carry reads that velocity; flip the velocity at the patrol endpoints (write-on-change).</li>
+</ul>
+<p>New conveniences: <code>b2kPlayerHalfH()</code>/<code>b2kPlayerHalfW()</code> (live capsule extents), <code>b2kPlayerInLadder()</code>/<code>b2kPlayerInWater()</code> (this frame's zone membership, for prompts/effects), and <code>b2kPlayerRespawn x, y</code> (teleport + zero velocity + clean state in one call). The <strong>platformer example</strong> is the marquee showcase for all of these.</p>
+<hr>
+<h2 id="22-xtalk-gotchas-worth-knowing">22. xTalk gotchas worth knowing</h2>
+<p>A few things that trip up LiveCode/OpenXTalk users specifically:</p>
+<ul>
+<li><strong>Pass controls by <code>the long id of …</code>.</strong> Short names break if you rename or re-layer; long ids stay valid. Every <code>ctrl</code> parameter wants a reference.</li>
+<li><strong>Identifiers are case-insensitive — dodge reserved words.</strong> xTalk treats <code>players</code>, <code>Players</code>, and <code>pLayers</code> as the <em>same</em> name, and many words (<code>type</code>, <code>name</code>, <code>layer</code>, <code>number</code>, <code>time</code>, <code>id</code>, <code>mode</code>…) are reserved. The Kit prefixes everything (<code>b2k…</code>, internal <code>s…</code>); prefix <strong>your</strong> variables too (<code>tBox</code>, <code>gScore</code>) so you never collide with a keyword.</li>
+<li><strong><code>get</code> vs. <code>put</code> for functions that return.</strong> <code>b2kSpawn…</code>, <code>b2kGrab</code>, and the joint constructors <em>return</em> a value. Use <code>put … into tVar</code> to keep it, or <code>get …</code> to discard it. Calling them as a bare statement is a syntax error.</li>
+<li><strong>Custom properties stick to objects.</strong> A handy pattern is to stash per-object data as <code>set the uColor of tBox to …</code> and read it back later — the Kit and the examples use <code>u…</code> custom properties throughout.</li>
+<li><strong>One world at a time.</strong> The Kit owns a single world. <code>b2kTeardown</code> before you build a fresh scene, or <code>b2kClear</code> to empty the current one.</li>
+</ul>
+<hr>
+<h2 id="23-complete-api-index">23. Complete API index</h2>
+<p>Every public handler, grouped. <code>[f]</code> marks a <strong>function</strong> (returns a value — call it with <code>()</code> / <code>get</code> / <code>put</code>); everything else is a <strong>command</strong> (a statement). Optional arguments are in <code>[…]</code>.</p>
+<h3 id="world--lifecycle">World &amp; lifecycle</h3>
+<p><code>b2kSetup [gx, gy]</code> · <code>b2kQuickStart [gy]</code> · <code>b2kStart</code> · <code>b2kStop</code> · <code>b2kPause</code> · <code>b2kResume</code> · <code>b2kStepOnce</code> · <code>b2kIsRunning()</code> <code>[f]</code> · <code>b2kAddWalls</code> · <code>b2kAddGround [screenY]</code> · <code>b2kWall x1,y1,x2,y2</code> · <code>b2kClear</code> · <code>b2kTeardown</code> · <code>b2kVersion()</code> <code>[f]</code> · <code>b2kWorld()</code> <code>[f]</code></p>
+<h3 id="configuration--coordinates">Configuration &amp; coordinates</h3>
+<p><code>b2kSetScale px</code> · <code>b2kSetOrigin x,y</code> · <code>b2kSetGravity gx,gy</code> · <code>b2kSetSubsteps n</code> · <code>b2kContactTarget obj</code> · <code>b2kFrameTarget obj</code> · <code>b2kEnableSleeping flag</code> · <code>b2kEnableContinuous flag</code> · <code>b2kToScreenX(m)</code> <code>[f]</code> · <code>b2kToScreenY(m)</code> <code>[f]</code> · <code>b2kToWorldX(px)</code> <code>[f]</code> · <code>b2kToWorldY(px)</code> <code>[f]</code></p>
+<h3 id="attach--spawn">Attach &amp; spawn</h3>
+<p><code>b2kAddBox ctrl [,dyn]</code> · <code>b2kAddBall ctrl [,dyn]</code> · <code>b2kAddCapsule ctrl [,dyn]</code> · <code>b2kAddPolygon ctrl [,dyn]</code> · <code>b2kAddStatic ctrl</code> · <code>b2kReshape ctrl, shape</code> · <code>b2kSpawnBox x,y,w,h [,color]</code> <code>[f]</code> · <code>b2kSpawnBall x,y,diam [,color]</code> <code>[f]</code> · <code>b2kSpawnCapsule x,y,len,thick [,color]</code> <code>[f]</code></p>
+<h3 id="materials--body-settings">Materials &amp; body settings</h3>
+<p><code>b2kSetBounce ctrl,0..1</code> · <code>b2kSetFriction ctrl,0..1</code> · <code>b2kSetDensity ctrl,d</code> · <code>b2kSetBullet ctrl,flag</code> · <code>b2kSetFixedRotation ctrl,flag</code> · <code>b2kSetGravityScale ctrl,s</code> · <code>b2kSetDamping ctrl,lin [,ang]</code> · <code>b2kWake ctrl</code> · <code>b2kSleep ctrl</code> · <code>b2kSetSleepEnabled ctrl,flag</code> · <code>b2kSetSleepThreshold ctrl,pxPerSec</code> · <code>b2kSetStatic ctrl</code> · <code>b2kSetDynamic ctrl</code> · <code>b2kSetKinematic ctrl</code> · <code>b2kSetType ctrl,name</code> · <code>b2kDisable ctrl</code> · <code>b2kEnable ctrl</code></p>
+<h3 id="act-on-bodies">Act on bodies</h3>
+<p><code>b2kPush ctrl,dvx,dvy</code> · <code>b2kImpulse ctrl,ix,iy</code> · <code>b2kForce ctrl,fx,fy</code> · <code>b2kSetVelocity ctrl,vx,vy</code> · <code>b2kSpin ctrl,deg/s</code> · <code>b2kSpinBy ctrl,deg/s</code> · <code>b2kTorque ctrl,t</code> · <code>b2kAngularImpulse ctrl,imp</code> · <code>b2kMoveTo ctrl,x,y [,deg]</code> · <code>b2kExplode x,y [,radius] [,power]</code> · <code>b2kExplodeLegacy x,y [,radius] [,power]</code> · <code>b2kRemove ctrl</code></p>
+<h3 id="read-state">Read state</h3>
+<p><code>b2kBodyOf(ctrl)</code> <code>[f]</code> · <code>b2kPosition(ctrl)</code> <code>[f]</code> · <code>b2kWorldCenter(ctrl)</code> <code>[f]</code> · <code>b2kVelocity(ctrl)</code> <code>[f]</code> · <code>b2kSpeed(ctrl)</code> <code>[f]</code> · <code>b2kAngle(ctrl)</code> <code>[f]</code> · <code>b2kSpinRate(ctrl)</code> <code>[f]</code> · <code>b2kMass(ctrl)</code> <code>[f]</code> · <code>b2kBodyType(ctrl)</code> <code>[f]</code> · <code>b2kGravityScale(ctrl)</code> <code>[f]</code> · <code>b2kDamping(ctrl)</code> <code>[f]</code> · <code>b2kIsAwake(ctrl)</code> <code>[f]</code> · <code>b2kIsBullet(ctrl)</code> <code>[f]</code> · <code>b2kIsEnabled(ctrl)</code> <code>[f]</code> · <code>b2kBodyCount()</code> <code>[f]</code> · <code>b2kAwakeCount()</code> <code>[f]</code> · <code>b2kControlAt(x,y)</code> <code>[f]</code> · <code>b2kControlContains(ctrl,x,y)</code> <code>[f]</code></p>
+<h3 id="joints">Joints</h3>
+<p><code>b2kHinge a,b,x,y</code> <code>[f]</code> · <code>b2kWeld a,b</code> <code>[f]</code> · <code>b2kRope a,b [,len]</code> <code>[f]</code> · <code>b2kSlider a,b,axisDeg</code> <code>[f]</code> · <code>b2kWheel chassis,wheel,x,y [,axisDeg]</code> <code>[f]</code> · <code>b2kMotorTo mover,ref,dx,dy,deg [,maxF,maxT]</code> <code>[f]</code> · <code>b2kNoCollide a,b</code> <code>[f]</code> · <code>b2kRemoveJoint joint</code> &amp;nbsp;&amp;nbsp;<strong>Drive/limit/spring:</strong> <code>b2kMotor j,deg/s [,maxT]</code> · <code>b2kHingeLimit j,lo,hi</code> · <code>b2kHingeAngle(j)</code> <code>[f]</code> · <code>b2kMotorOff j</code> · <code>b2kHingeLimitOff j</code> · <code>b2kSliderMotor j,px/s [,maxF]</code> · <code>b2kSliderLimit j,lo,hi</code> · <code>b2kSliderPos(j)</code> <code>[f]</code> · <code>b2kSliderMotorOff j</code> · <code>b2kSliderLimitOff j</code> · <code>b2kWheelMotor j,deg/s [,maxT]</code> · <code>b2kWheelSpring j,hz [,damp]</code> · <code>b2kWheelMotorOff j</code> · <code>b2kRope…</code> readouts: <code>b2kRopeRange j,min,max</code> · <code>b2kRopeLength(j)</code> <code>[f]</code> · <code>b2kRopeSetLength j,px</code> · <code>b2kSpring j,hz [,damp]</code> · <code>b2kWeldSpring j,hz [,damp]</code></p>
+<h3 id="drag">Drag</h3>
+<p><code>b2kGrab(x,y)</code> <code>[f]</code> · <code>b2kRelease</code></p>
+<h3 id="input-keyboard">Input (keyboard)</h3>
+<p><code>b2kInputOn</code> · <code>b2kInputOff</code> · <code>b2kInputIsOn()</code> <code>[f]</code> · <code>b2kKeyIsDown(key)</code> <code>[f]</code> · <code>b2kKeyPressed(key)</code> <code>[f]</code> · <code>b2kKeyReleased(key)</code> <code>[f]</code> · <code>b2kKeysHeld()</code> <code>[f]</code> · <code>b2kBindAction name,keys</code> · <code>b2kActionIsDown(name)</code> <code>[f]</code> · <code>b2kActionPressed(name)</code> <code>[f]</code> · <code>b2kActionReleased(name)</code> <code>[f]</code> · <code>b2kBindAxis name,negKeys,posKeys</code> · <code>b2kAxis(name)</code> <code>[f]</code> · <code>b2kInputInject keys</code> · <code>b2kInputInjectOff</code> · <code>b2kKeyCodes(key)</code> <code>[f]</code> · <code>b2kKeyName(code)</code> <code>[f]</code> · <code>b2kFrameMS()</code> <code>[f]</code></p>
+<h3 id="sprites--sheets">Sprites &amp; sheets</h3>
+<p><code>b2kSheetLoad name,path,fw,fh [,n,margin,spacing]</code> · <code>b2kSheetLoadAtlas name,png [,xml]</code> · <code>b2kSheetFromImage name,img,fw,fh [,n,margin,spacing]</code> · <code>b2kSheetAddFrame sheet,frame,x,y,w,h</code> · <code>b2kSheetFrames(name)</code> <code>[f]</code> · <code>b2kSheetHasFrame(name,frame)</code> <code>[f]</code> · <code>b2kSheetFrameNames(name)</code> <code>[f]</code> · <code>b2kSheetScale name,factor</code> · <code>b2kSheetPersist flag</code> · <code>b2kSheetPersists()</code> <code>[f]</code> · <code>b2kSheetsWipe</code> · <code>b2kSheetFrameSize(name,frame)</code> <code>[f]</code> · <code>b2kAnimDef sheet,anim,frames,fps [,loop]</code> · <code>b2kSpriteNew sheet [,frame,x,y]</code> · <code>b2kSpriteFromGIF path [,x,y]</code> · <code>b2kSpritePlay spr,anim [,restart]</code> · <code>b2kSpriteStop spr</code> · <code>b2kSpriteAnim(spr)</code> <code>[f]</code> · <code>b2kSpriteSetFrame spr,f</code> · <code>b2kSpriteFrame(spr)</code> <code>[f]</code> · <code>b2kSpriteFPS spr,fps</code> · <code>b2kSpriteFlipH spr,flag</code> · <code>b2kSpriteFlipped(spr)</code> <code>[f]</code> · <code>b2kSpriteOnFinish spr,msg</code> · <code>b2kSpriteMoveTo spr,x,y</code> · <code>b2kSpriteBind spr,bodyCtrl [,dx,dy]</code> · <code>b2kSpriteUnbind spr</code> · <code>b2kSpriteRemove spr</code></p>
+<h3 id="player-the-platformer-controller">Player (the platformer controller)</h3>
+<p><code>b2kPlayerMake x,y,w,h [,sheet]</code> · <code>b2kPlayerAttach ctrl</code> · <code>b2kPlayerAnims idle,run,jump [,fall] [,land] [,duck] [,climb] [,hurt] [,swim] [,wall] [,dash]</code> · <code>b2kPlayerSet key,value</code> · <code>b2kPlayerGet(key)</code> <code>[f]</code> · <code>b2kPlayerOnGround()</code> <code>[f]</code> · <code>b2kPlayerState()</code> <code>[f]</code> · <code>b2kPlayerFacing()</code> <code>[f]</code> · <code>b2kPlayerJump [speed]</code> · <code>b2kPlayerControl flag</code> · <code>b2kPlayerAddLadder x1,y1,x2,y2</code> · <code>b2kPlayerAddWater x1,y1,x2,y2</code> · <code>b2kPlayerHurt [fromX]</code> · <code>b2kPlayerHurtIs()</code> <code>[f]</code> · <code>b2kPlayer()</code> <code>[f]</code> · <code>b2kPlayerSprite()</code> <code>[f]</code> · <code>b2kPlayerRemove</code></p>
+<h3 id="camera">Camera</h3>
+<p><code>b2kCamOn [rect]</code> · <code>b2kCamOff</code> · <code>b2kCamIsOn()</code> <code>[f]</code> · <code>b2kCamGroup()</code> <code>[f]</code> · <code>b2kCamAdopt ctrl</code> · <code>b2kCamFollow ctrl [,lerp]</code> · <code>b2kCamUnfollow</code> · <code>b2kCamDeadzone w,h</code> · <code>b2kCamBounds x1,y1,x2,y2</code> · <code>b2kCamGoto x,y</code> · <code>b2kCamPos()</code> <code>[f]</code> · <code>b2kCamShake ampPx,ms</code> · <code>b2kCamStatus()</code> <code>[f]</code> · <code>b2kCamLocSemantics()</code> <code>[f]</code> · <code>b2kCamMouseX()</code> <code>[f]</code> · <code>b2kCamMouseY()</code> <code>[f]</code></p>
+<h3 id="sound">Sound</h3>
+<p><code>b2kSoundLoad name,path</code> · <code>b2kToneMake name,freqs,msPerNote [,vol,shape]</code> · <code>b2kSound name</code> · <code>b2kSoundLoop name</code> · <code>b2kSoundStop</code> · <code>b2kSoundMute flag</code> · <code>b2kSoundMuted()</code> <code>[f]</code> · <code>b2kSoundVolume pct</code> · <code>b2kSoundIsLoaded(name)</code> <code>[f]</code> · <code>b2kSoundStatus()</code> <code>[f]</code></p>
+<h3 id="events-handlers-you-write">Events (handlers you write)</h3>
+<p><code>on b2kFrame</code> · <code>on b2kContact pA,pB</code> · <code>on b2kEndContact pA,pB</code> · <code>on b2kSensorEnter pSensor,pVisitor</code> · <code>on b2kSensorExit pSensor,pVisitor</code> &amp;nbsp;&amp;nbsp;<strong>Polling:</strong> <code>b2kContactCount()</code> <code>[f]</code> · <code>b2kContactA(i)</code> <code>[f]</code> · <code>b2kContactB(i)</code> <code>[f]</code> · <code>b2kEndContactCount()</code> <code>[f]</code> · <code>b2kEndContactA(i)</code> <code>[f]</code> · <code>b2kEndContactB(i)</code> <code>[f]</code></p>
+<h3 id="sensors">Sensors</h3>
+<p><code>b2kAddSensor ctrl [,shape]</code> <code>[f]</code> · <code>b2kSetSensor ctrl,flag</code> · <code>b2kSensorCount()</code> <code>[f]</code> · <code>b2kSensorEnterSensor(i)</code> <code>[f]</code> · <code>b2kSensorEnterVisitor(i)</code> <code>[f]</code> · <code>b2kSensorExitCount()</code> <code>[f]</code> · <code>b2kSensorExitSensor(i)</code> <code>[f]</code> · <code>b2kSensorExitVisitor(i)</code> <code>[f]</code></p>
+<h3 id="collision-filtering">Collision filtering</h3>
+<p><code>b2kDefineLayer name</code> · <code>b2kLayerBits(list)</code> <code>[f]</code> · <code>b2kSetCategory ctrl,layers</code> · <code>b2kSetMask ctrl,layers</code> · <code>b2kSetCollisionGroup ctrl,n</code> · <code>b2kNoCollide a,b</code> <code>[f]</code></p>
+<h3 id="terrain--chains">Terrain &amp; chains</h3>
+<p><code>b2kChain points [,loop]</code> · <code>b2kSmoothGround points</code> · <code>b2kAddChain ctrl,points [,loop]</code></p>
+<h3 id="queries">Queries</h3>
+<p><code>b2kOverlap x1,y1,x2,y2</code> <code>[f]</code> · <code>b2kOverlapMoving x1,y1,x2,y2</code> <code>[f]</code> · <code>b2kOverlapCircle x,y,r</code> <code>[f]</code> · <code>b2kRayHit(x1,y1,x2,y2)</code> <code>[f]</code> · <code>b2kRayHitX()</code> <code>[f]</code> · <code>b2kRayHitY()</code> <code>[f]</code> · <code>b2kRayHitNormalX()</code> <code>[f]</code> · <code>b2kRayHitNormalY()</code> <code>[f]</code> · <code>b2kRayDist()</code> <code>[f]</code> · <code>b2kRayHitAll x1,y1,x2,y2</code> <code>[f]</code></p>
+<h3 id="tuning--profiling">Tuning &amp; profiling</h3>
+<p><code>b2kSetRestitutionThreshold px/s</code> · <code>b2kSetContactTuning hz,damp,pushPx</code> · <code>b2kSetJointTuning hz,damp</code> · <code>b2kSetMaxSpeed px/s</code> · <code>b2kEnableWarmStarting flag</code> · <code>b2kProfile()</code> <code>[f]</code> · <code>b2kAwakeBodyCount()</code> <code>[f]</code></p>
+<h3 id="internal-helpers-you-usually-wont-call-these">Internal helpers (you usually won't call these)</h3>
+<p>The Kit also defines handlers it uses on your behalf — the loop and renderer (<code>b2kSync</code>, <code>b2kDrawPoly</code>, <code>b2kDrawBall</code>, <code>b2kDrawImage</code>, <code>b2kDispatchContacts</code>, <code>b2kDispatchSensors</code>), construction primitives (<code>b2kEdge</code>, <code>b2kRegister</code>, <code>b2kResetTables</code>), and math helpers (<code>b2kLocalAnchor</code>, <code>b2kQueryToControls</code>, <code>b2kCorner</code>, <code>b2kCapsuleVerts</code>). They're listed here for completeness; reach for the public handlers above instead.</p>
+<hr>
+<p><em>See also:</em> <a href="getting-started.html"><code>getting-started.md</code></a> · <a href="kit-reference.html"><code>kit-reference.md</code></a> (quick tables) · <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/api-reference.md"><code>api-reference.md</code></a> (the core <code>b2…</code> layer) · <a href="https://github.com/SethMorrowSoftware/Box2Dxt/blob/main/docs/architecture.md"><code>architecture.md</code></a> (how the three layers fit together).</p></div>
+</article>
+</main>
+<footer class="footer"><div class="wrap footer-bottom" style="border-top:none;margin-top:0">
+  <span>MIT licensed · Box2D © Erin Catto, also MIT</span>
+  <a href="../index.html#top">BACK TO THE SITE ↑</a>
+</div></footer>
+<script src="../app.js"></script>
+</body>
+</html>
