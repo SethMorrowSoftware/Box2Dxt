@@ -125,10 +125,10 @@ private foreign handler _body_at_point(in pW as CInt, in pX as CDouble, in pY as
 private foreign handler _contacts_update(in pW as CInt) returns CInt binds to "c:box2dxt>b2lc_contacts_update!cdecl"
 private foreign handler _contact_begin_count() returns CInt binds to "c:box2dxt>b2lc_contact_begin_count!cdecl"
 private foreign handler _contact_end_count() returns CInt binds to "c:box2dxt>b2lc_contact_end_count!cdecl"
-private foreign handler _contact_begin_a(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_begin_a!cdecl"
-private foreign handler _contact_begin_b(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_begin_b!cdecl"
-private foreign handler _contact_end_a(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_end_a!cdecl"
-private foreign handler _contact_end_b(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_end_b!cdecl"
+private foreign handler _contact_begin_a(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_begin_a!cdecl"
+private foreign handler _contact_begin_b(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_begin_b!cdecl"
+private foreign handler _contact_end_a(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_end_a!cdecl"
+private foreign handler _contact_end_b(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_end_b!cdecl"
 
 -- ===== ABI v3 additions: foreign bindings ===========================
 -- shape-def builder (one-shot extras applied by the next shape creation)
@@ -143,31 +143,31 @@ private foreign handler _shapedef_set_material_id(in pId as CInt) returns nothin
 
 -- contact hit events
 private foreign handler _contact_hit_count() returns CInt binds to "c:box2dxt>b2lc_contact_hit_count!cdecl"
-private foreign handler _contact_hit_a(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_hit_a!cdecl"
-private foreign handler _contact_hit_b(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_hit_b!cdecl"
-private foreign handler _contact_hit_x(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_x!cdecl"
-private foreign handler _contact_hit_y(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_y!cdecl"
-private foreign handler _contact_hit_nx(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_nx!cdecl"
-private foreign handler _contact_hit_ny(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_ny!cdecl"
-private foreign handler _contact_hit_speed(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_speed!cdecl"
+private foreign handler _contact_hit_a(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_hit_a!cdecl"
+private foreign handler _contact_hit_b(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_contact_hit_b!cdecl"
+private foreign handler _contact_hit_x(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_x!cdecl"
+private foreign handler _contact_hit_y(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_y!cdecl"
+private foreign handler _contact_hit_nx(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_nx!cdecl"
+private foreign handler _contact_hit_ny(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_ny!cdecl"
+private foreign handler _contact_hit_speed(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_contact_hit_speed!cdecl"
 
 -- sensor events
 private foreign handler _sensors_update(in pW as CInt) returns CInt binds to "c:box2dxt>b2lc_sensors_update!cdecl"
 private foreign handler _sensor_begin_count() returns CInt binds to "c:box2dxt>b2lc_sensor_begin_count!cdecl"
 private foreign handler _sensor_end_count() returns CInt binds to "c:box2dxt>b2lc_sensor_end_count!cdecl"
-private foreign handler _sensor_begin_sensor(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_begin_sensor!cdecl"
-private foreign handler _sensor_begin_visitor(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_begin_visitor!cdecl"
-private foreign handler _sensor_end_sensor(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_end_sensor!cdecl"
-private foreign handler _sensor_end_visitor(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_end_visitor!cdecl"
+private foreign handler _sensor_begin_sensor(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_begin_sensor!cdecl"
+private foreign handler _sensor_begin_visitor(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_begin_visitor!cdecl"
+private foreign handler _sensor_end_sensor(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_end_sensor!cdecl"
+private foreign handler _sensor_end_visitor(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_sensor_end_visitor!cdecl"
 
 -- body move events
 private foreign handler _bodies_update(in pW as CInt) returns CInt binds to "c:box2dxt>b2lc_bodies_update!cdecl"
 private foreign handler _body_move_count() returns CInt binds to "c:box2dxt>b2lc_body_move_count!cdecl"
-private foreign handler _body_move_body(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_body_move_body!cdecl"
-private foreign handler _body_move_x(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_body_move_x!cdecl"
-private foreign handler _body_move_y(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_body_move_y!cdecl"
-private foreign handler _body_move_angle(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_body_move_angle!cdecl"
-private foreign handler _body_move_asleep(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_body_move_asleep!cdecl"
+private foreign handler _body_move_body(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_body_move_body!cdecl"
+private foreign handler _body_move_x(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_body_move_x!cdecl"
+private foreign handler _body_move_y(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_body_move_y!cdecl"
+private foreign handler _body_move_angle(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_body_move_angle!cdecl"
+private foreign handler _body_move_asleep(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_body_move_asleep!cdecl"
 
 -- world tuning / info / explode / profile / counters
 private foreign handler _world_gravity_x(in pW as CInt) returns CDouble binds to "c:box2dxt>b2lc_world_gravity_x!cdecl"
@@ -238,9 +238,9 @@ private foreign handler _aabb_lower_y() returns CDouble binds to "c:box2dxt>b2lc
 private foreign handler _aabb_upper_x() returns CDouble binds to "c:box2dxt>b2lc_aabb_upper_x!cdecl"
 private foreign handler _aabb_upper_y() returns CDouble binds to "c:box2dxt>b2lc_aabb_upper_y!cdecl"
 private foreign handler _body_shape_count(in pB as CInt) returns CInt binds to "c:box2dxt>b2lc_body_shape_count!cdecl"
-private foreign handler _body_shape_at(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_body_shape_at!cdecl"
+private foreign handler _body_shape_at(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_body_shape_at!cdecl"
 private foreign handler _body_joint_count(in pB as CInt) returns CInt binds to "c:box2dxt>b2lc_body_joint_count!cdecl"
-private foreign handler _body_joint_at(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_body_joint_at!cdecl"
+private foreign handler _body_joint_at(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_body_joint_at!cdecl"
 
 -- shape: type / material / filter / event flags / geometry / queries
 private foreign handler _shape_type(in pS as CInt) returns CInt binds to "c:box2dxt>b2lc_shape_type!cdecl"
@@ -278,8 +278,8 @@ private foreign handler _shape_segment_x2() returns CDouble binds to "c:box2dxt>
 private foreign handler _shape_segment_y2() returns CDouble binds to "c:box2dxt>b2lc_shape_segment_y2!cdecl"
 private foreign handler _shape_polygon_update(in pS as CInt) returns CInt binds to "c:box2dxt>b2lc_shape_polygon_update!cdecl"
 private foreign handler _shape_polygon_count() returns CInt binds to "c:box2dxt>b2lc_shape_polygon_count!cdecl"
-private foreign handler _shape_polygon_vx(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_shape_polygon_vx!cdecl"
-private foreign handler _shape_polygon_vy(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_shape_polygon_vy!cdecl"
+private foreign handler _shape_polygon_vx(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_shape_polygon_vx!cdecl"
+private foreign handler _shape_polygon_vy(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_shape_polygon_vy!cdecl"
 private foreign handler _shape_polygon_radius() returns CDouble binds to "c:box2dxt>b2lc_shape_polygon_radius!cdecl"
 private foreign handler _shape_set_circle(in pS as CInt, in pCx as CDouble, in pCy as CDouble, in pR as CDouble) returns nothing binds to "c:box2dxt>b2lc_shape_set_circle!cdecl"
 private foreign handler _shape_set_capsule(in pS as CInt, in pX1 as CDouble, in pY1 as CDouble, in pX2 as CDouble, in pY2 as CDouble, in pR as CDouble) returns nothing binds to "c:box2dxt>b2lc_shape_set_capsule!cdecl"
@@ -298,7 +298,7 @@ private foreign handler _shape_mass_data_update(in pS as CInt) returns nothing b
 private foreign handler _shape_sensor_capacity(in pS as CInt) returns CInt binds to "c:box2dxt>b2lc_shape_sensor_capacity!cdecl"
 private foreign handler _shape_sensor_overlaps_update(in pS as CInt) returns CInt binds to "c:box2dxt>b2lc_shape_sensor_overlaps_update!cdecl"
 private foreign handler _shape_sensor_overlap_count() returns CInt binds to "c:box2dxt>b2lc_shape_sensor_overlap_count!cdecl"
-private foreign handler _shape_sensor_overlap_at(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_shape_sensor_overlap_at!cdecl"
+private foreign handler _shape_sensor_overlap_at(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_shape_sensor_overlap_at!cdecl"
 
 -- chains
 private foreign handler _chain_begin() returns nothing binds to "c:box2dxt>b2lc_chain_begin!cdecl"
@@ -311,7 +311,7 @@ private foreign handler _chain_friction(in pC as CInt) returns CDouble binds to 
 private foreign handler _chain_set_restitution(in pC as CInt, in pR as CDouble) returns nothing binds to "c:box2dxt>b2lc_chain_set_restitution!cdecl"
 private foreign handler _chain_restitution(in pC as CInt) returns CDouble binds to "c:box2dxt>b2lc_chain_restitution!cdecl"
 private foreign handler _chain_segment_count(in pC as CInt) returns CInt binds to "c:box2dxt>b2lc_chain_segment_count!cdecl"
-private foreign handler _chain_segment_at(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_chain_segment_at!cdecl"
+private foreign handler _chain_segment_at(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_chain_segment_at!cdecl"
 
 -- joints: generic
 private foreign handler _joint_type(in pJ as CInt) returns CInt binds to "c:box2dxt>b2lc_joint_type!cdecl"
@@ -433,13 +433,13 @@ private foreign handler _query_overlap_shape(in pW as CInt, in pRadius as CDoubl
 private foreign handler _query_raycast_all(in pW as CInt, in pX1 as CDouble, in pY1 as CDouble, in pX2 as CDouble, in pY2 as CDouble) returns CInt binds to "c:box2dxt>b2lc_query_raycast_all!cdecl"
 private foreign handler _query_shapecast(in pW as CInt, in pRadius as CDouble, in pDx as CDouble, in pDy as CDouble) returns CInt binds to "c:box2dxt>b2lc_query_shapecast!cdecl"
 private foreign handler _query_count() returns CInt binds to "c:box2dxt>b2lc_query_count!cdecl"
-private foreign handler _query_body(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_query_body!cdecl"
-private foreign handler _query_shape(in pI as CInt) returns CInt binds to "c:box2dxt>b2lc_query_shape!cdecl"
-private foreign handler _query_x(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_x!cdecl"
-private foreign handler _query_y(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_y!cdecl"
-private foreign handler _query_normal_x(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_normal_x!cdecl"
-private foreign handler _query_normal_y(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_normal_y!cdecl"
-private foreign handler _query_fraction(in pI as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_fraction!cdecl"
+private foreign handler _query_body(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_query_body!cdecl"
+private foreign handler _query_shape(in pIdx as CInt) returns CInt binds to "c:box2dxt>b2lc_query_shape!cdecl"
+private foreign handler _query_x(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_x!cdecl"
+private foreign handler _query_y(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_y!cdecl"
+private foreign handler _query_normal_x(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_normal_x!cdecl"
+private foreign handler _query_normal_y(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_normal_y!cdecl"
+private foreign handler _query_fraction(in pIdx as CInt) returns CDouble binds to "c:box2dxt>b2lc_query_fraction!cdecl"
 
 -- ---- native loader assist (Linux) ----------------------------------
 -- The ONLY three bindings that do NOT target the box2dxt shim: they bind to
@@ -492,7 +492,7 @@ public handler b2LoadNativeLibHere() returns Integer
    variable tPath as String
    variable tLen as Integer
    variable tCut as Integer
-   variable i as Integer
+   variable tIdx as Integer
    variable tLib as String
    variable tHandle as optional Pointer
    unsafe
@@ -504,9 +504,9 @@ public handler b2LoadNativeLibHere() returns Integer
    put tExe into tPath
    put the number of chars in tPath into tLen
    put 0 into tCut
-   repeat with i from 1 up to tLen
-      if char i of tPath is "/" then
-         put i into tCut
+   repeat with tIdx from 1 up to tLen
+      if char tIdx of tPath is "/" then
+         put tIdx into tCut
       end if
    end repeat
    if tCut is 0 then

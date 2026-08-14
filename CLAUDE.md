@@ -1,6 +1,54 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working in the
+Box2Dxt member of the xtalk-suite monorepo (`box2dxt/`).
+
+> **Folded into the monorepo 2026-08-14.** Box2Dxt is the family's ANCESTOR -
+> the handle tables, the platform-id scheme, the packaged-extension install and
+> the exception-firewall discipline the suite members carry were born here -
+> and the fold brings it home. Copied verbatim (`git archive`, tracked files
+> only) from the standalone repository, which becomes a mirror; development
+> happens here now. What the fold changed, each per suite law:
+>
+> - `tools/check-livecodescript.py` was REPLACED with the suite's unified
+>   checker (this copy was the OLDEST surviving pre-unification lineage, 220
+>   lines against the union's 840) and is drift-gated + fixture-tested with
+>   the other eight copies. First contact found ~1550 violations: ~1520 were
+>   the pre-ASCII-rule character set (em dashes, ellipses, middots, and the
+>   UI glyph vocabulary - the contraption builder's tool legend is mnemonic
+>   ASCII now, and even had two tools sharing one glyph), and the rest were
+>   real: **29 `repeat with ... step` loops in the platformer** (OXT ignores
+>   the increment - the cxHexDecode lesson; every tile loop would have walked
+>   1px at a time, placing 64x the tiles), all rewritten to `repeat while` +
+>   explicit `add`; the `.lcb`'s 33 foreign-decl `pI` parameters (spells the
+>   reserved token `pi`; positional binds, so the rename is documentation);
+>   and one bare lowercase `i` local.
+> - `src/code/MANIFEST.sha256` now pins all five committed binaries (suite
+>   rule 5's integrity gate; this member never had one).
+> - The three stacks over the family's 720p budget were trimmed to fit
+>   (demo 660 and the gamekit spike 700 to 640; the contraption builder's
+>   kStackH 760 to 640 - all viewport-only, nothing was anchored below).
+> - `.github/workflows/native-box2dxt.yml` at the suite root runs the
+>   5-target native matrix (paths-scoped; artifacts, never releases or
+>   commits - the suite convention). The member's own build.yml stays for
+>   standalone work but is inert here. NOT yet done: box2dxt is not in
+>   release-binaries.yml's manual assembly matrix - add it there when the
+>   next release pass happens.
+> - The examples are registered EXEMPT in the suite UI-kit gate: they are
+>   games drawn by this member's own embedded b2k Kit (whose copies have
+>   their own sync gate, `tools/sync-embedded-kit.py`), not form UIs.
+>   **Phase-2 work, deliberately deferred:** suite-kit chrome for the game
+>   stacks, harness-scaffold adoption for `examples/box2dxt-selftest`, and
+>   folding that selftest into the suite harness as the ninth member.
+> - The `docs/holde-em/` spec moved UP to the suite's `docs/holde-em/`: it
+>   composes torrentxt + sodiumxt + box2dxt, which makes it a CROSS-MEMBER
+>   capstone design (Riptide's sibling), not a box2dxt document.
+>
+> The sweep + loop fixes touch nearly every script file, so the whole member
+> is **verified statically; needs an OXT re-pass** (its prior engine evidence
+> predates the fold). The library namespace stays `org.openxtalk.box2dxt` -
+> it predates the family's `org.openxtalk.library.*` convention and is
+> shipped; renaming would break every installed user for zero gain.
 
 ## What this is
 

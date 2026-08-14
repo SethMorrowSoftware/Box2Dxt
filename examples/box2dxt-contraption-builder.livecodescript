@@ -1,5 +1,5 @@
 -- #####################################################################
--- #  Box2Dxt  —  CONTRAPTION BUILDER  (Kit + builder GUI in one file) #
+-- #  Box2Dxt  -  CONTRAPTION BUILDER  (Kit + builder GUI in one file) #
 -- #                                                                   #
 -- #  An interactive sandbox. Drop parts (boxes, balls, capsules,      #
 -- #  polygons, imported images and static anchors), wire them up with #
@@ -25,17 +25,17 @@
 -- #####################################################################
 
 -- =====================================================================
--- EMBEDDED KIT  ·  auto-generated copy of src/box2dxt-kit.livecodescript
+-- EMBEDDED KIT  /  auto-generated copy of src/box2dxt-kit.livecodescript
 --
 -- This file is self-contained: paste the whole thing into one stack script
--- and it runs.  The Kit below is a GENERATED copy — do not edit it here.
+-- and it runs.  The Kit below is a GENERATED copy - do not edit it here.
 -- Edit the canonical Kit at src/box2dxt-kit.livecodescript, then run:
 --     python3 tools/sync-embedded-kit.py
 -- (CI checks it stays in sync via:  tools/sync-embedded-kit.py --check)
 -- =====================================================================
 -- >>> BEGIN EMBEDDED KIT >>>
 -- =====================================================================
--- box2dxt-kit.livecodescript   ·   "Box2Dxt Kit"  (b2k...)
+-- box2dxt-kit.livecodescript   /   "Box2Dxt Kit"  (b2k...)
 --
 -- A friendly, pure-xTalk toolkit over the box2dxt extension. You work in
 -- PIXELS, SCREEN coordinates and DEGREES; the kit converts to Box2D's
@@ -55,91 +55,91 @@
 --   on closeCard ; b2kStop ; end closeCard
 --
 -- =====================  CHEAT SHEET  ================================
--- WORLD   b2kSetup [gx,gy] · b2kQuickStart [gy] · b2kStart · b2kStop ·
---         b2kTeardown · b2kAddWalls · b2kWall x1,y1,x2,y2 · b2kClear ·
---         b2kPause · b2kResume · b2kIsRunning() · b2kKillFloor y
+-- WORLD   b2kSetup [gx,gy] / b2kQuickStart [gy] / b2kStart / b2kStop /
+--         b2kTeardown / b2kAddWalls / b2kWall x1,y1,x2,y2 / b2kClear /
+--         b2kPause / b2kResume / b2kIsRunning() / b2kKillFloor y
 --         (movers below y are removed; "b2kFell ctrl" precedes each)
--- CONFIG  b2kSetScale px · b2kSetOrigin x,y · b2kSetGravity gx,gy ·
---         b2kSetSubsteps n · b2kContactTarget obj · b2kFrameTarget obj ·
---         b2kEnableSleeping flag · b2kEnableContinuous flag
--- ATTACH  b2kAddBox ctrl[,dyn] · b2kAddBall ctrl[,dyn] · b2kAddCapsule ctrl[,dyn]
---         b2kAddPolygon ctrl[,dyn] · b2kAddStatic ctrl · b2kAddGround [screenY]
--- SPAWN   b2kSpawnBox x,y,w,h[,color] · b2kSpawnBall x,y,diam[,color] ·
+-- CONFIG  b2kSetScale px / b2kSetOrigin x,y / b2kSetGravity gx,gy /
+--         b2kSetSubsteps n / b2kContactTarget obj / b2kFrameTarget obj /
+--         b2kEnableSleeping flag / b2kEnableContinuous flag
+-- ATTACH  b2kAddBox ctrl[,dyn] / b2kAddBall ctrl[,dyn] / b2kAddCapsule ctrl[,dyn]
+--         b2kAddPolygon ctrl[,dyn] / b2kAddStatic ctrl / b2kAddGround [screenY]
+-- SPAWN   b2kSpawnBox x,y,w,h[,color] / b2kSpawnBall x,y,diam[,color] /
 --         b2kSpawnCapsule x,y,len,thick[,color]                       (-> control)
--- MATERIAL b2kSetBounce ctrl,0..1 · b2kSetFriction ctrl,0..1 · b2kSetDensity ctrl,d
--- BODY    b2kSetBullet ctrl,flag · b2kSetFixedRotation ctrl,flag ·
---         b2kSetGravityScale ctrl,s · b2kSetDamping ctrl,lin[,ang] · b2kWake ctrl ·
---         b2kSetType ctrl,name · b2kSetStatic/Dynamic/Kinematic ctrl ·
---         b2kEnable/Disable ctrl · b2kSetSleepEnabled ctrl,flag
--- ACT     b2kPush ctrl,dvx,dvy · b2kImpulse ctrl,ix,iy · b2kForce ctrl,fx,fy ·
---         b2kSetVelocity ctrl,vx,vy · b2kSpin ctrl,deg/s · b2kSpinBy ctrl,deg/s ·
---         b2kTorque ctrl,t · b2kAngularImpulse ctrl,imp · b2kMoveTo ctrl,x,y[,deg] ·
---         b2kExplode x,y[,radius][,power] · b2kRemove ctrl
--- GET     b2kBodyOf(ctrl) · b2kPosition(ctrl) · b2kWorldCenter(ctrl) · b2kVelocity(ctrl) ·
---         b2kSpeed(ctrl) · b2kAngle(ctrl) · b2kMass(ctrl) · b2kBodyType(ctrl) ·
---         b2kGravityScale(ctrl) · b2kDamping(ctrl) · b2kIsAwake(ctrl) · b2kControlAt(x,y) ·
---         b2kControlContains(ctrl,x,y) · b2kBodyCount() · b2kAwakeCount() ·
---         b2kToWorldX/Y(px) · b2kToScreenX/Y(m) ·
---         b2kRayHit(x1,y1,x2,y2) + b2kRayHitX/Y() · b2kRayHitNormalX/Y() · b2kRayDist()
--- JOINTS  b2kHinge ctrlA,ctrlB,x,y · b2kWeld ctrlA,ctrlB · b2kRope ctrlA,ctrlB[,len]
---         b2kSlider ctrlA,ctrlB,axisDeg · b2kWheel chassis,wheel,x,y[,axisDeg]
---         b2kMotor j,degPerSec[,maxTorque] · b2kSliderMotor j,pxPerSec[,maxForce] ·
---         b2kWheelMotor j,degPerSec[,maxTorque] · b2kRemoveJoint j
--- JOINT+  b2kHingeLimit j,loDeg,hiDeg · b2kHingeAngle(j) · b2kSliderLimit j,loPx,hiPx ·
---         b2kSliderPos(j) · b2kRopeRange j,minPx,maxPx · b2kRopeLength(j) ·
---         b2kSpring j,hz[,damp] · b2kWeldSpring j,hz[,damp] · b2kWheelSpring j,hz[,damp]
--- DRAG    b2kGrab(x,y) -> control · b2kRelease
--- INPUT   b2kInputOn/Off · b2kKeyIsDown(k) · b2kKeyPressed/Released(k) ·
---         b2kInputInject keys / b2kInputInjectOff (scripted keys: tests/replays) ·
---         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
---         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
+-- MATERIAL b2kSetBounce ctrl,0..1 / b2kSetFriction ctrl,0..1 / b2kSetDensity ctrl,d
+-- BODY    b2kSetBullet ctrl,flag / b2kSetFixedRotation ctrl,flag /
+--         b2kSetGravityScale ctrl,s / b2kSetDamping ctrl,lin[,ang] / b2kWake ctrl /
+--         b2kSetType ctrl,name / b2kSetStatic/Dynamic/Kinematic ctrl /
+--         b2kEnable/Disable ctrl / b2kSetSleepEnabled ctrl,flag
+-- ACT     b2kPush ctrl,dvx,dvy / b2kImpulse ctrl,ix,iy / b2kForce ctrl,fx,fy /
+--         b2kSetVelocity ctrl,vx,vy / b2kSpin ctrl,deg/s / b2kSpinBy ctrl,deg/s /
+--         b2kTorque ctrl,t / b2kAngularImpulse ctrl,imp / b2kMoveTo ctrl,x,y[,deg] /
+--         b2kExplode x,y[,radius][,power] / b2kRemove ctrl
+-- GET     b2kBodyOf(ctrl) / b2kPosition(ctrl) / b2kWorldCenter(ctrl) / b2kVelocity(ctrl) /
+--         b2kSpeed(ctrl) / b2kAngle(ctrl) / b2kMass(ctrl) / b2kBodyType(ctrl) /
+--         b2kGravityScale(ctrl) / b2kDamping(ctrl) / b2kIsAwake(ctrl) / b2kControlAt(x,y) /
+--         b2kControlContains(ctrl,x,y) / b2kBodyCount() / b2kAwakeCount() /
+--         b2kToWorldX/Y(px) / b2kToScreenX/Y(m) /
+--         b2kRayHit(x1,y1,x2,y2) + b2kRayHitX/Y() / b2kRayHitNormalX/Y() / b2kRayDist()
+-- JOINTS  b2kHinge ctrlA,ctrlB,x,y / b2kWeld ctrlA,ctrlB / b2kRope ctrlA,ctrlB[,len]
+--         b2kSlider ctrlA,ctrlB,axisDeg / b2kWheel chassis,wheel,x,y[,axisDeg]
+--         b2kMotor j,degPerSec[,maxTorque] / b2kSliderMotor j,pxPerSec[,maxForce] /
+--         b2kWheelMotor j,degPerSec[,maxTorque] / b2kRemoveJoint j
+-- JOINT+  b2kHingeLimit j,loDeg,hiDeg / b2kHingeAngle(j) / b2kSliderLimit j,loPx,hiPx /
+--         b2kSliderPos(j) / b2kRopeRange j,minPx,maxPx / b2kRopeLength(j) /
+--         b2kSpring j,hz[,damp] / b2kWeldSpring j,hz[,damp] / b2kWheelSpring j,hz[,damp]
+-- DRAG    b2kGrab(x,y) -> control / b2kRelease
+-- INPUT   b2kInputOn/Off / b2kKeyIsDown(k) / b2kKeyPressed/Released(k) /
+--         b2kInputInject keys / b2kInputInjectOff (scripted keys: tests/replays) /
+--         b2kKeysHeld() / b2kBindAction name,keys / b2kActionIsDown/Pressed/
+--         Released(name) / b2kBindAxis name,negKeys,posKeys / b2kAxis(name) /
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
--- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] · b2kSheetLoadAtlas name,png[,xml] ·
---         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] · b2kSheetFrames(name) ·
---         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) ·
---         b2kSheetFrameNames(name) · b2kSheetHasFrame(name,frame) ·
---         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
---         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
---         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
---         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
---         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
---         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
--- PLAYER  b2kPlayerMake x,y,w,h[,sheet] · b2kPlayerAttach ctrl ·
---         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt,swim] ·
---         b2kPlayerSet key,value · b2kPlayerGet(key) · b2kPlayerOnGround() ·
---         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt|swim) ·
---         b2kPlayerFacing() · b2kPlayerJump [speed] · b2kPlayerControl flag ·
---         b2kPlayerAddLadder x1,y1,x2,y2 · b2kPlayerAddWater x1,y1,x2,y2 ·
---         b2kPlayerHurt [fromX] ·
---         b2kPlayerHurtIs() (true through knockback + mercy window) ·
---         b2kPlayer() · b2kPlayerSprite() · b2kPlayerRemove
+-- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] / b2kSheetLoadAtlas name,png[,xml] /
+--         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] / b2kSheetFrames(name) /
+--         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) /
+--         b2kSheetFrameNames(name) / b2kSheetHasFrame(name,frame) /
+--         b2kSheetScale name,factor / b2kSheetFrameSize(name,frame) /
+--         b2kAnimDef sheet,anim,frames,fps[,loop] / b2kSpriteNew sheet[,frame,x,y] /
+--         b2kSpriteFromGIF path[,x,y] / b2kSpritePlay spr,anim[,restart] /
+--         b2kSpriteStop spr / b2kSpriteSetFrame spr,f / b2kSpriteFlipH spr,flag /
+--         b2kSpriteFPS spr,fps / b2kSpriteOnFinish spr,msg /
+--         b2kSpriteBind spr,bodyCtrl[,dx,dy] / b2kSpriteRemove spr
+-- PLAYER  b2kPlayerMake x,y,w,h[,sheet] / b2kPlayerAttach ctrl /
+--         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt,swim] /
+--         b2kPlayerSet key,value / b2kPlayerGet(key) / b2kPlayerOnGround() /
+--         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt|swim) /
+--         b2kPlayerFacing() / b2kPlayerJump [speed] / b2kPlayerControl flag /
+--         b2kPlayerAddLadder x1,y1,x2,y2 / b2kPlayerAddWater x1,y1,x2,y2 /
+--         b2kPlayerHurt [fromX] /
+--         b2kPlayerHurtIs() (true through knockback + mercy window) /
+--         b2kPlayer() / b2kPlayerSprite() / b2kPlayerRemove
 --         (drives axes "moveX"/"moveY" + action "jump"; rebind to remap.
---         DOWN ducks · DOWN+JUMP on a one-way chain drops through ·
---         UP/DOWN in a ladder zone climbs · JUMP exits a climb ·
+--         DOWN ducks / DOWN+JUMP on a one-way chain drops through /
+--         UP/DOWN in a ladder zone climbs / JUMP exits a climb /
 --         in a water zone UP/DOWN swim, JUMP strokes (repeatable))
--- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
---         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
---         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
+-- CAMERA  b2kCamOn [rect] / b2kCamOff / b2kCamFollow ctrl[,lerp] / b2kCamUnfollow /
+--         b2kCamDeadzone w,h / b2kCamBounds x1,y1,x2,y2 / b2kCamGoto x,y /
+--         b2kCamPos() / b2kCamShake amp,ms / b2kCamMouseX/Y() / b2kCamGroup() /
 --         b2kCamAdopt ctrl   (world px == control locs; spawns auto-join the view)
--- AUDIO   b2kSoundLoad name,path · b2kToneMake name,freqs,msPerNote[,vol,shape] ·
---         b2kSound name · b2kSoundLoop name · b2kSoundStop · b2kSoundMute flag ·
---         b2kSoundMuted() · b2kSoundVolume pct · b2kSoundIsLoaded(name) ·
+-- AUDIO   b2kSoundLoad name,path / b2kToneMake name,freqs,msPerNote[,vol,shape] /
+--         b2kSound name / b2kSoundLoop name / b2kSoundStop / b2kSoundMute flag /
+--         b2kSoundMuted() / b2kSoundVolume pct / b2kSoundIsLoaded(name) /
 --         b2kSoundStatus()  (audioClips: one at a time; b2kToneMake = no asset files)
--- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
---         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
---         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
--- SENSOR  b2kAddSensor ctrl[,shape] · on b2kSensorEnter pSensor,pVisitor ·
---         on b2kSensorExit pSensor,pVisitor · b2kSensorCount()+EnterSensor/Visitor(i)
--- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
---         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
--- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen
+-- EVENTS  on b2kContact pCtrlA,pCtrlB / on b2kEndContact pCtrlA,pCtrlB
+--         (long ids; empty for walls/ground) / on b2kFrame  (once per frame)
+--         poll instead: b2kContactCount()+b2kContactA/B(i) / b2kEndContactCount()+...
+-- SENSOR  b2kAddSensor ctrl[,shape] / on b2kSensorEnter pSensor,pVisitor /
+--         on b2kSensorExit pSensor,pVisitor / b2kSensorCount()+EnterSensor/Visitor(i)
+-- FILTER  b2kDefineLayer name / b2kSetCategory ctrl,layers / b2kSetMask ctrl,layers /
+--         b2kSetCollisionGroup ctrl,n / b2kNoCollide ctrlA,ctrlB
+-- TERRAIN b2kChain pointList[,loop] / b2kSmoothGround pointList  (>=4 screen
 --         points; chains carry the reserved "oneway" layer, bit 2^31)
--- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapMoving x1,y1,x2,y2 (presence:
---         statics filtered out) · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
--- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
--- TUNE    b2kSetRestitutionThreshold px/s · b2kSetContactTuning hz,damp,pushPx ·
---         b2kSetJointTuning hz,damp · b2kSetMaxSpeed px/s · b2kEnableWarmStarting f ·
---         b2kProfile() · b2kAwakeBodyCount()
+-- QUERY+  b2kOverlap x1,y1,x2,y2 / b2kOverlapMoving x1,y1,x2,y2 (presence:
+--         statics filtered out) / b2kOverlapCircle x,y,r / b2kRayHitAll x1,y1,x2,y2
+-- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] / b2kExplode (native blast)
+-- TUNE    b2kSetRestitutionThreshold px/s / b2kSetContactTuning hz,damp,pushPx /
+--         b2kSetJointTuning hz,damp / b2kSetMaxSpeed px/s / b2kEnableWarmStarting f /
+--         b2kProfile() / b2kAwakeBodyCount()
 --
 -- Tips: pass controls by reference (the long id of ... is safest). Keep moving
 -- objects a sensible on-screen size (default scale 40 px/m, so ~4-400 px).
@@ -486,7 +486,7 @@ command b2kAddGround pScreenY
    get b2AddSegment(tBody, -500, 0, 500, 0, 0.7, 0.1)
 end b2kAddGround
 
--- A static collision segment between two SCREEN points — custom walls, ramps,
+-- A static collision segment between two SCREEN points - custom walls, ramps,
 -- ledges and floors. Like the card-edge walls it is invisible (draw your own
 -- graphic to match) and lives for the world's lifetime; it isn't tracked as a
 -- body, so b2kClear leaves it in place.
@@ -1288,7 +1288,7 @@ end b2kBodyOf
 
 -- A body's position in SCREEN pixels as "x,y" (the position partner of
 -- b2kVelocity). Controls already follow their body, but this reads the exact,
--- sub-pixel centre — handy for aiming, distance checks, or mixing with b2…
+-- sub-pixel centre - handy for aiming, distance checks, or mixing with b2...
 function b2kPosition pControl
    local b
    put sBody[the long id of pControl] into b
@@ -1410,7 +1410,7 @@ function b2kControlAt pScreenX, pScreenY
    return sCtrl[b2BodyAtPoint(sWorld, b2kToWorldX(pScreenX), b2kToWorldY(pScreenY))]
 end b2kControlAt
 
--- True if SCREEN point (x,y) is inside this control's actual collision shape —
+-- True if SCREEN point (x,y) is inside this control's actual collision shape -
 -- rotation- and shape-aware, unlike a bounding-box test. b2kControlAt searches
 -- every body; this tests one control you already have (e.g. a precise click hit).
 function b2kControlContains pControl, pScreenX, pScreenY
@@ -1695,7 +1695,7 @@ command b2kWheelSpring pJoint, pHertz, pDamping
    b2WheelEnableSpring pJoint, true, pHertz, pDamping
 end b2kWheelSpring
 
--- OFF switches: the b2k… joint wrappers above only ever turn a feature ON, so
+-- OFF switches: the b2k... joint wrappers above only ever turn a feature ON, so
 -- these let callers disable a motor or limit again (free swing / unbounded slide).
 command b2kMotorOff pJoint
    if pJoint is not empty and pJoint > 0 then b2RevoluteEnableMotor pJoint, false, 0, 0
@@ -1769,7 +1769,7 @@ end b2kAddSensor
 
 -- Flip a control's collision between solid and SENSOR (a non-solid trigger that
 -- reports overlaps but never blocks). The flag lives on the shape, so rebuild the
--- shape afterwards with b2kReshape — it re-applies the sensor state from here.
+-- shape afterwards with b2kReshape - it re-applies the sensor state from here.
 command b2kSetSensor pControl, pFlag
    put (pFlag is true) into sSensor[the long id of pControl]
 end b2kSetSensor
@@ -1909,7 +1909,7 @@ command b2kSmoothGround pPoints
 end b2kSmoothGround
 
 -- Attach a smooth static chain to a CONTROL, from a list of SCREEN points
--- ("x,y" per line) — the control's own outline. Unlike b2kChain (which makes an
+-- ("x,y" per line) - the control's own outline. Unlike b2kChain (which makes an
 -- untracked world body), this registers the body against the control like
 -- b2kAddBox/Ball/Polygon, so it selects (b2kControlAt), drags (b2kMoveTo) and
 -- removes (b2kRemove) as a normal static part. The points are taken relative to
@@ -2032,7 +2032,7 @@ command b2kSetJointTuning pHertz, pDamping
    if sWorld is not empty then b2SetJointTuning sWorld, pHertz, pDamping
 end b2kSetJointTuning
 
--- Clamp how fast any body can move (px/sec) — stops runaway speeds.
+-- Clamp how fast any body can move (px/sec) - stops runaway speeds.
 command b2kSetMaxSpeed pPxPerSec
    if sWorld is not empty then b2SetMaximumLinearSpeed sWorld, pPxPerSec / sScale
 end b2kSetMaxSpeed
@@ -5199,7 +5199,7 @@ end b2kStepOnce
 -- draw throws. This is the "the loop is stopped, redraw by hand" entry point
 -- (editors and build modes call it after spawning or moving things), so it must
 -- FULL-SCAN: the move-event fast path only reports bodies a b2Step moved, and a
--- stopped world steps never — relying on it here would draw nothing at all.
+-- stopped world steps never - relying on it here would draw nothing at all.
 -- The running loop instead holds one lock across the whole frame and calls the
 -- lock-free, move-event-driven b2kSyncBodies directly.
 command b2kSync
@@ -5507,22 +5507,22 @@ end b2kDispatchSensors
 -- <<< END EMBEDDED KIT <<<
 
 -- =====================================================================
--- CONTRAPTION BUILDER  ·  built on the Kit above (b2k...)
+-- CONTRAPTION BUILDER  /  built on the Kit above (b2k...)
 --
 -- A free-form construction GUI: place parts, connect them with joints,
 -- motorise the joints, then flip Build -> Run to watch it go. Every line
 -- below only ever calls the friendly b2k... Kit, in screen pixels.
 --
 -- WORKFLOW
---   · BUILD mode (the loop is stopped, so nothing falls): click empty
+--   / BUILD mode (the loop is stopped, so nothing falls): click empty
 --     canvas with a shape tool to drop a part; drag parts to arrange them;
 --     the Delete tool removes a part and its joints.
---   · Pick a joint tool, then click part A and part B to connect them.
+--   / Pick a joint tool, then click part A and part B to connect them.
 --     A Hinge pinned to an Anchor (or empty space = the world) makes the
 --     best motor mount. Overlapping parts connect fine.
---   · Motor drives new Hinge / Wheel joints; Bouncy makes new parts springy.
---   · RUN mode: gravity + motors run; drag any body with the mouse.
---   · Save / Load store and restore a whole contraption as text.
+--   / Motor drives new Hinge / Wheel joints; Bouncy makes new parts springy.
+--   / RUN mode: gravity + motors run; drag any body with the mouse.
+--   / Save / Load store and restore a whole contraption as text.
 --
 -- NAMING: p* params, t* locals, g* script-locals, k* constants, u* custom
 -- properties. kPI is already defined by the embedded Kit above (do not
@@ -5556,7 +5556,7 @@ local gFrames, gFpsTime, gFps, gHudTime   -- gHudTime throttles the live HUD/tel
 -- gKindList[kind] holds a CR-delimited control list per special kind.
 local gKindList
 local gPlateLoad, gPlateState
-local gSensorCount      -- per-sensor count of bodies currently inside (fires on 0→1)
+local gSensorCount      -- per-sensor count of bodies currently inside (fires on 0->1)
 local gRingN, gRingX, gRingY, gRingF
 local gDynParts, gDynDirty
 -- selection / inspector / onboarding / stress-test bookkeeping
@@ -5567,7 +5567,7 @@ local gInspTab                         -- active inspector tab: shape | physics 
 local gInspectorMode                   -- "simple" (hides expert-only rows) | "advanced"; empty == simple
 local gGravityMode                     -- world gravity preset: normal|low|zero|reverse|sideways
 local gWorldFeel                       -- world-tuning preset: default|bouncy|floaty|snappy
-local gCCD, gSleepOn, gWarmStart, gSubsteps   -- advanced world solver toggles (the "World · Advanced" panel)
+local gCCD, gSleepOn, gWarmStart, gSubsteps   -- advanced world solver toggles (the "World / Advanced" panel)
 local gPreRun                          -- snapshot of the build, taken when Run starts
 local gPalOpen                         -- CR-list of palette section titles currently expanded
 
@@ -5592,7 +5592,7 @@ constant kServoForce = 3000, kServoTorque = 2500   -- how hard a Servo joint hol
 
 -- Layout, in screen pixels. Derived edges (canvas L/R/T/B) are computed from the
 -- card size in prepArena/buildUI, because LiveCode constants cannot be expressions.
-constant kStackW = 1180, kStackH = 760
+constant kStackW = 1180, kStackH = 640
 constant kTopBarH = 54, kAccentH = 3
 constant kPaletteW = 196, kInspectorW = 248, kStatusH = 26
 constant kCanvasInset = 2, kGroundBarH = 22
@@ -5612,7 +5612,7 @@ constant kColPaletteBg = "26,28,35", kColBtnIdle = "44,48,58", kColBtnIdleText =
 constant kColBtnHover = "58,64,78", kColBtnText = "255,255,255"
 constant kColAccentGreen = "72,190,130", kColAccentAmber = "232,150,72", kColToggleBlue = "64,132,232"
 constant kColDanger = "214,92,92", kColHeaderText = "150,156,172", kColRule = "52,57,70"
--- Former magic numbers: starting motor speed (°/s) and world gravity (downward).
+-- Former magic numbers: starting motor speed ( deg/s) and world gravity (downward).
 constant kDefaultMotorSpeed = 120, kDefaultGravity = -10
 
 -- Materials, motors, feedback timing, and default part sizes (were magic numbers).
@@ -5639,7 +5639,7 @@ constant kLaserCool = 250  -- ms without a hit after which a part's accrued burn
 constant kContainMargin = 90   -- how far past the arena a body may stray before the containment net pulls it back
 constant kStressBatch = 50
 constant kSizeMin = 16, kSizeMax = 240
--- Terrain (static scenery) can be larger than parts — wide ledges, long ramps.
+-- Terrain (static scenery) can be larger than parts - wide ledges, long ramps.
 constant kTerrainMin = 20, kTerrainMax = 600
 -- inspector: rows shown per tab, dimension nudge (px), joint click radius (px)
 constant kPropRows = 10, kDimStep = 8, kJointHitR = 16
@@ -5653,7 +5653,7 @@ constant kEntryKeys = "width,height,length,thickness,diameter,size,angle,bounce,
 -- =====================================================================
 -- Build once: startCB generates the chrome on first run and stamps a version on the
 -- stack, so save the stack afterwards. On later opens chromeBuilt() is true, so the
--- ~200-control UI is NOT rebuilt — only the native physics world is recreated (it
+-- ~200-control UI is NOT rebuilt - only the native physics world is recreated (it
 -- can't be serialised). Run rebuildCB to regenerate the chrome after editing the
 -- builder; bumping kUIVersion makes any older saved stack rebuild itself once.
 on preOpenCard
@@ -5665,7 +5665,7 @@ on closeCard
 end closeCard
 
 on startCB
-   set the title of this stack to "Box2Dxt — Contraption Builder"
+   set the title of this stack to "Box2Dxt - Contraption Builder"
    set the decorations of this stack to "default"
    set the resizable of this stack to false
    set the width of this stack to kStackW
@@ -5722,8 +5722,8 @@ on startCB
          put "reports version " & tVer & ", but this build needs version " & kReqABI & \
                ". Rebuild it from the current source" into tWhy
       end if
-      if there is a field "ui_status" then put "Box2Dxt native library unavailable — physics is disabled. See the dialog." into field "ui_status"
-      answer "Box2Dxt — native library unavailable" & return & return & \
+      if there is a field "ui_status" then put "Box2Dxt native library unavailable - physics is disabled. See the dialog." into field "ui_status"
+      answer "Box2Dxt - native library unavailable" & return & return & \
             "The box2dxt extension is loaded, but its native library" && tWhy & "." & return & return & \
             "Put the matching library where OXT's loader looks, named WITHOUT a 'lib' prefix:" & return & \
             "    Linux:    box2dxt.so   (copy to /usr/lib, then run: sudo ldconfig)" & return & \
@@ -5757,14 +5757,14 @@ on stopCB
    clearSceneControls
 end stopCB
 
--- Force a one-time chrome rebuild — after editing the builder, or to repair the UI.
+-- Force a one-time chrome rebuild - after editing the builder, or to repair the UI.
 on rebuildCB
    set the uUIVersion of this stack to empty
    startCB
 end rebuildCB
 
 -- Draw every part + joint once. Build mode stops the loop (so nothing falls),
--- which also stops the Kit's own redraw — so we sync by hand after each edit.
+-- which also stops the Kit's own redraw - so we sync by hand after each edit.
 on renderBuild
    if b2kWorld() is empty then exit renderBuild
    lock screen
@@ -5846,7 +5846,7 @@ end prepArena
 -- =====================================================================
 -- The chrome is generated once and saved with the stack; chromeBuilt reports whether
 -- the persisted UI is present and current, so startCB can skip the rebuild on reopen.
--- (A version mismatch — e.g. after the builder is updated — rebuilds it once.)
+-- (A version mismatch - e.g. after the builder is updated - rebuilds it once.)
 function chromeBuilt
    return (there is a group "ui_palettescroll") and (the uUIVersion of this stack is kUIVersion)
 end chromeBuilt
@@ -5874,7 +5874,7 @@ on makeTopBar
    makeBar "ui_header", 0, 0, tWide, kTopBarH, "30,33,42"
    makeBar "ui_accent", 0, kTopBarH, tWide, kTopBarH + kAccentH, kColAccentGreen
    makeLabel "ui_title", 18, 7, 280, 33, "Box2Dxt", 22, "236,238,245", true
-   makeLabel "ui_sub", 20, 32, 560, 50, "Contraption Builder — build a machine, then press Run to bring it to life", 11, "150,154,166", false
+   makeLabel "ui_sub", 20, 32, 560, 50, "Contraption Builder - build a machine, then press Run to bring it to life", 11, "150,154,166", false
    put "mode,play,reset,clear,save,load,worldadv,images,recipes,info" into tIds
    put "Run,Play,Reset,Clear,Save,Load,World,Images,Recipes,?" into tLbls
    put "84,58,58,58,58,58,58,66,78,30" into tWidths
@@ -5892,7 +5892,7 @@ on makeTopBar
 end makeTopBar
 
 -- Left palette: six colour-coded categories (TOOLS, SHAPES, SPECIAL, TERRAIN,
--- VEHICLES, JOINTS) as a single-open accordion — opening one collapses the others,
+-- VEHICLES, JOINTS) as a single-open accordion - opening one collapses the others,
 -- so the whole toolbox fits the window without a scrollbar. Drag/Delete/Duplicate/
 -- Multiply live under TOOLS; SHAPES holds only the parts you actually drop.
 on makePalette
@@ -5992,13 +5992,13 @@ function makeToolSection pTitle, pIds, pLabels, pKind, pStartY
    return tY + kPalSectionGap
 end makeToolSection
 
--- ▾ when a section is expanded, ▸ when collapsed (drives the header label).
+-- v when a section is expanded, > when collapsed (drives the header label).
 function chevronGlyph pTitle
-   if pTitle is among the lines of gPalOpen then return "▾"
-   return "▸"
+   if pTitle is among the lines of gPalOpen then return "v"
+   return ">"
 end chevronGlyph
 
--- Title → its tool ids / kind. No new data: routes to the existing constant lists.
+-- Title -> its tool ids / kind. No new data: routes to the existing constant lists.
 function sectionIds pTitle
    switch pTitle
       case "TOOLS"
@@ -6023,7 +6023,7 @@ function sectionKind pTitle
 end sectionKind
 
 -- Each category owns an accent colour. It fills the header when the section is open,
--- tints the header title when collapsed, and lights up the selected tool inside it —
+-- tints the header title when collapsed, and lights up the selected tool inside it -
 -- so the palette reads as distinct, colour-coded groups (white text stays legible on
 -- every one of these).
 function categoryColor pTitle
@@ -6048,7 +6048,7 @@ end categoryColor
 -- title); the open category reveals its rule + glyph gutters + tool buttons, while
 -- collapsed categories hide their rows and park them at the top of the content. With
 -- one category open at a time the whole toolbox fits the panel, so there is no native
--- scrollbar to flicker or resize — the viewport rect is re-asserted here each time.
+-- scrollbar to flicker or resize - the viewport rect is re-asserted here each time.
 on layoutPalette
    if there is not a group "ui_palettescroll" then exit layoutPalette
    local tY, tTitle, tIds, tPrefix, tId, tBtn, tGlyph, tOpen, tRight, tGut, tPark, tHdr
@@ -6119,7 +6119,7 @@ on layoutPalette
 end layoutPalette
 
 -- Single-open accordion: opening a category collapses the others, so the toolbox
--- always fits without a scrollbar. Pure chrome — tool selection and the HUD are left
+-- always fits without a scrollbar. Pure chrome - tool selection and the HUD are left
 -- untouched. gPalOpen holds at most one category title (empty = all collapsed).
 on togglePaletteSection pTitle
    if pTitle is empty then exit togglePaletteSection
@@ -6156,7 +6156,7 @@ on makeInspector
    put tTop + 186 into tRy
    repeat with tI = 1 to kPropRows
       makeField ("ui_prop_lbl_" & tI), tL + 12, tRy + 3, tWide - 92, tRy + 25, 11, "232,236,246"
-      makePropBtn ("prop_dec_" & tI), "−", tWide - 84, tRy, 32, 26
+      makePropBtn ("prop_dec_" & tI), "-", tWide - 84, tRy, 32, 26
       makePropBtn ("prop_inc_" & tI), "+", tWide - 44, tRy, 32, 26
       add 28 to tRy
    end repeat
@@ -6169,7 +6169,7 @@ on makeInspector
    makeAction "bouncy", "Bouncy", tL + 92, tRy, 80, 26
    add 32 to tRy
    makeLabel "ui_lbl_speed", tL + 12, tRy + 2, tWide - 92, tRy + 22, "Motor speed", 11, "168,172,184", false
-   makeAction "spddn", "−", tWide - 84, tRy, 32, 26
+   makeAction "spddn", "-", tWide - 84, tRy, 32, 26
    makeAction "spdup", "+", tWide - 44, tRy, 32, 26
    add 34 to tRy
    makeAction "gravity", "Gravity: Normal", tL + 12, tRy, kInspectorW - 24, 26
@@ -6193,13 +6193,13 @@ on makePropBtn pId, pLabel, pX, pY, pW, pH
 end makePropBtn
 
 on refreshSpeedLabel
-   if there is a field "ui_lbl_speed" then put "Motor speed: " & gMotorSpeed & "°/s" into field "ui_lbl_speed"
+   if there is a field "ui_lbl_speed" then put "Motor speed: " & gMotorSpeed & " deg/s" into field "ui_lbl_speed"
 end refreshSpeedLabel
 
 -- Show (or hide) the hint/preview line of the settings block. The field shares
 -- space with the settings rows (both start at the block's top), so when rows
 -- are visible the caller passes their count and the field is re-parked just
--- BELOW the last row — never drawn over the rows, which is exactly how the
+-- BELOW the last row - never drawn over the rows, which is exactly how the
 -- "Simple mode hides..." notice and the special-part previews used to end up
 -- overlapping the settings. If the rows leave no room, the text is dropped.
 on setSettingsHint pText, pBelowRows
@@ -6234,7 +6234,7 @@ on makeAction pId, pLabel, pX, pY, pW, pH
 end makeAction
 
 -- Delete the chrome. Collect first, then delete, and only touch *top-level*
--- ui_ controls — deleting the palette group cascades to its grouped buttons.
+-- ui_ controls - deleting the palette group cascades to its grouped buttons.
 on clearUI
    local tI, tCtrl, tKill
    put empty into tKill
@@ -6387,10 +6387,10 @@ on highlightActions
    -- subtitle while building; amber accent + a "running" subtitle while simulating.
    if gMode is "run" then
       put "232,150,60" into tAccent
-      put "RUNNING — drag parts to play; press Build or Reset to edit" into tSub
+      put "RUNNING - drag parts to play; press Build or Reset to edit" into tSub
    else
       put kColAccentGreen into tAccent
-      put "Contraption Builder — build a machine, then press Run to bring it to life" into tSub
+      put "Contraption Builder - build a machine, then press Run to bring it to life" into tSub
    end if
    if there is a graphic "ui_accent" then set the backgroundColor of graphic "ui_accent" to tAccent
    if there is a field "ui_sub" then set the text of field "ui_sub" to tSub
@@ -6586,7 +6586,7 @@ on clampPartToArena pCtrl
 end clampPartToArena
 
 -- The engine sends mouseRelease (not mouseUp) when the pointer is let go over a
--- different control than the one that got mouseDown — e.g. dragging a part toward
+-- different control than the one that got mouseDown - e.g. dragging a part toward
 -- the right edge and releasing over the inspector. Route it through the same
 -- endDrag so the move/draw is never lost.
 on mouseRelease
@@ -6620,7 +6620,7 @@ on deleteSelection
       deletePart gSelPart
       renderBuild
    else
-      put "Nothing selected — click a part (or a joint marker) first." into gStatus
+      put "Nothing selected - click a part (or a joint marker) first." into gStatus
    end if
    updateHud
 end deleteSelection
@@ -6760,7 +6760,7 @@ on handleUiClick
       resetPend
       deselectPart
       deselectJoint
-      put niceName(gJointTool) & " — click part A, then part B." into gStatus
+      put niceName(gJointTool) & " - click part A, then part B." into gStatus
       showInspectorForTool
    else if "ui_act_" is in tName then
       put the uActId of the target into tId
@@ -6814,7 +6814,7 @@ on handleAction pId
          break
       case "motor"
          put not gMotorOn into gMotorOn
-         if gMotorOn then put "Motor ON for new Hinge/Wheel joints (" & gMotorSpeed & "°/s)." into gStatus
+         if gMotorOn then put "Motor ON for new Hinge/Wheel joints (" & gMotorSpeed & " deg/s)." into gStatus
          else put "Motor OFF." into gStatus
          break
       case "bouncy"
@@ -6824,12 +6824,12 @@ on handleAction pId
          break
       case "spddn"
          put max(kMotorMin, gMotorSpeed - 30) into gMotorSpeed
-         put "Motor speed: " & gMotorSpeed & "°/s." into gStatus
+         put "Motor speed: " & gMotorSpeed & " deg/s." into gStatus
          refreshSpeedLabel
          break
       case "spdup"
          put min(kMotorMax, gMotorSpeed + 30) into gMotorSpeed
-         put "Motor speed: " & gMotorSpeed & "°/s." into gStatus
+         put "Motor speed: " & gMotorSpeed & " deg/s." into gStatus
          refreshSpeedLabel
          break
       case "gravity"
@@ -6978,10 +6978,10 @@ on toggleMode
       armThrusters
       b2kStart                      -- fresh loop: gravity, motors, mouse drag
       applyWorldFeel                -- re-apply the world-tuning preset to the live world
-      applyWorldOptions             -- and the advanced solver toggles (CCD, sleeping, substeps…)
+      applyWorldOptions             -- and the advanced solver toggles (CCD, sleeping, substeps...)
       armMotors                     -- re-establish each joint's designed motor state
       armLaunches                   -- fire each part's initial push/spin
-      put "Run — gravity & motors live. Drag bodies; Shift-click to kick." into gStatus
+      put "Run - gravity & motors live. Drag bodies; Shift-click to kick." into gStatus
    else
       put "build" into gMode
       put empty into gFps
@@ -6994,7 +6994,7 @@ on toggleMode
          if there is a button "ui_act_play" then set the label of button "ui_act_play" to "Play"
       end if
       renderBuild
-      put "Build mode — arrange parts and connect joints, then press Run." into gStatus
+      put "Build mode - arrange parts and connect joints, then press Run." into gStatus
    end if
    highlightAll
    refreshPauseLabel
@@ -7199,7 +7199,7 @@ end terrainColor
 
 -- Screen-space points for a terrain outline: the canonical shape scaled to
 -- pW x pH with its bounding box centred on (pCx,pCy), optionally mirrored
--- left↔right (pFlip, for ramps facing the other way), then rotated pAngleDeg
+-- left<->right (pFlip, for ramps facing the other way), then rotated pAngleDeg
 -- about the centre. Convex and <= 8 verts, so b2kAddPolygon accepts it.
 function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
    local tHw, tHh, tBase, tPt, tx, ty, tC, tS, tA, tRot
@@ -7222,13 +7222,13 @@ function terrainPoints pKind, pCx, pCy, pW, pH, pAngleDeg, pFlip
          put max(1, round(pW / 200)) into tBumps
          put 6 * (tBumps + 1) into tNh                       -- top samples
          put pCy + tHh into tYBase
-         -- order base-left, top LEFT→RIGHT, base-right: as a closed chain loop
+         -- order base-left, top LEFT->RIGHT, base-right: as a closed chain loop
          -- this puts the solid side below the surface (Box2D: solid = right of
          -- the travel direction), so bodies rest ON the hill rather than fall through.
          put (pCx - tHw) & "," & tYBase into tBase           -- base-left
-         repeat with tIh = 1 to tNh - 1                      -- interior top points, left → right
+         repeat with tIh = 1 to tNh - 1                      -- interior top points, left -> right
             put tIh / tNh into tT
-            put sin(tT * kPI) into tEnv                       -- 0 at the ends → meets the base
+            put sin(tT * kPI) into tEnv                       -- 0 at the ends -> meets the base
             put 0.62 + 0.38 * (0.5 - 0.5 * cos(tT * tBumps * 2 * kPI)) into tBump
             put pCx - tHw + tT * pW into tHx
             put tYBase - pH * tEnv * tBump into tHy
@@ -7323,7 +7323,7 @@ end rebuildHillChain
 on beginDrawTerrain pX, pY
    set the itemDelimiter to comma
    put "draw" into gDragMode
-   -- Clamp the first vertex to the arena, exactly like extendDrawTerrain — a draw
+   -- Clamp the first vertex to the arena, exactly like extendDrawTerrain - a draw
    -- that begins off the play area must not seed an out-of-bounds point.
    put max(gArenaL, min(gArenaR, pX)) into pX
    put max(gArenaT, min(gArenaB, pY)) into pY
@@ -7336,7 +7336,7 @@ on beginDrawTerrain pX, pY
    set the lineSize of gDrawCtrl to kDrawLineSize
    set the foregroundColor of gDrawCtrl to "150,120,84"
    set the points of gDrawCtrl to gDrawPts
-   put "Draw the ground — release to set it." into gStatus
+   put "Draw the ground - release to set it." into gStatus
 end beginDrawTerrain
 
 on extendDrawTerrain pX, pY
@@ -7365,10 +7365,10 @@ on finishDrawTerrain
       put "Press and drag to draw a ground line." into gStatus
       exit finishDrawTerrain
    end if
-   -- Normalise the contour left→right, then build a CLOSED, filled ribbon. The
+   -- Normalise the contour left->right, then build a CLOSED, filled ribbon. The
    -- drawn surface is still the upper collision edge, but the underside follows
    -- the same stroke a few pixels lower instead of connecting to the arena floor.
-   -- The top is laid right→left so the chain's solid side faces up (Box2D: solid
+   -- The top is laid right->left so the chain's solid side faces up (Box2D: solid
    -- = right of the travel direction), matching the smoke test's ground chain.
    local tShape
    if (item 1 of the last line of tPts) < (item 1 of line 1 of tPts) then put reversedLines(tPts) into tPts
@@ -7448,7 +7448,7 @@ function ptsPacked pCtrl
 end ptsPacked
 
 -- =====================================================================
--- Vehicle: a ready-made car you drop in like any object — a chassis on two
+-- Vehicle: a ready-made car you drop in like any object - a chassis on two
 -- sprung, motorised wheels. All three parts share a uGroup tag so dragging one
 -- moves the whole car, and the wheel joints/motors save, load and reset normally.
 -- =====================================================================
@@ -7708,7 +7708,7 @@ on removeFromLibrary pIndex
    refreshImagePanel
 end removeFromLibrary
 
--- Place an instance of a library image — an ordinary image part.
+-- Place an instance of a library image - an ordinary image part.
 function placeAssetInstance pIndex, pX, pY
    set the itemDelimiter to tab
    local tRec
@@ -7817,7 +7817,7 @@ on makeJoint pKind, pA, pB, pX, pY
          put " Tip: pin one side to an Anchor or the world for a steady spin." after gStatus
       end if
    else
-      put "Could not create that joint — try different parts or positions." into gStatus
+      put "Could not create that joint - try different parts or positions." into gStatus
    end if
    renderJoints
    updateHud
@@ -7835,7 +7835,7 @@ on buildSpan pKind, pA, pB, pEx, pEy
    put gPendY into tSy
    put sqrt((pEx - tSx) ^ 2 + (pEy - tSy) ^ 2) into tD
    if tD < 50 then
-      put "That span is too short — click two points further apart." into gStatus
+      put "That span is too short - click two points further apart." into gStatus
       exit buildSpan
    end if
    set the itemDelimiter to comma
@@ -8070,7 +8070,7 @@ on renderJoints
    if gJN < 1 then exit renderJoints
    -- While running, the Kit's sync only repositions AWAKE bodies, so a marker
    -- whose tracked body (or bodies) are all asleep is already in the right place
-   -- and its redraw — the real per-frame cost on big contraptions — can be
+   -- and its redraw - the real per-frame cost on big contraptions - can be
    -- skipped. In build mode parts move under the editor, not the sim, so the
    -- skip is disabled and every marker still follows a dragged part.
    put (gMode is "run") into tRunning
@@ -8105,8 +8105,8 @@ function jointAtRest pIndex, pVis
 end jointAtRest
 
 -- True when a part control has an awake, actively-simulating body. Empty or
--- body-less endpoints (a world pin, a static anchor) count as at rest — they
--- never move — so they don't force a redraw on their own.
+-- body-less endpoints (a world pin, a static anchor) count as at rest - they
+-- never move - so they don't force a redraw on their own.
 function partAwake pCtrl
    if pCtrl is empty then return false
    if b2kBodyOf(pCtrl) is empty then return false
@@ -8145,7 +8145,7 @@ on b2kEndContact pA, pB
 end b2kEndContact
 
 -- A dynamic body entered a sensor zone. Fire the plate signal on the first
--- arrival (0→1 occupants) so passing traffic doesn't machine-gun the motors.
+-- arrival (0->1 occupants) so passing traffic doesn't machine-gun the motors.
 on b2kSensorEnter pSensor, pVisitor
    if pSensor is empty or pVisitor is empty then exit b2kSensorEnter
    if (the uKind of pSensor is not "sensor") and (the uSensor of pSensor is not true) then exit b2kSensorEnter
@@ -8239,8 +8239,8 @@ on deletePart pCtrl
    put "Deleted a part and any joints on it." into gStatus
 end deletePart
 
--- Drop an identical copy of a part — same size, colour, material and special
--- settings — nudged off the original, then select it and switch to Drag so it
+-- Drop an identical copy of a part - same size, colour, material and special
+-- settings - nudged off the original, then select it and switch to Drag so it
 -- can be moved straight away. (Joints aren't copied; they connect two parts.)
 -- Make one independent copy of a part at (pX,pY): same size, colour, material and
 -- special settings. The copy carries no group tag, so copying a vehicle part
@@ -8292,7 +8292,7 @@ on multiplyPart pCtrl
       exit multiplyPart
    end if
    if it is not a number then
-      put "Please type a whole number (1–50)." into gStatus
+      put "Please type a whole number (1-50)." into gStatus
       updateHud
       exit multiplyPart
    end if
@@ -8442,7 +8442,7 @@ on buildSampleCart
    get placeVehicle((gArenaL + gArenaR) div 2, gArenaT + 110)
    highlightAll
    renderBuild
-   put "Sample cart built. Press Run — the motorised wheels drive it." into gStatus
+   put "Sample cart built. Press Run - the motorised wheels drive it." into gStatus
    updateHud
 end buildSampleCart
 
@@ -8455,11 +8455,11 @@ on buildSampleSwing
    put gArenaT + 30 into tAnchorY
    put 220 into tLen
    -- start the bob lifted ~55 deg so gravity swings it (build it where it sits,
-   -- then hinge — never teleport a body after jointing it).
+   -- then hinge - never teleport a body after jointing it).
    put placeBall(tAnchorX - tLen * 0.819, tAnchorY + tLen * 0.574, 56, "214,92,92") into tBob
    get connectJoint("hinge", tBob, empty, tAnchorX, tAnchorY, 0)
    renderBuild
-   put "Sample swing built. Press Run — gravity pulls the bob into a swing." into gStatus
+   put "Sample swing built. Press Run - gravity pulls the bob into a swing." into gStatus
    updateHud
 end buildSampleSwing
 
@@ -8749,7 +8749,7 @@ end rebuildFromText
 -- Restore the layout captured when Run last started, and return to Build mode.
 on resetMachine
    if gPreRun is empty then
-      put "Nothing to reset yet — press Run first; then Reset brings this build back." into gStatus
+      put "Nothing to reset yet - press Run first; then Reset brings this build back." into gStatus
       updateHud
       exit resetMachine
    end if
@@ -8827,8 +8827,8 @@ on updateHud
    local tInfo, tModeTxt, tMotorTxt
    if gMode is "run" then put "RUN" into tModeTxt
    else put "BUILD" into tModeTxt
-   if gMotorOn then put "Motor ON " & gMotorSpeed & "°/s" into tMotorTxt
-   else put "Motor OFF (" & gMotorSpeed & "°/s)" into tMotorTxt
+   if gMotorOn then put "Motor ON " & gMotorSpeed & " deg/s" into tMotorTxt
+   else put "Motor OFF (" & gMotorSpeed & " deg/s)" into tMotorTxt
    put "Mode: " & tModeTxt into tInfo
    if gJointTool is not empty then put tInfo & "    Joint: " & niceName(gJointTool) into tInfo
    else put tInfo & "    Tool: " & niceName(gTool) into tInfo
@@ -8848,7 +8848,7 @@ function hudPerf
    put b2kProfile() into tProf
    if tProf is empty then return empty
    set the itemDelimiter to comma
-   return "    step " & fmtMs(item 1 of tProf) & "ms · awake " & b2kAwakeBodyCount()
+   return "    step " & fmtMs(item 1 of tProf) & "ms / awake " & b2kAwakeBodyCount()
 end hudPerf
 
 -- Live readout for the selected part or joint, so the inspector numbers can be
@@ -8858,7 +8858,7 @@ function hudSelection
    if gSelJoint is not empty then
       put gJKind[gSelJoint] into tK
       put gJHandle[gSelJoint] into tH
-      if tK is "hinge" then return "    hinge " & round(b2kHingeAngle(tH)) & "°"
+      if tK is "hinge" then return "    hinge " & round(b2kHingeAngle(tH)) & " deg"
       if tK is "rope" then return "    rope " & round(b2kRopeLength(tH)) & " px"
       if tK is "slider" then return "    slider " & round(b2kSliderPos(tH)) & " px"
       return empty
@@ -8868,7 +8868,7 @@ function hudSelection
       return "    beam: " & (the uLaserDist of gSelPart) & " px"
    end if
    if gSelPart is empty or not kindHasBody(the uKind of gSelPart) then return empty
-   return "    sel: " & round(b2kSpeed(gSelPart)) & " px/s · " & fmtMass(b2kMass(gSelPart)) & " · " & round(b2kAngle(gSelPart)) & "°"
+   return "    sel: " & round(b2kSpeed(gSelPart)) & " px/s / " & fmtMass(b2kMass(gSelPart)) & " / " & round(b2kAngle(gSelPart)) & " deg"
 end hudSelection
 
 -- Small number formatters for the readouts.
@@ -8899,7 +8899,7 @@ on tickHud
       put tNow into gHudTime
       updateHud
       if gPlaying and not gGameWon and there is a field "ui_playbannerlbl" then
-         put "▶ PLAY — " & playElapsed() & "s    get a movable part into the goal" into field "ui_playbannerlbl"
+         put "> PLAY - " & playElapsed() & "s    get a movable part into the goal" into field "ui_playbannerlbl"
       end if
    end if
 end tickHud
@@ -8973,7 +8973,7 @@ function placePlate pX, pY
 end placePlate
 
 -- A non-solid trigger zone. Nothing collides with it, but when a dynamic body
--- ENTERS it (on b2kSensorEnter) it fires the same signal as a pressure plate —
+-- ENTERS it (on b2kSensorEnter) it fires the same signal as a pressure plate -
 -- bombs go off and motors flip. Drawn translucent so it reads as a zone.
 function placeSensor pX, pY
    local tName, tRef
@@ -9110,7 +9110,7 @@ end fanArrowPoints
 -- A laser: a no-body emitter that casts a ray each frame and draws the beam to
 -- whatever it hits first (a wall counts), marking the distance. Shows off the
 -- Kit's ray API (b2kRayHit + b2kRayHitX/Y + b2kRayDist). The graphic is the beam
--- itself — a thick line from the emitter (point 1) to the hit point (point 2).
+-- itself - a thick line from the emitter (point 1) to the hit point (point 2).
 function placeLaser pX, pY
    local tName, tRef
    put "cb_laser_" & the milliseconds & "_" & random(99999) into tName
@@ -9119,7 +9119,7 @@ function placeLaser pX, pY
    set the style of tRef to "line"
    set the lineSize of tRef to 5
    set the foregroundColor of tRef to "236,80,80"
-   set the uLaserDir of tRef to 0            -- 0=right 90=down 180=left 270=up (45° steps)
+   set the uLaserDir of tRef to 0            -- 0=right 90=down 180=left 270=up (45 deg steps)
    set the uLaserCut of tRef to false        -- default: a sightline; toggle 'Cut' to burn through parts
    set the uLaserBurn of tRef to kLaserBurnDefault
    set the points of tRef to round(pX) & "," & round(pY) & cr & round(pX + 40) & "," & round(pY)
@@ -9153,7 +9153,7 @@ on drawLaserBeam pLaser
    set the points of pLaser to round(tEx) & "," & round(tEy) & cr & round(tHx) & "," & round(tHy)
    -- Cutting beam: a SUSTAINED hit on a movable part burns through and destroys it.
    -- The burn cools back to zero after kLaserCool ms without a hit, so only continuous
-   -- exposure accumulates — a part that merely grazes the beam (or a fresh Run) never
+   -- exposure accumulates - a part that merely grazes the beam (or a fresh Run) never
    -- inherits stale burn.
    if gMode is "run" and the uLaserCut of pLaser is true and tHitCtrl is not empty \
          and (tHitCtrl is among the lines of gParts) and kindIsDynamic(the uKind of tHitCtrl) then
@@ -9790,8 +9790,8 @@ on handleLinkClick pHit
          exit handleLinkClick
       end if
       put pHit into gWireSrc
-      if the uKind of pHit is "goal" then put "Goal " & nameOf(pHit) & " — now click the object that must reach it." into gStatus
-      else put "Wiring from " & nameOf(pHit) & " — now click a part to set off." into gStatus
+      if the uKind of pHit is "goal" then put "Goal " & nameOf(pHit) & " - now click the object that must reach it." into gStatus
+      else put "Wiring from " & nameOf(pHit) & " - now click a part to set off." into gStatus
    else
       if pHit is gWireSrc then
          put empty into gWireSrc
@@ -9833,7 +9833,7 @@ on removeWiresFor pCtrl
    put tKept into gWires
 end removeWiresFor
 
--- A trigger fired: set off its wired targets, or — if it has none — fall back to
+-- A trigger fired: set off its wired targets, or - if it has none - fall back to
 -- the legacy global signal so an unwired plate/sensor still does something.
 on fireEmitter pEmitter
    local tEdge, tTgt, tFired
@@ -10004,7 +10004,7 @@ on startPlay
    resetGoals
    setPlayChrome true
    highlightActions                   -- recolour the Play button to amber 'Stop'
-   put "PLAY — get a movable part into the goal zone." into gStatus
+   put "PLAY - get a movable part into the goal zone." into gStatus
    updateHud
 end startPlay
 
@@ -10049,7 +10049,7 @@ on setPlayChrome pOn
    makeBar "ui_playscrimR", tWide - kInspectorW, kTopBarH + kAccentH, tWide, tHigh - kStatusH, "16,18,24"
    set the blendLevel of graphic "ui_playscrimR" to 78
    makeBar "ui_playbanner", kPaletteW, kTopBarH + kAccentH, tWide - kInspectorW, kTopBarH + kAccentH + 26, "40,120,72"
-   makeLabel "ui_playbannerlbl", kPaletteW + 12, kTopBarH + kAccentH + 4, tWide - kInspectorW - 12, kTopBarH + kAccentH + 24, "▶ PLAY — solve the puzzle", 12, "236,255,240", true
+   makeLabel "ui_playbannerlbl", kPaletteW + 12, kTopBarH + kAccentH + 4, tWide - kInspectorW - 12, kTopBarH + kAccentH + 24, "> PLAY - solve the puzzle", 12, "236,255,240", true
 end setPlayChrome
 
 -- The "Solved!" overlay, built once with the chrome and shown on a win.
@@ -10066,7 +10066,7 @@ on buildPlayOverlay
    set the uWinMenu of graphic "ui_winscrim" to true
    makeBar "ui_winbg", tL, tT, tL + tW, tT + tH, "40,120,72"
    set the uWinMenu of graphic "ui_winbg" to true
-   makeLabel "ui_wintitle", tL, tT + 28, tL + tW, tT + 68, "✓  Solved!", 26, "236,255,240", true
+   makeLabel "ui_wintitle", tL, tT + 28, tL + tW, tT + 68, "*  Solved!", 26, "236,255,240", true
    set the textAlign of field "ui_wintitle" to center
    set the uWinMenu of field "ui_wintitle" to true
    makeLabel "ui_winsub", tL, tT + 74, tL + tW, tT + 98, "You got a part into every goal zone.", 12, "210,240,220", false
@@ -10122,7 +10122,7 @@ on buildImagePanel
    set the uImgMenu of graphic "ui_imgbg" to true
    makeLabel "ui_img_title", tL + 18, tT + 14, tL + tW - 150, tT + 38, "Image Library", 15, "236,238,245", true
    set the uImgMenu of field "ui_img_title" to true
-   makeAction "imgimport", "Import New…", tL + tW - 142, tT + 12, 124, 28
+   makeAction "imgimport", "Import New...", tL + tW - 142, tT + 12, 124, 28
    set the uImgMenu of button "ui_act_imgimport" to true
    makeField "ui_img_empty", tL + 18, tT + 52, tL + tW - 18, tT + 96, 11, "168,172,184"
    set the uImgMenu of field "ui_img_empty" to true
@@ -10165,7 +10165,7 @@ on refreshImagePanel
       put tT + 96 + (tI - 1) * 34 into tRowY
       makeAction ("asset_" & tI), (tName & "   (" & tShape & ")"), tL + 18, tRowY, tW - 84, 28
       set the uImgMenu of button ("ui_act_asset_" & tI) to true
-      makeAction ("imgremove_" & tI), "✕", tL + tW - 56, tRowY, 38, 28
+      makeAction ("imgremove_" & tI), "x", tL + tW - 56, tRowY, 38, 28
       set the uImgMenu of button ("ui_act_imgremove_" & tI) to true
    end repeat
    setImageVisible true
@@ -10177,7 +10177,7 @@ on placeAssetFromPanel pIndex
    local tNew
    put placeAssetInstance(pIndex, (gArenaL + gArenaR) div 2, gArenaT + 90) into tNew
    if tNew is empty then
-      put "Could not place that image — its file may have moved." into gStatus
+      put "Could not place that image - its file may have moved." into gStatus
       updateHud
       exit placeAssetFromPanel
    end if
@@ -10185,7 +10185,7 @@ on placeAssetFromPanel pIndex
    put "drag" into gTool
    selectPart tNew
    highlightAll
-   put "Placed " & nameOf(tNew) & " — drag it where you want." into gStatus
+   put "Placed " & nameOf(tNew) & " - drag it where you want." into gStatus
    updateHud
 end placeAssetFromPanel
 
@@ -10220,7 +10220,7 @@ end toggleAllMotors
 
 -- Push every joint's designed motor state (from its marker) onto the live joint.
 -- Joints persist across Build<->Run, and a pressure plate can flip motors off
--- mid-run via toggleAllMotors, so each Run re-applies the design — otherwise a
+-- mid-run via toggleAllMotors, so each Run re-applies the design - otherwise a
 -- plate that killed a motor would leave it dead after the next Build/Run.
 on armMotors
    local tI
@@ -10370,7 +10370,7 @@ on showPartInspector pCtrl
    end repeat
    if tRow > 0 then
       if gInspectorMode is "simple" and advancedPropCount(tKind, gInspTab) > 0 then
-         setSettingsHint "Simple mode hides some expert settings on this tab — switch to Advanced (top of this block) to show them all.", tRow
+         setSettingsHint "Simple mode hides some expert settings on this tab - switch to Advanced (top of this block) to show them all.", tRow
       else
          setSettingsHint empty           -- rows are showing; hide the prompt
       end if
@@ -10400,7 +10400,7 @@ function blastPreviewText pBomb
    end repeat
    if tN is 1 then put "part" into tPlural
    else put "parts" into tPlural
-   return "Blast radius " & tR & " px — reaches " & tN && tPlural & " right now."
+   return "Blast radius " & tR & " px - reaches " & tN && tPlural & " right now."
 end blastPreviewText
 
 -- Live, plain-language preview lines for the other special parts, shown in the
@@ -10689,13 +10689,13 @@ function propLabel pCtrl, pKey
       case "diameter"
          return "Diameter: " & numOr(the uW of pCtrl, the width of pCtrl) & " px"
       case "angle"
-         if kindIsTerrain(the uKind of pCtrl) then return "Angle: " & numOr(the uAngle of pCtrl, 0) & "°"
-         return "Angle: " & round(b2kAngle(pCtrl)) & "°"
+         if kindIsTerrain(the uKind of pCtrl) then return "Angle: " & numOr(the uAngle of pCtrl, 0) & " deg"
+         return "Angle: " & round(b2kAngle(pCtrl)) & " deg"
       case "facing"
          if the uFlip of pCtrl is true then return "Facing: high on the left"
          return "Facing: high on the right"
       case "color"
-         return "Colour (cycle with +/−)"
+         return "Colour (cycle with +/-)"
       case "bounce"
          return "Bounciness: " & bounceLabel(the uBounce of pCtrl)
       case "density"
@@ -10738,9 +10738,9 @@ function propLabel pCtrl, pKey
       case "launchspeed"
          return "Launch speed: " & numOr(the uLaunchSpeed of pCtrl, 0) & " px/s"
       case "launchdir"
-         return "Launch angle: " & numOr(the uLaunchDir of pCtrl, 0) & "°"
+         return "Launch angle: " & numOr(the uLaunchDir of pCtrl, 0) & " deg"
       case "spinrate"
-         return "Launch spin: " & numOr(the uSpinRate of pCtrl, 0) & "°/s"
+         return "Launch spin: " & numOr(the uSpinRate of pCtrl, 0) & " deg/s"
       case "toughness"
          return "Toughness: " & format("%.1f", numOr(the uToughness of pCtrl, kToughnessDefault) / 60) & " s laser exposure"
       case "blastradius"
@@ -10770,7 +10770,7 @@ function propLabel pCtrl, pKey
       case "magrange"
          return "Reach: " & (the uMagRange of pCtrl)
       case "laserdir"
-         return "Beam angle: " & numOr(the uLaserDir of pCtrl, 0) & "°"
+         return "Beam angle: " & numOr(the uLaserDir of pCtrl, 0) & " deg"
       case "lasercut"
          if the uLaserCut of pCtrl is true then return "Mode: cutting (burns through parts)"
          return "Mode: sightline (harmless)"
@@ -10779,7 +10779,7 @@ function propLabel pCtrl, pKey
       case "goalsize"
          return "Zone size: " & sizeLabel(numOr(the uGoalScale of pCtrl, 1))
       case "thrustdir"
-         return "Thrust angle: " & numOr(the uThrustDir of pCtrl, 270) & "°"
+         return "Thrust angle: " & numOr(the uThrustDir of pCtrl, 270) & " deg"
       case "thrustpower"
          return "Thrust power: " & numOr(the uThrustPower of pCtrl, 0)
       case "thrustspin"
@@ -10810,7 +10810,7 @@ on showPropRow pRow, pLabel, pKey
    local tShownLabel
    -- Mark type-in rows with a pencil so users know the label is clickable, and
    -- hang plain-language help off every control via its tooltip.
-   if propCanType(pKey) then put pLabel & "  ✎" into tShownLabel
+   if propCanType(pKey) then put pLabel & "  ~" into tShownLabel
    else put pLabel into tShownLabel
    if there is a field ("ui_prop_lbl_" & pRow) then
       put tShownLabel into field ("ui_prop_lbl_" & pRow)
@@ -11277,7 +11277,7 @@ end reapplyCollision
 -- A compact one-line description for the inspector row.
 function filterSummary pCtrl
    if not partFilterCustom(pCtrl) then return "default (hits everything)"
-   return "on " & channelText(partCategories(pCtrl)) & " · hits " & channelText(partMaskChannels(pCtrl))
+   return "on " & channelText(partCategories(pCtrl)) & " / hits " & channelText(partMaskChannels(pCtrl))
 end filterSummary
 
 -- "1,2,3,4,5,6,7,8" -> "all"; a short list stays as-is; empty -> "none".
@@ -11487,8 +11487,8 @@ on editPropValue pKey
       exit editPropValue
    end if
    set the itemDelimiter to comma
-   if pKey is not among the items of kEntryKeys then     -- colours, materials and toggles step with +/−, not type-in
-      put "Use the +/− buttons to change this." into gStatus
+   if pKey is not among the items of kEntryKeys then     -- colours, materials and toggles step with +/-, not type-in
+      put "Use the +/- buttons to change this." into gStatus
       updateHud
       exit editPropValue
    end if
@@ -11799,7 +11799,7 @@ function jointPropLabel pMk, pKind, pKey
    if pKind is "slider" then
       put " px/s" into tUnit
    else
-      put "°/s" into tUnit
+      put " deg/s" into tUnit
    end if
    switch pKey
       case "jmotoron"
@@ -11812,10 +11812,10 @@ function jointPropLabel pMk, pKind, pKey
          return "Limits: " & onOff(the uLimitOn of pMk is true)
       case "jlimitlo"
          if pKind is "slider" then return "Limit min: " & numOr(the uLimitLo of pMk, -100) & " px"
-         return "Limit min: " & numOr(the uLimitLo of pMk, -45) & "°"
+         return "Limit min: " & numOr(the uLimitLo of pMk, -45) & " deg"
       case "jlimithi"
          if pKind is "slider" then return "Limit max: " & numOr(the uLimitHi of pMk, 100) & " px"
-         return "Limit max: " & numOr(the uLimitHi of pMk, 45) & "°"
+         return "Limit max: " & numOr(the uLimitHi of pMk, 45) & " deg"
       case "jspringhz"
          return "Springiness: " & numOr(the uSpringHz of pMk, 0) & " Hz"
       case "jspringdamp"
@@ -12070,7 +12070,7 @@ on applyJointValue pIndex, pKey, pVal
    end switch
 end applyJointValue
 
--- Pack a joint's editable settings as "key=value;…" (per-kind) for Save.
+-- Pack a joint's editable settings as "key=value;..." (per-kind) for Save.
 function jointSpecial pIndex
    local tKind, tMk, tS
    put gJKind[pIndex] into tKind
@@ -12272,7 +12272,7 @@ on refreshGravityLabel
    if there is a button "ui_act_gravity" then set the label of button "ui_act_gravity" to "Gravity: " & gravityModeName(gGravityMode)
 end refreshGravityLabel
 
--- World feel: a few one-click presets that tune how the whole world responds —
+-- World feel: a few one-click presets that tune how the whole world responds -
 -- how readily things bounce (restitution threshold), how soft/stiff contacts are
 -- (contact tuning) and a top speed cap. Cosmetic-but-fun; safe before the world
 -- exists (the Kit's world setters no-op until b2kSetup has run).
@@ -12362,7 +12362,7 @@ end gravityModeName
 
 on togglePause
    if gMode is not "run" then
-      put "Pause works while the simulation is running — press Run first." into gStatus
+      put "Pause works while the simulation is running - press Run first." into gStatus
       updateHud
       exit togglePause
    end if
@@ -12379,7 +12379,7 @@ end togglePause
 
 on stepOnce
    if gMode is not "run" then
-      put "Step works while paused during Run — press Run first." into gStatus
+      put "Step works while paused during Run - press Run first." into gStatus
       updateHud
       exit stepOnce
    end if
@@ -12495,11 +12495,11 @@ end niceName
 -- default font everywhere; the text label carries the real meaning.
 function toolGlyph pId
    local tGlyphs
-   put "drag=✥" & cr & "box=■" & cr & "ball=●" & cr & "capsule=▬" & cr & "poly=◆" & cr \
-         & "image=▦" & cr & "anchor=▼" & cr & "delete=✕" & cr & "duplicate=▣" & cr & "multiply=⧉" & cr & "link=↦" & cr & "balloon=◯" & cr & "bomb=◉" & cr \
-         & "plate=▭" & cr & "fan=▷" & cr & "magnet=◐" & cr & "sensor=◉" & cr & "laser=↗" & cr & "thruster=▲" & cr & "goal=⚑" & cr \
-         & "platform=━" & cr & "ramp=◣" & cr & "hill=∩" & cr & "draw=✎" & cr & "car=⊙" & cr & "hinge=○" & cr & "weld=▰" & cr \
-         & "servo=⊕" & cr & "rope=∿" & cr & "slider=↔" & cr & "wheel=◎" & cr & "bridge=◠" & cr & "chain=∾" into tGlyphs
+   put "drag=::" & cr & "box=[]" & cr & "ball=o" & cr & "capsule=()" & cr & "poly=<>" & cr \
+         & "image=#" & cr & "anchor=v" & cr & "delete=x" & cr & "duplicate=[+]" & cr & "multiply=++" & cr & "link=->" & cr & "balloon=O" & cr & "bomb=(*)" & cr \
+         & "plate=[-]" & cr & "fan=>" & cr & "magnet=U" & cr & "sensor=(.)" & cr & "laser=/" & cr & "thruster=^" & cr & "goal=|>" & cr \
+         & "platform=--" & cr & "ramp=|\" & cr & "hill=/\" & cr & "draw=~" & cr & "car=(o)" & cr & "hinge=-o-" & cr & "weld===" & cr \
+         & "servo=(+)" & cr & "rope=~~" & cr & "slider=<->" & cr & "wheel=(O)" & cr & "bridge=n" & cr & "chain=oo" into tGlyphs
    local tLine
    set the itemDelimiter to "="
    repeat for each line tLine in tGlyphs
@@ -12509,7 +12509,7 @@ function toolGlyph pId
       end if
    end repeat
    set the itemDelimiter to comma
-   return "•"
+   return "*"
 end toolGlyph
 
 -- Line 1 = short tooltip; line 2 = the longer inspector explanation.
@@ -12518,25 +12518,25 @@ function toolHelp pId
       case "drag"
          return "Move parts around (places nothing new)." & cr & "Move tool. In Build mode, drag any part to reposition it. In Run mode, grab and fling parts with the mouse."
       case "box"
-         return "Drop a solid box that falls and stacks." & cr & "A box is a solid rectangle. It falls, stacks and tumbles — great for crates, walls and dominoes."
+         return "Drop a solid box that falls and stacks." & cr & "A box is a solid rectangle. It falls, stacks and tumbles - great for crates, walls and dominoes."
       case "ball"
          return "Drop a ball that rolls and bounces." & cr & "A ball rolls and bounces. Handy for wheels, marbles, and things that trigger pressure plates."
       case "capsule"
-         return "Drop a rounded bar (a capsule)." & cr & "A capsule is a bar with rounded ends. It rolls on its ends — useful for rollers, limbs and levers."
+         return "Drop a rounded bar (a capsule)." & cr & "A capsule is a bar with rounded ends. It rolls on its ends - useful for rollers, limbs and levers."
       case "poly"
          return "Drop a six-sided block." & cr & "A polygon is a chunky many-sided block. It stacks and tumbles like a box with more character."
       case "image"
          return "Use your own picture as an object." & cr & "Pick an image file and it becomes a physical block that tumbles and spins like any other part."
       case "anchor"
-         return "Place a fixed point that never moves." & cr & "An anchor is pinned to the world. Attach joints to it to hold things up — perfect as a motor mount or a pivot."
+         return "Place a fixed point that never moves." & cr & "An anchor is pinned to the world. Attach joints to it to hold things up - perfect as a motor mount or a pivot."
       case "delete"
          return "Remove a part you click on." & cr & "Delete tool. Click any part to remove it, along with any joints attached to it."
       case "duplicate"
-         return "Copy a part you click on." & cr & "Duplicate tool. Click any part to drop an identical copy — same size, colour and settings — then drag it where you want."
+         return "Copy a part you click on." & cr & "Duplicate tool. Click any part to drop an identical copy - same size, colour and settings - then drag it where you want."
       case "multiply"
          return "Make many copies of a part at once." & cr & "Multiply tool. Click any part and choose how many copies to make; they drop into a tidy grid, each identical to the original. Great for crates, dominoes and bricks."
       case "link"
-         return "Wire a trigger to a bomb." & cr & "Link tool. Click a plate or sensor, then click a bomb — an amber wire ties that trigger to that bomb. An unwired trigger still sets off everything."
+         return "Wire a trigger to a bomb." & cr & "Link tool. Click a plate or sensor, then click a bomb - an amber wire ties that trigger to that bomb. An unwired trigger still sets off everything."
       case "balloon"
          return "A helium balloon that floats upward." & cr & "A balloon rises on its own. Tie it to a part with a Rope joint to lift that part. A nearby bomb blast pops it."
       case "bomb"
@@ -12546,41 +12546,41 @@ function toolHelp pId
       case "sensor"
          return "A trigger zone that fires when entered." & cr & "A sensor is a non-solid zone. The moment a part enters, it fires like a pressure plate: bombs go off and motors switch. Great for tripwires and gates."
       case "fan"
-         return "A wind zone that blows parts along." & cr & "A fan pushes any part inside its zone in the arrow's direction. Set the direction and strength in the inspector. No body — parts pass through it."
+         return "A wind zone that blows parts along." & cr & "A fan pushes any part inside its zone in the arrow's direction. Set the direction and strength in the inspector. No body - parts pass through it."
       case "magnet"
-         return "A magnet that pulls parts toward it." & cr & "A magnet attracts nearby parts (or repels them). Set attract/repel, strength and reach in the inspector. No body — parts pass through it."
+         return "A magnet that pulls parts toward it." & cr & "A magnet attracts nearby parts (or repels them). Set attract/repel, strength and reach in the inspector. No body - parts pass through it."
       case "laser"
-         return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray and draws its beam to the first thing it strikes — walls count. Set the angle in the inspector; select it while running to read the hit distance."
+         return "A ray that draws a beam to whatever it hits." & cr & "A laser casts a ray and draws its beam to the first thing it strikes - walls count. Set the angle in the inspector; select it while running to read the hit distance."
       case "thruster"
          return "A self-propelled rocket that thrusts on Run." & cr & "A thruster drives itself: an ignition kick on Run, then a steady push. Set angle and power in the inspector; Aim makes it steer with the body. A wire can switch it."
       case "goal"
-         return "A target zone — reach it to win." & cr & "The finish line for a puzzle. Press Play: get a movable part inside every goal at once to solve it. Resize it in the inspector; parts pass through it."
+         return "A target zone - reach it to win." & cr & "The finish line for a puzzle. Press Play: get a movable part inside every goal at once to solve it. Resize it in the inspector; parts pass through it."
       case "platform"
-         return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery — a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf."
+         return "Place a solid ledge that never moves." & cr & "A platform is fixed scenery - a solid ledge that stays put. Rest parts on it, build floors and steps, or rotate it into an angled shelf."
       case "ramp"
-         return "Place a fixed slope for rolling and sliding." & cr & "A ramp is a fixed wedge. Balls roll down it and parts slide along it. Rotate it for any incline and raise its grip to slow the slide — great for launches and runs."
+         return "Place a fixed slope for rolling and sliding." & cr & "A ramp is a fixed wedge. Balls roll down it and parts slide along it. Rotate it for any incline and raise its grip to slow the slide - great for launches and runs."
       case "hill"
-         return "Place a smooth rolling mound." & cr & "A hill is a smooth chain mound — parts roll over it without catching. Narrow makes one dome, wide makes rolling hills; size and rotate it to shape the land."
+         return "Place a smooth rolling mound." & cr & "A hill is a smooth chain mound - parts roll over it without catching. Narrow makes one dome, wide makes rolling hills; size and rotate it to shape the land."
       case "draw"
-         return "Draw your own ground line." & cr & "Press and drag to sketch a ground contour — bumps, valleys, ramps. On release it becomes solid terrain. Drag to move it; delete and redraw to reshape."
+         return "Draw your own ground line." & cr & "Press and drag to sketch a ground contour - bumps, valleys, ramps. On release it becomes solid terrain. Drag to move it; delete and redraw to reshape."
       case "car"
-         return "Drop a ready-made motor car." & cr & "A complete car: a chassis on two sprung, motorised wheels — press Run and it drives. Drag the body to move it all; tune each wheel in the joint inspector."
+         return "Drop a ready-made motor car." & cr & "A complete car: a chassis on two sprung, motorised wheels - press Run and it drives. Drag the body to move it all; tune each wheel in the joint inspector."
       case "hinge"
-         return "Pin two parts so they rotate." & cr & "A hinge is a pin two parts spin around — like an axle or a pendulum. Pin to an Anchor or empty space, switch Motor on, and it drives itself."
+         return "Pin two parts so they rotate." & cr & "A hinge is a pin two parts spin around - like an axle or a pendulum. Pin to an Anchor or empty space, switch Motor on, and it drives itself."
       case "weld"
-         return "Glue two parts rigidly together." & cr & "A weld locks two parts as one solid piece — they keep their relative position and angle."
+         return "Glue two parts rigidly together." & cr & "A weld locks two parts as one solid piece - they keep their relative position and angle."
       case "servo"
-         return "A powered hold between two parts." & cr & "A servo holds one part at a position and angle relative to another, giving under load and springing back — a soft weld. Click part A, then part B."
+         return "A powered hold between two parts." & cr & "A servo holds one part at a position and angle relative to another, giving under load and springing back - a soft weld. Click part A, then part B."
       case "rope"
          return "Link two parts with a rope." & cr & "A rope keeps two parts from drifting further apart than its length. They can still swing and fall closer together."
       case "slider"
-         return "Let one part slide along a line." & cr & "A slider lets one part slide in a straight line relative to another — like a piston or a drawer."
+         return "Let one part slide along a line." & cr & "A slider lets one part slide in a straight line relative to another - like a piston or a drawer."
       case "wheel"
-         return "Add a springy, spinning wheel." & cr & "A wheel joint carries a wheel with springy suspension and lets it spin freely — switch Motor on to drive a vehicle."
+         return "Add a springy, spinning wheel." & cr & "A wheel joint carries a wheel with springy suspension and lets it spin freely - switch Motor on to drive a vehicle."
       case "bridge"
          return "Span a plank bridge between two points." & cr & "Bridge tool. Click a part (or empty space), then a second point: a row of hinged planks spans the gap and sags under weight. Anchor the ends to Anchors or the world."
       case "chain"
-         return "Hang a flexible segmented rope." & cr & "Click two points and a rope of small hinged links drapes between them. It bends, coils and swings — great for swings and tethers."
+         return "Hang a flexible segmented rope." & cr & "Click two points and a rope of small hinged links drapes between them. It bends, coils and swings - great for swings and tethers."
    end switch
    return niceName(pId) & cr & "Select this tool, then click the stage."
 end toolHelp
@@ -12616,9 +12616,9 @@ function actionHelp pId
       case "filterclose"
          return "Close the collision filter."
       case "images"
-         return "Your image library — import pictures (with a collision shape) and reuse them."
+         return "Your image library - import pictures (with a collision shape) and reuse them."
       case "worldadv"
-         return "Advanced world solver settings (CCD, sleeping, sub-steps…)."
+         return "Advanced world solver settings (CCD, sleeping, sub-steps...)."
       case "worldclose"
          return "Close the world settings."
    end switch
@@ -12708,7 +12708,7 @@ on buildRecipesMenu
    put recipeCategory("Machines", "crane,cart,fantower,magnetcatch,balloonlift", \
          "Crane,Motor Cart,Fan Tower,Magnet Catch,Balloon Lift", tL, tW, tBy) into tBy
    put recipeCategory("Chain Reactions", "platebomb,dominoes", \
-         "Plate → Bomb,Domino Run", tL, tW, tBy) into tBy
+         "Plate -> Bomb,Domino Run", tL, tW, tBy) into tBy
    put recipeCategory("Toys & Tests", "swing,cradle,terrainrun,stress", \
          "Pendulum Swing,Newton's Cradle,Terrain Run,Stress (+" & kStressBatch & ")", tL, tW, tBy) into tBy
    makeAction "recipeclose", "Close", tL + tW - 92, tBy + 2, 76, 26
@@ -12894,7 +12894,7 @@ on setFilterVisible pFlag
 end setFilterVisible
 
 -- =====================================================================
--- World · Advanced popup: the solver toggles the Feel presets don't cover
+-- World / Advanced popup: the solver toggles the Feel presets don't cover
 -- (continuous collision, sleeping, warm-starting, sub-steps). Built once
 -- with the chrome, hidden, like the recipes and filter popups.
 -- =====================================================================
@@ -12911,7 +12911,7 @@ on buildWorldPanel
    set the uWorldMenu of graphic "ui_worldscrim" to true
    makeBar "ui_worldbg", tL, tT, tL + tW, tT + tH, "34,38,48"
    set the uWorldMenu of graphic "ui_worldbg" to true
-   makeLabel "ui_world_title", tL + 18, tT + 14, tL + tW - 18, tT + 36, "World · Advanced", 15, "236,238,245", true
+   makeLabel "ui_world_title", tL + 18, tT + 14, tL + tW - 18, tT + 36, "World / Advanced", 15, "236,238,245", true
    set the uWorldMenu of field "ui_world_title" to true
    put tT + 48 into tRy
    makeAction "wopt_ccd", "Continuous collision: off", tL + 18, tRy, tW - 36, 28
@@ -12999,7 +12999,7 @@ on buildRecipeBalloonLift
    put placeBalloon(tCx, tBaseY - 150) into tBalloon
    get connectJoint("rope", tBalloon, tBox, tCx, tBaseY - 80, 0)
    renderBuild
-   put "Balloon Lift — press Run: the balloon rises and hauls the box up by its rope." into gStatus
+   put "Balloon Lift - press Run: the balloon rises and hauls the box up by its rope." into gStatus
    updateHud
 end buildRecipeBalloonLift
 
@@ -13020,7 +13020,7 @@ on buildRecipePlateBomb
       get placeBox(tTowerX, gArenaB - 66 - tI * 34, 46, 30, "214,92,92")
    end repeat
    renderBuild
-   put "Plate → Bomb — press Run: the ball lands on the plate, the bomb fires, the tower topples." into gStatus
+   put "Plate -> Bomb - press Run: the ball lands on the plate, the bomb fires, the tower topples." into gStatus
    updateHud
 end buildRecipePlateBomb
 
@@ -13056,7 +13056,7 @@ on buildRecipeChainPuzzle
    set the uGoalScale of tGoal to 1.3
    drawGoalShape tGoal
    renderBuild
-   put "Demolish & Deliver — press Play! The ball trips the plate, the bomb clears the wall, and it rolls into the goal (nudge it if it stalls)." into gStatus
+   put "Demolish & Deliver - press Play! The ball trips the plate, the bomb clears the wall, and it rolls into the goal (nudge it if it stalls)." into gStatus
    updateHud
 end buildRecipeChainPuzzle
 
@@ -13072,7 +13072,7 @@ on buildRecipeFanTower
       get placeBall(tCx, gArenaT + 40 + tI * 46, 36, "84,206,142")
    end repeat
    renderBuild
-   put "Fan Tower — press Run: the upward wind catches the balls and juggles them." into gStatus
+   put "Fan Tower - press Run: the upward wind catches the balls and juggles them." into gStatus
    updateHud
 end buildRecipeFanTower
 
@@ -13095,7 +13095,7 @@ on buildRecipeMagnetCatch
       get placeBall(rnd(tLoX, tHiX), rnd(tLoY, tHiY), 30, "206,124,206")
    end repeat
    renderBuild
-   put "Magnet Catch — press Run: the magnet pulls the scattered balls toward it." into gStatus
+   put "Magnet Catch - press Run: the magnet pulls the scattered balls toward it." into gStatus
    updateHud
 end buildRecipeMagnetCatch
 
@@ -13116,12 +13116,12 @@ on buildRecipeCatapult
    set the uDensity of tWeight to 3.4
    b2kSetDensity tWeight, 3.4
    renderBuild
-   put "Catapult — press Run: the heavy block drops on the right arm and flings the ball off the left." into gStatus
+   put "Catapult - press Run: the heavy block drops on the right arm and flings the ball off the left." into gStatus
    updateHud
 end buildRecipeCatapult
 
 -- A horizontal cannon: a static carriage + barrel (axis-aligned, so the static
--- render is exact — no rotated-static-body gotcha), a heavy ball that fires up
+-- render is exact - no rotated-static-body gotcha), a heavy ball that fires up
 -- the field on Run via the launch system, and a crate stack to knock down. The
 -- ball + barrel share a collision layer, so the ball slips clear of the barrel
 -- instead of snagging on it as it launches.
@@ -13147,19 +13147,19 @@ on buildRecipeCannon
    set the uLayer of tBall to 1
    applyCollisionLayer tBall
    -- Put the stack a fixed distance downrange (inside the flat shot's range), not
-   -- at the far wall — otherwise on a wide stage the ball drops short or sails past.
+   -- at the far wall - otherwise on a wide stage the ball drops short or sails past.
    put min(tX + 688, gArenaR - 110) into tStackX
    repeat with tI = 0 to 4                                                -- crate stack
       get placeBox(tStackX, gArenaB - 22 - tI * 30, 46, 28, "200,120,80")
    end repeat
    renderBuild
-   put "Cannon — press Run: the ball fires across the field. Knock the crate stack down!" into gStatus
+   put "Cannon - press Run: the ball fires across the field. Knock the crate stack down!" into gStatus
    updateHud
 end buildRecipeCannon
 
 -- A trebuchet: a long arm hinged off-centre, a heavy counterweight welded to the
 -- short end and a ball resting on the long end. On Run the weight drops, the arm
--- whips round and flings the ball downfield. (Gravity-driven — no motor.)
+-- whips round and flings the ball downfield. (Gravity-driven - no motor.)
 on buildRecipeTrebuchet
    if gMode is "run" then toggleMode
    clearAll
@@ -13179,7 +13179,7 @@ on buildRecipeTrebuchet
    set the uDensity of tBall to 0.8
    b2kSetDensity tBall, 0.8
    renderBuild
-   put "Trebuchet — press Run: the counterweight drops and the long arm flings the ball downfield." into gStatus
+   put "Trebuchet - press Run: the counterweight drops and the long arm flings the ball downfield." into gStatus
    updateHud
 end buildRecipeTrebuchet
 
@@ -13205,7 +13205,7 @@ on buildRecipeCrane
    b2kSetDensity tLoad, 2
    get connectJoint("rope", tJib, tLoad)
    renderBuild
-   put "Crane — press Run: the motorised jib swings and the roped load trails and sways behind it." into gStatus
+   put "Crane - press Run: the motorised jib swings and the roped load trails and sways behind it." into gStatus
    updateHud
 end buildRecipeCrane
 
@@ -13238,7 +13238,7 @@ on buildRecipeWreckingBall
       get placeBox(tWallX, gArenaB - 22 - tI * 30, 60, 28, "200,120,80")
    end repeat
    renderBuild
-   put "Wrecking Ball — press Run: the ball swings off the beam into the brick wall and smashes it down." into gStatus
+   put "Wrecking Ball - press Run: the ball swings off the beam into the brick wall and smashes it down." into gStatus
    updateHud
 end buildRecipeWreckingBall
 
@@ -13255,7 +13255,7 @@ on buildRecipeCradle
       put tCx + (tI - 3) * tDiam into tX
       put placeAnchor(tX, tTopY) into tAnchor
       if tI is 1 then
-         put placeBall(tX - 106, tTopY + 106, tDiam, "120,200,232") into tBall   -- raised 45°, same rope length
+         put placeBall(tX - 106, tTopY + 106, tDiam, "120,200,232") into tBall   -- raised 45 deg, same rope length
       else
          put placeBall(tX, tTopY + tLen, tDiam, "120,200,232") into tBall
       end if
@@ -13266,7 +13266,7 @@ on buildRecipeCradle
       get connectJoint("rope", tBall, tAnchor, tX, tTopY, 0)
    end repeat
    renderBuild
-   put "Newton's Cradle — press Run: the raised ball swings down and kicks the far ball out." into gStatus
+   put "Newton's Cradle - press Run: the raised ball swings down and kicks the far ball out." into gStatus
    updateHud
 end buildRecipeCradle
 
@@ -13285,11 +13285,11 @@ on buildRecipeDominoes
    set the uLaunchSpeed of tBall to 320
    set the uLaunchDir of tBall to 0
    renderBuild
-   put "Domino Run — press Run: the ball is launched into the line and the dominoes cascade." into gStatus
+   put "Domino Run - press Run: the ball is launched into the line and the dominoes cascade." into gStatus
    updateHud
 end buildRecipeDominoes
 
--- A ball rolls down a ramp, along a raised ledge and into a hill — the terrain set.
+-- A ball rolls down a ramp, along a raised ledge and into a hill - the terrain set.
 on buildRecipeTerrainRun
    if gMode is "run" then toggleMode
    clearAll
@@ -13304,7 +13304,7 @@ on buildRecipeTerrainRun
    set the uLaunchSpeed of tBall to 120
    set the uLaunchDir of tBall to 180                           -- a nudge to start it down-slope
    renderBuild
-   put "Terrain Run — press Run: the ball rolls down the ramp, along the ledge and into the hill. Resize, rotate or re-grip any terrain piece in the inspector." into gStatus
+   put "Terrain Run - press Run: the ball rolls down the ramp, along the ledge and into the hill. Resize, rotate or re-grip any terrain piece in the inspector." into gStatus
    updateHud
 end buildRecipeTerrainRun
 
@@ -13319,7 +13319,7 @@ on stressTest
    end repeat
    add kStressBatch to gStressCount
    if gMode is "build" then toggleMode
-   put "Stress test: " & b2kBodyCount() & " bodies. Watch the fps — press again to push further." into gStatus
+   put "Stress test: " & b2kBodyCount() & " bodies. Watch the fps - press again to push further." into gStatus
    updateHud
 end stressTest
 
@@ -13359,23 +13359,23 @@ on showOnboardingStep
    local tTitle, tText
    switch gOnbStep
       case 1
-         put "Step 1 of 5 — Pick a part" into tTitle
-         put "On the left is your toolbox. Click a category header (SHAPES, SPECIAL, JOINTS…) to open it — only one opens at a time. Try a shape under SHAPES (Box or Ball), or something fun under SPECIAL — a Balloon, a Bomb, a Thruster, a Laser." into tText
+         put "Step 1 of 5 - Pick a part" into tTitle
+         put "On the left is your toolbox. Click a category header (SHAPES, SPECIAL, JOINTS...) to open it - only one opens at a time. Try a shape under SHAPES (Box or Ball), or something fun under SPECIAL - a Balloon, a Bomb, a Thruster, a Laser." into tText
          break
       case 2
-         put "Step 2 of 5 — Drop it and arrange" into tTitle
+         put "Step 2 of 5 - Drop it and arrange" into tTitle
          put "Click the dark stage in the middle to drop your part, then drag parts to arrange them. The panel on the right explains and tunes whatever you select (and Rename names it)." into tText
          break
       case 3
-         put "Step 3 of 5 — Connect with joints" into tTitle
+         put "Step 3 of 5 - Connect with joints" into tTitle
          put "Pick a joint under JOINTS (a Hinge is a pin things spin around), then click part A and part B to link them. Turn Motor on first to make hinges and wheels drive themselves." into tText
          break
       case 4
-         put "Step 4 of 5 — Wire up triggers" into tTitle
-         put "Use the Link tool (under TOOLS): click a Pressure Plate or Sensor, then click a Bomb to wire them — an amber wire means that trigger sets off that bomb. Set a bomb to 'Demolish' or a laser to 'Cut' to destroy parts." into tText
+         put "Step 4 of 5 - Wire up triggers" into tTitle
+         put "Use the Link tool (under TOOLS): click a Pressure Plate or Sensor, then click a Bomb to wire them - an amber wire means that trigger sets off that bomb. Set a bomb to 'Demolish' or a laser to 'Cut' to destroy parts." into tText
          break
       default
-         put "Step 5 of 5 — Set a goal and Play" into tTitle
+         put "Step 5 of 5 - Set a goal and Play" into tTitle
          put "Drop a Goal Zone (under SPECIAL), then press Play (top bar): get a movable part into the goal to solve it. Run just tests physics; Play is the puzzle. Open Recipes > Puzzles for a ready-made one." into tText
    end switch
    if there is a field "ui_onb_title" then put tTitle into field "ui_onb_title"

@@ -1,5 +1,5 @@
 -- =====================================================================
--- box2dxt-platformer.livecodescript  ·  Game Kit Phases 1+2+3+4 showcase
+-- box2dxt-platformer.livecodescript  /  Game Kit Phases 1+2+3+4 showcase
 --
 -- A SEVEN-LEVEL collect-them-all platformer (each level its own
 -- scrolling world in a 1024px viewport) that exercises everything
@@ -24,15 +24,15 @@
 --   3. First run asks for the repo's Spritesheets folder (remembered in a
 --      stack property; Shift+Reset re-asks; Cancel = placeholder shapes).
 --
--- CONTROLS  arrows or A/D run · SPACE / UP / W jumps (tap = hop, hold =
---           full) · jump AGAIN in mid-air = DOUBLE JUMP · jump off a wall
---           you are sliding = WALL JUMP · SHIFT or X = DASH (a flat zip) ·
+-- CONTROLS  arrows or A/D run / SPACE / UP / W jumps (tap = hop, hold =
+--           full) / jump AGAIN in mid-air = DOUBLE JUMP / jump off a wall
+--           you are sliding = WALL JUMP / SHIFT or X = DASH (a flat zip) /
 --           DOWN/S ducks (brakes to a stop in place) - and DOWN+JUMP
---           on a one-way deck (bridge, clouds) DROPS THROUGH it · UP/DOWN
---           at the L2 ladder CLIMBS (JUMP lets go) · ride the moving LIFTS
---           (they carry you) · the MOUSE DRAGS the crate (chained weights
---           are NOT draggable) · R restarts the CURRENT level · ESC pauses
---           · M mutes the synthesized sound
+--           on a one-way deck (bridge, clouds) DROPS THROUGH it / UP/DOWN
+--           at the L2 ladder CLIMBS (JUMP lets go) / ride the moving LIFTS
+--           (they carry you) / the MOUSE DRAGS the crate (chained weights
+--           are NOT draggable) / R restarts the CURRENT level / ESC pauses
+--           / M mutes the synthesized sound
 --
 -- THE SEVEN LEVELS (every beat holds a coin; the flag advances):
 --   LEVEL 1  GREEN HILLS (8640px) - movement + the toys: the
@@ -677,7 +677,7 @@ command buildPfUI
    set the textColor of it to "248,249,240"
    set the opaque of it to false
    set the showBorder of it to false
-   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  ·  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & "Pick your hero on the TITLE screen  (1 - 5 there)" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
+   set the text of it to "P A U S E D" & cr & cr & "Arrows / A-D  -  run          SPACE  -  jump" & cr & "jump again in mid-air = DOUBLE  /  off a wall = WALL-JUMP" & cr & "SHIFT / X  -  dash          DOWN  -  duck (DOWN+JUMP drops through)" & cr & "UP / DOWN  -  climb ladders          MOUSE  -  drag the crate" & cr & "Pick your hero on the TITLE screen  (1 - 5 there)" & cr & cr & "ESC  resume       R  restart       M  mute       `  debug overlay"
    set the visible of it to false
    -- ===== the TRANSITION CARD: a full-screen opaque overlay that COVERS each
    -- level teardown + rebuild (no visible construction), and doubles as the boot
@@ -2769,8 +2769,10 @@ command pfMakeConveyor pL, pR, pDir
    put 576 into gConvY[gConvN]
    put pDir into gConvDir[gConvN]
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "conveyor") then
-      repeat with tX = pL to pR - 64 step 64
+      put pL into tX
+      repeat while tX <= pR - 64
          pfTile "conveyor", tX, 576, (pDir < 0)   -- flip the tread to face pDir; the single frame has no scroll animation, so the flip is the only direction cue (OXT-verify it reads)
+         add 64 to tX
       end repeat
    end if
 end pfMakeConveyor
@@ -2893,8 +2895,10 @@ command pfMakeLava pL, pR, pSensorTop
    -- through a collapsed plank still drops into it.
    if pSensorTop is empty then put 548 into pSensorTop
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "lava_top") then
-      repeat with tX = pL to pR - 64 step 64
+      put pL into tX
+      repeat while tX <= pR - 64
          pfTile "lava_top", tX, 576
+         add 64 to tX
       end repeat
    else
       create graphic ("pf_lava" & pL)
@@ -3071,8 +3075,10 @@ command pfMakeKeyDoor pKeyX, pKeyY, pWallX, pColour
    set the rect of it to pWallX, 0, pWallX + 64, 448
    set the visible of it to false
    b2kAddStatic the long id of graphic tWall
-   repeat with tY = 0 to 320 step 64
+   put 0 into tY
+   repeat while tY <= 320
       pfTile "terrain_stone_block_center", pWallX, tY
+      add 64 to tY
    end repeat
    b2kSpriteNew "tiles", "lock_" & pColour, tCX, 416
    put the result into gLockSpr[tI]
@@ -3129,10 +3135,14 @@ command pfDressWall pSlab, pX1, pX2, pTop, pBottom
    local tX, tY
    if pX2 - pX1 < 1 then exit pfDressWall                  -- a zero-width margin (column == viewport): nothing to fill
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_center") then
-      repeat with tX = pX1 to pX2 - 64 step 64
-         repeat with tY = pTop to pBottom - 64 step 64
+      put pX1 into tX
+      repeat while tX <= pX2 - 64
+         put pTop into tY
+         repeat while tY <= pBottom - 64
             pfTile "terrain_stone_block_center", tX, tY
+            add 64 to tY
          end repeat
+         add 64 to tX
       end repeat
    else if there is a graphic pSlab then
       set the backgroundColor of graphic pSlab to "70,73,86"   -- lit stone, lighter than the backdrop
@@ -3280,8 +3290,10 @@ end pfMakeSwitchGate
 command pfMakeSpikes pL, pR
    local tRef, tX
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "spikes") then
-      repeat with tX = pL to pR - 64 step 64
+      put pL into tX
+      repeat while tX <= pR - 64
          pfTile "spikes", tX, 546   -- HORIZONTAL alignment: pfTile treats (x,y) as the tile's TOP-LEFT (it centres at x+32, like all the ground tiling), so the row must use top-lefts pL, pL+64, ... pR-64 to land FLUSH from pL to pR. The old pL+32..pR-32 range shifted every spike 32px RIGHT - a bare gap at the LEFT pit edge and the last spike OVERHANGING the ground on the RIGHT (the reported misalignment). VERTICAL: the spike pixels are the bottom 34px of the 64px frame, so y546 puts the tips at the ground line (576).
+         add 64 to tX
       end repeat
    else
       create graphic ("pf_spikes" & pL)
@@ -3537,19 +3549,25 @@ command pfL1Scene
    pfSlab "pf_ground2", 2752, 576, 3968, 640
    pfSlab "pf_ground3", 4288, 576, 7552, 640   -- the far meadow, the gauntlet, the homeward run + the GREEN CRUSHER alley
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 2496 step 64
+      put 0 into tX
+      repeat while tX <= 2496
          if tX >= 1376 and tX <= 1696 then
             -- under the mound: plain centre, so the hill reads as one mass
             pfTile "terrain_grass_block_center", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
+         add 64 to tX
       end repeat
-      repeat with tX = 2752 to 3904 step 64
+      put 2752 into tX
+      repeat while tX <= 3904
          pfTile "terrain_grass_block_top", tX, 576
+         add 64 to tX
       end repeat
-      repeat with tX = 4288 to 7488 step 64
+      put 4288 into tX
+      repeat while tX <= 7488
          pfTile "terrain_grass_block_top", tX, 576
+         add 64 to tX
       end repeat
       pfShowSlabs false
    else
@@ -3578,8 +3596,10 @@ command pfL1Scene
    -- deck on each side - 688..1072 under art 752..1008)
    b2kSmoothGround "1072,440" & cr & "1008,440" & cr & "752,440" & cr & "688,440"
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "bridge") then
-      repeat with tX = 752 to 944 step 64
+      put 752 into tX
+      repeat while tX <= 944
          pfTile "bridge", tX, 424
+         add 64 to tX
       end repeat
    else
       create graphic "pf_ledge"
@@ -3756,14 +3776,20 @@ command pfL1Scene
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
       -- grass the bank tops + the far-bank flag approach so the pool reads
       -- as a basin set into the hill (the floor stays under the water)
-      repeat with tX = 7552 to 7696 step 64
+      put 7552 into tX
+      repeat while tX <= 7696
          pfTile "terrain_grass_block_top", tX, 480
+         add 64 to tX
       end repeat
-      repeat with tX = 8160 to 8304 step 64
+      put 8160 into tX
+      repeat while tX <= 8304
          pfTile "terrain_grass_block_top", tX, 480
+         add 64 to tX
       end repeat
-      repeat with tX = 8368 to 8576 step 64
+      put 8368 into tX
+      repeat while tX <= 8576
          pfTile "terrain_grass_block_top", tX, 576
+         add 64 to tX
       end repeat
    else
       set the visible of graphic "pf_ground4" to true
@@ -3925,13 +3951,15 @@ command pfL2Scene
    pfSlab "pf_plat1", 6016, 512, 6208, 576
    pfSlab "pf_plat2", 6208, 448, 6336, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_grass_block_top") then
-      repeat with tX = 0 to 6320 step 64
+      put 0 into tX
+      repeat while tX <= 6320
          if tX >= 5344 then
             -- the VAULT finale plays in STONE, entered through the first (yellow) gate
             pfTile "terrain_stone_block_top", tX, 576
          else
             pfTile "terrain_grass_block_top", tX, 576
          end if
+         add 64 to tX
       end repeat
       pfTile "terrain_stone_block_top_left", 6016, 512
       pfTile "terrain_stone_block_top", 6080, 512
@@ -4236,14 +4264,20 @@ command pfL3Scene
    pfSlab "pf_plat1", 5920, 512, 6112, 576
    pfSlab "pf_plat2", 6112, 448, 6240, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_snow_block_top") then
-      repeat with tX = 0 to 704 step 64
+      put 0 into tX
+      repeat while tX <= 704
          pfTile "terrain_snow_block_top", tX, 576
+         add 64 to tX
       end repeat
-      repeat with tX = 960 to 1728 step 64
+      put 960 into tX
+      repeat while tX <= 1728
          pfTile "terrain_snow_block_top", tX, 576
+         add 64 to tX
       end repeat
-      repeat with tX = 1984 to 6528 step 64
+      put 1984 into tX
+      repeat while tX <= 6528
          pfTile "terrain_snow_block_top", tX, 576
+         add 64 to tX
       end repeat
       pfTile "terrain_snow_block_top_left", 5920, 512
       pfTile "terrain_snow_block_top", 5984, 512
@@ -4470,12 +4504,16 @@ command pfL4Scene
    -- the bat overhang: a stone bar the bats roost under
    pfSlab "pf_batbar", 1472, 256, 1856, 320
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_purple_block_top") then
-      repeat with tX = 0 to 1792 step 64
+      put 0 into tX
+      repeat while tX <= 1792
          pfTile "terrain_purple_block_top", tX, 576
+         add 64 to tX
       end repeat
-      repeat with tX = 2048 to 6592 step 64
+      put 2048 into tX
+      repeat while tX <= 6592
          if tX >= 2944 and tX < 3456 then next repeat   -- leave the WIDE LAVA PIT open
          pfTile "terrain_purple_block_top", tX, 576
+         add 64 to tX
       end repeat
       -- the mid-lava stepping-stone, tiled to match its slab (deck y490): L/M/R
       pfTile "terrain_purple_block_top_left", 3104, 490
@@ -4684,25 +4722,33 @@ command pfL5Scene
    pfSlab "pf_plat1", 6080, 512, 6272, 576
    pfSlab "pf_plat2", 6272, 448, 6400, 576
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_sand_block_top") then
-      repeat with tX = 0 to 1936 step 64
+      put 0 into tX
+      repeat while tX <= 1936
          if tX >= 864 and tX <= 1184 then
             pfTile "terrain_sand_block_center", tX, 576   -- under the first dune: one mass
          else
             pfTile "terrain_sand_block_top", tX, 576
          end if
+         add 64 to tX
       end repeat
-      repeat with tX = 2256 to 3776 step 64
+      put 2256 into tX
+      repeat while tX <= 3776
          pfTile "terrain_sand_block_top", tX, 576
+         add 64 to tX
       end repeat
-      repeat with tX = 4096 to 5312 step 64
+      put 4096 into tX
+      repeat while tX <= 5312
          if tX >= 4352 and tX <= 4672 then
             pfTile "terrain_sand_block_center", tX, 576   -- under the second (boulder) dune
          else
             pfTile "terrain_sand_block_top", tX, 576
          end if
+         add 64 to tX
       end repeat
-      repeat with tX = 5568 to 6016 step 64
+      put 5568 into tX
+      repeat while tX <= 6016
          pfTile "terrain_sand_block_top", tX, 576
+         add 64 to tX
       end repeat
       pfTile "terrain_sand_block_top_left", 6080, 512
       pfTile "terrain_sand_block_top", 6144, 512
@@ -4904,27 +4950,35 @@ command pfL6Scene
    -- the ramp mound's mass), carved CLIFF CORNERS at the pit edges, finished
    -- steps at the goal climb. terrain_dirt_* was entirely unused before L6.
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_dirt_block_top") then
-      repeat with tX = 0 to 960 step 64
+      put 0 into tX
+      repeat while tX <= 960
          pfTile "terrain_dirt_block_top", tX, 576
+         add 64 to tX
       end repeat
       pfTile "terrain_dirt_block_top_right", 1024, 576   -- carved LEFT lip of PIT1
       pfTile "terrain_dirt_block_top_left", 1280, 576    -- carved RIGHT lip of PIT1
-      repeat with tX = 1344 to 3392 step 64
+      put 1344 into tX
+      repeat while tX <= 3392
          if tX >= 1408 and tX <= 1792 then
             pfTile "terrain_dirt_block_center", tX, 576   -- under the dirt mound: one mass
          else
             pfTile "terrain_dirt_block_top", tX, 576
          end if
+         add 64 to tX
       end repeat
       pfTile "terrain_dirt_block_top_right", 3456, 576   -- carved LEFT lip of PIT2
       pfTile "terrain_dirt_block_top_left", 3776, 576    -- carved RIGHT lip of PIT2
-      repeat with tX = 3840 to 4608 step 64
+      put 3840 into tX
+      repeat while tX <= 4608
          pfTile "terrain_dirt_block_top", tX, 576
+         add 64 to tX
       end repeat
       pfTile "terrain_dirt_block_top_right", 4672, 576   -- carved LEFT lip of PIT3
       pfTile "terrain_dirt_block_top_left", 4928, 576    -- carved RIGHT lip of PIT3
-      repeat with tX = 4992 to 5952 step 64
+      put 4992 into tX
+      repeat while tX <= 5952
          pfTile "terrain_dirt_block_top", tX, 576
+         add 64 to tX
       end repeat
       pfTile "terrain_dirt_block_top_left", 6016, 512    -- the goal climb's finished steps
       pfTile "terrain_dirt_block_top", 6080, 512
@@ -5150,8 +5204,10 @@ command pfMakeLedge pL, pR, pY
    b2kSmoothGround tPts
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_cloud_left") then
       pfTile "terrain_stone_cloud_left", pL, pY
-      repeat with tX = pL + 64 to pR - 128 step 64
+      put pL + 64 into tX
+      repeat while tX <= pR - 128
          pfTile "terrain_stone_cloud_middle", tX, pY
+         add 64 to tX
       end repeat
       pfTile "terrain_stone_cloud_right", pR - 64, pY
    else
@@ -5183,8 +5239,10 @@ command pfL7Scene
    pfBoundsV 64, 960, 0, 2304   -- a TALL keep (~2300px): the camera scrolls UP the whole climb
    pfSlab "pf_ground1", 64, 2240, 960, 2304   -- the bottom floor (solid)
    if gAssetsOK is true and b2kSheetHasFrame("tiles", "terrain_stone_block_top") then
-      repeat with tX = 64 to 896 step 64
+      put 64 into tX
+      repeat while tX <= 896
          pfTile "terrain_stone_block_top", tX, 2240
+         add 64 to tX
       end repeat
       pfShowSlabs false
    else
@@ -7155,7 +7213,7 @@ end rawKeyDown
 -- =====================================================================
 -- >>> BEGIN EMBEDDED KIT >>>
 -- =====================================================================
--- box2dxt-kit.livecodescript   ·   "Box2Dxt Kit"  (b2k...)
+-- box2dxt-kit.livecodescript   /   "Box2Dxt Kit"  (b2k...)
 --
 -- A friendly, pure-xTalk toolkit over the box2dxt extension. You work in
 -- PIXELS, SCREEN coordinates and DEGREES; the kit converts to Box2D's
@@ -7175,91 +7233,91 @@ end rawKeyDown
 --   on closeCard ; b2kStop ; end closeCard
 --
 -- =====================  CHEAT SHEET  ================================
--- WORLD   b2kSetup [gx,gy] · b2kQuickStart [gy] · b2kStart · b2kStop ·
---         b2kTeardown · b2kAddWalls · b2kWall x1,y1,x2,y2 · b2kClear ·
---         b2kPause · b2kResume · b2kIsRunning() · b2kKillFloor y
+-- WORLD   b2kSetup [gx,gy] / b2kQuickStart [gy] / b2kStart / b2kStop /
+--         b2kTeardown / b2kAddWalls / b2kWall x1,y1,x2,y2 / b2kClear /
+--         b2kPause / b2kResume / b2kIsRunning() / b2kKillFloor y
 --         (movers below y are removed; "b2kFell ctrl" precedes each)
--- CONFIG  b2kSetScale px · b2kSetOrigin x,y · b2kSetGravity gx,gy ·
---         b2kSetSubsteps n · b2kContactTarget obj · b2kFrameTarget obj ·
---         b2kEnableSleeping flag · b2kEnableContinuous flag
--- ATTACH  b2kAddBox ctrl[,dyn] · b2kAddBall ctrl[,dyn] · b2kAddCapsule ctrl[,dyn]
---         b2kAddPolygon ctrl[,dyn] · b2kAddStatic ctrl · b2kAddGround [screenY]
--- SPAWN   b2kSpawnBox x,y,w,h[,color] · b2kSpawnBall x,y,diam[,color] ·
+-- CONFIG  b2kSetScale px / b2kSetOrigin x,y / b2kSetGravity gx,gy /
+--         b2kSetSubsteps n / b2kContactTarget obj / b2kFrameTarget obj /
+--         b2kEnableSleeping flag / b2kEnableContinuous flag
+-- ATTACH  b2kAddBox ctrl[,dyn] / b2kAddBall ctrl[,dyn] / b2kAddCapsule ctrl[,dyn]
+--         b2kAddPolygon ctrl[,dyn] / b2kAddStatic ctrl / b2kAddGround [screenY]
+-- SPAWN   b2kSpawnBox x,y,w,h[,color] / b2kSpawnBall x,y,diam[,color] /
 --         b2kSpawnCapsule x,y,len,thick[,color]                       (-> control)
--- MATERIAL b2kSetBounce ctrl,0..1 · b2kSetFriction ctrl,0..1 · b2kSetDensity ctrl,d
--- BODY    b2kSetBullet ctrl,flag · b2kSetFixedRotation ctrl,flag ·
---         b2kSetGravityScale ctrl,s · b2kSetDamping ctrl,lin[,ang] · b2kWake ctrl ·
---         b2kSetType ctrl,name · b2kSetStatic/Dynamic/Kinematic ctrl ·
---         b2kEnable/Disable ctrl · b2kSetSleepEnabled ctrl,flag
--- ACT     b2kPush ctrl,dvx,dvy · b2kImpulse ctrl,ix,iy · b2kForce ctrl,fx,fy ·
---         b2kSetVelocity ctrl,vx,vy · b2kSpin ctrl,deg/s · b2kSpinBy ctrl,deg/s ·
---         b2kTorque ctrl,t · b2kAngularImpulse ctrl,imp · b2kMoveTo ctrl,x,y[,deg] ·
---         b2kExplode x,y[,radius][,power] · b2kRemove ctrl
--- GET     b2kBodyOf(ctrl) · b2kPosition(ctrl) · b2kWorldCenter(ctrl) · b2kVelocity(ctrl) ·
---         b2kSpeed(ctrl) · b2kAngle(ctrl) · b2kMass(ctrl) · b2kBodyType(ctrl) ·
---         b2kGravityScale(ctrl) · b2kDamping(ctrl) · b2kIsAwake(ctrl) · b2kControlAt(x,y) ·
---         b2kControlContains(ctrl,x,y) · b2kBodyCount() · b2kAwakeCount() ·
---         b2kToWorldX/Y(px) · b2kToScreenX/Y(m) ·
---         b2kRayHit(x1,y1,x2,y2) + b2kRayHitX/Y() · b2kRayHitNormalX/Y() · b2kRayDist()
--- JOINTS  b2kHinge ctrlA,ctrlB,x,y · b2kWeld ctrlA,ctrlB · b2kRope ctrlA,ctrlB[,len]
---         b2kSlider ctrlA,ctrlB,axisDeg · b2kWheel chassis,wheel,x,y[,axisDeg]
---         b2kMotor j,degPerSec[,maxTorque] · b2kSliderMotor j,pxPerSec[,maxForce] ·
---         b2kWheelMotor j,degPerSec[,maxTorque] · b2kRemoveJoint j
--- JOINT+  b2kHingeLimit j,loDeg,hiDeg · b2kHingeAngle(j) · b2kSliderLimit j,loPx,hiPx ·
---         b2kSliderPos(j) · b2kRopeRange j,minPx,maxPx · b2kRopeLength(j) ·
---         b2kSpring j,hz[,damp] · b2kWeldSpring j,hz[,damp] · b2kWheelSpring j,hz[,damp]
--- DRAG    b2kGrab(x,y) -> control · b2kRelease
--- INPUT   b2kInputOn/Off · b2kKeyIsDown(k) · b2kKeyPressed/Released(k) ·
---         b2kInputInject keys / b2kInputInjectOff (scripted keys: tests/replays) ·
---         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
---         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
+-- MATERIAL b2kSetBounce ctrl,0..1 / b2kSetFriction ctrl,0..1 / b2kSetDensity ctrl,d
+-- BODY    b2kSetBullet ctrl,flag / b2kSetFixedRotation ctrl,flag /
+--         b2kSetGravityScale ctrl,s / b2kSetDamping ctrl,lin[,ang] / b2kWake ctrl /
+--         b2kSetType ctrl,name / b2kSetStatic/Dynamic/Kinematic ctrl /
+--         b2kEnable/Disable ctrl / b2kSetSleepEnabled ctrl,flag
+-- ACT     b2kPush ctrl,dvx,dvy / b2kImpulse ctrl,ix,iy / b2kForce ctrl,fx,fy /
+--         b2kSetVelocity ctrl,vx,vy / b2kSpin ctrl,deg/s / b2kSpinBy ctrl,deg/s /
+--         b2kTorque ctrl,t / b2kAngularImpulse ctrl,imp / b2kMoveTo ctrl,x,y[,deg] /
+--         b2kExplode x,y[,radius][,power] / b2kRemove ctrl
+-- GET     b2kBodyOf(ctrl) / b2kPosition(ctrl) / b2kWorldCenter(ctrl) / b2kVelocity(ctrl) /
+--         b2kSpeed(ctrl) / b2kAngle(ctrl) / b2kMass(ctrl) / b2kBodyType(ctrl) /
+--         b2kGravityScale(ctrl) / b2kDamping(ctrl) / b2kIsAwake(ctrl) / b2kControlAt(x,y) /
+--         b2kControlContains(ctrl,x,y) / b2kBodyCount() / b2kAwakeCount() /
+--         b2kToWorldX/Y(px) / b2kToScreenX/Y(m) /
+--         b2kRayHit(x1,y1,x2,y2) + b2kRayHitX/Y() / b2kRayHitNormalX/Y() / b2kRayDist()
+-- JOINTS  b2kHinge ctrlA,ctrlB,x,y / b2kWeld ctrlA,ctrlB / b2kRope ctrlA,ctrlB[,len]
+--         b2kSlider ctrlA,ctrlB,axisDeg / b2kWheel chassis,wheel,x,y[,axisDeg]
+--         b2kMotor j,degPerSec[,maxTorque] / b2kSliderMotor j,pxPerSec[,maxForce] /
+--         b2kWheelMotor j,degPerSec[,maxTorque] / b2kRemoveJoint j
+-- JOINT+  b2kHingeLimit j,loDeg,hiDeg / b2kHingeAngle(j) / b2kSliderLimit j,loPx,hiPx /
+--         b2kSliderPos(j) / b2kRopeRange j,minPx,maxPx / b2kRopeLength(j) /
+--         b2kSpring j,hz[,damp] / b2kWeldSpring j,hz[,damp] / b2kWheelSpring j,hz[,damp]
+-- DRAG    b2kGrab(x,y) -> control / b2kRelease
+-- INPUT   b2kInputOn/Off / b2kKeyIsDown(k) / b2kKeyPressed/Released(k) /
+--         b2kInputInject keys / b2kInputInjectOff (scripted keys: tests/replays) /
+--         b2kKeysHeld() / b2kBindAction name,keys / b2kActionIsDown/Pressed/
+--         Released(name) / b2kBindAxis name,negKeys,posKeys / b2kAxis(name) /
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
--- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] · b2kSheetLoadAtlas name,png[,xml] ·
---         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] · b2kSheetFrames(name) ·
---         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) ·
---         b2kSheetFrameNames(name) · b2kSheetHasFrame(name,frame) ·
---         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
---         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
---         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
---         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
---         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
---         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
--- PLAYER  b2kPlayerMake x,y,w,h[,sheet] · b2kPlayerAttach ctrl ·
---         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt,swim] ·
---         b2kPlayerSet key,value · b2kPlayerGet(key) · b2kPlayerOnGround() ·
---         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt|swim) ·
---         b2kPlayerFacing() · b2kPlayerJump [speed] · b2kPlayerControl flag ·
---         b2kPlayerAddLadder x1,y1,x2,y2 · b2kPlayerAddWater x1,y1,x2,y2 ·
---         b2kPlayerHurt [fromX] ·
---         b2kPlayerHurtIs() (true through knockback + mercy window) ·
---         b2kPlayer() · b2kPlayerSprite() · b2kPlayerRemove
+-- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] / b2kSheetLoadAtlas name,png[,xml] /
+--         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] / b2kSheetFrames(name) /
+--         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) /
+--         b2kSheetFrameNames(name) / b2kSheetHasFrame(name,frame) /
+--         b2kSheetScale name,factor / b2kSheetFrameSize(name,frame) /
+--         b2kAnimDef sheet,anim,frames,fps[,loop] / b2kSpriteNew sheet[,frame,x,y] /
+--         b2kSpriteFromGIF path[,x,y] / b2kSpritePlay spr,anim[,restart] /
+--         b2kSpriteStop spr / b2kSpriteSetFrame spr,f / b2kSpriteFlipH spr,flag /
+--         b2kSpriteFPS spr,fps / b2kSpriteOnFinish spr,msg /
+--         b2kSpriteBind spr,bodyCtrl[,dx,dy] / b2kSpriteRemove spr
+-- PLAYER  b2kPlayerMake x,y,w,h[,sheet] / b2kPlayerAttach ctrl /
+--         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt,swim] /
+--         b2kPlayerSet key,value / b2kPlayerGet(key) / b2kPlayerOnGround() /
+--         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt|swim) /
+--         b2kPlayerFacing() / b2kPlayerJump [speed] / b2kPlayerControl flag /
+--         b2kPlayerAddLadder x1,y1,x2,y2 / b2kPlayerAddWater x1,y1,x2,y2 /
+--         b2kPlayerHurt [fromX] /
+--         b2kPlayerHurtIs() (true through knockback + mercy window) /
+--         b2kPlayer() / b2kPlayerSprite() / b2kPlayerRemove
 --         (drives axes "moveX"/"moveY" + action "jump"; rebind to remap.
---         DOWN ducks · DOWN+JUMP on a one-way chain drops through ·
---         UP/DOWN in a ladder zone climbs · JUMP exits a climb ·
+--         DOWN ducks / DOWN+JUMP on a one-way chain drops through /
+--         UP/DOWN in a ladder zone climbs / JUMP exits a climb /
 --         in a water zone UP/DOWN swim, JUMP strokes (repeatable))
--- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
---         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
---         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
+-- CAMERA  b2kCamOn [rect] / b2kCamOff / b2kCamFollow ctrl[,lerp] / b2kCamUnfollow /
+--         b2kCamDeadzone w,h / b2kCamBounds x1,y1,x2,y2 / b2kCamGoto x,y /
+--         b2kCamPos() / b2kCamShake amp,ms / b2kCamMouseX/Y() / b2kCamGroup() /
 --         b2kCamAdopt ctrl   (world px == control locs; spawns auto-join the view)
--- AUDIO   b2kSoundLoad name,path · b2kToneMake name,freqs,msPerNote[,vol,shape] ·
---         b2kSound name · b2kSoundLoop name · b2kSoundStop · b2kSoundMute flag ·
---         b2kSoundMuted() · b2kSoundVolume pct · b2kSoundIsLoaded(name) ·
+-- AUDIO   b2kSoundLoad name,path / b2kToneMake name,freqs,msPerNote[,vol,shape] /
+--         b2kSound name / b2kSoundLoop name / b2kSoundStop / b2kSoundMute flag /
+--         b2kSoundMuted() / b2kSoundVolume pct / b2kSoundIsLoaded(name) /
 --         b2kSoundStatus()  (audioClips: one at a time; b2kToneMake = no asset files)
--- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
---         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
---         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
--- SENSOR  b2kAddSensor ctrl[,shape] · on b2kSensorEnter pSensor,pVisitor ·
---         on b2kSensorExit pSensor,pVisitor · b2kSensorCount()+EnterSensor/Visitor(i)
--- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
---         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
--- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen
+-- EVENTS  on b2kContact pCtrlA,pCtrlB / on b2kEndContact pCtrlA,pCtrlB
+--         (long ids; empty for walls/ground) / on b2kFrame  (once per frame)
+--         poll instead: b2kContactCount()+b2kContactA/B(i) / b2kEndContactCount()+...
+-- SENSOR  b2kAddSensor ctrl[,shape] / on b2kSensorEnter pSensor,pVisitor /
+--         on b2kSensorExit pSensor,pVisitor / b2kSensorCount()+EnterSensor/Visitor(i)
+-- FILTER  b2kDefineLayer name / b2kSetCategory ctrl,layers / b2kSetMask ctrl,layers /
+--         b2kSetCollisionGroup ctrl,n / b2kNoCollide ctrlA,ctrlB
+-- TERRAIN b2kChain pointList[,loop] / b2kSmoothGround pointList  (>=4 screen
 --         points; chains carry the reserved "oneway" layer, bit 2^31)
--- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapMoving x1,y1,x2,y2 (presence:
---         statics filtered out) · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
--- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
--- TUNE    b2kSetRestitutionThreshold px/s · b2kSetContactTuning hz,damp,pushPx ·
---         b2kSetJointTuning hz,damp · b2kSetMaxSpeed px/s · b2kEnableWarmStarting f ·
---         b2kProfile() · b2kAwakeBodyCount()
+-- QUERY+  b2kOverlap x1,y1,x2,y2 / b2kOverlapMoving x1,y1,x2,y2 (presence:
+--         statics filtered out) / b2kOverlapCircle x,y,r / b2kRayHitAll x1,y1,x2,y2
+-- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] / b2kExplode (native blast)
+-- TUNE    b2kSetRestitutionThreshold px/s / b2kSetContactTuning hz,damp,pushPx /
+--         b2kSetJointTuning hz,damp / b2kSetMaxSpeed px/s / b2kEnableWarmStarting f /
+--         b2kProfile() / b2kAwakeBodyCount()
 --
 -- Tips: pass controls by reference (the long id of ... is safest). Keep moving
 -- objects a sensible on-screen size (default scale 40 px/m, so ~4-400 px).
@@ -7606,7 +7664,7 @@ command b2kAddGround pScreenY
    get b2AddSegment(tBody, -500, 0, 500, 0, 0.7, 0.1)
 end b2kAddGround
 
--- A static collision segment between two SCREEN points — custom walls, ramps,
+-- A static collision segment between two SCREEN points - custom walls, ramps,
 -- ledges and floors. Like the card-edge walls it is invisible (draw your own
 -- graphic to match) and lives for the world's lifetime; it isn't tracked as a
 -- body, so b2kClear leaves it in place.
@@ -8408,7 +8466,7 @@ end b2kBodyOf
 
 -- A body's position in SCREEN pixels as "x,y" (the position partner of
 -- b2kVelocity). Controls already follow their body, but this reads the exact,
--- sub-pixel centre — handy for aiming, distance checks, or mixing with b2…
+-- sub-pixel centre - handy for aiming, distance checks, or mixing with b2...
 function b2kPosition pControl
    local b
    put sBody[the long id of pControl] into b
@@ -8530,7 +8588,7 @@ function b2kControlAt pScreenX, pScreenY
    return sCtrl[b2BodyAtPoint(sWorld, b2kToWorldX(pScreenX), b2kToWorldY(pScreenY))]
 end b2kControlAt
 
--- True if SCREEN point (x,y) is inside this control's actual collision shape —
+-- True if SCREEN point (x,y) is inside this control's actual collision shape -
 -- rotation- and shape-aware, unlike a bounding-box test. b2kControlAt searches
 -- every body; this tests one control you already have (e.g. a precise click hit).
 function b2kControlContains pControl, pScreenX, pScreenY
@@ -8815,7 +8873,7 @@ command b2kWheelSpring pJoint, pHertz, pDamping
    b2WheelEnableSpring pJoint, true, pHertz, pDamping
 end b2kWheelSpring
 
--- OFF switches: the b2k… joint wrappers above only ever turn a feature ON, so
+-- OFF switches: the b2k... joint wrappers above only ever turn a feature ON, so
 -- these let callers disable a motor or limit again (free swing / unbounded slide).
 command b2kMotorOff pJoint
    if pJoint is not empty and pJoint > 0 then b2RevoluteEnableMotor pJoint, false, 0, 0
@@ -8889,7 +8947,7 @@ end b2kAddSensor
 
 -- Flip a control's collision between solid and SENSOR (a non-solid trigger that
 -- reports overlaps but never blocks). The flag lives on the shape, so rebuild the
--- shape afterwards with b2kReshape — it re-applies the sensor state from here.
+-- shape afterwards with b2kReshape - it re-applies the sensor state from here.
 command b2kSetSensor pControl, pFlag
    put (pFlag is true) into sSensor[the long id of pControl]
 end b2kSetSensor
@@ -9029,7 +9087,7 @@ command b2kSmoothGround pPoints
 end b2kSmoothGround
 
 -- Attach a smooth static chain to a CONTROL, from a list of SCREEN points
--- ("x,y" per line) — the control's own outline. Unlike b2kChain (which makes an
+-- ("x,y" per line) - the control's own outline. Unlike b2kChain (which makes an
 -- untracked world body), this registers the body against the control like
 -- b2kAddBox/Ball/Polygon, so it selects (b2kControlAt), drags (b2kMoveTo) and
 -- removes (b2kRemove) as a normal static part. The points are taken relative to
@@ -9152,7 +9210,7 @@ command b2kSetJointTuning pHertz, pDamping
    if sWorld is not empty then b2SetJointTuning sWorld, pHertz, pDamping
 end b2kSetJointTuning
 
--- Clamp how fast any body can move (px/sec) — stops runaway speeds.
+-- Clamp how fast any body can move (px/sec) - stops runaway speeds.
 command b2kSetMaxSpeed pPxPerSec
    if sWorld is not empty then b2SetMaximumLinearSpeed sWorld, pPxPerSec / sScale
 end b2kSetMaxSpeed
@@ -12319,7 +12377,7 @@ end b2kStepOnce
 -- draw throws. This is the "the loop is stopped, redraw by hand" entry point
 -- (editors and build modes call it after spawning or moving things), so it must
 -- FULL-SCAN: the move-event fast path only reports bodies a b2Step moved, and a
--- stopped world steps never — relying on it here would draw nothing at all.
+-- stopped world steps never - relying on it here would draw nothing at all.
 -- The running loop instead holds one lock across the whole frame and calls the
 -- lock-free, move-event-driven b2kSyncBodies directly.
 command b2kSync

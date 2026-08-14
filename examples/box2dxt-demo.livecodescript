@@ -1,5 +1,5 @@
 -- #####################################################################
--- #  Box2Dxt  —  SELF-CONTAINED DEMO  (Kit + showcase in one file)    #
+-- #  Box2Dxt  -  SELF-CONTAINED DEMO  (Kit + showcase in one file)    #
 -- #                                                                   #
 -- #  HOW TO RUN                                                       #
 -- #   1. Load the box2dxt.lcb extension and put the box2dxt native    #
@@ -15,17 +15,17 @@
 -- #####################################################################
 
 -- =====================================================================
--- EMBEDDED KIT  ·  auto-generated copy of src/box2dxt-kit.livecodescript
+-- EMBEDDED KIT  /  auto-generated copy of src/box2dxt-kit.livecodescript
 --
 -- This file is self-contained: paste the whole thing into one stack script
--- and it runs.  The Kit below is a GENERATED copy — do not edit it here.
+-- and it runs.  The Kit below is a GENERATED copy - do not edit it here.
 -- Edit the canonical Kit at src/box2dxt-kit.livecodescript, then run:
 --     python3 tools/sync-embedded-kit.py
 -- (CI checks it stays in sync via:  tools/sync-embedded-kit.py --check)
 -- =====================================================================
 -- >>> BEGIN EMBEDDED KIT >>>
 -- =====================================================================
--- box2dxt-kit.livecodescript   ·   "Box2Dxt Kit"  (b2k...)
+-- box2dxt-kit.livecodescript   /   "Box2Dxt Kit"  (b2k...)
 --
 -- A friendly, pure-xTalk toolkit over the box2dxt extension. You work in
 -- PIXELS, SCREEN coordinates and DEGREES; the kit converts to Box2D's
@@ -45,91 +45,91 @@
 --   on closeCard ; b2kStop ; end closeCard
 --
 -- =====================  CHEAT SHEET  ================================
--- WORLD   b2kSetup [gx,gy] · b2kQuickStart [gy] · b2kStart · b2kStop ·
---         b2kTeardown · b2kAddWalls · b2kWall x1,y1,x2,y2 · b2kClear ·
---         b2kPause · b2kResume · b2kIsRunning() · b2kKillFloor y
+-- WORLD   b2kSetup [gx,gy] / b2kQuickStart [gy] / b2kStart / b2kStop /
+--         b2kTeardown / b2kAddWalls / b2kWall x1,y1,x2,y2 / b2kClear /
+--         b2kPause / b2kResume / b2kIsRunning() / b2kKillFloor y
 --         (movers below y are removed; "b2kFell ctrl" precedes each)
--- CONFIG  b2kSetScale px · b2kSetOrigin x,y · b2kSetGravity gx,gy ·
---         b2kSetSubsteps n · b2kContactTarget obj · b2kFrameTarget obj ·
---         b2kEnableSleeping flag · b2kEnableContinuous flag
--- ATTACH  b2kAddBox ctrl[,dyn] · b2kAddBall ctrl[,dyn] · b2kAddCapsule ctrl[,dyn]
---         b2kAddPolygon ctrl[,dyn] · b2kAddStatic ctrl · b2kAddGround [screenY]
--- SPAWN   b2kSpawnBox x,y,w,h[,color] · b2kSpawnBall x,y,diam[,color] ·
+-- CONFIG  b2kSetScale px / b2kSetOrigin x,y / b2kSetGravity gx,gy /
+--         b2kSetSubsteps n / b2kContactTarget obj / b2kFrameTarget obj /
+--         b2kEnableSleeping flag / b2kEnableContinuous flag
+-- ATTACH  b2kAddBox ctrl[,dyn] / b2kAddBall ctrl[,dyn] / b2kAddCapsule ctrl[,dyn]
+--         b2kAddPolygon ctrl[,dyn] / b2kAddStatic ctrl / b2kAddGround [screenY]
+-- SPAWN   b2kSpawnBox x,y,w,h[,color] / b2kSpawnBall x,y,diam[,color] /
 --         b2kSpawnCapsule x,y,len,thick[,color]                       (-> control)
--- MATERIAL b2kSetBounce ctrl,0..1 · b2kSetFriction ctrl,0..1 · b2kSetDensity ctrl,d
--- BODY    b2kSetBullet ctrl,flag · b2kSetFixedRotation ctrl,flag ·
---         b2kSetGravityScale ctrl,s · b2kSetDamping ctrl,lin[,ang] · b2kWake ctrl ·
---         b2kSetType ctrl,name · b2kSetStatic/Dynamic/Kinematic ctrl ·
---         b2kEnable/Disable ctrl · b2kSetSleepEnabled ctrl,flag
--- ACT     b2kPush ctrl,dvx,dvy · b2kImpulse ctrl,ix,iy · b2kForce ctrl,fx,fy ·
---         b2kSetVelocity ctrl,vx,vy · b2kSpin ctrl,deg/s · b2kSpinBy ctrl,deg/s ·
---         b2kTorque ctrl,t · b2kAngularImpulse ctrl,imp · b2kMoveTo ctrl,x,y[,deg] ·
---         b2kExplode x,y[,radius][,power] · b2kRemove ctrl
--- GET     b2kBodyOf(ctrl) · b2kPosition(ctrl) · b2kWorldCenter(ctrl) · b2kVelocity(ctrl) ·
---         b2kSpeed(ctrl) · b2kAngle(ctrl) · b2kMass(ctrl) · b2kBodyType(ctrl) ·
---         b2kGravityScale(ctrl) · b2kDamping(ctrl) · b2kIsAwake(ctrl) · b2kControlAt(x,y) ·
---         b2kControlContains(ctrl,x,y) · b2kBodyCount() · b2kAwakeCount() ·
---         b2kToWorldX/Y(px) · b2kToScreenX/Y(m) ·
---         b2kRayHit(x1,y1,x2,y2) + b2kRayHitX/Y() · b2kRayHitNormalX/Y() · b2kRayDist()
--- JOINTS  b2kHinge ctrlA,ctrlB,x,y · b2kWeld ctrlA,ctrlB · b2kRope ctrlA,ctrlB[,len]
---         b2kSlider ctrlA,ctrlB,axisDeg · b2kWheel chassis,wheel,x,y[,axisDeg]
---         b2kMotor j,degPerSec[,maxTorque] · b2kSliderMotor j,pxPerSec[,maxForce] ·
---         b2kWheelMotor j,degPerSec[,maxTorque] · b2kRemoveJoint j
--- JOINT+  b2kHingeLimit j,loDeg,hiDeg · b2kHingeAngle(j) · b2kSliderLimit j,loPx,hiPx ·
---         b2kSliderPos(j) · b2kRopeRange j,minPx,maxPx · b2kRopeLength(j) ·
---         b2kSpring j,hz[,damp] · b2kWeldSpring j,hz[,damp] · b2kWheelSpring j,hz[,damp]
--- DRAG    b2kGrab(x,y) -> control · b2kRelease
--- INPUT   b2kInputOn/Off · b2kKeyIsDown(k) · b2kKeyPressed/Released(k) ·
---         b2kInputInject keys / b2kInputInjectOff (scripted keys: tests/replays) ·
---         b2kKeysHeld() · b2kBindAction name,keys · b2kActionIsDown/Pressed/
---         Released(name) · b2kBindAxis name,negKeys,posKeys · b2kAxis(name) ·
+-- MATERIAL b2kSetBounce ctrl,0..1 / b2kSetFriction ctrl,0..1 / b2kSetDensity ctrl,d
+-- BODY    b2kSetBullet ctrl,flag / b2kSetFixedRotation ctrl,flag /
+--         b2kSetGravityScale ctrl,s / b2kSetDamping ctrl,lin[,ang] / b2kWake ctrl /
+--         b2kSetType ctrl,name / b2kSetStatic/Dynamic/Kinematic ctrl /
+--         b2kEnable/Disable ctrl / b2kSetSleepEnabled ctrl,flag
+-- ACT     b2kPush ctrl,dvx,dvy / b2kImpulse ctrl,ix,iy / b2kForce ctrl,fx,fy /
+--         b2kSetVelocity ctrl,vx,vy / b2kSpin ctrl,deg/s / b2kSpinBy ctrl,deg/s /
+--         b2kTorque ctrl,t / b2kAngularImpulse ctrl,imp / b2kMoveTo ctrl,x,y[,deg] /
+--         b2kExplode x,y[,radius][,power] / b2kRemove ctrl
+-- GET     b2kBodyOf(ctrl) / b2kPosition(ctrl) / b2kWorldCenter(ctrl) / b2kVelocity(ctrl) /
+--         b2kSpeed(ctrl) / b2kAngle(ctrl) / b2kMass(ctrl) / b2kBodyType(ctrl) /
+--         b2kGravityScale(ctrl) / b2kDamping(ctrl) / b2kIsAwake(ctrl) / b2kControlAt(x,y) /
+--         b2kControlContains(ctrl,x,y) / b2kBodyCount() / b2kAwakeCount() /
+--         b2kToWorldX/Y(px) / b2kToScreenX/Y(m) /
+--         b2kRayHit(x1,y1,x2,y2) + b2kRayHitX/Y() / b2kRayHitNormalX/Y() / b2kRayDist()
+-- JOINTS  b2kHinge ctrlA,ctrlB,x,y / b2kWeld ctrlA,ctrlB / b2kRope ctrlA,ctrlB[,len]
+--         b2kSlider ctrlA,ctrlB,axisDeg / b2kWheel chassis,wheel,x,y[,axisDeg]
+--         b2kMotor j,degPerSec[,maxTorque] / b2kSliderMotor j,pxPerSec[,maxForce] /
+--         b2kWheelMotor j,degPerSec[,maxTorque] / b2kRemoveJoint j
+-- JOINT+  b2kHingeLimit j,loDeg,hiDeg / b2kHingeAngle(j) / b2kSliderLimit j,loPx,hiPx /
+--         b2kSliderPos(j) / b2kRopeRange j,minPx,maxPx / b2kRopeLength(j) /
+--         b2kSpring j,hz[,damp] / b2kWeldSpring j,hz[,damp] / b2kWheelSpring j,hz[,damp]
+-- DRAG    b2kGrab(x,y) -> control / b2kRelease
+-- INPUT   b2kInputOn/Off / b2kKeyIsDown(k) / b2kKeyPressed/Released(k) /
+--         b2kInputInject keys / b2kInputInjectOff (scripted keys: tests/replays) /
+--         b2kKeysHeld() / b2kBindAction name,keys / b2kActionIsDown/Pressed/
+--         Released(name) / b2kBindAxis name,negKeys,posKeys / b2kAxis(name) /
 --         b2kFrameMS()   (poll-based: arm b2kInputOn, read from on b2kFrame)
--- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] · b2kSheetLoadAtlas name,png[,xml] ·
---         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] · b2kSheetFrames(name) ·
---         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) ·
---         b2kSheetFrameNames(name) · b2kSheetHasFrame(name,frame) ·
---         b2kSheetScale name,factor · b2kSheetFrameSize(name,frame) ·
---         b2kAnimDef sheet,anim,frames,fps[,loop] · b2kSpriteNew sheet[,frame,x,y] ·
---         b2kSpriteFromGIF path[,x,y] · b2kSpritePlay spr,anim[,restart] ·
---         b2kSpriteStop spr · b2kSpriteSetFrame spr,f · b2kSpriteFlipH spr,flag ·
---         b2kSpriteFPS spr,fps · b2kSpriteOnFinish spr,msg ·
---         b2kSpriteBind spr,bodyCtrl[,dx,dy] · b2kSpriteRemove spr
--- PLAYER  b2kPlayerMake x,y,w,h[,sheet] · b2kPlayerAttach ctrl ·
---         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt,swim] ·
---         b2kPlayerSet key,value · b2kPlayerGet(key) · b2kPlayerOnGround() ·
---         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt|swim) ·
---         b2kPlayerFacing() · b2kPlayerJump [speed] · b2kPlayerControl flag ·
---         b2kPlayerAddLadder x1,y1,x2,y2 · b2kPlayerAddWater x1,y1,x2,y2 ·
---         b2kPlayerHurt [fromX] ·
---         b2kPlayerHurtIs() (true through knockback + mercy window) ·
---         b2kPlayer() · b2kPlayerSprite() · b2kPlayerRemove
+-- SPRITE  b2kSheetLoad name,path,fw,fh[,n,margin,gap] / b2kSheetLoadAtlas name,png[,xml] /
+--         b2kSheetFromImage name,img,fw,fh[,n,margin,gap] / b2kSheetFrames(name) /
+--         b2kSheetAddFrame sheet,frame,x,y,w,h (no-XML packed sheets; fw/fh 0 = no grid) /
+--         b2kSheetFrameNames(name) / b2kSheetHasFrame(name,frame) /
+--         b2kSheetScale name,factor / b2kSheetFrameSize(name,frame) /
+--         b2kAnimDef sheet,anim,frames,fps[,loop] / b2kSpriteNew sheet[,frame,x,y] /
+--         b2kSpriteFromGIF path[,x,y] / b2kSpritePlay spr,anim[,restart] /
+--         b2kSpriteStop spr / b2kSpriteSetFrame spr,f / b2kSpriteFlipH spr,flag /
+--         b2kSpriteFPS spr,fps / b2kSpriteOnFinish spr,msg /
+--         b2kSpriteBind spr,bodyCtrl[,dx,dy] / b2kSpriteRemove spr
+-- PLAYER  b2kPlayerMake x,y,w,h[,sheet] / b2kPlayerAttach ctrl /
+--         b2kPlayerAnims idle,run,jump,fall[,land,duck,climb,hurt,swim] /
+--         b2kPlayerSet key,value / b2kPlayerGet(key) / b2kPlayerOnGround() /
+--         b2kPlayerState() (idle|run|jump|fall|land|duck|climb|hurt|swim) /
+--         b2kPlayerFacing() / b2kPlayerJump [speed] / b2kPlayerControl flag /
+--         b2kPlayerAddLadder x1,y1,x2,y2 / b2kPlayerAddWater x1,y1,x2,y2 /
+--         b2kPlayerHurt [fromX] /
+--         b2kPlayerHurtIs() (true through knockback + mercy window) /
+--         b2kPlayer() / b2kPlayerSprite() / b2kPlayerRemove
 --         (drives axes "moveX"/"moveY" + action "jump"; rebind to remap.
---         DOWN ducks · DOWN+JUMP on a one-way chain drops through ·
---         UP/DOWN in a ladder zone climbs · JUMP exits a climb ·
+--         DOWN ducks / DOWN+JUMP on a one-way chain drops through /
+--         UP/DOWN in a ladder zone climbs / JUMP exits a climb /
 --         in a water zone UP/DOWN swim, JUMP strokes (repeatable))
--- CAMERA  b2kCamOn [rect] · b2kCamOff · b2kCamFollow ctrl[,lerp] · b2kCamUnfollow ·
---         b2kCamDeadzone w,h · b2kCamBounds x1,y1,x2,y2 · b2kCamGoto x,y ·
---         b2kCamPos() · b2kCamShake amp,ms · b2kCamMouseX/Y() · b2kCamGroup() ·
+-- CAMERA  b2kCamOn [rect] / b2kCamOff / b2kCamFollow ctrl[,lerp] / b2kCamUnfollow /
+--         b2kCamDeadzone w,h / b2kCamBounds x1,y1,x2,y2 / b2kCamGoto x,y /
+--         b2kCamPos() / b2kCamShake amp,ms / b2kCamMouseX/Y() / b2kCamGroup() /
 --         b2kCamAdopt ctrl   (world px == control locs; spawns auto-join the view)
--- AUDIO   b2kSoundLoad name,path · b2kToneMake name,freqs,msPerNote[,vol,shape] ·
---         b2kSound name · b2kSoundLoop name · b2kSoundStop · b2kSoundMute flag ·
---         b2kSoundMuted() · b2kSoundVolume pct · b2kSoundIsLoaded(name) ·
+-- AUDIO   b2kSoundLoad name,path / b2kToneMake name,freqs,msPerNote[,vol,shape] /
+--         b2kSound name / b2kSoundLoop name / b2kSoundStop / b2kSoundMute flag /
+--         b2kSoundMuted() / b2kSoundVolume pct / b2kSoundIsLoaded(name) /
 --         b2kSoundStatus()  (audioClips: one at a time; b2kToneMake = no asset files)
--- EVENTS  on b2kContact pCtrlA,pCtrlB · on b2kEndContact pCtrlA,pCtrlB
---         (long ids; empty for walls/ground) · on b2kFrame  (once per frame)
---         poll instead: b2kContactCount()+b2kContactA/B(i) · b2kEndContactCount()+…
--- SENSOR  b2kAddSensor ctrl[,shape] · on b2kSensorEnter pSensor,pVisitor ·
---         on b2kSensorExit pSensor,pVisitor · b2kSensorCount()+EnterSensor/Visitor(i)
--- FILTER  b2kDefineLayer name · b2kSetCategory ctrl,layers · b2kSetMask ctrl,layers ·
---         b2kSetCollisionGroup ctrl,n · b2kNoCollide ctrlA,ctrlB
--- TERRAIN b2kChain pointList[,loop] · b2kSmoothGround pointList  (>=4 screen
+-- EVENTS  on b2kContact pCtrlA,pCtrlB / on b2kEndContact pCtrlA,pCtrlB
+--         (long ids; empty for walls/ground) / on b2kFrame  (once per frame)
+--         poll instead: b2kContactCount()+b2kContactA/B(i) / b2kEndContactCount()+...
+-- SENSOR  b2kAddSensor ctrl[,shape] / on b2kSensorEnter pSensor,pVisitor /
+--         on b2kSensorExit pSensor,pVisitor / b2kSensorCount()+EnterSensor/Visitor(i)
+-- FILTER  b2kDefineLayer name / b2kSetCategory ctrl,layers / b2kSetMask ctrl,layers /
+--         b2kSetCollisionGroup ctrl,n / b2kNoCollide ctrlA,ctrlB
+-- TERRAIN b2kChain pointList[,loop] / b2kSmoothGround pointList  (>=4 screen
 --         points; chains carry the reserved "oneway" layer, bit 2^31)
--- QUERY+  b2kOverlap x1,y1,x2,y2 · b2kOverlapMoving x1,y1,x2,y2 (presence:
---         statics filtered out) · b2kOverlapCircle x,y,r · b2kRayHitAll x1,y1,x2,y2
--- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] · b2kExplode (native blast)
--- TUNE    b2kSetRestitutionThreshold px/s · b2kSetContactTuning hz,damp,pushPx ·
---         b2kSetJointTuning hz,damp · b2kSetMaxSpeed px/s · b2kEnableWarmStarting f ·
---         b2kProfile() · b2kAwakeBodyCount()
+-- QUERY+  b2kOverlap x1,y1,x2,y2 / b2kOverlapMoving x1,y1,x2,y2 (presence:
+--         statics filtered out) / b2kOverlapCircle x,y,r / b2kRayHitAll x1,y1,x2,y2
+-- MOTOR   b2kMotorTo mover,ref,dxPx,dyPx,deg[,maxF,maxT] / b2kExplode (native blast)
+-- TUNE    b2kSetRestitutionThreshold px/s / b2kSetContactTuning hz,damp,pushPx /
+--         b2kSetJointTuning hz,damp / b2kSetMaxSpeed px/s / b2kEnableWarmStarting f /
+--         b2kProfile() / b2kAwakeBodyCount()
 --
 -- Tips: pass controls by reference (the long id of ... is safest). Keep moving
 -- objects a sensible on-screen size (default scale 40 px/m, so ~4-400 px).
@@ -476,7 +476,7 @@ command b2kAddGround pScreenY
    get b2AddSegment(tBody, -500, 0, 500, 0, 0.7, 0.1)
 end b2kAddGround
 
--- A static collision segment between two SCREEN points — custom walls, ramps,
+-- A static collision segment between two SCREEN points - custom walls, ramps,
 -- ledges and floors. Like the card-edge walls it is invisible (draw your own
 -- graphic to match) and lives for the world's lifetime; it isn't tracked as a
 -- body, so b2kClear leaves it in place.
@@ -1278,7 +1278,7 @@ end b2kBodyOf
 
 -- A body's position in SCREEN pixels as "x,y" (the position partner of
 -- b2kVelocity). Controls already follow their body, but this reads the exact,
--- sub-pixel centre — handy for aiming, distance checks, or mixing with b2…
+-- sub-pixel centre - handy for aiming, distance checks, or mixing with b2...
 function b2kPosition pControl
    local b
    put sBody[the long id of pControl] into b
@@ -1400,7 +1400,7 @@ function b2kControlAt pScreenX, pScreenY
    return sCtrl[b2BodyAtPoint(sWorld, b2kToWorldX(pScreenX), b2kToWorldY(pScreenY))]
 end b2kControlAt
 
--- True if SCREEN point (x,y) is inside this control's actual collision shape —
+-- True if SCREEN point (x,y) is inside this control's actual collision shape -
 -- rotation- and shape-aware, unlike a bounding-box test. b2kControlAt searches
 -- every body; this tests one control you already have (e.g. a precise click hit).
 function b2kControlContains pControl, pScreenX, pScreenY
@@ -1685,7 +1685,7 @@ command b2kWheelSpring pJoint, pHertz, pDamping
    b2WheelEnableSpring pJoint, true, pHertz, pDamping
 end b2kWheelSpring
 
--- OFF switches: the b2k… joint wrappers above only ever turn a feature ON, so
+-- OFF switches: the b2k... joint wrappers above only ever turn a feature ON, so
 -- these let callers disable a motor or limit again (free swing / unbounded slide).
 command b2kMotorOff pJoint
    if pJoint is not empty and pJoint > 0 then b2RevoluteEnableMotor pJoint, false, 0, 0
@@ -1759,7 +1759,7 @@ end b2kAddSensor
 
 -- Flip a control's collision between solid and SENSOR (a non-solid trigger that
 -- reports overlaps but never blocks). The flag lives on the shape, so rebuild the
--- shape afterwards with b2kReshape — it re-applies the sensor state from here.
+-- shape afterwards with b2kReshape - it re-applies the sensor state from here.
 command b2kSetSensor pControl, pFlag
    put (pFlag is true) into sSensor[the long id of pControl]
 end b2kSetSensor
@@ -1899,7 +1899,7 @@ command b2kSmoothGround pPoints
 end b2kSmoothGround
 
 -- Attach a smooth static chain to a CONTROL, from a list of SCREEN points
--- ("x,y" per line) — the control's own outline. Unlike b2kChain (which makes an
+-- ("x,y" per line) - the control's own outline. Unlike b2kChain (which makes an
 -- untracked world body), this registers the body against the control like
 -- b2kAddBox/Ball/Polygon, so it selects (b2kControlAt), drags (b2kMoveTo) and
 -- removes (b2kRemove) as a normal static part. The points are taken relative to
@@ -2022,7 +2022,7 @@ command b2kSetJointTuning pHertz, pDamping
    if sWorld is not empty then b2SetJointTuning sWorld, pHertz, pDamping
 end b2kSetJointTuning
 
--- Clamp how fast any body can move (px/sec) — stops runaway speeds.
+-- Clamp how fast any body can move (px/sec) - stops runaway speeds.
 command b2kSetMaxSpeed pPxPerSec
    if sWorld is not empty then b2SetMaximumLinearSpeed sWorld, pPxPerSec / sScale
 end b2kSetMaxSpeed
@@ -5189,7 +5189,7 @@ end b2kStepOnce
 -- draw throws. This is the "the loop is stopped, redraw by hand" entry point
 -- (editors and build modes call it after spawning or moving things), so it must
 -- FULL-SCAN: the move-event fast path only reports bodies a b2Step moved, and a
--- stopped world steps never — relying on it here would draw nothing at all.
+-- stopped world steps never - relying on it here would draw nothing at all.
 -- The running loop instead holds one lock across the whole frame and calls the
 -- lock-free, move-event-driven b2kSyncBodies directly.
 command b2kSync
@@ -5497,17 +5497,17 @@ end b2kDispatchSensors
 -- <<< END EMBEDDED KIT <<<
 
 -- =====================================================================
--- DEMO APP  ·  built on the Kit above (b2k...)
+-- DEMO APP  /  built on the Kit above (b2k...)
 --
 -- WHAT IT SHOWS
---   · Every shape: boxes, balls, capsules, polygons.
---   · Joints: hinge + motor (windmill, see-saw), distance (cradle), revolute
+--   / Every shape: boxes, balls, capsules, polygons.
+--   / Joints: hinge + motor (windmill, see-saw), distance (cradle), revolute
 --     chain (bridge), wheel + suspension (vehicle).
---   · Forces, dragging, contact + end-contact events, live ray casting.
---   · The b2kFrame per-frame hook for app logic and custom drawing.
+--   / Forces, dragging, contact + end-contact events, live ray casting.
+--   / The b2kFrame per-frame hook for app logic and custom drawing.
 --
--- NAMING: LiveCode conventions throughout — p* parameters, t* locals,
--- g* script-locals, k* constants — so nothing collides with reserved words.
+-- NAMING: LiveCode conventions throughout - p* parameters, t* locals,
+-- g* script-locals, k* constants - so nothing collides with reserved words.
 -- All scene coordinates are in SCREEN PIXELS.
 -- =====================================================================
 
@@ -5540,11 +5540,11 @@ end closeCard
 
 on startBox2DDemo
    -- a proper, centred, non-resizable window
-   set the title of this stack to "Box2Dxt — Kit Showcase"
+   set the title of this stack to "Box2Dxt - Kit Showcase"
    set the decorations of this stack to "default"
    set the resizable of this stack to false
    set the width of this stack to 980
-   set the height of this stack to 660
+   set the height of this stack to 640
    set the loc of this stack to the screenLoc
    set the backgroundColor of this card to "22,24,30"
    put "box" into gTool
@@ -5694,7 +5694,7 @@ on buildPlayground
    get newPoly(tCx + 210, 180, 36, accentShape(4))
 
    -- SEE-SAW: a plank hinged to the world at its centre. The fulcrum is purely
-   -- decorative — making it a static *body* (as before) jams the plank against
+   -- decorative - making it a static *body* (as before) jams the plank against
    -- it and the see-saw can't tilt.
    local tPlank, tPivotX, tPivotY
    put tCx - 250 into tPivotX
@@ -5773,7 +5773,7 @@ on buildCradle
       b2kHinge tBob, empty, tBx, tAnchorY
       addCable tBx, tAnchorY, tBob
    end repeat
-   put "Watch momentum carry through the line — drag a ball aside and release." into gObjective
+   put "Watch momentum carry through the line - drag a ball aside and release." into gObjective
 end buildCradle
 
 on buildBridge
@@ -5853,10 +5853,10 @@ on buildVehicle
    put tWheelB into gWheelBC
    put tWheelF into gWheelFC
    put 190 into gStartX
-   put "Drive with the ← / → arrow keys — roll over the hills and grab the coins!" into gObjective
+   put "Drive with the <- / -> arrow keys - roll over the hills and grab the coins!" into gObjective
 end buildVehicle
 
--- Terrain height (screen Y) at a screen X — gentle rolling hills that always
+-- Terrain height (screen Y) at a screen X - gentle rolling hills that always
 -- stay above the arena floor.
 function terrainY pX
    local tBase, tRel
@@ -5935,7 +5935,7 @@ on buildLidar
    set the width of graphic "demo_emitter" to 16
    set the height of graphic "demo_emitter" to 16
    set the visible of graphic "demo_emitter" to false
-   put "Move the mouse inside the arena — rays scan outward and stop at the nearest shape." into gObjective
+   put "Move the mouse inside the arena - rays scan outward and stop at the nearest shape." into gObjective
 end buildLidar
 
 -- =====================================================================
@@ -5961,7 +5961,7 @@ on b2kFrame
 end b2kFrame
 
 -- Count how many tower blocks have been knocked well away from where they
--- started — the demolition "score".
+-- started - the demolition "score".
 on framePyramid
    local t, tScattered, tX
    put 0 into tScattered
@@ -5974,7 +5974,7 @@ on framePyramid
       if tX is not empty and abs(tX - gSpawnX[t]) > 70 then add 1 to tScattered
    end repeat
    put "Scattered: " & tScattered & " / " & (the number of lines of gTargets) \
-         & "   ·   pick the Bomb tool and click the stack" into gObjective
+         & "   /   pick the Bomb tool and click the stack" into gObjective
 end framePyramid
 
 on driveFrame
@@ -6025,7 +6025,7 @@ on driveFrame
    local tDist
    put round((tCx - gStartX) / 40 * 10) / 10 into tDist
    put "Coins: " & gScore & " / " & gCoinTotal & "        Distance: " & max(0, tDist) \
-         & " m        ← / → to drive" into gObjective
+         & " m        <- / -> to drive" into gObjective
 end driveFrame
 
 on renderLidar
@@ -6355,7 +6355,7 @@ on buildUI
    makeBar "ui_header", 0, 0, tWide, 54, "30,33,42"
    makeBar "ui_accent", 0, 54, tWide, 57, "64,132,232"
    makeLabel "ui_title", 18, 11, 320, 44, "Box2Dxt", 22, "236,238,245", true
-   makeLabel "ui_sub", 20, 33, 460, 53, "Box2D v3 physics · the OpenXTalk Kit, in action", 11, "150,154,166", false
+   makeLabel "ui_sub", 20, 33, 460, 53, "Box2D v3 physics / the OpenXTalk Kit, in action", 11, "150,154,166", false
 
    put 16 into tX
    repeat with tI = 1 to the number of items of kScenes
@@ -6508,17 +6508,17 @@ end rnd
 function sceneTitle pScene
    switch pScene
       case "playground"
-         return "PLAYGROUND — shapes, a see-saw, a motorised windmill & a pendulum"
+         return "PLAYGROUND - shapes, a see-saw, a motorised windmill & a pendulum"
       case "pyramid"
-         return "PYRAMID — stacking (pick the Bomb tool and click the stack!)"
+         return "PYRAMID - stacking (pick the Bomb tool and click the stack!)"
       case "cradle"
-         return "NEWTON'S CRADLE — distance/hinge joints + restitution"
+         return "NEWTON'S CRADLE - distance/hinge joints + restitution"
       case "bridge"
-         return "BRIDGE — a chain of revolute joints you can load up"
+         return "BRIDGE - a chain of revolute joints you can load up"
       case "vehicle"
-         return "VEHICLE — wheel joints, a motor & spring suspension"
+         return "VEHICLE - wheel joints, a motor & spring suspension"
       case "lidar"
-         return "LIDAR — live ray casting that follows your mouse"
+         return "LIDAR - live ray casting that follows your mouse"
    end switch
    return pScene
 end sceneTitle
@@ -6530,7 +6530,7 @@ function sceneHelp pScene
       case "vehicle"
          return "Drive with the LEFT / RIGHT arrow keys to climb the bumps. Drag the car to mess with it." & tTail
       case "lidar"
-         return "Move the mouse — rays fan out from the cursor and each stops at the nearest shape (b2kRayHit)."
+         return "Move the mouse - rays fan out from the cursor and each stops at the nearest shape (b2kRayHit)."
       case "pyramid"
          return "Choose the Bomb tool and click beside the stack to scatter it with a blast." & tTail
       case "cradle"
